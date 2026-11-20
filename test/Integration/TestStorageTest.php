@@ -22,12 +22,34 @@ use LogicException;
  */
 final class TestStorageTest extends IntegrationTestCase
 {
+    private const array VARIABLES = ['CLAVIA_TEST_DATABASE_URL', 'CLAVIA_TEST_REDIS_URL'];
+
+    /**
+     * The variables as the run started with them. They are put back after each test, not
+     * removed: under docker-compose they name `db-test` and `redis`, and every later test
+     * that builds the application reads them again.
+     *
+     * @var array<string, string|false>
+     */
+    private array $environment = [];
+
+    #[\Override]
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        foreach (self::VARIABLES as $name) {
+            $this->environment[$name] = getenv($name);
+        }
+    }
+
     #[\Override]
     protected function tearDown(): void
     {
         TestStorage::database()->executeScript('DROP TABLE IF EXISTS storage_probe');
-        putenv('CLAVIA_TEST_DATABASE_URL');
-        putenv('CLAVIA_TEST_REDIS_URL');
+        foreach ($this->environment as $name => $value) {
+            putenv($value === false ? $name : $name . '=' . $value);
+        }
 
         parent::tearDown();
     }
