@@ -16,16 +16,16 @@ and multi-tenancy.
 
 ## Current state
 
-**Step 0 is done: the repository, the toolchain and the local infrastructure exist; no feature
-does.** The application answers `GET /healthz` and nothing else. Update this section at the end
-of every step (what exists, where it lives, which conventions it established).
+**Steps 0 and 1 are done: the toolchain, the local infrastructure, the shared kernel, the
+technical ports and the storage adapters exist; no feature does.** The application answers
+`GET /healthz` and nothing else, and there is no table yet. Update this section at the end of
+every step (what exists, where it lives, which conventions it established).
 
 What exists:
 
 - **Skeleton**: `public/index.php` → `config/container.php` (laminas-servicemanager) →
   `config/pipeline.php` → `config/routes.php`. The pipeline is `ErrorHandler` → routing →
-  implicit `HEAD` → 405 → dispatch → 404. `src/Domain`, `src/Application` and
-  `src/Infrastructure` are empty.
+  implicit `HEAD` → 405 → dispatch → 404.
 - **Settings** (`src/Configuration`): `Settings` is a readonly class whose constructor
   parameters *are* the `CLAVIA_*` variables (`rootDomain` ⇄ `CLAVIA_ROOT_DOMAIN`);
   `Settings::fromEnvironment()` coerces, bounds-checks (`#[Range]`) and cross-checks them, with
@@ -35,7 +35,23 @@ What exists:
 - **Local infrastructure**: `docker-compose.yml` (Caddy, `php` = PHP-FPM 8.5, Postgres :5433,
   `db-test` :5434, Redis), `docker/php/`, the ported `Caddyfile`, `Makefile`, `setup-ssl.sh`.
 - **QA**: `composer check` = PHPCS (PSR-12, 120 columns) + Psalm level 1 + deptrac + PHPUnit.
-  `.github/workflows/ci.yml` runs it.
+  `.github/workflows/ci.yml` runs it, with PostgreSQL and Redis as services.
+- **Shared kernel** (`src/Domain/Shared`): the `Clock` and `RandomSource` ports; `Digest`
+  (SHA-256, the at-rest form of codes and tokens); `SecretGenerator` (43-character tokens,
+  alphanumeric ids, `rs_…`/`rol_…` prefixed ids); `Scope`/`ScopeSet` (RFC 6749 §3.3, with the
+  narrowing operations); `Audience`; `Url` (kept byte for byte, compared exactly); `InvalidValue`.
+- **Technical ports** (`src/Application/Port`): `TransactionManager`, `PasswordHasher`,
+  `SecretCipher`, `SchemaMigrator` and their exceptions. One use case so far:
+  `Application\Secrets\GenerateEncryptionKey`.
+- **Driven adapters** (`src/Infrastructure`): `System\SystemClock`/`SystemRandomSource`;
+  `Crypto\BcryptPasswordHasher` (cost 12) and `Crypto\AesGcmSecretCipher`;
+  `Persistence\PhpDb\Database` (the one door to PostgreSQL), `PostgresUrl`,
+  `PhpDbTransactionManager`; `Persistence\Migrations\SqlFileMigrator`; `Redis\RedisConnection`
+  and `Redis\Keys`.
+- **Console**: `clavia db:migrate`, `clavia db:status`, `clavia secrets:generate-key`.
+- **Test kit** (`test/Support`): `Fake\*` (one in-memory double per port), `Contract\*`
+  (abstract suites run against both the double and the real adapter), `TestEnvironment`,
+  `TestStorage`, `IntegrationTestCase`, `AcceptanceTestCase`.
 
 Conventions established in Step 0 that later steps keep:
 
@@ -66,15 +82,71 @@ Conventions established in Step 0 that later steps keep:
   served from `public/` by Caddy; `php_fastcgi` runs `index.php` and no other script. The host
   split (`/api/v1/*` only on `management.*`) is still enforced in the `Caddyfile`.
 - **Acceptance tests extend `ClaviaTest\Support\AcceptanceTestCase`**: the real container,
-  pipeline and routes, in-process, with settings built from an explicit array — never from the
-  machine's `.env` — and a `RecordingLogger`. PHPUnit lowers `error_reporting` while a test
-  runs; the base class restores `E_ALL`.
+  pipeline and routes, in-process, with settings built from `TestEnvironment::variables()` —
+  never from the machine's `.env` — and a `RecordingLogger`. PHPUnit lowers `error_reporting`
+  while a test runs; the base class restores `E_ALL`.
 - **Every PHP file starts with the header in `.docheader`** (`LicenseHeaderTest`).
 - **A deliberate difference from the Python server is recorded in `docs/DEVIATIONS.md`** in the
   same change that introduces it.
 
-Running it: `cp .env.example .env`, `./setup-ssl.sh`, `make up install`, then
-`https://auth.{domain}/healthz`. Tooling runs in the container: `make check`, `make config`.
+Conventions established in Step 1:
+
+- **`RandomSource` lives in `Domain\Shared` next to `Clock`**, not in `Application\Port`: the
+  domain itself mints secrets (`SecretGenerator`), and rule 1 says randomness reaches it
+  through a port. `Application\Port` holds the ports only use cases need.
+- **A value object is built by a named constructor that throws `InvalidValue`** (`fromString`,
+  `fromHex`, `of`); its real constructor is private. Anchored patterns use the `D` modifier —
+  without it `$` accepts a trailing newline.
+- **Never read a value back from an array key.** PHP turns an all-digit string key into an
+  integer (`'10'` → `10`); `ScopeSet` and the migrator keep keys for lookup only.
+- **Every repository goes through `Infrastructure\Persistence\PhpDb\Database`**: SQL written
+  out, named parameters (`:client_id`), plain rows back. `fetchAll` / `fetchOne` / `fetchValue`
+  / `execute` (returns the affected-row count — the answer to "did I win?" for a conditional
+  `UPDATE … WHERE used_at IS NULL`). The library's query builder is reachable through
+  `Database::adapter()` for dynamic filters only. Generated keys are read with
+  `INSERT … RETURNING`, never "last insert id".
+- **A use case that must be atomic wraps itself in `TransactionManager::transactional()`.** A
+  nested call joins the outer transaction; an exception anywhere rolls all of it back; there
+  are no savepoints, and catching a database error inside a transaction to carry on is not
+  possible (PostgreSQL refuses everything after a failed statement). Isolation is READ
+  COMMITTED; exactly-once rests on row locks or conditional writes, not on the isolation level.
+- **Migrations are `migrations/<version>_<name>.sql`** (`0003_refresh_tokens.sql`), forward
+  only, one transaction each, immutable once applied (checksummed), linear (a pending file
+  older than an applied one is refused). A step adds its files in the same change as the code
+  that needs them. No `CREATE INDEX CONCURRENTLY` in a migration: it cannot run in a transaction.
+- **PostgreSQL and Redis connections are lazy.** Building the container opens neither;
+  `/healthz` touches neither (there is a test for it).
+- **Redis keys are `<prefix>:<identifier>`**, built by `Redis\Keys`: `forSecret()` digests
+  whatever a browser could present (session ids, handles, device codes), `forIdentifier()` is
+  for user ids and `sid`s.
+- **Secrets that must be read back go through `SecretCipher`, with a row-specific context**
+  (`kid`, `user:42:totp`). The token format, `base64(nonce ‖ ciphertext ‖ tag)`, is the Python
+  implementation's; there is a test that decrypts a Python-made value.
+- **bcrypt takes 72 bytes.** `PasswordHasher::hash()` throws `SecretNotHashable` beyond that
+  (and on a NUL byte) instead of truncating; `verify()` returns false. Password and
+  client-secret validation in later steps must turn that into a proper validation error.
+- **Each port ships with a double and a contract.** `test/Support/Fake/X` plus, where behaviour
+  is shared, an abstract `test/Support/Contract/XContract` that both the double's test and the
+  adapter's test extend. A double that drifts from its adapter fails its own test.
+- **Three test suites, three bases.** `Unit` (no I/O: domain, use cases with doubles, pure
+  adapters such as crypto), `Integration` (`IntegrationTestCase`: one adapter against real
+  PostgreSQL/Redis, with a scratch schema per test for tables of its own), `Acceptance`
+  (`AcceptanceTestCase`: the whole application). The last two wipe every table and Redis
+  database 1 before each test; `TestEnvironment` refuses a database whose name does not end in
+  `_test` and Redis database 0.
+
+**Known defect in the database library, worked around.** At the pinned commit,
+`php-db/phpdb-pgsql` runs `SELECT LASTVAL()` after every statement to fetch a "last generated
+value". In a session that has not used a sequence that query fails; the library swallows the
+exception, but PostgreSQL has already aborted the surrounding transaction, so its writes are
+silently discarded and the final `COMMIT` becomes a `ROLLBACK`. `PostgresConnection` overrides
+that lookup; `DatabaseTest::testReadingInsideATransactionDoesNotDiscardItsWrites` and the test
+after it fail without the override. **Do not `composer update php-db/*` without running the
+Integration suite**, and report the defect upstream.
+
+Running it: `cp .env.example .env`, `./setup-ssl.sh`, `make up install migrate`, then
+`https://auth.{domain}/healthz`. Tooling runs in the container: `make check`, `make config`,
+`make migrate`, `make db-status`.
 
 ## How the migration works
 
@@ -143,7 +215,8 @@ Three rings. Dependencies point inward only; nothing in an inner ring knows an o
 ```
 src/
   Domain/                     # pure PHP. No vendor import at all — not even PSR interfaces.
-    Shared/                   #   Clock, ids, Digest, Url, Scope, Audience, DomainException…
+    Shared/                   #   Clock, RandomSource, SecretGenerator, Digest, Url, Scope(Set),
+                              #   Audience, InvalidValue
     Client/                   #   applications: Client, RedirectUri, ClientAuthMethod, ownership
     Identity/                 #   User, Connection, ExternalIdentity, credentials, linking policy
     ResourceServer/           #   APIs, Permission, ClientGrant
@@ -156,10 +229,11 @@ src/
   Application/                # orchestration. Imports Domain only.
     <Context>/<UseCase>/      #   Command|Query (readonly DTO) + Handler + Result — one folder each
     Port/                     #   technical outbound ports: TokenSigner, SecretCipher, PasswordHasher,
-                              #   RandomSource, TransactionManager, Mailer, OutboundHttp,
+                              #   TransactionManager, SchemaMigrator, Mailer, OutboundHttp,
                               #   OutboundUrlPolicy, DeferredTasks, *Store (Redis-shaped state)
   Infrastructure/             # driven adapters. Implements Domain + Application ports.
-    Persistence/PhpDb/        #   repositories, row↔aggregate mappers, migrations runner
+    Persistence/PhpDb/        #   Database (the one door to PostgreSQL), repositories, mappers
+    Persistence/Migrations/   #   SqlFileMigrator
     Redis/  Signing/  Crypto/  Mail/  HttpClient/  System/ (clock, random, deferred)
   Ui/                         # driving adapters. Calls Application use cases only.
     Http/OAuth2/  Http/Oidc/  Http/Auth/  Http/Management/  Http/Shared/ (middleware)
@@ -173,13 +247,14 @@ frontend/                     # the React dashboard, copied from the Python proj
 migrations/  docs/
 test/
   Unit/ (Domain, Application with in-memory adapters)   Integration/ (each driven adapter)
-  Acceptance/ (ported Python tests, through the PSR-15 pipeline)   Support/
+  Acceptance/ (ported Python tests, through the PSR-15 pipeline)
+  Support/ (Fake/ doubles, Contract/ shared suites, the three base test cases)
 ```
 
 ### Rules — a violation is a build failure, not a review comment
 
 1. **Domain imports nothing** outside `Clavia\Domain` and PHP core. No Mezzio, PSR-7, phpdb,
-   Redis, `DateTimeImmutable::now()`, `random_bytes()`, `getenv()`. Time and randomness arrive
+   Redis, `new DateTimeImmutable()` for "now", `random_bytes()`, `getenv()`. Time and randomness arrive
    through `Clock` and `RandomSource`.
 2. **Application imports Domain only.** Use cases receive a Command/Query of scalars and value
    objects and return a Result or throw a domain exception. They never see a PSR-7 request, a
@@ -482,18 +557,25 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
 - Verified: `GET /healthz` through Caddy over HTTPS (FastCGI to PHP-FPM 8.5), `composer check` green.
   Not yet exercised: the Docker image build itself and the GitHub workflow.
 
-#### [ ] Step 1 — Shared kernel, technical ports, persistence base
-- Domain/Shared: `Clock`, typed ids, `Digest` (SHA-256), `Url`, `Scope`/`ScopeSet`, `Audience`.
-- Ports + adapters: `RandomSource`, `PasswordHasher` (bcrypt), `SecretCipher` (AES-256-GCM, AAD
-  context, no plaintext fallback), `TransactionManager`, Redis connection + key-prefix convention.
-- **Database adapter on `php-db/phpdb-pgsql`**, pinned to a commit: connection factory,
-  `TransactionManager`, and integration tests for transactions, `FOR UPDATE` and `RETURNING`.
-- Migrations: a minimal runner (`clavia db:migrate`, `db:status`, a `schema_migrations` table)
-  over versioned SQL files in `migrations/`. **The runner is built here; the migrations are
-  not.** Each later step adds the files for the tables it introduces, in their final shape.
-- Test kit: in-memory fakes for every port, acceptance harness (in-process pipeline, cookie jar,
-  DB reset through real migrations, Redis db 1 flush), contract-test base classes.
+#### [x] Step 1 — Shared kernel, technical ports, persistence base
+- Domain/Shared: `Clock`, `RandomSource`, `SecretGenerator`, `Digest` (SHA-256), `Url`,
+  `Scope`/`ScopeSet`, `Audience`. Typed ids arrive with the aggregate they identify.
+- Ports + adapters: `PasswordHasher` (bcrypt), `SecretCipher` (AES-256-GCM, AAD context, no
+  plaintext fallback), `TransactionManager`, Redis connection + key-prefix convention.
+- **Database adapter on `php-db/phpdb-pgsql`**, pinned in `composer.lock` (`phpdb-pgsql`
+  `deddafa`, `phpdb` `008de26`): `Database`, `PostgresUrl`, `PhpDbTransactionManager`, and
+  integration tests for parameters, types, transactions, `FOR UPDATE` (`NOWAIT`, `SKIP LOCKED`),
+  conditional updates and `RETURNING`. One library defect found and worked around
+  (`PostgresConnection`, see "Current state").
+- Migrations: `SqlFileMigrator` behind the `SchemaMigrator` port; `clavia db:migrate`,
+  `db:status`, a `schema_migrations` table. **The runner is built; no migration exists yet.**
+  Each later step adds the files for the tables it introduces, in their final shape.
+- Test kit: doubles for every port, contract suites, `IntegrationTestCase` with scratch schemas,
+  storage reset through the real migrations, Redis database 1 flushed.
+- `clavia secrets:generate-key` (moved here from Step 4: the cipher it serves lands here).
 - Python: `security/*`, `redis_store.py`, `db/session.py`, `tests/conftest.py`.
+- Verified against PostgreSQL 16 and Redis 7 outside Docker; the plan targets PostgreSQL 17.
+  Not yet built: the cookie jar of the acceptance harness — it arrives with the first cookie (Step 3).
 
 ### Phase B — The original build order (Python steps 1–6)
 
@@ -505,7 +587,8 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
 - Ui: `GET /oauth2/authorize`, `POST /oauth2/token`; `state` echoed on every error redirect;
   RFC 9207 `iss`; `WWW-Authenticate` on 401; exact redirect-URI match; a replayed code revokes
   what it issued. Dev auto-login (`CLAVIA_DEV_AUTOLOGIN_EMAIL`) as a development-only adapter.
-- CLI: `seed-dev` (first version), `authorize-url`.
+- CLI: `seed-dev` (first version), `authorize-url`. First migrations: `users`, `oauth2_clients`,
+  `oauth2_authorization_codes`, `oauth2_access_tokens`.
 - Python: `oauth2/{server,grants,requests,router}.py`, `db/models/{client,oauth2,user}.py`.
 - Tests: `test_authorization_code_flow` (9), `test_pkce_security` (16).
 
@@ -524,7 +607,7 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
   `identityClaims` for ID token and userinfo, `SigningKey` lifecycle (active/retired + grace).
 - Port: `TokenSigner` (`sign`, `publicJwks`). Adapter: postgres backend, compact JWS built by hand.
 - Ui: both `/.well-known/*` documents, `/oidc/jwks.json`, `/oidc/userinfo`; nonce replay guard.
-- CLI: `keys generate|rotate|list`, `secrets generate-key`.
+- CLI: `keys:generate|rotate|list`.
 - Python: `oidc/{router,grant,claims,keys,nonce}.py`, `oidc/signing/{__init__,_core,postgres}.py`.
 - Tests: `test_oidc` (26), postgres part of `test_signing_backends`.
 

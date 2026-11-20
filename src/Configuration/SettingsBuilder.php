@@ -30,7 +30,7 @@ use Uri\Rfc3986\Uri;
 final class SettingsBuilder
 {
     /** A DNS name: labels of letters, digits and hyphens joined by dots. No scheme, port or path. */
-    private const string DOMAIN_PATTERN = '/^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9-]{1,63}$/';
+    private const string DOMAIN_PATTERN = '/^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9-]{1,63}$/D';
 
     private const array TRUE_WORDS = ['1', 'true', 't', 'yes', 'y', 'on'];
     private const array FALSE_WORDS = ['0', 'false', 'f', 'no', 'n', 'off'];

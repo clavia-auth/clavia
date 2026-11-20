@@ -24,15 +24,16 @@ use Psr\Log\LoggerInterface;
  * `public/index.php`, with a request handed straight to the PSR-15 pipeline.
  *
  * This is where the tests ported from the Python project live. Each test gets a fresh
- * application, built from {@see self::ENVIRONMENT} plus whatever it overrides — never
- * from the machine's `.env`.
+ * application, built from {@see TestEnvironment::variables()} plus whatever it
+ * overrides — never from the machine's `.env` — and starts with every table and the
+ * Redis test database empty.
  */
 abstract class AcceptanceTestCase extends TestCase
 {
-    /** @var array<string, string> */
-    protected const array ENVIRONMENT = [
-        'CLAVIA_ROOT_DOMAIN' => 'acme.com',
-    ];
+    /** The origin every request is sent to unless a test says otherwise. */
+    protected const string AUTH_HOST = 'auth.' . TestEnvironment::ROOT_DOMAIN;
+
+    protected const string MANAGEMENT_HOST = 'management.' . TestEnvironment::ROOT_DOMAIN;
 
     protected RecordingLogger $logger;
 
@@ -51,6 +52,8 @@ abstract class AcceptanceTestCase extends TestCase
         // failure. PHPUnit narrows the level while a test runs; put it back so the
         // application behaves here as it does in production.
         $this->errorReporting = error_reporting(E_ALL);
+
+        TestStorage::reset();
     }
 
     #[\Override]
@@ -62,14 +65,14 @@ abstract class AcceptanceTestCase extends TestCase
     /**
      * Start the application with different settings. Call before the first request.
      *
-     * @param array<string, string> $environment `CLAVIA_*` variables laid over {@see self::ENVIRONMENT}.
+     * @param array<string, string> $environment `CLAVIA_*` variables laid over the test environment.
      */
     protected function boot(array $environment = []): Application
     {
         /** @var ServiceManager $container */
         $container = require __DIR__ . '/../../config/container.php';
         $container->setAllowOverride(true);
-        $container->setService(Settings::class, Settings::fromEnvironment($environment + self::ENVIRONMENT));
+        $container->setService(Settings::class, Settings::fromEnvironment($environment + TestEnvironment::variables()));
         $container->setService(LoggerInterface::class, $this->logger);
 
         /** @var Application $application */
@@ -102,7 +105,7 @@ abstract class AcceptanceTestCase extends TestCase
         string $method,
         string $path,
         array $headers = [],
-        string $host = 'auth.acme.com',
+        string $host = self::AUTH_HOST,
     ): ResponseInterface {
         $request = new ServerRequest(
             serverParams: ['REMOTE_ADDR' => '203.0.113.7'],
@@ -114,7 +117,7 @@ abstract class AcceptanceTestCase extends TestCase
         return $this->application()->handle($request);
     }
 
-    protected function get(string $path, string $host = 'auth.acme.com'): ResponseInterface
+    protected function get(string $path, string $host = self::AUTH_HOST): ResponseInterface
     {
         return $this->request('GET', $path, host: $host);
     }

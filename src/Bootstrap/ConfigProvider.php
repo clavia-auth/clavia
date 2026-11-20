@@ -11,7 +11,23 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap;
 
+use Clavia\Application\Port\PasswordHasher;
+use Clavia\Application\Port\SchemaMigrator;
+use Clavia\Application\Port\SecretCipher;
+use Clavia\Application\Port\TransactionManager;
+use Clavia\Application\Secrets\GenerateEncryptionKey;
 use Clavia\Configuration\Settings;
+use Clavia\Domain\Shared\Clock;
+use Clavia\Domain\Shared\RandomSource;
+use Clavia\Domain\Shared\SecretGenerator;
+use Clavia\Infrastructure\Crypto\BcryptPasswordHasher;
+use Clavia\Infrastructure\Persistence\PhpDb\Database;
+use Clavia\Infrastructure\Redis\RedisConnection;
+use Clavia\Infrastructure\System\SystemClock;
+use Clavia\Infrastructure\System\SystemRandomSource;
+use Clavia\Ui\Cli\DatabaseStatusCommand;
+use Clavia\Ui\Cli\GenerateEncryptionKeyCommand;
+use Clavia\Ui\Cli\MigrateDatabaseCommand;
 use Clavia\Ui\Cli\ShowConfigCommand;
 use Clavia\Ui\Http\Shared\ErrorResponseGenerator;
 use Clavia\Ui\Http\Shared\HealthHandler;
@@ -42,6 +58,9 @@ final class ConfigProvider
      */
     public const array CONSOLE_COMMANDS = [
         'config' => ShowConfigCommand::class,
+        'db:migrate' => MigrateDatabaseCommand::class,
+        'db:status' => DatabaseStatusCommand::class,
+        'secrets:generate-key' => GenerateEncryptionKeyCommand::class,
     ];
 
     /**
@@ -54,12 +73,30 @@ final class ConfigProvider
                 'invokables' => [
                     ResponseFactoryInterface::class => ResponseFactory::class,
                     StreamFactoryInterface::class => StreamFactory::class,
+
+                    // Ports whose adapter needs nothing to be built
+                    Clock::class => SystemClock::class,
+                    RandomSource::class => SystemRandomSource::class,
+                    PasswordHasher::class => BcryptPasswordHasher::class,
                 ],
                 'factories' => [
                     // Configuration and cross-cutting services
                     Settings::class => Container\SettingsFactory::class,
                     LoggerInterface::class => Container\LoggerFactory::class,
                     FilterServerRequestInterface::class => Container\ForwardedHeadersFilterFactory::class,
+
+                    // Domain services
+                    SecretGenerator::class => Container\SecretGeneratorFactory::class,
+
+                    // Use cases
+                    GenerateEncryptionKey::class => Container\GenerateEncryptionKeyFactory::class,
+
+                    // Driven adapters, each registered under the port it implements
+                    Database::class => Container\DatabaseFactory::class,
+                    TransactionManager::class => Container\TransactionManagerFactory::class,
+                    SchemaMigrator::class => Container\SchemaMigratorFactory::class,
+                    RedisConnection::class => Container\RedisConnectionFactory::class,
+                    SecretCipher::class => Container\SecretCipherFactory::class,
 
                     // Driving adapter: HTTP
                     JsonResponder::class => Container\JsonResponderFactory::class,
@@ -71,6 +108,9 @@ final class ConfigProvider
                     // Driving adapter: CLI
                     ConsoleApplication::class => Container\ConsoleApplicationFactory::class,
                     ShowConfigCommand::class => Container\ShowConfigCommandFactory::class,
+                    MigrateDatabaseCommand::class => Container\MigrateDatabaseCommandFactory::class,
+                    DatabaseStatusCommand::class => Container\DatabaseStatusCommandFactory::class,
+                    GenerateEncryptionKeyCommand::class => Container\GenerateEncryptionKeyCommandFactory::class,
                 ],
             ],
         ];

@@ -3,11 +3,11 @@
 #
 #   cp .env.example .env    # set CLAVIA_ROOT_DOMAIN
 #   ./setup-ssl.sh          # mkcert certificate for *.{CLAVIA_ROOT_DOMAIN}
-#   make up install
+#   make up install migrate
 
 PHP := docker compose exec php
 
-.PHONY: up down install config check test lint analyse arch shell
+.PHONY: up down install config migrate db-status check test lint analyse arch shell
 
 # Caddy, PHP-FPM, PostgreSQL (dev + test) and Redis.
 up:
@@ -22,6 +22,14 @@ install:
 # Print every CLAVIA_* setting as the server sees it.
 config:
 	$(PHP) bin/clavia config
+
+# Apply the pending migrations of migrations/ to the development database.
+migrate:
+	$(PHP) bin/clavia db:migrate
+
+# List the migrations and whether each is applied.
+db-status:
+	$(PHP) bin/clavia db:status
 
 # Everything a change must pass: coding standard, static analysis, the hexagonal
 # dependency rules, the test suite.

@@ -6,7 +6,8 @@ Auth0: OAuth2 flows, interactive login with MFA, and a Management API.
 This is the PHP 8.5 implementation. It is being ported feature by feature from the Python
 reference implementation; `CLAUDE.md` holds the migration plan and the current state.
 
-**Status: Step 0 — the project skeleton.** The server answers `GET /healthz` and nothing else yet.
+**Status: Step 1 — foundations.** The shared kernel, the technical ports and the PostgreSQL and
+Redis adapters are in place; the server still answers `GET /healthz` and nothing else.
 
 ## Architecture
 
@@ -26,10 +27,10 @@ Strict hexagonal (ports and adapters), enforced by the build:
 Requirements: Docker, and [mkcert](https://github.com/FiloSottile/mkcert) for local TLS.
 
 ```sh
-cp .env.example .env     # set CLAVIA_ROOT_DOMAIN (e.g. acme.com)
+cp .env.example .env     # set CLAVIA_ROOT_DOMAIN (e.g. clavia.local)
 ./setup-ssl.sh           # certificate for *.{CLAVIA_ROOT_DOMAIN} + /etc/hosts entries
-make up install          # Caddy, PHP-FPM, PostgreSQL, Redis; composer install
-curl https://auth.acme.com/healthz
+make up install migrate  # Caddy, PHP-FPM, PostgreSQL, Redis; composer install; schema
+curl https://auth.clavia.local/healthz
 ```
 
 | Command | What it does |
@@ -37,6 +38,7 @@ curl https://auth.acme.com/healthz
 | `make check` | Coding standard, static analysis, architecture rules, tests |
 | `make test` | PHPUnit only |
 | `make config` | Print every `CLAVIA_*` setting as the server sees it |
+| `make migrate` / `make db-status` | Apply the pending SQL migrations / list them |
 | `make shell` | A shell in the PHP container |
 
 ## Configuration
