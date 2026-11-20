@@ -11,8 +11,8 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
-use Clavia\Configuration\Settings;
 use Clavia\Adapter\Secondary\Redis\RedisConnection;
+use Clavia\Configuration\Settings;
 use Psr\Container\ContainerInterface;
 
 final class RedisConnectionFactory

@@ -11,9 +11,13 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Adapter\Primary\Http;
 
-use Clavia\Domain\OAuth2\OAuth2Error;
 use Clavia\Adapter\Primary\Http\OAuth2\OAuth2Responder;
+use Clavia\Adapter\Primary\Http\Shared\ErrorResponder;
+use Clavia\Adapter\Primary\Http\Shared\PageRenderer;
+use Clavia\Domain\OAuth2\OAuth2Error;
+use ClaviaTest\Support\Fake\RecordingTemplateRenderer;
 use Laminas\Diactoros\ResponseFactory;
+use Laminas\Diactoros\ServerRequest;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -22,11 +26,17 @@ final class OAuth2ResponderTest extends TestCase
     private const string ISSUER = 'https://auth.clavia.test';
 
     private OAuth2Responder $responder;
+    private RecordingTemplateRenderer $templates;
 
     #[\Override]
     protected function setUp(): void
     {
-        $this->responder = new OAuth2Responder(new ResponseFactory(), self::ISSUER);
+        $this->templates = new RecordingTemplateRenderer();
+        $this->responder = new OAuth2Responder(
+            new ResponseFactory(),
+            new ErrorResponder(new PageRenderer($this->templates)),
+            self::ISSUER,
+        );
     }
 
     public function testASuccessIsJsonThatMustNotBeStored(): void
@@ -89,9 +99,26 @@ final class OAuth2ResponderTest extends TestCase
 
     public function testAnAuthorizationErrorShownInPlaceNeverChallengesTheBrowser(): void
     {
-        $response = $this->responder->authorizationError(OAuth2Error::invalidClient('The client does not exist.'));
+        $response = $this->responder->authorizationError(
+            new ServerRequest(headers: ['Accept' => 'text/html,application/xhtml+xml,*/*;q=0.8']),
+            OAuth2Error::invalidClient('The client does not exist.'),
+        );
 
         // A Basic challenge here would make the browser ask the user for a client secret.
+        self::assertSame(400, $response->getStatusCode());
+        self::assertFalse($response->hasHeader('WWW-Authenticate'));
+        self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
+        self::assertStringStartsWith('text/html', $response->getHeaderLine('Content-Type'));
+        self::assertSame('error::page', $this->templates->rendered[0]['name']);
+    }
+
+    public function testAProgramGetsTheErrorDocumentInstead(): void
+    {
+        $response = $this->responder->authorizationError(
+            new ServerRequest(),
+            OAuth2Error::invalidClient('The client does not exist.'),
+        );
+
         self::assertSame(400, $response->getStatusCode());
         self::assertFalse($response->hasHeader('WWW-Authenticate'));
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
@@ -99,6 +126,7 @@ final class OAuth2ResponderTest extends TestCase
             ['error' => 'invalid_client', 'error_description' => 'The client does not exist.'],
             json_decode((string) $response->getBody(), true),
         );
+        self::assertSame([], $this->templates->rendered);
     }
 
     public function testARedirectToTheClientCarriesTheParametersAndTheIssuer(): void

@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Acceptance;
 
+use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Application\Port\SchemaMigrator;
 use Clavia\Application\Port\SecretCipher;
@@ -18,7 +19,6 @@ use Clavia\Application\Port\TransactionManager;
 use Clavia\Bootstrap\ConfigProvider;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\RandomSource;
-use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use ClaviaTest\Support\AcceptanceTestCase;
 use Symfony\Component\Console\Application as ConsoleApplication;
 

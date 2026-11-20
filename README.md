@@ -6,10 +6,10 @@ Auth0: OAuth2 flows, interactive login with MFA, and a Management API.
 This is the PHP 8.5 implementation. It is being ported feature by feature from the Python
 reference implementation; `CLAUDE.md` holds the migration plan and the current state.
 
-**Status: Step 2 — Authorization Code + PKCE.** `/oauth2/authorize` and `/oauth2/token` issue
-single-use codes and opaque access tokens to public and confidential clients. The login page
-comes next; until then a development deployment can sign a user in with
-`CLAVIA_DEV_AUTOLOGIN_EMAIL`.
+**Status: Step 3 — login page and sessions.** A person signs in with a password at
+`/auth/login` and completes the Authorization Code + PKCE flow in a browser; `/oauth2/token`
+issues opaque access tokens to public and confidential clients. ID tokens and discovery come
+next.
 
 ## Architecture
 
@@ -48,12 +48,10 @@ curl https://auth.clavia.local/healthz
 
 ### Trying the flow
 
-Set `CLAVIA_DEV_AUTOLOGIN_EMAIL=dev@clavia.local` in `.env` (development only — the server
-refuses to start with it anywhere else), then:
-
 ```sh
 make seed
-make authorize-url       # open the link, copy ?code=… from the address bar, run the curl
+make authorize-url       # open the link and sign in as dev@clavia.local / devpassword,
+                         # copy ?code=… from the address bar, then run the printed curl
 ```
 
 Differences from the Python server are listed in [`docs/DEVIATIONS.md`](docs/DEVIATIONS.md).

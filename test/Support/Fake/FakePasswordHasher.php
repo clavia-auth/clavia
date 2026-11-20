@@ -31,6 +31,9 @@ final class FakePasswordHasher implements PasswordHasher
 
     public bool $outdated = false;
 
+    /** How many times a verification was simulated, so a test can see the timing guard ran. */
+    public int $simulatedVerifications = 0;
+
     #[\Override]
     public function hash(#[\SensitiveParameter] string $secret): string
     {
@@ -58,6 +61,12 @@ final class FakePasswordHasher implements PasswordHasher
     public function needsRehash(string $hash): bool
     {
         return $this->outdated || ! str_starts_with($hash, self::PREFIX);
+    }
+
+    #[\Override]
+    public function simulateVerification(#[\SensitiveParameter] string $secret): void
+    {
+        $this->simulatedVerifications++;
     }
 
     private function isRepresentable(#[\SensitiveParameter] string $secret): bool

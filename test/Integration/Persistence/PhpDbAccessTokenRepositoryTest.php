@@ -11,6 +11,10 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Integration\Persistence;
 
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbAccessTokenRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbAuthorizationCodeRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbUserRepository;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\ClientId;
@@ -26,10 +30,6 @@ use Clavia\Domain\OAuth2\CodeChallenge;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\ScopeSet;
 use Clavia\Domain\Shared\Url;
-use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbAccessTokenRepository;
-use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbAuthorizationCodeRepository;
-use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientRepository;
-use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbUserRepository;
 use ClaviaTest\Support\Contract\AccessTokenRepositoryContract;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use ClaviaTest\Support\IntegrationTestCase;

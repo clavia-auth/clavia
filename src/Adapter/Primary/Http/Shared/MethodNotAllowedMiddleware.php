@@ -11,7 +11,6 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Shared;
 
-use Laminas\Diactoros\Response\JsonResponse;
 use Mezzio\Router\RouteResult;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -24,9 +23,16 @@ use Psr\Http\Server\RequestHandlerInterface;
  * A route answers exactly the methods it declares, and the `Allow` header lists them.
  * Nothing is implied — no automatic `HEAD`, no automatic `OPTIONS`: a `HEAD` that ran a
  * `GET` handler would issue an authorization code nobody receives.
+ *
+ * A browser gets a page, anything else `{"detail": "Method Not Allowed"}`; both carry
+ * `Allow`.
  */
 final readonly class MethodNotAllowedMiddleware implements MiddlewareInterface
 {
+    public function __construct(private ErrorResponder $errors)
+    {
+    }
+
     #[\Override]
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
@@ -35,10 +41,6 @@ final readonly class MethodNotAllowedMiddleware implements MiddlewareInterface
             return $handler->handle($request);
         }
 
-        return new JsonResponse(
-            ['detail' => 'Method Not Allowed'],
-            405,
-            ['Allow' => implode(', ', $result->getAllowedMethods() ?? [])],
-        );
+        return $this->errors->methodNotAllowed($request, $result->getAllowedMethods() ?? []);
     }
 }

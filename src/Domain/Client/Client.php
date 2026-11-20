@@ -121,6 +121,22 @@ final readonly class Client
     }
 
     /** The redirect URI used when a request names none — only when exactly one is registered. */
+    /**
+     * The origins the registered redirect URIs point at, each once, in registration order.
+     *
+     * Where a browser may legitimately end up after this client's authorization
+     * request: the login page lists them in its CSP `form-action`, because Chromium
+     * applies that directive to the whole redirect chain of a form submission.
+     *
+     * @return list<string>
+     */
+    public function redirectOrigins(): array
+    {
+        $origins = array_map(static fn (Url $uri): string => $uri->origin(), $this->redirectUris);
+
+        return array_values(array_unique($origins));
+    }
+
     public function soleRedirectUri(): ?Url
     {
         return count($this->redirectUris) === 1 ? $this->redirectUris[0] : null;

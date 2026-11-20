@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Adapter\Primary\Http\Shared\ErrorResponder;
 use Clavia\Adapter\Primary\Http\Shared\NotFoundHandler;
 use Psr\Container\ContainerInterface;
 
@@ -18,6 +19,9 @@ final class NotFoundHandlerFactory
 {
     public function __invoke(ContainerInterface $container): NotFoundHandler
     {
-        return new NotFoundHandler();
+        /** @var ErrorResponder $errors */
+        $errors = $container->get(ErrorResponder::class);
+
+        return new NotFoundHandler($errors);
     }
 }

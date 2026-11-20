@@ -113,6 +113,36 @@ trait ClientRepositoryContract
         self::assertFalse($client->hasRedirectUri('http://localhost:3000/callback'));
     }
 
+    #[Test]
+    public function aRedirectOriginIsRegisteredWhenAnyClientPointsAtIt(): void
+    {
+        $this->clients()->save($this->aPublicClient('spa', 'My SPA'));
+        $this->clients()->save($this->aConfidentialClient('backend'));
+
+        self::assertTrue($this->clients()->registersRedirectOrigin('https://app.example'));
+        self::assertTrue($this->clients()->registersRedirectOrigin('http://localhost:3000'));
+        self::assertTrue($this->clients()->registersRedirectOrigin('https://backend.example'));
+    }
+
+    #[Test]
+    public function anOriginIsMatchedWholeAndExactly(): void
+    {
+        $this->clients()->save($this->aPublicClient('spa', 'My SPA'));
+
+        self::assertFalse($this->clients()->registersRedirectOrigin('http://app.example'));
+        self::assertFalse($this->clients()->registersRedirectOrigin('https://app.example:8443'));
+        self::assertFalse($this->clients()->registersRedirectOrigin('https://evil.app.example'));
+        self::assertFalse($this->clients()->registersRedirectOrigin('https://app.example/cb'));
+        self::assertFalse($this->clients()->registersRedirectOrigin('http://localhost'));
+        self::assertFalse($this->clients()->registersRedirectOrigin(''));
+    }
+
+    #[Test]
+    public function withoutClientsNoOriginIsRegistered(): void
+    {
+        self::assertFalse($this->clients()->registersRedirectOrigin('https://app.example'));
+    }
+
     private function aPublicClient(string $id, string $name, string $createdAt = '2026-01-15T10:00:00Z'): Client
     {
         return Client::register(

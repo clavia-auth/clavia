@@ -11,10 +11,10 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\OAuth2;
 
+use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\OAuth2\Token\IssueToken;
 use Clavia\Application\OAuth2\Token\TokenRequest;
 use Clavia\Domain\OAuth2\OAuth2Error;
-use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;

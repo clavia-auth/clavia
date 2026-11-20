@@ -11,14 +11,14 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Adapter\Primary\Cli;
 
+use Clavia\Adapter\Primary\Cli\AuthorizeUrlCommand;
+use Clavia\Adapter\Primary\Cli\SeedDevelopmentDataCommand;
 use Clavia\Application\Development\BuildAuthorizationUrl;
 use Clavia\Application\Development\SeedDevelopmentData;
 use Clavia\Domain\OAuth2\CodeChallenge;
 use Clavia\Domain\OAuth2\CodeVerifier;
 use Clavia\Domain\Shared\ScopeSet;
 use Clavia\Domain\Shared\SecretGenerator;
-use Clavia\Adapter\Primary\Cli\AuthorizeUrlCommand;
-use Clavia\Adapter\Primary\Cli\SeedDevelopmentDataCommand;
 use ClaviaTest\Support\Fake\FakePasswordHasher;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;

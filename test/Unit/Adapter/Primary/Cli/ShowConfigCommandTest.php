@@ -11,8 +11,8 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Adapter\Primary\Cli;
 
-use Clavia\Configuration\Settings;
 use Clavia\Adapter\Primary\Cli\ShowConfigCommand;
+use Clavia\Configuration\Settings;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use Symfony\Component\Console\Tester\CommandTester;

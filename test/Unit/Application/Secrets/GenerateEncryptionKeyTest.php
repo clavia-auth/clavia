@@ -11,9 +11,9 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Application\Secrets;
 
-use Clavia\Application\Secrets\GenerateEncryptionKey;
-use Clavia\Adapter\Secondary\Crypto\AesGcmSecretCipher;
 use Clavia\Adapter\Primary\Cli\GenerateEncryptionKeyCommand;
+use Clavia\Adapter\Secondary\Crypto\AesGcmSecretCipher;
+use Clavia\Application\Secrets\GenerateEncryptionKey;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Tester\CommandTester;

@@ -11,9 +11,9 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Adapter\Primary\Cli\AuthorizeUrlCommand;
 use Clavia\Application\Development\BuildAuthorizationUrl;
 use Clavia\Configuration\Settings;
-use Clavia\Adapter\Primary\Cli\AuthorizeUrlCommand;
 use Psr\Container\ContainerInterface;
 
 final class AuthorizeUrlCommandFactory

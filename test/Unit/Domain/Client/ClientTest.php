@@ -140,6 +140,21 @@ final class ClientTest extends TestCase
         yield 'empty' => [''];
     }
 
+    public function testTheRedirectOriginsAreTheDistinctOriginsOfTheRedirectUris(): void
+    {
+        $client = $this->register(redirectUris: [
+            Url::fromString('https://app.example/cb'),
+            Url::fromString('https://app.example/other?x=1'),
+            Url::fromString('https://app.example:8443/cb'),
+            Url::fromString('http://localhost:3000/callback'),
+        ]);
+
+        self::assertSame(
+            ['https://app.example', 'https://app.example:8443', 'http://localhost:3000'],
+            $client->redirectOrigins(),
+        );
+    }
+
     public function testTheSoleRedirectUriIsOnlyThereWhenThereIsExactlyOne(): void
     {
         $one = $this->register(redirectUris: [Url::fromString('https://app.example/cb')]);

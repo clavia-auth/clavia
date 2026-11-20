@@ -56,6 +56,23 @@ final readonly class PhpDbClientRepository implements ClientRepository
     }
 
     #[\Override]
+    public function registersRedirectOrigin(string $origin): bool
+    {
+        // Origins are derived by the domain's own URL parsing rather than in SQL, so the
+        // answer cannot differ from what Client::redirectOrigins() says for one client.
+        foreach ($this->database->fetchAll('SELECT redirect_uris::text AS redirect_uris FROM oauth2_clients') as $row) {
+            /** @var array{redirect_uris: string} $row */
+            foreach ($this->decode($row['redirect_uris']) as $uri) {
+                if (Url::fromString($uri)->origin() === $origin) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    #[\Override]
     public function save(Client $client): void
     {
         $this->database->execute(

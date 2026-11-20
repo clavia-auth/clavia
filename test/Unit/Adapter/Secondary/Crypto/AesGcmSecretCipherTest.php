@@ -11,10 +11,10 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Adapter\Secondary\Crypto;
 
+use Clavia\Adapter\Secondary\Crypto\AesGcmSecretCipher;
 use Clavia\Application\Port\DecryptionFailed;
 use Clavia\Application\Port\EncryptionUnavailable;
 use Clavia\Application\Port\SecretCipher;
-use Clavia\Adapter\Secondary\Crypto\AesGcmSecretCipher;
 use ClaviaTest\Support\Contract\SecretCipherContract;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use PHPUnit\Framework\Attributes\DataProvider;

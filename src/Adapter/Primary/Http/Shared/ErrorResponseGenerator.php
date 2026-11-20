@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Shared;
 
+use Clavia\Domain\Shared\SecretGenerator;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\StreamFactoryInterface;
@@ -22,13 +23,20 @@ use Throwable;
  *
  * The cause goes to the log and never to the client, in every environment: an
  * identity provider's stack trace names its tables, its keys' identifiers and the
- * code path an attacker just reached. `no-store` keeps the failure out of caches.
+ * code path an attacker just reached. What the client gets is a reference, logged with
+ * the cause, that a person can quote to whoever runs the server.
+ *
+ * A browser gets a page; anything else a bare `Internal Server Error` in plain text and
+ * the reference in `X-Error-Reference`. If even the page fails to render, the plain text
+ * is sent instead: the error path must not have errors of its own.
  */
 final readonly class ErrorResponseGenerator
 {
     public function __construct(
         private StreamFactoryInterface $streams,
         private LoggerInterface $logger,
+        private PageRenderer $pages,
+        private SecretGenerator $secrets,
     ) {
     }
 
@@ -37,17 +45,35 @@ final readonly class ErrorResponseGenerator
         ServerRequestInterface $request,
         ResponseInterface $response,
     ): ResponseInterface {
-        $this->logger->error('Uncaught error while handling {method} {path}: {message}', [
+        $reference = $this->secrets->alphanumeric(12);
+
+        $this->logger->error('Uncaught error {reference} while handling {method} {path}: {message}', [
+            'reference' => $reference,
             'method' => $request->getMethod(),
             'path' => $request->getUri()->getPath(),
             'message' => $error->getMessage(),
             'exception' => $error,
         ]);
 
+        if (ClientPreference::prefersHtml($request)) {
+            try {
+                return $this->pages
+                    ->render($request, ErrorPage::internalError($reference)->toHtmlPage(500))
+                    ->withHeader('X-Error-Reference', $reference);
+            } catch (Throwable $renderingFailure) {
+                $this->logger->error('The error page for {reference} could not be rendered: {message}', [
+                    'reference' => $reference,
+                    'message' => $renderingFailure->getMessage(),
+                    'exception' => $renderingFailure,
+                ]);
+            }
+        }
+
         return $response
             ->withStatus(500)
             ->withHeader('Content-Type', 'text/plain; charset=utf-8')
             ->withHeader('Cache-Control', 'no-store')
+            ->withHeader('X-Error-Reference', $reference)
             ->withBody($this->streams->createStream('Internal Server Error'));
     }
 }

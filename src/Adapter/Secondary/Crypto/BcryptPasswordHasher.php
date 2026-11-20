@@ -76,6 +76,14 @@ final readonly class BcryptPasswordHasher implements PasswordHasher
         return password_needs_rehash($hash, PASSWORD_BCRYPT, ['cost' => $this->cost]);
     }
 
+    #[\Override]
+    public function simulateVerification(#[\SensitiveParameter] string $secret): void
+    {
+        // Computing a hash at this cost takes what verifying one does. The input is
+        // random rather than the secret, so the time spent does not depend on it either.
+        password_hash(bin2hex(random_bytes(16)), PASSWORD_BCRYPT, ['cost' => $this->cost]);
+    }
+
     private function isRepresentable(#[\SensitiveParameter] string $secret): bool
     {
         return strlen($secret) <= self::MAX_SECRET_BYTES && ! str_contains($secret, "\0");

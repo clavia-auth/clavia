@@ -27,6 +27,16 @@ interface ClientRepository
      */
     public function findByName(string $name): ?Client;
 
+    /**
+     * Whether any client registers a redirect URI on this origin (`scheme://host[:port]`,
+     * as {@see \Clavia\Domain\Shared\Url::origin()} spells it).
+     *
+     * The trust anchor for a redirect that legitimately leaves this server — after
+     * logout, to the application the person came from: the same registrations the
+     * authorization endpoint trusts, rather than a second allowlist that could drift.
+     */
+    public function registersRedirectOrigin(string $origin): bool;
+
     /** Insert the client, or update it when it already exists. */
     public function save(Client $client): void;
 }

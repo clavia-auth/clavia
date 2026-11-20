@@ -1,0 +1,11 @@
+<?php
+/**
+ * The hidden fields every form of the auth surface carries.
+ *
+ * @var Laminas\View\Renderer\PhpRenderer $this
+ * @var string $csrfToken
+ * @var string $loginState The pending authorization request's handle, or ''.
+ */
+?>
+      <input type="hidden" name="csrf_token" value="<?= $this->escapeHtmlAttr($csrfToken) ?>">
+      <input type="hidden" name="state" value="<?= $this->escapeHtmlAttr($loginState) ?>">

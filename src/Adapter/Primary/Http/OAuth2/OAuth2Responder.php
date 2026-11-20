@@ -11,11 +11,14 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\OAuth2;
 
+use Clavia\Adapter\Primary\Http\Shared\ErrorPage;
+use Clavia\Adapter\Primary\Http\Shared\ErrorResponder;
 use Clavia\Domain\OAuth2\ErrorCode;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\ServerRequestInterface;
 
 /**
  * Encodes what the OAuth2 use cases decided as HTTP: the JSON bodies of RFC 6749 §5,
@@ -38,6 +41,7 @@ final readonly class OAuth2Responder
      */
     public function __construct(
         private ResponseFactoryInterface $responses,
+        private ErrorResponder $errors,
         private string $issuer,
     ) {
     }
@@ -74,16 +78,23 @@ final readonly class OAuth2Responder
 
     /**
      * An error of the authorization endpoint that must not be redirected — the client or
-     * its redirect URI could not be established — so it is shown where it happened
-     * (RFC 6749 §4.1.2.1).
+     * its redirect URI could not be established — so it is shown where it happened, to
+     * the person whose browser made the request (RFC 6749 §4.1.2.1: "inform the resource
+     * owner"). A browser gets a page; a program gets the RFC 6749 §5.2 error document.
      *
-     * Always a 400, and never a challenge: this endpoint is visited by a person's
-     * browser, where `WWW-Authenticate: Basic` would raise a password prompt for a
-     * client secret nobody at the keyboard has.
+     * Always a 400, and never a challenge: `WWW-Authenticate: Basic` would raise a
+     * password prompt for a client secret nobody at the keyboard has. The page offers no
+     * way onwards: the only address the request named is the one that was not trusted.
      */
-    public function authorizationError(OAuth2Error $error): ResponseInterface
+    public function authorizationError(ServerRequestInterface $request, OAuth2Error $error): ResponseInterface
     {
-        return new JsonResponse(self::document($error), 400, self::NO_STORE);
+        return $this->errors->respond(
+            $request,
+            400,
+            ErrorPage::authorizationRefused($error->description, $error->error->value),
+            self::document($error),
+            self::NO_STORE,
+        );
     }
 
     /**

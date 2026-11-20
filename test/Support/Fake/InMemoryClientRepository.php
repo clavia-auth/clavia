@@ -42,6 +42,15 @@ final class InMemoryClientRepository implements ClientRepository
     }
 
     #[\Override]
+    public function registersRedirectOrigin(string $origin): bool
+    {
+        return array_any(
+            $this->clients,
+            static fn (Client $client): bool => in_array($origin, $client->redirectOrigins(), true),
+        );
+    }
+
+    #[\Override]
     public function save(Client $client): void
     {
         $this->clients[$client->id->value] = $client;

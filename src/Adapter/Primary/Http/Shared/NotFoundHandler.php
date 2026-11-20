@@ -11,19 +11,23 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Shared;
 
-use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 
 /**
- * The end of the pipeline: no route matched the request path.
+ * The end of the pipeline: no route matched the request path. A page for a browser,
+ * `{"detail": "Not Found"}` for anything else.
  */
 final readonly class NotFoundHandler implements RequestHandlerInterface
 {
+    public function __construct(private ErrorResponder $errors)
+    {
+    }
+
     #[\Override]
     public function handle(ServerRequestInterface $request): ResponseInterface
     {
-        return new JsonResponse(['detail' => 'Not Found'], 404);
+        return $this->errors->notFound($request);
     }
 }

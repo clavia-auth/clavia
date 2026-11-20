@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "9d9e84f152ba6956a77c592235d31781",
+    "content-hash": "5aa5e04e5558664fa8b1e26448f52682",
     "packages": [
         {
             "name": "brick/varexporter",
@@ -625,6 +625,145 @@
             "time": "2026-11-12T11:01:05+00:00"
         },
         {
+            "name": "laminas/laminas-translator",
+            "version": "2.1.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/laminas/laminas-translator.git",
+                "reference": "3d85838296c60be5df0ee577c07e36faa1d32263"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/laminas/laminas-translator/zipball/3d85838296c60be5df0ee577c07e36faa1d32263",
+                "reference": "3d85838296c60be5df0ee577c07e36faa1d32263",
+                "shasum": ""
+            },
+            "require": {
+                "php": "~8.3.0 || ~8.4.0 || ~8.5.0 || ~8.6.0"
+            },
+            "require-dev": {
+                "laminas/internal-tooling": "^1.0",
+                "laminas/laminas-coding-standard": "~3.1.0",
+                "phpunit/phpunit": "^11.5.57",
+                "vimeo/psalm": "^6.20.10"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Laminas\\Translator\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "BSD-3-Clause"
+            ],
+            "description": "Interfaces for the Translator component of laminas-i18n",
+            "homepage": "https://laminas.dev",
+            "keywords": [
+                "i18n",
+                "laminas"
+            ],
+            "support": {
+                "chat": "https://laminas.dev/chat",
+                "docs": "https://docs.laminas.dev/laminas-i18n/",
+                "forum": "https://discourse.laminas.dev",
+                "issues": "https://github.com/laminas/laminas-translator/issues",
+                "rss": "https://github.com/laminas/laminas-translator/releases.atom",
+                "source": "https://github.com/laminas/laminas-translator"
+            },
+            "funding": [
+                {
+                    "url": "https://crowdfunding.linuxfoundation.org/initiatives/laminas-project",
+                    "type": "custom"
+                }
+            ],
+            "time": "2026-11-10T00:27:07+00:00"
+        },
+        {
+            "name": "laminas/laminas-view",
+            "version": "3.2.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/laminas/laminas-view.git",
+                "reference": "9f8751ea7e74d3dd1b95863fc7ddf7b99eb69d3f"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/laminas/laminas-view/zipball/9f8751ea7e74d3dd1b95863fc7ddf7b99eb69d3f",
+                "reference": "9f8751ea7e74d3dd1b95863fc7ddf7b99eb69d3f",
+                "shasum": ""
+            },
+            "require": {
+                "ext-json": "*",
+                "laminas/laminas-escaper": "^2.17.0",
+                "laminas/laminas-servicemanager": "^4.4.0",
+                "laminas/laminas-stdlib": "^3.10.1",
+                "laminas/laminas-translator": "^1.1 || ^2.0",
+                "php": "~8.3.0 || ~8.4.0 || ~8.5.0 || ~8.6.0",
+                "psr/container": "^1 || ^2"
+            },
+            "require-dev": {
+                "amphp/dns": "^2.4.2",
+                "amphp/socket": "^2.4.2",
+                "boundwize/structarmed": "^0.21.8",
+                "laminas/internal-tooling": "^1.2",
+                "laminas/laminas-coding-standard": "~3.1.0",
+                "phpunit/phpunit": "^11.5.55 || ^12.5.43",
+                "psalm/plugin-phpunit": "^0.22.2",
+                "symfony/console": "7.4.23",
+                "vimeo/psalm": "^6.20.11"
+            },
+            "suggest": {
+                "laminas/laminas-authentication": "Laminas\\Authentication component",
+                "laminas/laminas-cli": "Laminas\\Cli component to autowire the template map generator utility",
+                "laminas/laminas-feed": "Laminas\\Feed component",
+                "laminas/laminas-filter": "Laminas\\Filter component",
+                "laminas/laminas-i18n": "Laminas\\I18n component",
+                "laminas/laminas-navigation": "Laminas\\Navigation component",
+                "laminas/laminas-paginator": "Laminas\\Paginator component",
+                "laminas/laminas-permissions-acl": "Laminas\\Permissions\\Acl component"
+            },
+            "type": "library",
+            "extra": {
+                "laminas": {
+                    "config-provider": "Laminas\\View\\ConfigProvider"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Laminas\\View\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "BSD-3-Clause"
+            ],
+            "description": "Fast and type safe HTML templating library with a flexible plugin system supporting multistep template composition",
+            "homepage": "https://laminas.dev",
+            "keywords": [
+                "html",
+                "laminas",
+                "templates",
+                "templating",
+                "view"
+            ],
+            "support": {
+                "chat": "https://laminas.dev/chat",
+                "docs": "https://docs.laminas.dev/laminas-view/",
+                "forum": "https://discourse.laminas.dev",
+                "issues": "https://github.com/laminas/laminas-view/issues",
+                "rss": "https://github.com/laminas/laminas-view/releases.atom",
+                "source": "https://github.com/laminas/laminas-view"
+            },
+            "funding": [
+                {
+                    "url": "https://crowdfunding.linuxfoundation.org/initiatives/laminas-project",
+                    "type": "custom"
+                }
+            ],
+            "time": "2026-11-12T14:11:14+00:00"
+        },
+        {
             "name": "mezzio/mezzio",
             "version": "3.29.0",
             "source": {
@@ -811,6 +950,159 @@
                 }
             ],
             "time": "2026-11-10T00:03:21+00:00"
+        },
+        {
+            "name": "mezzio/mezzio-helpers",
+            "version": "5.21.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/mezzio/mezzio-helpers.git",
+                "reference": "2eb571e2f4a20b83ffd94b4d56a1720024a0cd39"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/mezzio/mezzio-helpers/zipball/2eb571e2f4a20b83ffd94b4d56a1720024a0cd39",
+                "reference": "2eb571e2f4a20b83ffd94b4d56a1720024a0cd39",
+                "shasum": ""
+            },
+            "require": {
+                "mezzio/mezzio-router": "^3.18 || ^4.0",
+                "php": "~8.3.0 || ~8.4.0 || ~8.5.0 || ~8.6.0",
+                "psr/container": "^1.0 || ^2.0",
+                "psr/http-message": "^1.0.1 || ^2.0.0",
+                "psr/http-server-middleware": "^1.0"
+            },
+            "conflict": {
+                "amphp/amp": "<2.6.4",
+                "amphp/dns": "<2.1.2",
+                "amphp/socket": "<2.3.1",
+                "zendframework/zend-expressive-helpers": "*"
+            },
+            "require-dev": {
+                "ext-json": "*",
+                "laminas/internal-tooling": "^1.0.0",
+                "laminas/laminas-coding-standard": "~3.1.0",
+                "laminas/laminas-diactoros": "^3.10",
+                "phpunit/phpunit": "^11.5.57",
+                "psalm/plugin-phpunit": "^0.19.7",
+                "vimeo/psalm": "^6.20.10"
+            },
+            "suggest": {
+                "ext-json": "If you wish to use the JsonStrategy with BodyParamsMiddleware"
+            },
+            "type": "library",
+            "extra": {
+                "laminas": {
+                    "config-provider": "Mezzio\\Helper\\ConfigProvider"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Mezzio\\Helper\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "BSD-3-Clause"
+            ],
+            "description": "Helper/Utility classes for Mezzio",
+            "homepage": "https://mezzio.dev",
+            "keywords": [
+                "http",
+                "laminas",
+                "mezzio",
+                "middleware",
+                "psr",
+                "psr-7"
+            ],
+            "support": {
+                "chat": "https://laminas.dev/chat",
+                "docs": "https://docs.mezzio.dev/mezzio/features/helpers/intro/",
+                "forum": "https://discourse.laminas.dev",
+                "issues": "https://github.com/mezzio/mezzio-helpers/issues",
+                "rss": "https://github.com/mezzio/mezzio-helpers/releases.atom",
+                "source": "https://github.com/mezzio/mezzio-helpers"
+            },
+            "funding": [
+                {
+                    "url": "https://crowdfunding.linuxfoundation.org/initiatives/laminas-project",
+                    "type": "custom"
+                }
+            ],
+            "time": "2026-11-10T00:02:54+00:00"
+        },
+        {
+            "name": "mezzio/mezzio-laminasviewrenderer",
+            "version": "3.1.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/mezzio/mezzio-laminasviewrenderer.git",
+                "reference": "348b0abc4683f267c2de2a79cba2cf840fb36cf0"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/mezzio/mezzio-laminasviewrenderer/zipball/348b0abc4683f267c2de2a79cba2cf840fb36cf0",
+                "reference": "348b0abc4683f267c2de2a79cba2cf840fb36cf0",
+                "shasum": ""
+            },
+            "require": {
+                "laminas/laminas-servicemanager": "^4.4.0",
+                "laminas/laminas-view": "^3.0.1",
+                "mezzio/mezzio-helpers": "^5.15.0",
+                "mezzio/mezzio-router": "^3.16.1 || ^4.0.0",
+                "mezzio/mezzio-template": "^3.0",
+                "php": "~8.3.0 || ~8.4.0 || ~8.5.0 || ~8.6.0",
+                "psr/container": "^1.0 || ^2.0",
+                "psr/http-message": "^1.0.1 || ^2.0.0"
+            },
+            "require-dev": {
+                "laminas/internal-tooling": "^1.0.0",
+                "laminas/laminas-coding-standard": "^3.1.0",
+                "mezzio/mezzio-fastroute": "^3.15",
+                "phpunit/phpunit": "^11.5.57",
+                "psalm/plugin-phpunit": "^0.19.7",
+                "vimeo/psalm": "^6.20.10"
+            },
+            "type": "library",
+            "extra": {
+                "laminas": {
+                    "config-provider": "Mezzio\\LaminasView\\ConfigProvider"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Mezzio\\LaminasView\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "BSD-3-Clause"
+            ],
+            "description": "laminas-view PhpRenderer integration for Mezzio",
+            "homepage": "https://mezzio.dev",
+            "keywords": [
+                "http",
+                "laminas",
+                "mezzio",
+                "middleware",
+                "psr",
+                "psr-7"
+            ],
+            "support": {
+                "chat": "https://laminas.dev/chat",
+                "docs": "https://docs.mezzio.dev/mezzio/features/template/laminas-view/",
+                "forum": "https://discourse.laminas.dev",
+                "issues": "https://github.com/mezzio/mezzio-laminasviewrenderer/issues",
+                "rss": "https://github.com/mezzio/mezzio-laminasviewrenderer/releases.atom",
+                "source": "https://github.com/mezzio/mezzio-laminasviewrenderer"
+            },
+            "funding": [
+                {
+                    "url": "https://crowdfunding.linuxfoundation.org/initiatives/laminas-project",
+                    "type": "custom"
+                }
+            ],
+            "time": "2026-11-10T00:28:34+00:00"
         },
         {
             "name": "mezzio/mezzio-router",

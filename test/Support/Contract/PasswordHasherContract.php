@@ -114,4 +114,17 @@ abstract class PasswordHasherContract extends TestCase
 
         $hasher->hash(str_repeat('€', 25));
     }
+
+    public function testSimulatingAVerificationAcceptsAnySecretAndLeavesNothingBehind(): void
+    {
+        $hasher = $this->hasher();
+        $hash = $hasher->hash('the-secret');
+
+        // Whatever an attacker types reaches this path: nothing may make it throw.
+        $hasher->simulateVerification('');
+        $hasher->simulateVerification(str_repeat('a', 200));
+        $hasher->simulateVerification("before\0after");
+
+        self::assertTrue($hasher->verify('the-secret', $hash));
+    }
 }

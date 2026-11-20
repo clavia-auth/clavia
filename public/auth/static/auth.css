@@ -192,6 +192,13 @@ input[type="text"] {
 
 .qr svg { display: block; width: 100%; height: auto; }
 
+/* What to do next, on an error page: the one paragraph the person must read. */
+.advice {
+  margin: 0 0 1.25rem;
+  font-size: .9375rem;
+  line-height: 1.5;
+}
+
 .hint {
   margin: 0 0 .5rem;
   color: var(--muted);

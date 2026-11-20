@@ -13,9 +13,9 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Bootstrap\ConfigProvider;
 use Clavia\Configuration\Version;
+use Psr\Container\ContainerInterface;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\CommandLoader\ContainerCommandLoader;
-use Psr\Container\ContainerInterface;
 
 final class ConsoleApplicationFactory
 {

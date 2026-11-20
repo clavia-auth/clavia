@@ -11,6 +11,12 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Integration\Persistence;
 
+use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbAuthorizationCodeRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbTransactionManager;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbUserRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PostgresUrl;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\ClientId;
@@ -25,12 +31,6 @@ use Clavia\Domain\OAuth2\AuthorizationCode;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\Url;
-use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
-use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbAuthorizationCodeRepository;
-use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientRepository;
-use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbTransactionManager;
-use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbUserRepository;
-use Clavia\Adapter\Secondary\Persistence\PhpDb\PostgresUrl;
 use ClaviaTest\Support\Contract\AuthorizationCodeRepositoryContract;
 use ClaviaTest\Support\Contract\ClientRepositoryContract;
 use ClaviaTest\Support\Contract\UserRepositoryContract;

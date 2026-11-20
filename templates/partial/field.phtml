@@ -1,0 +1,15 @@
+<?php
+/**
+ * A labelled form field.
+ *
+ * @var Laminas\View\Renderer\PhpRenderer $this
+ * @var string $name
+ * @var string $label
+ * @var string $type
+ * @var string $autocomplete
+ * @var string $value
+ * @var bool   $autofocus
+ */
+?>
+      <label for="<?= $this->escapeHtmlAttr($name) ?>"><?= $this->escapeHtml($label) ?></label>
+      <input id="<?= $this->escapeHtmlAttr($name) ?>" name="<?= $this->escapeHtmlAttr($name) ?>" type="<?= $this->escapeHtmlAttr($type) ?>" required autocomplete="<?= $this->escapeHtmlAttr($autocomplete) ?>" spellcheck="false"<?php if ($value !== ''): ?> value="<?= $this->escapeHtmlAttr($value) ?>"<?php endif ?><?php if ($autofocus): ?> autofocus<?php endif ?>>

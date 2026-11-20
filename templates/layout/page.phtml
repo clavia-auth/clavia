@@ -1,0 +1,59 @@
+<?php
+/**
+ * The layout of every page this server renders: the auth pages and the error pages.
+ *
+ * Variables (set by Clavia\Adapter\Primary\Http\Shared\PageRenderer):
+ * @var Laminas\View\Renderer\PhpRenderer $this
+ * @var string      $title
+ * @var string      $heading
+ * @var string|null $error
+ * @var string|null $theme    The forced colour scheme, or null to follow the system.
+ * @var string|null $returnTo Where the theme toggle comes back to; null leaves the toggle out.
+ * @var string      $content  The page itself, already rendered.
+ *
+ * A page puts the line under the heading in the `subtitle` placeholder; it is rendered
+ * before the layout, so the layout prints whatever the page captured.
+ *
+ * No JavaScript anywhere on these pages, by design: a credential-entry surface whose
+ * policy forbids script cannot run an injected one either.
+ */
+?>
+<!DOCTYPE html>
+<html lang="en"<?php if ($theme !== null): ?> data-theme="<?= $this->escapeHtmlAttr($theme) ?>"<?php endif ?>>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="same-origin">
+  <title><?= $this->escapeHtml($title) ?> · Clavia</title>
+  <link rel="icon" href="/auth/static/clavia-icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/auth/static/auth.css">
+</head>
+<body>
+  <main class="card">
+    <header class="brand">
+      <img class="brand-mark" src="/auth/static/clavia-icon.svg" alt="" width="48" height="48">
+      <h1><?= $this->escapeHtml($heading) ?></h1>
+<?= $this->placeholder('subtitle') ?>
+    </header>
+
+<?php if ($error !== null): ?>
+    <?= $this->partial('partial::alert', ['message' => $error]) ?>
+<?php endif ?>
+
+<?= $content ?>
+
+    <footer class="footer">Secured by <span class="wordmark">Clavia</span></footer>
+  </main>
+
+<?php if ($returnTo !== null): ?>
+  <!-- The colour scheme is a cookie set by a form post: three buttons on one form, the
+       pressed one's value is the choice, and `next` brings the browser back here. -->
+  <form class="theme" method="post" action="/auth/theme" aria-label="Colour scheme">
+    <input type="hidden" name="next" value="<?= $this->escapeHtmlAttr($returnTo) ?>">
+<?php foreach (['auto' => 'Auto', 'light' => 'Light', 'dark' => 'Dark'] as $value => $label): ?>
+    <button type="submit" name="theme" value="<?= $value ?>"<?php if (($theme ?? 'auto') === $value): ?> aria-pressed="true"<?php endif ?>><?= $label ?></button>
+<?php endforeach ?>
+  </form>
+<?php endif ?>
+</body>
+</html>

@@ -11,10 +11,10 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Integration\Persistence;
 
-use Clavia\Application\Port\MigrationStatus;
-use Clavia\Application\Port\SchemaMigrationFailed;
 use Clavia\Adapter\Secondary\Persistence\Migrations\SqlFileMigrator;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
+use Clavia\Application\Port\MigrationStatus;
+use Clavia\Application\Port\SchemaMigrationFailed;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\IntegrationTestCase;
 

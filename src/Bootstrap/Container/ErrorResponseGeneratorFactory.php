@@ -12,9 +12,11 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Adapter\Primary\Http\Shared\ErrorResponseGenerator;
+use Clavia\Adapter\Primary\Http\Shared\PageRenderer;
+use Clavia\Domain\Shared\SecretGenerator;
+use Psr\Container\ContainerInterface;
 use Psr\Http\Message\StreamFactoryInterface;
 use Psr\Log\LoggerInterface;
-use Psr\Container\ContainerInterface;
 
 final class ErrorResponseGeneratorFactory
 {
@@ -24,7 +26,11 @@ final class ErrorResponseGeneratorFactory
         $streams = $container->get(StreamFactoryInterface::class);
         /** @var LoggerInterface $logger */
         $logger = $container->get(LoggerInterface::class);
+        /** @var PageRenderer $pages */
+        $pages = $container->get(PageRenderer::class);
+        /** @var SecretGenerator $secrets */
+        $secrets = $container->get(SecretGenerator::class);
 
-        return new ErrorResponseGenerator($streams, $logger);
+        return new ErrorResponseGenerator($streams, $logger, $pages, $secrets);
     }
 }

@@ -21,6 +21,8 @@ return new ConfigAggregator([
     Mezzio\ConfigProvider::class,
     Mezzio\Router\ConfigProvider::class,
     Mezzio\Router\FastRouteRouter\ConfigProvider::class,
+    Laminas\View\ConfigProvider::class,
+    Mezzio\LaminasView\ConfigProvider::class,
     new ArrayProvider(['clavia' => ['project_root' => dirname(__DIR__)]]),
     Clavia\Bootstrap\ConfigProvider::class,
 ])->getMergedConfig();

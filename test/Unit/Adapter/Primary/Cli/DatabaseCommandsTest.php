@@ -11,9 +11,9 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Adapter\Primary\Cli;
 
-use Clavia\Application\Port\MigrationStatus;
 use Clavia\Adapter\Primary\Cli\DatabaseStatusCommand;
 use Clavia\Adapter\Primary\Cli\MigrateDatabaseCommand;
+use Clavia\Application\Port\MigrationStatus;
 use ClaviaTest\Support\Fake\FakeSchemaMigrator;
 use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;

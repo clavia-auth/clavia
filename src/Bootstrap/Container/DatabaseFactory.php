@@ -11,9 +11,9 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
-use Clavia\Configuration\Settings;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PostgresUrl;
+use Clavia\Configuration\Settings;
 use Psr\Container\ContainerInterface;
 
 final class DatabaseFactory

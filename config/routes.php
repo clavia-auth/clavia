@@ -9,6 +9,10 @@
 
 declare(strict_types=1);
 
+use Clavia\Adapter\Primary\Http\Auth\LoginHandler;
+use Clavia\Adapter\Primary\Http\Auth\LoginPageHandler;
+use Clavia\Adapter\Primary\Http\Auth\LogoutHandler;
+use Clavia\Adapter\Primary\Http\Auth\ThemeHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\TokenHandler;
 use Clavia\Adapter\Primary\Http\Shared\HealthHandler;
@@ -24,4 +28,11 @@ return static function (Application $app): void {
     // ── /oauth2/* — the authorization server. Callers authenticate as clients. ──
     $app->route('/oauth2/authorize', AuthorizeHandler::class, ['GET', 'POST'], 'oauth2.authorize');
     $app->post('/oauth2/token', TokenHandler::class, 'oauth2.token');
+
+    // ── /auth/* — the interactive sign-in. The browser authenticates with its session
+    // cookie; every state change is a POST, and logout has no GET on purpose. ──
+    $app->get('/auth/login', LoginPageHandler::class, 'auth.login');
+    $app->post('/auth/login', LoginHandler::class, 'auth.login.submit');
+    $app->post('/auth/logout', LogoutHandler::class, 'auth.logout');
+    $app->post('/auth/theme', ThemeHandler::class, 'auth.theme');
 };

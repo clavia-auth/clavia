@@ -1,0 +1,34 @@
+<?php
+/**
+ * The login page: the sign-in form, or — for a visitor already signed in with no
+ * authorization request to return to — who they are and how to sign out.
+ *
+ * Variables (set by Clavia\Adapter\Primary\Http\Auth\LoginPages):
+ * @var Laminas\View\Renderer\PhpRenderer $this
+ * @var string      $csrfToken
+ * @var string      $loginState
+ * @var string      $email      Prefilled after a failed attempt, or ''.
+ * @var string|null $signedInAs
+ */
+?>
+<?php $this->placeholder('subtitle')->captureStart() ?>
+<?php if ($signedInAs !== null): ?>
+      <p class="subtitle">as <strong><?= $this->escapeHtml($signedInAs) ?></strong>. Go back to the application that sent you here — it will pick this sign-in up.</p>
+<?php else: ?>
+      <p class="subtitle">Continue to the application that sent you here.</p>
+<?php endif ?>
+<?php $this->placeholder('subtitle')->captureEnd() ?>
+<?php if ($signedInAs !== null): ?>
+
+    <form method="post" action="/auth/logout">
+      <button type="submit" class="secondary">Sign out</button>
+    </form>
+<?php else: ?>
+    <form method="post" action="/auth/login" autocomplete="on" novalidate>
+<?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => $loginState]) ?>
+<?= $this->partial('partial::field', ['name' => 'email', 'label' => 'Email', 'type' => 'email', 'autocomplete' => 'username', 'value' => $email, 'autofocus' => true]) ?>
+<?= $this->partial('partial::field', ['name' => 'password', 'label' => 'Password', 'type' => 'password', 'autocomplete' => 'current-password', 'value' => '', 'autofocus' => false]) ?>
+
+      <button type="submit">Sign in</button>
+    </form>
+<?php endif ?>

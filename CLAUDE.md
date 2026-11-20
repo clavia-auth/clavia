@@ -29,12 +29,12 @@ and multi-tenancy.
 
 ## Current state
 
-**Steps 0 to 2 are done: the foundations, and the first feature — Authorization Code + PKCE,
-ending in an opaque access token.** The application answers `GET /healthz`,
-`GET|POST /oauth2/authorize` and `POST /oauth2/token`. Nobody can sign in yet: without
-`CLAVIA_DEV_AUTOLOGIN_EMAIL`, `/oauth2/authorize` parks the request and redirects to
-`/auth/login?state=…`, which Step 3 builds. Update this section at the end of every step (what
-exists, where it lives, which conventions it established).
+**Steps 0 to 3 are done: the foundations, Authorization Code + PKCE ending in an opaque access
+token, and the login page with browser sessions.** The application answers `GET /healthz`,
+`GET|POST /oauth2/authorize`, `POST /oauth2/token`, `GET|POST /auth/login`, `POST /auth/logout`
+and `POST /auth/theme`: a person can sign in with a password and complete the flow in a
+browser. Update this section at the end of every step (what exists, where it lives, which
+conventions it established).
 
 What exists:
 
@@ -68,7 +68,8 @@ What exists:
   `clavia seed-dev`, `clavia authorize-url`.
 - **Test kit** (`test/Support`): `Fake\*` (one in-memory double per port), `Contract\*`
   (traits run against both the double and the real adapter), `TestEnvironment`, `TestStorage`,
-  `IntegrationTestCase`, `AcceptanceTestCase` (`get`/`post`/`locationQuery`), `OAuth2Fixtures`
+  `IntegrationTestCase`, `AcceptanceTestCase` (`get`/`post`/`locationQuery`, a cookie jar,
+  `freezeClock()`), `OAuth2Fixtures`, `LoginFixtures` (`submitLogin`, login-state handles)
   (users, clients, PKCE pairs and whole flows for acceptance tests), `Clients` (ready-made
   registrations for unit tests).
 - **Authorization Code + PKCE** (Step 2):
@@ -90,6 +91,29 @@ What exists:
   - `Adapter\Primary\Http\OAuth2\{AuthorizeHandler,TokenHandler,OAuth2Responder}`,
     `Adapter\Primary\Http\Shared\RequestParameterReader`, `Adapter\Primary\Cli\{SeedDevelopmentData,AuthorizeUrl}Command`.
   - Migrations `0001_users` … `0004_oauth2_access_tokens`.
+- **Login page and sessions** (Step 3):
+  - `Domain\Authentication` — `Session` (absolute and idle lifetimes, `sid`, `methods`),
+    `AuthenticationMethod` (RFC 8176 `amr` values), `LocalPath` (the only shape a post-sign-in
+    `Location` may take).
+  - `Application\Authentication` — `Sessions` (establish with rotation, resolve with sliding,
+    end), `LoginThrottle`, `ResolveEndUser` (session, then the development auto-login),
+    `SignIn\SignInWithPassword` (`SignedIn | CredentialsRejected`), `SignOut`,
+    `LoginPage\DescribeLoginPage`; ports `SessionStore` and `AttemptCounter`;
+    `PasswordHasher::simulateVerification()`; `ClientRepository::registersRedirectOrigin()`
+    and `Client::redirectOrigins()`.
+  - `Adapter\Secondary\Redis\{RedisSessionStore,RedisAttemptCounter}`.
+  - `Adapter\Primary\Http\Auth\{LoginPageHandler,LoginHandler,LogoutHandler,ThemeHandler}`,
+    `AuthPageResponder` + `AuthPage` + `LoginPages` (view models), `AuthCookies`, `CsrfToken`;
+    `Adapter\Primary\Http\Shared\{RequestCookies,SetCookie}`. `AuthorizeHandler` now
+    resolves the end user from the session cookie.
+  - `templates/` — `layout/page.phtml`, `auth/login.phtml`, `error/page.phtml`,
+    `partial/{alert,csrf,field}.phtml`, rendered by laminas-view through
+    `mezzio/mezzio-laminasviewrenderer`.
+- **Error pages for browsers** (after Step 3): `Adapter\Primary\Http\Shared\ClientPreference`
+  (`Accept` negotiation), `ErrorResponder` + `ErrorPage`, `PageRenderer` + `HtmlPage` (the
+  layout, headers and CSP every server-rendered page shares). 404, 405, 500 and the
+  authorization endpoint's non-redirectable errors are a page for a browser and JSON (plain
+  text for 500) for anything else.
 
 Conventions established in Step 0 that later steps keep:
 
@@ -228,11 +252,66 @@ Conventions established in Step 2:
   `JsonResponse` and a PSR-17 `ResponseFactoryInterface`. Token-endpoint errors are 400, or 401
   with `WWW-Authenticate` for `invalid_client`; an authorization-endpoint error that cannot be
   redirected is a plain 400 and never a challenge (a browser would prompt for a client secret).
-  Step 3 turns that last one into an HTML page.
+  A browser gets that last one as a page; see "An error is a page for a person".
 - **Acceptance tests state behaviour, not Python parity.** `AuthorizationCodeFlowTest` and
   `PkceSecurityTest` cover every behaviour of the Python suites they came from, through
   `OAuth2Fixtures`; where the RFC-correct answer differs from what Python gave, the test
   asserts the RFC-correct one and `docs/DEVIATIONS.md` keeps the note.
+
+Conventions established in Step 3:
+
+- **One door per session operation.** `Sessions::establish()` is the only way a browser
+  becomes authenticated (it always rotates: the identifier the browser held is ended),
+  `resolve()` the only way one is read (it slides the idle window, never past the absolute
+  ceiling, and deletes a session found past it), `end()` the only way one stops. Later
+  sign-in flows (second factor, social, passwordless) call `establish()` with their own
+  `AuthenticationMethod`s. The session identifier is a 43-character token stored as its
+  digest; the `sid` is a second, unrelated token.
+- **Sign-in failures are one outcome.** `CredentialsRejected` covers an unknown account, a
+  wrong password, a deactivated account, one without a password and a throttled subject; the
+  page shows one message with one status. Whenever no real hash is checked,
+  `PasswordHasher::simulateVerification()` spends the same time. Throttling counts per account
+  (case-insensitive) and per client address (`REMOTE_ADDR`, never a forwarded header).
+- **`ResolveEndUser` answers "who is this?" for every browser-facing handler**, re-checking
+  that the account is still active on every request.
+- **A `Location` built from anything a client or a store supplied goes through `LocalPath`**
+  (or, for sign-out, an https URL on an origin some client registered). Rejected, never
+  repaired.
+- **Cookies are read from the `Cookie` header** (`RequestCookies`, which keeps every value of a
+  name in the order sent) **and written through `SetCookie`** (`HttpOnly; SameSite=Lax`, never
+  a `Domain`, name and value validated so nothing can split the header). `AuthCookies` owns
+  each cookie's name, path and lifetime, so a cookie is always deleted with the path it was set
+  with.
+- **CSRF is double-submit, per browser.** `AuthPageResponder` reuses the token the browser
+  holds (minting one only when there is none) and refreshes its cookie on every page; every
+  `/auth/*` form posts it and `CsrfToken::isValid()` accepts a match with any held value.
+  Logout and the theme toggle need none (a `SameSite=Lax` session cookie never rides a
+  cross-site POST; a colour scheme is not worth forging).
+- **A server-rendered page is an `HtmlPage` view model rendered by `PageRenderer`** (the
+  `layout::page` layout and the headers every page carries); `AuthPageResponder` adds the
+  CSRF token for auth pages. The handler decides every value (`LoginPages` builds the login
+  page's); templates print and loop. Every page gets `Cache-Control: no-store`,
+  `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: same-origin` and a CSP with no script
+  source and a `form-action` naming the application's redirect origins when the page belongs
+  to an authorization request.
+- **An error is a page for a person and data for a program.** `ClientPreference::prefersHtml()`
+  says which: HTML only when `Accept` names `text/html` (or `text/*`, or
+  `application/xhtml+xml`) at a weight at least as high as JSON's — `*/*` alone, or no
+  `Accept`, is a program. `ErrorResponder::respond()` sends the same status and headers either
+  way with an `ErrorPage` (title, what happened, what to do, an optional reference) or the
+  JSON document. Error text never comes from the request, an error page offers no link or
+  form onwards (the only address a refused request named is the untrusted one) and sets no
+  cookie. Endpoints whose format a specification fixes — `/oauth2/token`, and later
+  introspection, revocation, userinfo — answer JSON whatever `Accept` says. An uncaught error
+  is logged under a 12-character reference, sent in `X-Error-Reference` and shown on the page;
+  if the page itself fails to render, the plain `Internal Server Error` goes out instead.
+- **Every printed value is escaped by the template** with `escapeHtml()` /
+  `escapeHtmlAttr()` — laminas-view does not escape on its own. `AuthPagesEscapingTest`
+  renders every page with hostile values; a new page or template variable gets a case there.
+  A line under the heading goes in the `subtitle` placeholder.
+- **An acceptance test that moves time calls `freezeClock()`** before its first request. The
+  harness drops each test's container in `tearDown()`; PHPUnit keeps finished tests alive,
+  and a container left on one holds a PostgreSQL connection.
 
 **Known defect in the database library, worked around.** At the pinned commit,
 `php-db/phpdb-pgsql` runs `SELECT LASTVAL()` after every statement to fetch a "last generated
@@ -245,9 +324,8 @@ Integration suite**, and report the defect upstream.
 
 Running it: `cp .env.example .env`, `./setup-ssl.sh`, `make up install migrate seed`, then
 `https://auth.{domain}/healthz`. Tooling runs in the container: `make check`, `make config`,
-`make migrate`, `make db-status`, `make seed`, `make authorize-url`. To walk the flow before
-Step 3 exists, set `CLAVIA_DEV_AUTOLOGIN_EMAIL=dev@{domain}` in `.env` and follow what
-`make authorize-url` prints.
+`make migrate`, `make db-status`, `make seed`, `make authorize-url`. To walk the flow, open the
+link `make authorize-url` prints and sign in as `dev@{domain}` / `devpassword`.
 
 ## How the migration works
 
@@ -281,7 +359,7 @@ Step 3 exists, set `CLAVIA_DEV_AUTOLOGIN_EMAIL=dev@{domain}` in `.env` and follo
 | Runtime | **PHP-FPM behind Caddy** (share-nothing; no worker mode) |
 | Short-TTL state | Redis (`ext-redis`), behind store ports |
 | Dashboard | The existing **React** dashboard (`frontend/`), copied unchanged |
-| Auth pages | **Plain HTML templates, no Twig, no template engine**, no JavaScript — see "Auth pages" |
+| Auth pages | **laminas-view** PHP templates through `mezzio/mezzio-laminasviewrenderer` — no Twig, no other template language, no JavaScript — see "Auth pages" |
 | Namespace / licence | `Clavia\` · BSD-3-Clause |
 | Existing data | None to carry over — the PHP schema is free to be designed cleanly |
 
@@ -344,7 +422,7 @@ src/
   Configuration/              # the typed CLAVIA_* settings. Plain data; depends on nothing.
   Bootstrap/                  # composition root: ConfigProvider + one factory per service.
 config/                       # Mezzio entry files: config, container, pipeline, routes
-templates/                    # auth pages: plain HTML templates + partials
+templates/                    # auth pages: laminas-view layout/, auth/ (one per page), partial/
 public/                       # index.php, auth/static/ (auth.css, icon — served by Caddy)
 frontend/                     # the React dashboard, copied from the Python project
 migrations/  docs/
@@ -401,7 +479,7 @@ test/
 | Pydantic, `extra="forbid"` | OpenAPI document + `phayne-io/openapi-psr7-validator` (`additionalProperties: false`) at the edge, then typed Commands | The Management API becomes contract-first: `docs/openapi/management-api.yaml` is the source of truth. Error bodies keep FastAPI's shape (`{"detail": …}`) — the contract is frozen. |
 | SQLAlchemy models + Alembic | Aggregates + phpdb-pgsql repositories + SQL migrations | Models are not table-shaped; mappers live in the adapter. |
 | `pydantic-settings` | A typed, validated `Settings` object built once in the composition root | Same `CLAVIA_*` names and the same validators (e.g. console mail refused outside development). |
-| Jinja2 | Plain HTML templates with partials and one escaping helper | No Twig, no template engine. Still **no JavaScript** on the auth origin. |
+| Jinja2 | laminas-view PHP templates (layout, pages, partials) behind Mezzio's `TemplateRendererInterface` | No Twig. Escaping is explicit (`escapeHtml`/`escapeHtmlAttr`) and tested. Still **no JavaScript** on the auth origin. |
 | `BackgroundTask` (back-channel logout) | `DeferredTasks` port; FPM adapter runs after `fastcgi_finish_request()` | Must work without a queue; keep the port so a queue adapter can replace it. |
 | `httpx` + `MockTransport` | PSR-18 client behind `OutboundHttp`; fake in tests | `OutboundUrlPolicy` (SSRF guard) must pin the resolved address it validated. |
 | `cryptography` | `ext-openssl`: RSASSA-PKCS1-v1_5/SHA-256, AES-256-GCM with AAD | JWS assembled by hand, as in Python. |
@@ -430,17 +508,25 @@ touches `Adapter/Secondary/Persistence/PhpDb` and nothing else.
 
 ## Auth pages
 
-The pages on `auth.{domain}` (login, MFA, consent, device, passwordless) are **plain HTML**:
-no Twig, no template engine, no front-end framework, no JavaScript.
+The pages on `auth.{domain}` (login now; MFA, consent, device and passwordless later) are
+**server-rendered HTML with no JavaScript**, written as laminas-view PHP templates
+(`.phtml`) and rendered through `mezzio/mezzio-laminasviewrenderer`. No Twig, no other
+template language, no front-end framework. (Decided 2026-11-20, replacing the earlier
+"no template engine" line: laminas-view is PHP itself, used as Mezzio intends.)
 
-- `templates/layout.html.php` + one template per page + reusable partials (`field`, `alert`,
-  `button`, `connection-list`). A repeated block becomes a partial, never a copy.
-- Templates are HTML with the minimum of PHP needed to print a value or loop; no logic beyond
-  that — the handler passes a ready-made view model.
-- A small `PageRenderer` in `Adapter/Primary/Http/Shared` renders them, escapes every value by default and
-  attaches the per-page CSP.
-- One stylesheet, `public/auth/static/auth.css` (served at `/auth/static/auth.css`), copied from the Python project; light/dark through
-  custom properties; the theme toggle stays a POST.
+- `templates/layout/page.phtml` + one template per page (`templates/auth/*.phtml`, and
+  `templates/error/page.phtml` for every error shown to a browser) + reusable partials
+  (`templates/partial/*.phtml`: `alert`, `csrf`, `field`; later `button`,
+  `connection-list`). A repeated block becomes a partial, never a copy. Names are namespaced:
+  `layout::page`, `auth::login`, `error::page`, `partial::field`.
+- Templates print and loop; the handler passes a ready-made view model (`HtmlPage`, built for
+  the login page by `LoginPages` and for errors by `ErrorPage::toHtmlPage()`).
+- `PageRenderer` in `Adapter/Primary/Http/Shared` renders them with the per-page CSP and the
+  common headers; `AuthPageResponder` adds the CSRF cookie to auth pages. Every value is
+  escaped by the template; `AuthPagesEscapingTest` proves it for every page.
+- One stylesheet, `public/auth/static/auth.css` (served at `/auth/static/auth.css`), copied
+  from the Python project; light/dark through custom properties; the theme toggle is a POST
+  that sets a cookie.
 - No JavaScript on this origin is a security property, not a style choice.
 
 The management dashboard is a separate concern: the React app in `frontend/`, kept as is.
@@ -678,7 +764,7 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
 - `clavia secrets:generate-key` (moved here from Step 4: the cipher it serves lands here).
 - Python: `security/*`, `redis_store.py`, `db/session.py`, `tests/conftest.py`.
 - Verified against PostgreSQL 16 and Redis 7 outside Docker; the plan targets PostgreSQL 17.
-  Not yet built: the cookie jar of the acceptance harness — it arrives with the first cookie (Step 3).
+  The acceptance harness's cookie jar arrived with the first cookie, in Step 3.
 
 ### Phase B — The original build order (Python steps 1–6)
 
@@ -699,7 +785,7 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
   steps that own them: the login page behind `LoginRequired` (3), `nonce`/`openid` handling and
   the ID token (4), consent (15), per-client scopes and audiences (5, 16).
 
-#### [ ] Step 3 — Login page and sessions
+#### [x] Step 3 — Login page and sessions
 - Domain: `Session` (idle + absolute lifetime, `sid`, `amr`, `connection`), `LoginState`,
   throttling policy, redirect-target validation.
 - Ports: `SessionStore`, `LoginStateStore`, `AttemptCounter` (Redis adapters).
@@ -707,7 +793,11 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
   per-page CSP builder; per-browser CSRF double-submit; host-only cookie; session rotation.
 - Python: `auth/{router,sessions,login_state,throttle,redirects,pages,current_user}.py`,
   `forms.py`, `templates/`.
-- Tests: `test_login` (35).
+- Tests: `test_login` (35) — ported as `LoginTest` (42 cases), plus `AuthPagesEscapingTest`,
+  unit tests for every new class and contracts run against the doubles and Redis.
+- Left for the steps that own them: `connection` on the session and the per-application
+  connection check (13), the user→sessions and session→clients indexes (17), the second
+  factor between password and session (7).
 
 #### [ ] Step 4 — JWKS, ID token, discovery, userinfo
 - Domain: `IdTokenClaims` (incl. `at_hash`, `nonce`, `auth_time`, `amr`), shared

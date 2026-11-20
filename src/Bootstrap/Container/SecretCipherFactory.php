@@ -11,9 +11,9 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Adapter\Secondary\Crypto\AesGcmSecretCipher;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Shared\RandomSource;
-use Clavia\Adapter\Secondary\Crypto\AesGcmSecretCipher;
 use Psr\Container\ContainerInterface;
 
 final class SecretCipherFactory

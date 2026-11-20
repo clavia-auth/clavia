@@ -11,8 +11,8 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Adapter\Secondary\Crypto;
 
-use Clavia\Application\Port\PasswordHasher;
 use Clavia\Adapter\Secondary\Crypto\BcryptPasswordHasher;
+use Clavia\Application\Port\PasswordHasher;
 use ClaviaTest\Support\Contract\PasswordHasherContract;
 
 final class BcryptPasswordHasherTest extends PasswordHasherContract

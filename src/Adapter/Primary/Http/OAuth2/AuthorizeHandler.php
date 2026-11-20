@@ -11,14 +11,16 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\OAuth2;
 
-use Clavia\Application\Authentication\DevelopmentAutoLogin;
+use Clavia\Adapter\Primary\Http\Auth\AuthCookies;
+use Clavia\Adapter\Primary\Http\Shared\RequestCookies;
+use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
+use Clavia\Application\Authentication\ResolveEndUser;
 use Clavia\Application\OAuth2\Authorize\AuthorizationRequest;
 use Clavia\Application\OAuth2\Authorize\Authorize;
 use Clavia\Application\OAuth2\Authorize\CodeIssued;
 use Clavia\Application\OAuth2\Authorize\LoginRequired;
 use Clavia\Application\OAuth2\Authorize\RequestRefused;
 use Clavia\Domain\OAuth2\OAuth2Error;
-use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
@@ -35,8 +37,9 @@ final readonly class AuthorizeHandler implements RequestHandlerInterface
 {
     public function __construct(
         private Authorize $authorize,
-        private DevelopmentAutoLogin $autoLogin,
+        private ResolveEndUser $resolveEndUser,
         private OAuth2Responder $responder,
+        private AuthCookies $cookies,
     ) {
     }
 
@@ -50,10 +53,10 @@ final readonly class AuthorizeHandler implements RequestHandlerInterface
                 // RFC 6749 §3.1: the endpoint must support GET and may support POST.
                 RequestParameterReader::queryAndForm($request),
                 $uri->getPath() . ($uri->getQuery() === '' ? '' : '?' . $uri->getQuery()),
-                $this->autoLogin->endUser(),
+                ($this->resolveEndUser)(RequestCookies::first($request, $this->cookies->sessionCookieName)),
             ));
         } catch (OAuth2Error $error) {
-            return $this->responder->authorizationError($error);
+            return $this->responder->authorizationError($request, $error);
         }
 
         if ($outcome instanceof CodeIssued) {

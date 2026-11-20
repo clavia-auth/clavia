@@ -15,8 +15,8 @@ use Monolog\Handler\StreamHandler;
 use Monolog\Level;
 use Monolog\Logger;
 use Monolog\Processor\PsrLogMessageProcessor;
-use Psr\Log\LoggerInterface;
 use Psr\Container\ContainerInterface;
+use Psr\Log\LoggerInterface;
 
 final class LoggerFactory
 {

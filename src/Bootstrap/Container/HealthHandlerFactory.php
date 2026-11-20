@@ -11,8 +11,8 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
-use Clavia\Configuration\Version;
 use Clavia\Adapter\Primary\Http\Shared\HealthHandler;
+use Clavia\Configuration\Version;
 use Psr\Container\ContainerInterface;
 
 final class HealthHandlerFactory

@@ -11,9 +11,9 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Adapter\Primary\Cli\SeedDevelopmentDataCommand;
 use Clavia\Application\Development\SeedDevelopmentData;
 use Clavia\Configuration\Settings;
-use Clavia\Adapter\Primary\Cli\SeedDevelopmentDataCommand;
 use Psr\Container\ContainerInterface;
 
 final class SeedDevelopmentDataCommandFactory

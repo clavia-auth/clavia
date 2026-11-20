@@ -38,4 +38,13 @@ interface PasswordHasher
 
     /** Whether a hash that just verified should be replaced by a fresh one at today's cost. */
     public function needsRehash(string $hash): bool;
+
+    /**
+     * Spend the time a {@see verify()} against a real hash would take, and match nothing.
+     *
+     * For the case where there is no hash to check against — an unknown account, one
+     * without a password. Answering faster there would tell an observer which accounts
+     * exist.
+     */
+    public function simulateVerification(#[\SensitiveParameter] string $secret): void;
 }

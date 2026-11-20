@@ -1,0 +1,22 @@
+<?php
+/**
+ * An error, explained to the person who met it.
+ *
+ * Variables (set by Clavia\Adapter\Primary\Http\Shared\ErrorResponder):
+ * @var Laminas\View\Renderer\PhpRenderer $this
+ * @var string      $message What happened.
+ * @var string      $advice  What to do now.
+ * @var string|null $code    A reference to quote to whoever can help.
+ *
+ * Deliberately no link onwards: the only addresses the request offered are the ones that
+ * could not be trusted.
+ */
+?>
+<?php $this->placeholder('subtitle')->captureStart() ?>
+      <p class="subtitle"><?= $this->escapeHtml($message) ?></p>
+<?php $this->placeholder('subtitle')->captureEnd() ?>
+    <p class="advice"><?= $this->escapeHtml($advice) ?></p>
+<?php if ($code !== null): ?>
+    <p class="hint">Reference</p>
+    <p class="secret"><?= $this->escapeHtml($code) ?></p>
+<?php endif ?>

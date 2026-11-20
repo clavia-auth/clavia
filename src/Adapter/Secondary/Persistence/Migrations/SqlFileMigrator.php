@@ -11,11 +11,11 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Secondary\Persistence\Migrations;
 
+use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use Clavia\Application\Port\MigrationStatus;
 use Clavia\Application\Port\SchemaMigrationFailed;
 use Clavia\Application\Port\SchemaMigrator;
 use Clavia\Domain\Shared\Clock;
-use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use DateTimeImmutable;
 use DateTimeInterface;
 use Throwable;

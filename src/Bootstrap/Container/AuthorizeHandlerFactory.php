@@ -11,10 +11,11 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
-use Clavia\Application\Authentication\DevelopmentAutoLogin;
-use Clavia\Application\OAuth2\Authorize\Authorize;
+use Clavia\Adapter\Primary\Http\Auth\AuthCookies;
 use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\OAuth2Responder;
+use Clavia\Application\Authentication\ResolveEndUser;
+use Clavia\Application\OAuth2\Authorize\Authorize;
 use Psr\Container\ContainerInterface;
 
 final class AuthorizeHandlerFactory
@@ -23,11 +24,13 @@ final class AuthorizeHandlerFactory
     {
         /** @var Authorize $authorize */
         $authorize = $container->get(Authorize::class);
-        /** @var DevelopmentAutoLogin $autoLogin */
-        $autoLogin = $container->get(DevelopmentAutoLogin::class);
+        /** @var ResolveEndUser $resolveEndUser */
+        $resolveEndUser = $container->get(ResolveEndUser::class);
         /** @var OAuth2Responder $responder */
         $responder = $container->get(OAuth2Responder::class);
+        /** @var AuthCookies $cookies */
+        $cookies = $container->get(AuthCookies::class);
 
-        return new AuthorizeHandler($authorize, $autoLogin, $responder);
+        return new AuthorizeHandler($authorize, $resolveEndUser, $responder, $cookies);
     }
 }

@@ -43,8 +43,28 @@ knows what changes.
 | List columns of `oauth2_clients` (`redirect_uris`, `grant_types`, `response_types`) | `JSON` | `jsonb`, each constrained to be an array | Not visible over HTTP. `jsonb` can be indexed and compared. |
 | Columns not used yet (`nonce`, `auth_time`, `sid`, `amr`, `audience`, profile fields, `is_first_party`, per-connection email uniqueness…) | Present from the first revision that needed them | Added by the step that introduces the behaviour | Migrations are written as the port advances; `users.email` is unique on its own until connections arrive (Step 13). |
 
+## Login page and sessions
+
+| Area | Python | PHP | Why |
+|---|---|---|---|
+| A throttled sign-in attempt | Refused at once, without hashing anything | Refused after the same time a password check takes | A faster answer would tell an observer the account is locked — and so that it exists. |
+| Theme toggle on a login page re-shown after a failed attempt | Came back to `/auth/login`, losing the pending authorization request | Comes back to `/auth/login?state=…` | Switching colour scheme must not cost the person their place in the flow. |
+| `next` on `POST /auth/logout` | Any `https` URL on a registered origin | The same, without a fragment | Nothing legitimate needs one there, and a fragment is never checked by anyone. |
+| Session record in Redis | A hash, plus a per-user index and a per-session client index | One JSON document per session; the two indexes come with session management and back-channel logout (Step 17) | Not visible over HTTP. Nothing reads the indexes yet. |
+| The session's connection | Recorded | Not yet recorded | Connections arrive in Step 13, with the check that uses the value. |
+
+## Errors shown to browsers
+
+| Area | Python | PHP | Why |
+|---|---|---|---|
+| 404 and 405 | `{"detail": …}` for every caller | The same for a program; a page for a browser (`Accept` naming `text/html`) | A person who follows a dead link should read a sentence, not a JSON document. Programs keep the body they parse. |
+| `/oauth2/authorize` error that cannot be redirected (unknown client, unregistered redirect URI) | A JSON error document | The same for a program; a page for a browser, explaining what happened, with the error code as a reference and no link onwards | RFC 6749 §4.1.2.1: the resource owner is to be informed, and the resource owner is in a browser. |
+| An uncaught error (500) | `Internal Server Error` in plain text | The same for a program, plus `X-Error-Reference`; a page with the reference for a browser | The reference is in the log next to the cause, so a person can report the failure without the server describing it. |
+
 ## Tooling (not user-visible)
 
 - Console commands are built on `symfony/console` directly rather than `laminas-cli`, which wraps
   it: `bin/clavia <command>` keeps the Python command names without a second binary.
 - The licence header is enforced by a test (`LicenseHeaderTest`) instead of an extra tool.
+- The auth pages are laminas-view PHP templates rendered through Mezzio's
+  `TemplateRendererInterface`, where Python used Jinja2. Markup and the stylesheet are the same.

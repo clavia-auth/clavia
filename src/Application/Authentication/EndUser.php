@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Authentication;
 
+use Clavia\Domain\Authentication\Session;
 use Clavia\Domain\Identity\UserId;
 
 /**
@@ -23,7 +24,14 @@ use Clavia\Domain\Identity\UserId;
  */
 final readonly class EndUser
 {
-    public function __construct(public UserId $userId)
-    {
+    /**
+     * @param Session|null $session The browser session that established who this is; null when
+     *                              something else did (the development auto-login). Later steps read
+     *                              when and how the person authenticated from it (`auth_time`, `amr`).
+     */
+    public function __construct(
+        public UserId $userId,
+        public ?Session $session = null,
+    ) {
     }
 }
