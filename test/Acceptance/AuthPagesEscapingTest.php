@@ -13,8 +13,11 @@ namespace ClaviaTest\Acceptance;
 
 use Clavia\Adapter\Primary\Http\Auth\AuthPageResponder;
 use Clavia\Adapter\Primary\Http\Auth\LoginPages;
+use Clavia\Adapter\Primary\Http\Auth\MfaPages;
 use Clavia\Adapter\Primary\Http\Shared\ErrorPage;
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
+use Clavia\Application\Authentication\Mfa\MfaStatus;
+use Clavia\Application\Authentication\Mfa\TotpEnrollment;
 use ClaviaTest\Support\AcceptanceTestCase;
 use Laminas\Diactoros\ServerRequest;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -60,6 +63,16 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
             variables: ['loginState' => '', 'email' => '', 'signedInAs' => null],
             error: self::HOSTILE,
         )];
+        yield 'the second step: error' => [MfaPages::challenge([], self::HOSTILE, 401)];
+        yield 'the two-factor settings: email' => [MfaPages::settings(new MfaStatus(self::HOSTILE, true, 3))];
+        yield 'the two-factor settings, off: email' => [MfaPages::settings(new MfaStatus(self::HOSTILE, false, 0))];
+        yield 'the set-up page: seed and error' => [
+            MfaPages::setUp(
+                new TotpEnrollment(self::HOSTILE, 'otpauth://totp/' . rawurlencode(self::HOSTILE)),
+                self::HOSTILE,
+            ),
+        ];
+        yield 'the recovery codes' => [MfaPages::recoveryCodes([self::HOSTILE, 'abcd-efgh-jkmn'])];
         yield 'an error page: message, advice and reference' => [
             new ErrorPage(self::HOSTILE, self::HOSTILE, self::HOSTILE, self::HOSTILE)->toHtmlPage(400),
         ];

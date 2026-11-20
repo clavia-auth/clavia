@@ -94,6 +94,14 @@ knows what changes.
 | Session record in Redis | A hash, plus a per-user index and a per-session client index | One JSON document per session; the two indexes come with session management and back-channel logout (Step 17) | Not visible over HTTP. Nothing reads the indexes yet. |
 | The session's connection | Recorded | Not yet recorded | Connections arrive in Step 13, with the check that uses the value. |
 
+## Multi-factor authentication
+
+| Area | Python | PHP | Why |
+|---|---|---|---|
+| Wrong codes at the second step | Counted per challenge only: a challenge is destroyed after `CLAVIA_MFA_MAX_ATTEMPTS`, and the next correct password opens a fresh one | Also counted against the account and the address, by the same throttle as wrong passwords (`CLAVIA_LOGIN_MAX_ATTEMPTS` per `CLAVIA_LOGIN_ATTEMPT_WINDOW`); a throttled attempt is refused without the code being checked | Per challenge alone, anyone holding the password can guess six digits forever, five at a time. |
+| Counting the wrong codes | Read, increment, write back | One Redis script (`EXISTS`, `HINCRBY`, `DEL` at the limit) | Concurrent guesses are each counted, and a challenge that expired meanwhile is not written back. |
+| The challenge's connection | Recorded | Not yet recorded | As for sessions: connections arrive in Step 13. |
+
 ## Errors shown to browsers
 
 | Area | Python | PHP | Why |

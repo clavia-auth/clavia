@@ -29,6 +29,8 @@ use Clavia\Adapter\Primary\Http\Auth\AuthPageResponder;
 use Clavia\Adapter\Primary\Http\Auth\LoginHandler;
 use Clavia\Adapter\Primary\Http\Auth\LoginPageHandler;
 use Clavia\Adapter\Primary\Http\Auth\LogoutHandler;
+use Clavia\Adapter\Primary\Http\Auth\MfaChallengeHandler;
+use Clavia\Adapter\Primary\Http\Auth\MfaSettingsHandler;
 use Clavia\Adapter\Primary\Http\Auth\ThemeHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientsHandler;
@@ -39,6 +41,7 @@ use Clavia\Adapter\Primary\Http\Management\ResourceServerHandler;
 use Clavia\Adapter\Primary\Http\Management\ResourceServersHandler;
 use Clavia\Adapter\Primary\Http\Management\RotateClientSecretHandler;
 use Clavia\Adapter\Primary\Http\Management\UserHandler;
+use Clavia\Adapter\Primary\Http\Management\UserMfaHandler;
 use Clavia\Adapter\Primary\Http\Management\UsersHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\OAuth2Responder;
@@ -61,6 +64,15 @@ use Clavia\Adapter\Secondary\System\SystemRandomSource;
 use Clavia\Application\Authentication\DevelopmentAutoLogin;
 use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
 use Clavia\Application\Authentication\LoginThrottle;
+use Clavia\Application\Authentication\Mfa\BeginTotpEnrollment;
+use Clavia\Application\Authentication\Mfa\CompleteSecondFactor;
+use Clavia\Application\Authentication\Mfa\ConfirmTotpEnrollment;
+use Clavia\Application\Authentication\Mfa\DescribeMfa;
+use Clavia\Application\Authentication\Mfa\DescribeSecondFactorPage;
+use Clavia\Application\Authentication\Mfa\DisableMfa;
+use Clavia\Application\Authentication\Mfa\ResumeTotpEnrollment;
+use Clavia\Application\Authentication\Mfa\TotpSeeds;
+use Clavia\Application\Authentication\RequireSignIn;
 use Clavia\Application\Authentication\ResolveEndUser;
 use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Authentication\SignIn\SignInWithPassword;
@@ -84,6 +96,7 @@ use Clavia\Application\Management\ResourceServers\UpdateResourceServer;
 use Clavia\Application\Management\Users\CreateUser;
 use Clavia\Application\Management\Users\DeleteUser;
 use Clavia\Application\Management\Users\ReadUsers;
+use Clavia\Application\Management\Users\ResetUserMfa;
 use Clavia\Application\Management\Users\UpdateUser;
 use Clavia\Application\OAuth2\Authorize\Authorize;
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
@@ -100,6 +113,7 @@ use Clavia\Application\Oidc\Keys\RotateSigningKey;
 use Clavia\Application\Oidc\UserInfo\ReadUserInfo;
 use Clavia\Application\Port\AttemptCounter;
 use Clavia\Application\Port\LoginStateStore;
+use Clavia\Application\Port\MfaChallengeStore;
 use Clavia\Application\Port\NonceRegistry;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Application\Port\SchemaMigrator;
@@ -110,6 +124,8 @@ use Clavia\Application\Port\TokenSigner;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Application\Secrets\GenerateEncryptionKey;
 use Clavia\Configuration\Settings;
+use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
+use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
@@ -218,6 +234,22 @@ final class ConfigProvider
                     RotateSigningKey::class => Container\RotateSigningKeyFactory::class,
                     ListSigningKeys::class => Container\ListSigningKeysFactory::class,
                     ReadUserInfo::class => Container\ReadUserInfoFactory::class,
+                    MfaFactorRepository::class => Container\MfaFactorRepositoryFactory::class,
+                    RecoveryCodeRepository::class => Container\RecoveryCodeRepositoryFactory::class,
+                    MfaChallengeStore::class => Container\MfaChallengeStoreFactory::class,
+                    TotpSeeds::class => Container\TotpSeedsFactory::class,
+                    DescribeMfa::class => Container\DescribeMfaFactory::class,
+                    BeginTotpEnrollment::class => Container\BeginTotpEnrollmentFactory::class,
+                    ResumeTotpEnrollment::class => Container\ResumeTotpEnrollmentFactory::class,
+                    ConfirmTotpEnrollment::class => Container\ConfirmTotpEnrollmentFactory::class,
+                    DisableMfa::class => Container\DisableMfaFactory::class,
+                    CompleteSecondFactor::class => Container\CompleteSecondFactorFactory::class,
+                    DescribeSecondFactorPage::class => Container\DescribeSecondFactorPageFactory::class,
+                    RequireSignIn::class => Container\RequireSignInFactory::class,
+                    ResetUserMfa::class => Container\ResetUserMfaFactory::class,
+                    MfaChallengeHandler::class => Container\MfaChallengeHandlerFactory::class,
+                    MfaSettingsHandler::class => Container\MfaSettingsHandlerFactory::class,
+                    UserMfaHandler::class => Container\UserMfaHandlerFactory::class,
                     ReadUsers::class => Container\ReadUsersFactory::class,
                     CreateUser::class => Container\CreateUserFactory::class,
                     UpdateUser::class => Container\UpdateUserFactory::class,

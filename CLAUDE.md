@@ -29,16 +29,20 @@ and multi-tenancy.
 
 ## Current state
 
-**Steps 0 to 6 are done: the foundations, Authorization Code + PKCE, the login page with
+**Steps 0 to 7 are done: the foundations, Authorization Code + PKCE, the login page with
 browser sessions, OpenID Connect (ID tokens, discovery, JWKS, userinfo), Client
-Credentials for machine clients holding a grant on an API, and the Management API with
-audiences in the user's flow.** The application answers `GET /healthz`,
+Credentials for machine clients holding a grant on an API, the Management API with
+audiences in the user's flow, and two-factor authentication (TOTP and recovery codes).**
+The application answers `GET /healthz`,
 `GET|POST /oauth2/authorize`, `POST /oauth2/token`, `GET /.well-known/openid-configuration`,
 `GET /.well-known/oauth-authorization-server`, `GET /oidc/jwks.json`, `GET|POST /oidc/userinfo`,
-`GET|POST /auth/login`, `POST /auth/logout`, `POST /auth/theme` and the Management API under
-`/api/v1/` (users, clients with secret rotation, resource servers): a person can sign in with a
-password, complete the flow in a browser — naming an API in `audience` if the client wants
-its permissions — and the client gets an RS256 ID token it can verify against the published
+`GET|POST /auth/login`, `GET|POST /auth/mfa`, `GET|POST /auth/mfa/enroll`,
+`POST /auth/mfa/enroll/confirm`, `POST /auth/mfa/disable`, `POST /auth/logout`,
+`POST /auth/theme` and the Management API under `/api/v1/` (users with their second factor,
+clients with secret rotation, resource servers): a person can sign in with a
+password — and, once they have turned it on, a code from their authenticator app or a
+recovery code — complete the flow in a browser, naming an API in `audience` if the client
+wants its permissions, and the client gets an RS256 ID token it can verify against the published
 JWKS; a machine client gets a subject-less token for an API it holds a grant on, and with one
 for the Management API it administers the deployment. Update this section at the
 end of every step (what exists, where it lives, which conventions it established).
@@ -188,6 +192,30 @@ What exists:
   - `Adapter\Secondary\Persistence\PhpDb\{Constraint,Search}`.
   - `docs/openapi/management-api.yaml` (OpenAPI 3.0.3). Migrations
     `0011_system_resource_servers`, `0012_authorization_code_audience`.
+- **Multi-factor authentication** (Step 7):
+  - `Domain\Authentication\Mfa` — `Totp` (RFC 6238/4226: SHA-1, six digits, thirty seconds,
+    one step either side, every step compared in constant time, single-use by time step),
+    `TotpSecret` (160 random bits; at least 128 accepted), `Base32` (RFC 4648),
+    `RecoveryCode` (`xxxx-xxxx-xxxx`, looked up by the SHA-256 of the normalised code),
+    `MfaFactor` (pending → confirmed, `accept()` records the step) with
+    `FactorAlreadyConfirmed`, and the `MfaFactorRepository` / `RecoveryCodeRepository`
+    interfaces. `Domain\Authentication\MfaChallenge` (the parked first factor) and
+    `AuthenticationMethod::{OneTimePassword, MultipleFactors, combined()}`.
+  - `Application\Authentication\Mfa` — `TotpSeeds` (sealing through `SecretCipher`, the
+    provisioning URI), `DescribeMfa`, `BeginTotpEnrollment`, `ResumeTotpEnrollment`,
+    `ConfirmTotpEnrollment`, `DisableMfa`, `CompleteSecondFactor` (with `SecondFactorAttempt`
+    and the outcomes `SignedIn`, `SecondFactorRejected`, `ChallengeGone`),
+    `DescribeSecondFactorPage`. `SignInWithPassword` returns `SecondFactorRequired` for an
+    account with a confirmed factor; `RequireSignIn` parks a page behind the login;
+    `ResolveEndUser::bySession()`. Port `MfaChallengeStore`. Management:
+    `Users\{ManagedUser,ResetUserMfa}`.
+  - `Adapter\Primary\Http\Auth\{MfaChallengeHandler,MfaSettingsHandler,MfaPages,QrCodeSvg,ClientAddress}`;
+    `Management\UserMfaHandler` (`DELETE /api/v1/users/{user_id}/mfa`) and `mfa_enrolled` on
+    every user the API returns. Templates `auth/mfa-{challenge,settings,setup,codes}` and
+    `partial/code-field`.
+  - `Adapter\Secondary\Persistence\PhpDb\{PhpDbMfaFactorRepository,PhpDbRecoveryCodeRepository}`,
+    `Adapter\Secondary\Redis\RedisMfaChallengeStore`. Migration `0013_mfa`.
+  - `bacon/bacon-qr-code` draws the QR code; its namespace joins deptrac's `Vendor` layer.
 - **Error pages for browsers** (after Step 3): `Adapter\Primary\Http\Shared\ClientPreference`
   (`Accept` negotiation), `ErrorResponder` + `ErrorPage`, `PageRenderer` + `HtmlPage` (the
   layout, headers and CSP every server-rendered page shares). 404, 405, 500 and the
@@ -479,6 +507,34 @@ Conventions established in Step 6:
   the OIDC scopes; an unknown API is `invalid_target`, a malformed one `invalid_request`. It is
   stored on the code and re-checked at redemption: the scope is cut to what is still defined,
   and a code for an API that is gone is `invalid_grant`.
+
+Conventions established in Step 7:
+
+- **A correct password is not a session once a factor is confirmed.** It opens a challenge
+  instead — in Redis, keyed by the digest of a handle the browser holds in `clavia_mfa`
+  (`Path=/auth`, `HttpOnly`, as long as the challenge) — and the session is established only
+  by `CompleteSecondFactor`, with `amr` = the first factor's methods + `otp` (an app code)
+  + `mfa`. A pending factor enforces nothing: someone who scans and walks away is not locked
+  out.
+- **A code is spent when it is used.** The factor row is locked (`FOR UPDATE`) for the check
+  and the step recorded; a recovery code is spent by one conditional `UPDATE`. Two requests
+  with one code cannot both succeed.
+- **Guesses are bounded twice**: per challenge (`CLAVIA_MFA_MAX_ATTEMPTS`, counted atomically,
+  the challenge destroyed at the limit) and per account and address by the sign-in throttle,
+  which a throttled attempt does not get past even with the right code. The account is
+  re-read at the second step and must still be active.
+- **Seeds are sealed, never hashed**: `SecretCipher` with `user:<id>:totp` as associated
+  data, so a ciphertext moved onto another account's row does not open. The seed is
+  decrypted only for a check.
+- **Pages that change an account need a real session** (`ResolveEndUser::bySession()`, never
+  the development auto-login); without one, `RequireSignIn` parks the page behind the login and
+  the person comes back to it. Their forms check the CSRF token and, failing it, change nothing.
+- **The QR code is drawn by the HTTP adapter** (`QrCodeSvg`), not behind a `QrRenderer`
+  port: it is presentation, and the use cases hand out the provisioning URI. The SVG is
+  cleaned for the page's policy — no `style`, no background, `fill="currentColor"` so it
+  follows the theme, `role="img"` with a label — and the URI never appears in the markup.
+- **The recovery codes exist in the clear once**, in the response that turns two-factor
+  authentication on; only their digests are stored, and a new set replaces the old one.
 
 **Known defect in the database library, worked around.** At the pinned commit,
 `php-db/phpdb-pgsql` runs `SELECT LASTVAL()` after every statement to fetch a "last generated
@@ -1054,11 +1110,22 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
   system-API refusal (10), the connection scopes and endpoints (13), `refresh_token` and the
   device grant on registrations (11, 15), `is_first_party` (12).
 
-#### [ ] Step 7 — MFA (TOTP)
-- Domain: own RFC 6238 `Totp` (single-use by time step), `RecoveryCode` digests, enrollment.
-- Ports: `MfaChallengeStore`, `QrRenderer`. Seeds encrypted through `SecretCipher`.
-- Primary adapters: `/auth/mfa`, `/auth/mfa/enroll`, `/enroll/confirm`, `/disable`; `DELETE /users/{id}/mfa`.
-- Python: `mfa/*`, `db/models/mfa.py`. Tests: `test_mfa` (17).
+#### [x] Step 7 — MFA (TOTP)
+- Domain: own RFC 6238 `Totp` (single-use by time step), `Base32`, `TotpSecret`,
+  `RecoveryCode` digests, `MfaFactor` (pending → confirmed), `MfaChallenge`.
+- Port: `MfaChallengeStore` (Redis, attempts counted by a Lua script). Seeds sealed through
+  `SecretCipher`. No `QrRenderer` port: the QR code is presentation, drawn by the HTTP
+  adapter (see the Step 7 conventions).
+- Primary adapters: `/auth/mfa`, `/auth/mfa/enroll`, `/enroll/confirm`, `/disable`;
+  `DELETE /api/v1/users/{user_id}/mfa` and `mfa_enrolled` in the Management API contract.
+- Python: `mfa/*`, `db/models/mfa.py`.
+- Tests: `test_mfa` (17) — ported as `MfaTest` (20 cases); unit tests for `Totp` (the RFC 6238
+  vectors), `Base32` (RFC 4648), `MfaFactor`, `RecoveryCode`, the enrollment use cases,
+  `CompleteSecondFactor` and `QrCodeSvg`; `MfaRepositoriesContract` and
+  `MfaChallengeStoreContract` run against the fakes, PostgreSQL and Redis; the new pages are in
+  `AuthPagesEscapingTest`.
+- Left for the steps that own them: `ext` as a first factor (social login, 8), the
+  challenge's connection (13).
 
 #### [ ] Step 8 — Social login
 - Domain: `ExternalIdentity` keyed `(provider, subject)`, linking policy (verified email only,

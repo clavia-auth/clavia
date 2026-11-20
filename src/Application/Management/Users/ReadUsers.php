@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Application\Management\Users;
 
 use Clavia\Application\Management\NotFound;
+use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
@@ -23,21 +24,39 @@ use Clavia\Domain\Shared\PageRequest;
  */
 final readonly class ReadUsers
 {
-    public function __construct(private UserRepository $users)
-    {
+    public function __construct(
+        private UserRepository $users,
+        private MfaFactorRepository $factors,
+    ) {
     }
 
-    /** @return Page<User> */
+    /**
+     * @return Page<ManagedUser>
+     */
     public function page(PageRequest $request): Page
     {
-        return $this->users->page($request);
+        $page = $this->users->page($request);
+        $enrolled = array_map(
+            static fn (UserId $id): string => $id->value,
+            $this->factors->confirmedAmong(array_map(static fn (User $user): UserId => $user->id, $page->items)),
+        );
+
+        return $page->map(
+            static fn (User $user): ManagedUser => new ManagedUser($user, in_array($user->id->value, $enrolled, true)),
+        );
     }
 
     /**
      * @throws NotFound
      */
-    public function one(UserId $id): User
+    public function one(UserId $id): ManagedUser
     {
-        return $this->users->find($id) ?? throw NotFound::of('user');
+        return $this->describe($this->users->find($id) ?? throw NotFound::of('user'));
+    }
+
+    /** The account with what lives beside it. */
+    public function describe(User $user): ManagedUser
+    {
+        return new ManagedUser($user, $this->factors->find($user->id)?->isConfirmed() ?? false);
     }
 }

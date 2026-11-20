@@ -40,7 +40,7 @@ final readonly class CreateUser
      * @throws InvalidValue  When the address, the password or a profile field is not acceptable.
      * @throws AlreadyExists When another account uses the address.
      */
-    public function __invoke(NewUser $new): User
+    public function __invoke(NewUser $new): ManagedUser
     {
         $now = $this->clock->now();
         $profile = ProfileFields::apply(Profile::empty(), $new->profile);
@@ -59,6 +59,7 @@ final readonly class CreateUser
 
         $this->users->save($user);
 
-        return $user;
+        // A new account has no second factor: enrolling one is something its holder does.
+        return new ManagedUser($user, false);
     }
 }

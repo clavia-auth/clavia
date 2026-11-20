@@ -9,6 +9,7 @@
  * @var string|null $error
  * @var string|null $theme    The forced colour scheme, or null to follow the system.
  * @var string|null $returnTo Where the theme toggle comes back to; null leaves the toggle out.
+ * @var bool        $wide     A wider card, for a QR code or a list of codes.
  * @var string      $content  The page itself, already rendered.
  *
  * A page puts the line under the heading in the `subtitle` placeholder; it is rendered
@@ -29,7 +30,7 @@
   <link rel="stylesheet" href="/auth/static/auth.css">
 </head>
 <body>
-  <main class="card">
+  <main class="card<?php if ($wide): ?> card-wide<?php endif ?>">
     <header class="brand">
       <img class="brand-mark" src="/auth/static/clavia-icon.svg" alt="" width="48" height="48">
       <h1><?= $this->escapeHtml($heading) ?></h1>

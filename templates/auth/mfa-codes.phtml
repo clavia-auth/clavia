@@ -1,0 +1,21 @@
+<?php
+/**
+ * The recovery codes, shown once when two-factor authentication is turned on.
+ *
+ * Variables (set by Clavia\Adapter\Primary\Http\Auth\MfaPages):
+ * @var Laminas\View\Renderer\PhpRenderer $this
+ * @var list<string> $codes
+ */
+?>
+<?php $this->placeholder('subtitle')->captureStart() ?>
+      <p class="subtitle">Save these recovery codes somewhere safe. Each one signs you in once if you lose your authenticator — and this is the only time they are shown.</p>
+<?php $this->placeholder('subtitle')->captureEnd() ?>
+    <ul class="codes">
+<?php foreach ($codes as $code): ?>
+      <li><?= $this->escapeHtml($code) ?></li>
+<?php endforeach ?>
+    </ul>
+
+    <form method="get" action="/auth/mfa/enroll">
+      <button type="submit">Done</button>
+    </form>

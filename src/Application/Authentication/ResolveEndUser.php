@@ -47,4 +47,20 @@ final readonly class ResolveEndUser
 
         return $this->autoLogin->endUser();
     }
+
+    /**
+     * Who the session says this is — and nobody else: no development auto-login. For the
+     * pages that change an account's own security settings, which must be reached by
+     * someone who actually signed in.
+     */
+    public function bySession(#[\SensitiveParameter] ?string $sessionId): ?EndUser
+    {
+        $session = $this->sessions->resolve($sessionId);
+        if ($session === null) {
+            return null;
+        }
+        $user = $this->users->find($session->userId);
+
+        return $user !== null && $user->isActive() ? new EndUser($user->id, $session) : null;
+    }
 }

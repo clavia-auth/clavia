@@ -188,6 +188,33 @@ paths:
         '422':
           $ref: '#/components/responses/Unprocessable'
 
+  /api/v1/users/{user_id}/mfa:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    delete:
+      tags: [users]
+      operationId: resetUserMfa
+      summary: Turn a user's two-factor authentication off.
+      description: |
+        The way back for someone who lost both their authenticator and their recovery
+        codes: every second factor and every recovery code of the account is removed,
+        and the next sign-in is by password alone. Idempotent — the user's
+        two-factor authentication is off afterwards, whether it was on or not.
+      security:
+        - managementToken: [update:users]
+      responses:
+        '204':
+          description: Two-factor authentication is off.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /api/v1/clients:
     get:
       tags: [clients]
@@ -766,8 +793,8 @@ components:
     User:
       type: object
       additionalProperties: false
-      required: [id, email, email_verified, is_active, has_password, name, given_name, family_name,
-        nickname, picture, locale, created_at, updated_at]
+      required: [id, email, email_verified, is_active, has_password, mfa_enrolled, name, given_name,
+        family_name, nickname, picture, locale, created_at, updated_at]
       properties:
         id:
           type: string
@@ -782,6 +809,12 @@ components:
         has_password:
           type: boolean
           description: Whether the account can be signed into with a password at all.
+        mfa_enrolled:
+          type: boolean
+          description: |
+            Whether signing in asks for a second factor: a confirmed TOTP authenticator.
+            Set by the account holder at `/auth/mfa/enroll`; cleared by them or by
+            `DELETE /api/v1/users/{user_id}/mfa`.
         name:
           type: string
           nullable: true

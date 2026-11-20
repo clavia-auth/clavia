@@ -15,6 +15,7 @@ use Clavia\Adapter\Primary\Http\Shared\RequestCookies;
 use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
 use Clavia\Application\Authentication\SignIn\PasswordSignIn;
+use Clavia\Application\Authentication\SignIn\SecondFactorRequired;
 use Clavia\Application\Authentication\SignIn\SignedIn;
 use Clavia\Application\Authentication\SignIn\SignInWithPassword;
 use Psr\Http\Message\ResponseInterface;
@@ -27,6 +28,9 @@ use Psr\Http\Server\RequestHandlerInterface;
  * The body is read only as `application/x-www-form-urlencoded`, which is all the form
  * sends: a multipart body is not recognised, so file-upload handling never reaches the
  * most sensitive endpoint of the product.
+ *
+ * When the account has a second factor, a correct password leads to `/auth/mfa` with a
+ * challenge cookie instead of a session ({@see MfaChallengeHandler}).
  *
  * A failure re-renders the form with the same `state`, so the person is not sent back
  * to the application to start over: `400` when the CSRF check fails, `401` when the
@@ -56,11 +60,19 @@ final readonly class LoginHandler implements RequestHandlerInterface
         $outcome = ($this->signIn)(new PasswordSignIn(
             $email,
             $form->get('password') ?? '',
-            self::clientAddress($request),
+            ClientAddress::of($request),
             $loginState,
             RequestCookies::first($request, $this->cookies->sessionCookieName),
         ));
 
+        if ($outcome instanceof SecondFactorRequired) {
+            // No session yet: the second step is a page of its own, holding the
+            // challenge in a cookie scoped to /auth.
+            return $this->responder->redirect(
+                MfaPages::CHALLENGE_PATH,
+                [$this->cookies->mfaChallenge($outcome->challenge)],
+            );
+        }
         if (! $outcome instanceof SignedIn) {
             return $this->refuse($request, $loginState, $email, LoginPages::INVALID_CREDENTIALS, 401);
         }
@@ -85,17 +97,5 @@ final readonly class LoginHandler implements RequestHandlerInterface
             $request,
             LoginPages::form($loginState, $origins, $email, $error, $status),
         );
-    }
-
-    /**
-     * The address the web server reports. Behind Caddy over FastCGI that is the
-     * client's own; no forwarded header is consulted.
-     */
-    private static function clientAddress(ServerRequestInterface $request): string
-    {
-        /** @var mixed $address */
-        $address = $request->getServerParams()['REMOTE_ADDR'] ?? null;
-
-        return is_string($address) && $address !== '' ? $address : 'unknown';
     }
 }

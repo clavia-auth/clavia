@@ -21,4 +21,34 @@ enum AuthenticationMethod: string
 {
     /** A password was typed on the login page. */
     case Password = 'pwd';
+
+    /** A one-time password was entered: a TOTP code from an authenticator app. */
+    case OneTimePassword = 'otp';
+
+    /**
+     * More than one factor was used (RFC 8176 §2: "multiple-factor authentication"). Added
+     * whenever a second factor completes the sign-in — a TOTP code or a recovery code —
+     * so a relying party that only looks for `mfa` finds it either way.
+     */
+    case MultipleFactors = 'mfa';
+
+    /**
+     * The first factor followed by a second: each method once, in order, then `mfa`.
+     *
+     * @param list<self> $firstFactor
+     * @param list<self> $secondFactor
+     *
+     * @return list<self>
+     */
+    public static function combined(array $firstFactor, array $secondFactor): array
+    {
+        $methods = [];
+        foreach ([...$firstFactor, ...$secondFactor, self::MultipleFactors] as $method) {
+            if (! in_array($method, $methods, true)) {
+                $methods[] = $method;
+            }
+        }
+
+        return $methods;
+    }
 }

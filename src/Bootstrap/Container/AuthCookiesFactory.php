@@ -24,8 +24,9 @@ final class AuthCookiesFactory
 
         $name = $settings->sessionCookieName;
         $lifetime = $settings->sessionAbsoluteLifetime;
-        assert($name !== '' && $lifetime > 0);
+        $challengeLifetime = $settings->mfaChallengeLifetime;
+        assert($name !== '' && $lifetime > 0 && $challengeLifetime > 0);
 
-        return new AuthCookies($name, $lifetime, $settings->sessionCookieSecure);
+        return new AuthCookies($name, $lifetime, $settings->sessionCookieSecure, $challengeLifetime);
     }
 }

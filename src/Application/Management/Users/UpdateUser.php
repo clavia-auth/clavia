@@ -13,8 +13,8 @@ namespace Clavia\Application\Management\Users;
 
 use Clavia\Application\Management\NotFound;
 use Clavia\Application\Port\PasswordHasher;
+use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Identity\PasswordPolicy;
-use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\Shared\AlreadyExists;
@@ -34,6 +34,7 @@ final readonly class UpdateUser
         private UserRepository $users,
         private PasswordHasher $hasher,
         private Clock $clock,
+        private MfaFactorRepository $factors,
     ) {
     }
 
@@ -42,7 +43,7 @@ final readonly class UpdateUser
      * @throws InvalidValue  When a new value is not acceptable.
      * @throws AlreadyExists When another account uses the new address.
      */
-    public function __invoke(UserId $id, UserChanges $changes): User
+    public function __invoke(UserId $id, UserChanges $changes): ManagedUser
     {
         $user = $this->users->find($id) ?? throw NotFound::of('user');
         $now = $this->clock->now();
@@ -67,6 +68,6 @@ final readonly class UpdateUser
 
         $this->users->save($user);
 
-        return $user;
+        return new ManagedUser($user, $this->factors->find($id)?->isConfirmed() ?? false);
     }
 }

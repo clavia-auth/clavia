@@ -30,6 +30,7 @@ final readonly class HtmlPage
      * @param int                            $status      The HTTP status.
      * @param list<string>                   $formOrigins Origins a form submission on this page may end
      *                                                    at, besides this server; see {@see PageRenderer}.
+     * @param bool                           $wide        A wider card, for a QR code or a list of codes.
      */
     public function __construct(
         public string $template,
@@ -40,6 +41,7 @@ final readonly class HtmlPage
         public ?string $error = null,
         public int $status = 200,
         public array $formOrigins = [],
+        public bool $wide = false,
     ) {
     }
 }

@@ -15,11 +15,16 @@ use Clavia\Application\Authentication\LoginThrottle;
 use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Authentication\SignIn\CredentialsRejected;
 use Clavia\Application\Authentication\SignIn\PasswordSignIn;
+use Clavia\Application\Authentication\SignIn\SecondFactorRequired;
 use Clavia\Application\Authentication\SignIn\SignedIn;
 use Clavia\Application\Authentication\SignIn\SignInOutcome;
 use Clavia\Application\Authentication\SignIn\SignInWithPassword;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\LoginState;
+use Clavia\Domain\Authentication\Mfa\MfaFactor;
+use Clavia\Domain\Authentication\Mfa\Totp;
+use Clavia\Domain\Authentication\Mfa\TotpSecret;
+use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\SecretGenerator;
@@ -27,7 +32,10 @@ use ClaviaTest\Support\Fake\FakePasswordHasher;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryAttemptCounter;
 use ClaviaTest\Support\Fake\InMemoryLoginStateStore;
+use ClaviaTest\Support\Fake\InMemoryMfaChallengeStore;
+use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
 use ClaviaTest\Support\Fake\InMemorySessionStore;
+use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use PHPUnit\Framework\TestCase;
@@ -46,6 +54,8 @@ final class SignInWithPasswordTest extends TestCase
     private InMemorySessionStore $sessionStore;
     private Sessions $sessions;
     private SignInWithPassword $signIn;
+    private InMemoryMfaFactorRepository $factors;
+    private InMemoryMfaChallengeStore $challenges;
     private User $user;
 
     #[\Override]
@@ -64,12 +74,18 @@ final class SignInWithPasswordTest extends TestCase
             28800,
             604800,
         );
+        $this->factors = new InMemoryMfaFactorRepository(new InMemoryTransactionManager());
+        $this->challenges = new InMemoryMfaChallengeStore($this->clock);
         $this->signIn = new SignInWithPassword(
             $this->users,
             $this->hasher,
             new LoginThrottle($this->counter, 3, 900),
             $this->loginStates,
             $this->sessions,
+            $this->factors,
+            $this->challenges,
+            new SecretGenerator(new SeededRandomSource(3)),
+            300,
         );
 
         $this->user = User::register(
@@ -91,6 +107,47 @@ final class SignInWithPasswordTest extends TestCase
         self::assertTrue($session->userId->equals($this->user->id));
         self::assertSame([AuthenticationMethod::Password], $session->methods);
         self::assertSame('/auth/login', $outcome->nextUrl);
+    }
+
+    public function testAnAccountWithAConfirmedFactorGetsAChallengeInsteadOfASession(): void
+    {
+        $this->enrolSecondFactor();
+        $this->loginStates->put(
+            'handle',
+            new LoginState('/oauth2/authorize?client_id=spa', ClientId::fromString('spa')),
+        );
+
+        $outcome = $this->attempt(loginState: 'handle');
+
+        self::assertInstanceOf(SecondFactorRequired::class, $outcome);
+        self::assertSame(0, $this->sessionStore->count());
+        self::assertNull($this->loginStates->get('handle'));
+        $challenge = $this->challenges->find($outcome->challenge);
+        self::assertNotNull($challenge);
+        self::assertTrue($challenge->userId->equals($this->user->id));
+        self::assertSame('/oauth2/authorize?client_id=spa', $challenge->nextUrl);
+        self::assertSame('spa', $challenge->clientId?->value);
+        self::assertSame([AuthenticationMethod::Password], $challenge->firstFactor);
+        self::assertSame(0, $challenge->attempts);
+
+        $this->clock->advance(300);
+        self::assertNull($this->challenges->find($outcome->challenge));
+    }
+
+    public function testAFactorStillBeingSetUpDoesNotStandInTheWay(): void
+    {
+        $this->factors->save(MfaFactor::stage($this->user->id, 'sealed', $this->clock->now()));
+
+        self::assertInstanceOf(SignedIn::class, $this->attempt());
+        self::assertSame(0, $this->challenges->count());
+    }
+
+    public function testAWrongPasswordOpensNoChallenge(): void
+    {
+        $this->enrolSecondFactor();
+
+        self::assertInstanceOf(CredentialsRejected::class, $this->attempt(password: 'wrong'));
+        self::assertSame(0, $this->challenges->count());
     }
 
     public function testTheBrowserIsSentBackToThePendingRequestAndTheHandleIsSpent(): void
@@ -233,5 +290,14 @@ final class SignInWithPasswordTest extends TestCase
         ?string $currentSessionId = null,
     ): SignInOutcome {
         return ($this->signIn)(new PasswordSignIn($email, $password, $clientAddress, $loginState, $currentSessionId));
+    }
+
+    private function enrolSecondFactor(): void
+    {
+        $secret = TotpSecret::generate(new SeededRandomSource(4));
+        $factor = MfaFactor::stage($this->user->id, 'sealed', $this->clock->now());
+        self::assertTrue($factor->accept($secret, Totp::codeAt($secret, $this->clock->now()), $this->clock->now()));
+        $factor->confirm($this->clock->now());
+        $this->factors->save($factor);
     }
 }

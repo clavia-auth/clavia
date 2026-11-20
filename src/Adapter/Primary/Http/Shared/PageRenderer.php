@@ -65,6 +65,7 @@ final readonly class PageRenderer
                 'error' => $page->error,
                 'theme' => self::theme($request),
                 'returnTo' => $page->returnTo,
+                'wide' => $page->wide,
             ], 'layout::page'),
             ...$page->variables,
             ...$variables,

@@ -15,10 +15,14 @@ use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbAuthorizationCodeRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientGrantRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbMfaFactorRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbRecoveryCodeRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbResourceServerRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbTransactionManager;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbUserRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PostgresUrl;
+use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
+use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\ClientId;
@@ -40,6 +44,7 @@ use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\Url;
 use ClaviaTest\Support\Contract\AuthorizationCodeRepositoryContract;
 use ClaviaTest\Support\Contract\ClientRepositoryContract;
+use ClaviaTest\Support\Contract\MfaRepositoriesContract;
 use ClaviaTest\Support\Contract\ResourceServerRepositoryContract;
 use ClaviaTest\Support\Contract\UserRepositoryContract;
 use ClaviaTest\Support\Fake\SeededRandomSource;
@@ -60,11 +65,27 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
     use ClientRepositoryContract;
     use AuthorizationCodeRepositoryContract;
     use ResourceServerRepositoryContract;
+    use MfaRepositoriesContract;
 
     #[\Override]
     protected function users(): UserRepository
     {
         return new PhpDbUserRepository(TestStorage::database());
+    }
+
+    #[\Override]
+    protected function factors(): MfaFactorRepository
+    {
+        return new PhpDbMfaFactorRepository(TestStorage::database());
+    }
+
+    #[\Override]
+    protected function recoveryCodes(): RecoveryCodeRepository
+    {
+        return new PhpDbRecoveryCodeRepository(
+            TestStorage::database(),
+            new PhpDbTransactionManager(TestStorage::database()),
+        );
     }
 
     #[\Override]

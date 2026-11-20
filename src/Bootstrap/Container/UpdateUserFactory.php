@@ -13,6 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Management\Users\UpdateUser;
 use Clavia\Application\Port\PasswordHasher;
+use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\Shared\Clock;
 use Psr\Container\ContainerInterface;
@@ -27,7 +28,9 @@ final class UpdateUserFactory
         $hasher = $container->get(PasswordHasher::class);
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
+        /** @var MfaFactorRepository $factors */
+        $factors = $container->get(MfaFactorRepository::class);
 
-        return new UpdateUser($users, $hasher, $clock);
+        return new UpdateUser($users, $hasher, $clock, $factors);
     }
 }

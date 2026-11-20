@@ -1,0 +1,40 @@
+<?php
+/**
+ * Two-factor settings of the signed-in account: whether it is on, and the way to change it.
+ *
+ * Variables (set by Clavia\Adapter\Primary\Http\Auth\MfaPages):
+ * @var Laminas\View\Renderer\PhpRenderer $this
+ * @var string $csrfToken
+ * @var string $email
+ * @var bool   $enabled
+ * @var int    $recoveryCodesLeft
+ */
+?>
+<?php $this->placeholder('subtitle')->captureStart() ?>
+      <p class="subtitle"><?= $this->escapeHtml($email) ?></p>
+<?php $this->placeholder('subtitle')->captureEnd() ?>
+<?php if ($enabled): ?>
+    <p class="status status-on">On</p>
+    <p class="hint">
+      Signing in asks for a code from your authenticator app.
+<?php if ($recoveryCodesLeft > 0): ?>
+      You have <?= $this->escapeHtml((string) $recoveryCodesLeft) ?> unused recovery <?= $recoveryCodesLeft === 1 ? 'code' : 'codes' ?>.
+<?php else: ?>
+      You have no recovery codes left — turn two-factor authentication off and on again to get new ones.
+<?php endif ?>
+    </p>
+    <form method="post" action="/auth/mfa/disable">
+<?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => '']) ?>
+      <button type="submit" class="danger">Turn off</button>
+    </form>
+<?php else: ?>
+    <p class="status status-off">Off</p>
+    <p class="hint">
+      Add a second step to your sign-in: a code from an authenticator app such as
+      Google Authenticator, 1Password or Aegis.
+    </p>
+    <form method="post" action="/auth/mfa/enroll">
+<?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => '']) ?>
+      <button type="submit">Set up</button>
+    </form>
+<?php endif ?>

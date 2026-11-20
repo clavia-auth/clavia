@@ -12,7 +12,8 @@ declare(strict_types=1);
 namespace Clavia\Application\Authentication\SignIn;
 
 /**
- * What came of a sign-in attempt: {@see SignedIn} or {@see CredentialsRejected}.
+ * What came of a sign-in attempt: {@see SignedIn}, {@see SecondFactorRequired} or
+ * {@see CredentialsRejected}.
  */
 interface SignInOutcome
 {

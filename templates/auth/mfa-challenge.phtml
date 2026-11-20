@@ -1,0 +1,18 @@
+<?php
+/**
+ * The second step of a sign-in: a code from the authenticator app, or a recovery code.
+ *
+ * Variables (set by Clavia\Adapter\Primary\Http\Auth\MfaPages):
+ * @var Laminas\View\Renderer\PhpRenderer $this
+ * @var string $csrfToken
+ */
+?>
+<?php $this->placeholder('subtitle')->captureStart() ?>
+      <p class="subtitle">Enter the six-digit code from your app, or one of your recovery codes.</p>
+<?php $this->placeholder('subtitle')->captureEnd() ?>
+    <form method="post" action="/auth/mfa" autocomplete="off" novalidate>
+<?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => '']) ?>
+<?= $this->partial('partial::code-field', ['label' => 'Code']) ?>
+
+      <button type="submit">Continue</button>
+    </form>

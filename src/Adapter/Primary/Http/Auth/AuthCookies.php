@@ -22,6 +22,9 @@ use Clavia\Adapter\Primary\Http\Shared\SetCookie;
  *   session. Lasts the absolute session lifetime; the server ends it sooner when idle.
  * - **CSRF** (`clavia_csrf`, path `/auth`): the double-submit token. Nothing outside
  *   `/auth` reads it, and it only has to outlast one form.
+ * - **Second-factor challenge** (`clavia_mfa`, path `/auth`): the handle of a sign-in
+ *   waiting for its second factor. Lasts as long as the challenge may; deleted when it
+ *   ends, either way.
  * - **Theme** (`clavia_theme`, path `/`): the colour scheme; absent means "follow the
  *   system". Read by nothing but the page's `data-theme` attribute.
  */
@@ -32,6 +35,10 @@ final readonly class AuthCookies
     public const string CSRF_PATH = '/auth';
 
     public const int CSRF_LIFETIME = 3600;
+
+    public const string MFA_CHALLENGE = 'clavia_mfa';
+
+    public const string MFA_CHALLENGE_PATH = '/auth';
 
     public const string THEME = PageRenderer::THEME_COOKIE;
 
@@ -44,11 +51,13 @@ final readonly class AuthCookies
      * @param non-empty-string $sessionCookieName
      * @param positive-int     $sessionLifetime   The absolute session lifetime, in seconds.
      * @param bool             $secure            Whether cookies carry `Secure`; false only in development.
+     * @param positive-int     $mfaChallengeLifetime How long the second step of a sign-in may take.
      */
     public function __construct(
         public string $sessionCookieName,
         private int $sessionLifetime,
         private bool $secure,
+        private int $mfaChallengeLifetime = 300,
     ) {
     }
 
@@ -79,6 +88,22 @@ final readonly class AuthCookies
     public function expireStrayCsrf(): SetCookie
     {
         return SetCookie::expire(self::CSRF, '/', $this->secure);
+    }
+
+    public function mfaChallenge(#[\SensitiveParameter] string $handle): SetCookie
+    {
+        return SetCookie::create(
+            self::MFA_CHALLENGE,
+            $handle,
+            $this->mfaChallengeLifetime,
+            self::MFA_CHALLENGE_PATH,
+            $this->secure,
+        );
+    }
+
+    public function expireMfaChallenge(): SetCookie
+    {
+        return SetCookie::expire(self::MFA_CHALLENGE, self::MFA_CHALLENGE_PATH, $this->secure);
     }
 
     public function theme(string $theme): SetCookie

@@ -56,6 +56,6 @@ final readonly class UsersHandler implements RequestHandlerInterface
             UserFields::profile($body),
         ));
 
-        return $this->responder->created(ManagementViews::user($user), '/api/v1/users/' . $user->id->value);
+        return $this->responder->created(ManagementViews::user($user), '/api/v1/users/' . $user->user->id->value);
     }
 }

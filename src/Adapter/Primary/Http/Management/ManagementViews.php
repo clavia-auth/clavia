@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Management;
 
 use Clavia\Application\Management\Clients\ClientWithSecret;
+use Clavia\Application\Management\Users\ManagedUser;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\ResponseType;
@@ -57,8 +58,9 @@ final class ManagementViews
     /**
      * @return array<string, mixed>
      */
-    public static function user(User $user): array
+    public static function user(ManagedUser $managed): array
     {
+        $user = $managed->user;
         $profile = $user->profile();
 
         return [
@@ -67,6 +69,7 @@ final class ManagementViews
             'email_verified' => $user->isEmailVerified(),
             'is_active' => $user->isActive(),
             'has_password' => $user->passwordHash() !== null,
+            'mfa_enrolled' => $managed->mfaEnrolled,
             'name' => $profile->name,
             'given_name' => $profile->givenName,
             'family_name' => $profile->familyName,

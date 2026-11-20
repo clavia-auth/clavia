@@ -1,0 +1,11 @@
+<?php
+/**
+ * The field a one-time code is typed into: numeric keyboard on phones, the browser's
+ * one-time-code autofill, nothing remembered.
+ *
+ * @var Laminas\View\Renderer\PhpRenderer $this
+ * @var string $label
+ */
+?>
+      <label for="code"><?= $this->escapeHtml($label) ?></label>
+      <input id="code" name="code" type="text" class="code-input" required autofocus inputmode="numeric" autocomplete="one-time-code" spellcheck="false">

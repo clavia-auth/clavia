@@ -12,6 +12,8 @@ declare(strict_types=1);
 use Clavia\Adapter\Primary\Http\Auth\LoginHandler;
 use Clavia\Adapter\Primary\Http\Auth\LoginPageHandler;
 use Clavia\Adapter\Primary\Http\Auth\LogoutHandler;
+use Clavia\Adapter\Primary\Http\Auth\MfaChallengeHandler;
+use Clavia\Adapter\Primary\Http\Auth\MfaSettingsHandler;
 use Clavia\Adapter\Primary\Http\Auth\ThemeHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientsHandler;
@@ -20,6 +22,7 @@ use Clavia\Adapter\Primary\Http\Management\ResourceServerHandler;
 use Clavia\Adapter\Primary\Http\Management\ResourceServersHandler;
 use Clavia\Adapter\Primary\Http\Management\RotateClientSecretHandler;
 use Clavia\Adapter\Primary\Http\Management\UserHandler;
+use Clavia\Adapter\Primary\Http\Management\UserMfaHandler;
 use Clavia\Adapter\Primary\Http\Management\UsersHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\TokenHandler;
@@ -56,6 +59,11 @@ return static function (Application $app): void {
     $app->post('/auth/login', LoginHandler::class, 'auth.login.submit');
     $app->post('/auth/logout', LogoutHandler::class, 'auth.logout');
     $app->post('/auth/theme', ThemeHandler::class, 'auth.theme');
+    // The second step of a sign-in, and the account holder's own two-factor settings.
+    $app->route('/auth/mfa', MfaChallengeHandler::class, ['GET', 'POST'], 'auth.mfa');
+    $app->route('/auth/mfa/enroll', MfaSettingsHandler::class, ['GET', 'POST'], 'auth.mfa.enroll');
+    $app->post('/auth/mfa/enroll/confirm', MfaSettingsHandler::class, 'auth.mfa.enroll.confirm');
+    $app->post('/auth/mfa/disable', MfaSettingsHandler::class, 'auth.mfa.disable');
 
     // ── /api/v1/* — the Management API, a machine plane: a bearer token for this API on
     // every route, through ManagementApiMiddleware, which also checks each request
@@ -68,6 +76,7 @@ return static function (Application $app): void {
         ['GET', 'PATCH', 'DELETE'],
         'api.user',
     );
+    $app->delete('/api/v1/users/{user_id}/mfa', $management(UserMfaHandler::class), 'api.user.mfa');
     $app->route('/api/v1/clients', $management(ClientsHandler::class), ['GET', 'POST'], 'api.clients');
     $app->route(
         '/api/v1/clients/{client_id}',

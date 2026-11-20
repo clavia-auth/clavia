@@ -11,10 +11,13 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Authentication\SignIn;
 
+use Clavia\Application\Authentication\Mfa\SecondFactorOutcome;
+
 /**
- * The person is authenticated and has a session.
+ * The person is authenticated and has a session — by password alone, or once a second
+ * factor completed what the password started.
  */
-final readonly class SignedIn implements SignInOutcome
+final readonly class SignedIn implements SignInOutcome, SecondFactorOutcome
 {
     /**
      * @param non-empty-string $sessionId The new session identifier, to hand to the browser once.
