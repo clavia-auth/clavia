@@ -29,18 +29,20 @@ and multi-tenancy.
 
 ## Current state
 
-**Steps 0 to 7 are done: the foundations, Authorization Code + PKCE, the login page with
+**Steps 0 to 8 are done: the foundations, Authorization Code + PKCE, the login page with
 browser sessions, OpenID Connect (ID tokens, discovery, JWKS, userinfo), Client
 Credentials for machine clients holding a grant on an API, the Management API with
-audiences in the user's flow, and two-factor authentication (TOTP and recovery codes).**
+audiences in the user's flow, two-factor authentication (TOTP and recovery codes), and
+signing in with Google or GitHub.**
 The application answers `GET /healthz`,
 `GET|POST /oauth2/authorize`, `POST /oauth2/token`, `GET /.well-known/openid-configuration`,
 `GET /.well-known/oauth-authorization-server`, `GET /oidc/jwks.json`, `GET|POST /oidc/userinfo`,
 `GET|POST /auth/login`, `GET|POST /auth/mfa`, `GET|POST /auth/mfa/enroll`,
-`POST /auth/mfa/enroll/confirm`, `POST /auth/mfa/disable`, `POST /auth/logout`,
+`POST /auth/mfa/enroll/confirm`, `POST /auth/mfa/disable`, `GET /auth/social/{provider}` and
+its `/callback`, `POST /auth/logout`,
 `POST /auth/theme` and the Management API under `/api/v1/` (users with their second factor,
 clients with secret rotation, resource servers): a person can sign in with a
-password — and, once they have turned it on, a code from their authenticator app or a
+password or through Google or GitHub — and, once they have turned it on, a code from their authenticator app or a
 recovery code — complete the flow in a browser, naming an API in `audience` if the client
 wants its permissions, and the client gets an RS256 ID token it can verify against the published
 JWKS; a machine client gets a subject-less token for an API it holds a grant on, and with one
@@ -216,6 +218,26 @@ What exists:
   - `Adapter\Secondary\Persistence\PhpDb\{PhpDbMfaFactorRepository,PhpDbRecoveryCodeRepository}`,
     `Adapter\Secondary\Redis\RedisMfaChallengeStore`. Migration `0013_mfa`.
   - `bacon/bacon-qr-code` draws the QR code; its namespace joins deptrac's `Vendor` layer.
+- **Social login** (Step 8):
+  - `Domain\Identity` — `ProviderName` (the slug in URLs and keys), `AssertedIdentity` (what a
+    provider says: subject, address, whether it vouches for it), `ExternalIdentity` (an account
+    linked by `(provider, subject)`) and `ExternalIdentityRepository`;
+    `User::registerFromProvider()`; `UserRepository::matchingEmail()` (ignoring case).
+    `Domain\Authentication\PendingExternalSignIn` and `AuthenticationMethod::External` (`ext`).
+  - `Application\Authentication\External` — `BeginExternalSignIn`, `CompleteExternalSignIn`
+    (with `ExternalCallback`, `ExternalSignInRefused` + `ExternalSignInFailure`),
+    `ResolveExternalAccount` (the linking rules), `ExternalCallbackUrl`, `ExternalProviderOption`.
+    `SignIn\CompleteFirstFactor`: what follows any first factor — a session, or the second-factor
+    challenge — used by the password and by external sign-in alike. Ports `IdentityProvider`,
+    `IdentityProviders`, `IdentityProviderFailed`, `ExternalSignInStore`. `DescribeLoginPage`
+    lists the configured providers.
+  - `Adapter\Secondary\IdentityProvider\{GoogleIdentityProvider,GitHubIdentityProvider,AuthorizationCodeExchange,ProviderHttp,ConfiguredIdentityProviders}`;
+    `Persistence\PhpDb\PhpDbExternalIdentityRepository`; `Redis\RedisExternalSignInStore`.
+    Migration `0014_external_identities`.
+  - `Adapter\Primary\Http\Auth\{ExternalSignInHandler,ExternalSignInCallbackHandler,ExternalSignInMessages}`;
+    the provider links on the login page.
+  - `guzzlehttp/guzzle` is the PSR-18 client (`Bootstrap\Container\HttpClientFactory`); its
+    namespace joins deptrac's `Vendor` layer.
 - **Error pages for browsers** (after Step 3): `Adapter\Primary\Http\Shared\ClientPreference`
   (`Accept` negotiation), `ErrorResponder` + `ErrorPage`, `PageRenderer` + `HtmlPage` (the
   layout, headers and CSP every server-rendered page shares). 404, 405, 500 and the
@@ -536,6 +558,31 @@ Conventions established in Step 7:
 - **The recovery codes exist in the clear once**, in the response that turns two-factor
   authentication on; only their digests are stored, and a new set replaces the old one.
 
+Conventions established in Step 8:
+
+- **Outbound HTTP is PSR-18, injected.** Adapters receive `Psr\Http\Client\ClientInterface`
+  with PSR-17 request and stream factories, never a concrete client; the composition root
+  builds Guzzle (`HttpClientFactory`: 5 s to connect, 10 s in all, no redirect followed, no
+  exception on a status). Tests swap in `Fake\FakeHttpClient`, so nothing in the suite reaches
+  a real provider. The PSR interfaces are the port: there is no `OutboundHttp` wrapper.
+- **Clavia as an OAuth 2.0 client holds itself to its own rules**: an opaque `state` in the
+  redirect and in a cookie (`clavia_external_state`, `Path=/auth`), the two compared in
+  constant time before anything is looked up, then claimed with `GETDEL` so it works once;
+  PKCE S256 sent to every provider; the same redirect URI (`ExternalCallbackUrl`, under the
+  issuer) at both ends; the code exchanged server side with the secret in the body.
+- **An identity is `(provider, subject)`, never an address.** `ResolveExternalAccount` applies,
+  in order: a linked subject wins; an address the provider does not vouch for links and creates
+  nothing; a verified address matching one account (ignoring case) links to it when
+  `CLAVIA_SOCIAL_AUTO_LINK` allows, two is no answer; otherwise a password-less, verified account
+  is created. A first sign-in racing with itself is settled by the primary key and resolved again.
+- **Every first factor ends at `CompleteFirstFactor`**, so a second factor turned on is asked
+  for whichever way the person signed in. `amr` is `ext` for an external sign-in: outside the
+  RFC 8176 registry, which has no value for "another provider vouched for them".
+- **A provider's words never reach the page.** Failures are an `ExternalSignInFailure`, worded by
+  `ExternalSignInMessages`; the reason is logged by `ProviderHttp` (endpoint and status, never a
+  body), and the refusal is the login form as if reached directly. An unknown and an
+  unconfigured provider are the same 404.
+
 **Known defect in the database library, worked around.** At the pinned commit,
 `php-db/phpdb-pgsql` runs `SELECT LASTVAL()` after every statement to fetch a "last generated
 value". In a session that has not used a sequence that query fails; the library swallows the
@@ -615,6 +662,7 @@ Management API scope.
 | Migrations | Plain SQL files, **written step by step** as each feature needs its tables — no upfront schema |
 | Runtime | **PHP-FPM behind Caddy** (share-nothing; no worker mode) |
 | Short-TTL state | Redis (`ext-redis`), behind store ports |
+| Outbound HTTP | **Guzzle** as the PSR-18 client, injected by interface with PSR-17 factories (decided 2026-11-20) |
 | Dashboard | The existing **React** dashboard (`frontend/`), copied unchanged |
 | Auth pages | **laminas-view** PHP templates through `mezzio/mezzio-laminasviewrenderer` — no Twig, no other template language, no JavaScript — see "Auth pages" |
 | Namespace / licence | `Clavia\` · BSD-3-Clause |
@@ -738,7 +786,7 @@ test/
 | `pydantic-settings` | A typed, validated `Settings` object built once in the composition root | Same `CLAVIA_*` names and the same validators (e.g. console mail refused outside development). |
 | Jinja2 | laminas-view PHP templates (layout, pages, partials) behind Mezzio's `TemplateRendererInterface` | No Twig. Escaping is explicit (`escapeHtml`/`escapeHtmlAttr`) and tested. Still **no JavaScript** on the auth origin. |
 | `BackgroundTask` (back-channel logout) | `DeferredTasks` port; FPM adapter runs after `fastcgi_finish_request()` | Must work without a queue; keep the port so a queue adapter can replace it. |
-| `httpx` + `MockTransport` | PSR-18 client behind `OutboundHttp`; fake in tests | `OutboundUrlPolicy` (SSRF guard) must pin the resolved address it validated. |
+| `httpx` + `MockTransport` | Guzzle, injected as a PSR-18 `ClientInterface`; `FakeHttpClient` in tests | `OutboundUrlPolicy` (SSRF guard, Step 13) must pin the resolved address it validated. |
 | `cryptography` | `ext-openssl`: RSASSA-PKCS1-v1_5/SHA-256, AES-256-GCM with AAD | JWS assembled by hand, as in Python. |
 | `pwdlib[bcrypt]` | `password_hash(PASSWORD_BCRYPT)` behind `PasswordHasher` | |
 | `joserfc` | `web-token/jwt-library` — **verification and JWK handling only** | Never used to sign. |
@@ -1127,12 +1175,24 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
 - Left for the steps that own them: `ext` as a first factor (social login, 8), the
   challenge's connection (13).
 
-#### [ ] Step 8 — Social login
-- Domain: `ExternalIdentity` keyed `(provider, subject)`, linking policy (verified email only,
-  ambiguity refused). Port: `IdentityProvider::fetchIdentity()`; adapters Google, GitHub.
-- Primary adapters: `/auth/social/{provider}` and `/callback`; `state` paired with a cookie; provider errors
-  never echoed.
-- Python: `social/*`, `db/models/identity.py`. Tests: `test_social_login` (18).
+#### [x] Step 8 — Social login
+- Domain: `ExternalIdentity` keyed `(provider, subject)`, `AssertedIdentity`, `ProviderName`,
+  `PendingExternalSignIn`; the linking rules in `ResolveExternalAccount` (verified address
+  only, case-insensitive, ambiguity refused, `CLAVIA_SOCIAL_AUTO_LINK`).
+- Ports: `IdentityProvider` (`authorizationUrl()`, `identify()`), `IdentityProviders`,
+  `ExternalSignInStore` (Redis, `GETDEL`). Adapters Google (userinfo) and GitHub (`/user` +
+  `/user/emails`, the primary verified address), over PSR-18 with Guzzle behind it.
+- Primary adapters: `GET /auth/social/{provider}` and `/callback`; `state` paired with a
+  cookie; provider errors never echoed; the providers offered on the login page.
+- `CompleteFirstFactor` extracted from `SignInWithPassword`, so an external sign-in meets the
+  same second factor.
+- Python: `social/*`, `db/models/identity.py`. Tests: `test_social_login` (18) — ported as
+  `SocialLoginTest` (18 cases); unit tests for the domain values, both adapters against a fake
+  wire, and the use cases; `ExternalIdentityRepositoryContract` and
+  `ExternalSignInStoreContract` run against the fakes, PostgreSQL and Redis.
+- Left for Step 13: operator-registered OIDC providers (discovery, ID-token verification,
+  nonce), the providers as connections a client enables (the identity's provider becomes a
+  foreign key), the pools an address is looked for in, and unlinking identities.
 
 #### [ ] Step 9 — RP-Initiated Logout and the dashboard  ← first usable milestone
 - `GET /oidc/logout` (`id_token_hint` verified against the JWKS, `post_logout_redirect_uri`).

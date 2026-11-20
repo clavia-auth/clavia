@@ -22,6 +22,15 @@ enum AuthenticationMethod: string
     /** A password was typed on the login page. */
     case Password = 'pwd';
 
+    /**
+     * An external identity provider authenticated the person (Google, GitHub). Not a
+     * value of the RFC 8176 registry, which names how a person proved who they are and
+     * has none for "another provider vouched for them" — how they proved it there is the
+     * provider's to say. OpenID Connect Core §2 leaves `amr` values to agreement between
+     * the parties.
+     */
+    case External = 'ext';
+
     /** A one-time password was entered: a TOTP code from an authenticator app. */
     case OneTimePassword = 'otp';
 

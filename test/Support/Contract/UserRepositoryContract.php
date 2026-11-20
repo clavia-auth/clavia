@@ -189,6 +189,25 @@ trait UserRepositoryContract
         self::assertNull($this->users()->findByEmail('jane@example.com'));
     }
 
+    #[Test]
+    public function addressesAreMatchedIgnoringCaseOnlyWhenAsked(): void
+    {
+        $this->users()->save($this->aUser('Ada@Example.com'));
+        $this->users()->save($this->aUser('ada@example.com'));
+        $this->users()->save($this->aUser('bob@example.com'));
+
+        $matches = array_map(
+            static fn (User $user): string => $user->email,
+            $this->users()->matchingEmail('ADA@example.COM'),
+        );
+        sort($matches);
+
+        self::assertSame(['Ada@Example.com', 'ada@example.com'], $matches);
+        self::assertSame([], $this->users()->matchingEmail('ada@example.co'));
+        self::assertSame([], $this->users()->matchingEmail('%@example.com'));
+        self::assertNull($this->users()->findByEmail('ADA@example.com'));
+    }
+
     private function aUser(string $email): User
     {
         return User::register(

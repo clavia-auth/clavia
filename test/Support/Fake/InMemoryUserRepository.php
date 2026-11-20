@@ -42,6 +42,18 @@ final class InMemoryUserRepository implements UserRepository
     }
 
     #[\Override]
+    public function matchingEmail(string $email): array
+    {
+        $matches = array_filter(
+            $this->users,
+            static fn (User $user): bool => mb_strtolower($user->email) === mb_strtolower($email),
+        );
+        usort($matches, static fn (User $a, User $b): int => $a->createdAt <=> $b->createdAt);
+
+        return array_map(static fn (User $user): User => clone $user, $matches);
+    }
+
+    #[\Override]
     public function save(User $user): void
     {
         $other = $this->findByEmail($user->email);

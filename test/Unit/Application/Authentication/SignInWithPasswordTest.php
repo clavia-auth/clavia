@@ -13,6 +13,7 @@ namespace ClaviaTest\Unit\Application\Authentication;
 
 use Clavia\Application\Authentication\LoginThrottle;
 use Clavia\Application\Authentication\Sessions;
+use Clavia\Application\Authentication\SignIn\CompleteFirstFactor;
 use Clavia\Application\Authentication\SignIn\CredentialsRejected;
 use Clavia\Application\Authentication\SignIn\PasswordSignIn;
 use Clavia\Application\Authentication\SignIn\SecondFactorRequired;
@@ -81,11 +82,13 @@ final class SignInWithPasswordTest extends TestCase
             $this->hasher,
             new LoginThrottle($this->counter, 3, 900),
             $this->loginStates,
-            $this->sessions,
-            $this->factors,
-            $this->challenges,
-            new SecretGenerator(new SeededRandomSource(3)),
-            300,
+            new CompleteFirstFactor(
+                $this->sessions,
+                $this->factors,
+                $this->challenges,
+                new SecretGenerator(new SeededRandomSource(3)),
+                300,
+            ),
         );
 
         $this->user = User::register(

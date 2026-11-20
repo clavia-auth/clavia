@@ -16,6 +16,7 @@ use Clavia\Adapter\Primary\Http\Auth\LoginPages;
 use Clavia\Adapter\Primary\Http\Auth\MfaPages;
 use Clavia\Adapter\Primary\Http\Shared\ErrorPage;
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
+use Clavia\Application\Authentication\External\ExternalProviderOption;
 use Clavia\Application\Authentication\Mfa\MfaStatus;
 use Clavia\Application\Authentication\Mfa\TotpEnrollment;
 use ClaviaTest\Support\AcceptanceTestCase;
@@ -52,7 +53,14 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
     public static function pages(): iterable
     {
         yield 'the form: state, email and error' => [
-            LoginPages::form(self::HOSTILE, [], self::HOSTILE, self::HOSTILE, 401),
+            LoginPages::form(
+                self::HOSTILE,
+                [],
+                [new ExternalProviderOption(self::HOSTILE, self::HOSTILE)],
+                self::HOSTILE,
+                self::HOSTILE,
+                401,
+            ),
         ];
         yield 'the signed-in page' => [LoginPages::signedIn(self::HOSTILE)];
         yield 'the layout: title, heading and return address' => [new HtmlPage(
@@ -60,7 +68,7 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
             title: self::HOSTILE,
             heading: self::HOSTILE,
             returnTo: self::HOSTILE,
-            variables: ['loginState' => '', 'email' => '', 'signedInAs' => null],
+            variables: ['loginState' => '', 'email' => '', 'signedInAs' => null, 'providers' => []],
             error: self::HOSTILE,
         )];
         yield 'the second step: error' => [MfaPages::challenge([], self::HOSTILE, 401)];

@@ -26,6 +26,15 @@ interface UserRepository
     public function findByEmail(string $email): ?User;
 
     /**
+     * Every account whose address equals `$email` ignoring case — usually none or one.
+     * Addresses are unique as written, so two accounts can differ only by case; a caller
+     * linking by address treats more than one as no answer.
+     *
+     * @return list<User>
+     */
+    public function matchingEmail(string $email): array;
+
+    /**
      * Insert the account, or update it when it already exists.
      *
      * @throws AlreadyExists When another account uses the address.

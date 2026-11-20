@@ -9,6 +9,7 @@
  * @var string      $loginState
  * @var string      $email      Prefilled after a failed attempt, or ''.
  * @var string|null $signedInAs
+ * @var list<array{label: string, href: string}> $providers External providers, as links.
  */
 ?>
 <?php $this->placeholder('subtitle')->captureStart() ?>
@@ -31,4 +32,15 @@
 
       <button type="submit">Sign in</button>
     </form>
+<?php if ($providers !== []): ?>
+
+    <div class="divider"><span>or</span></div>
+    <!-- Links, not a form: starting an external sign-in is a navigation. The login
+         page's handle rides along, so the sign-in comes back to the same request. -->
+    <ul class="providers">
+<?php foreach ($providers as $provider): ?>
+      <li><a class="provider" href="<?= $this->escapeHtmlAttr($provider['href']) ?>">Continue with <?= $this->escapeHtml($provider['label']) ?></a></li>
+<?php endforeach ?>
+    </ul>
+<?php endif ?>
 <?php endif ?>

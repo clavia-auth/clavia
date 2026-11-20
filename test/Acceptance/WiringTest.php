@@ -12,18 +12,24 @@ declare(strict_types=1);
 namespace ClaviaTest\Acceptance;
 
 use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
+use Clavia\Application\Port\IdentityProvider;
+use Clavia\Application\Port\IdentityProviders;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Application\Port\SchemaMigrator;
 use Clavia\Application\Port\SecretCipher;
 use Clavia\Application\Port\TokenSigner;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Bootstrap\ConfigProvider;
+use Clavia\Bootstrap\Container\HttpClientFactory;
 use Clavia\Configuration\InvalidSettings;
 use Clavia\Domain\Oidc\SigningAlgorithm;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\RandomSource;
 use ClaviaTest\Support\AcceptanceTestCase;
+use GuzzleHttp\Client;
+use GuzzleHttp\RequestOptions;
 use Laminas\ServiceManager\Exception\ServiceNotCreatedException;
+use Psr\Http\Client\ClientInterface;
 use Symfony\Component\Console\Application as ConsoleApplication;
 
 /**
@@ -121,6 +127,32 @@ final class WiringTest extends AcceptanceTestCase
         self::assertSame(16, strlen($random->bytes(16)));
         // The suite migrated the test database from migrations/: nothing is left pending.
         self::assertSame([], $migrator->migrate());
+    }
+
+    public function testOutboundHttpIsABoundedGuzzleClientThatFollowsNoRedirect(): void
+    {
+        $client = $this->container()->get(ClientInterface::class);
+
+        self::assertInstanceOf(Client::class, $client);
+        self::assertSame(HttpClientFactory::TIMEOUT, $client->getConfig(RequestOptions::TIMEOUT));
+        self::assertSame(HttpClientFactory::CONNECT_TIMEOUT, $client->getConfig(RequestOptions::CONNECT_TIMEOUT));
+        self::assertFalse($client->getConfig(RequestOptions::ALLOW_REDIRECTS));
+    }
+
+    public function testAProviderIsOfferedOnlyWithBothHalvesOfItsCredentials(): void
+    {
+        $this->boot([
+            'CLAVIA_GOOGLE_CLIENT_ID' => 'id',
+            'CLAVIA_GOOGLE_CLIENT_SECRET' => 'secret',
+            'CLAVIA_GITHUB_CLIENT_ID' => 'id',
+        ]);
+
+        $providers = $this->container()->get(IdentityProviders::class);
+
+        self::assertSame(['google'], array_map(
+            static fn (IdentityProvider $provider): string => $provider->name()->value,
+            $providers->all(),
+        ));
     }
 
     public function testHealthzNeedsNeitherPostgresNorRedis(): void

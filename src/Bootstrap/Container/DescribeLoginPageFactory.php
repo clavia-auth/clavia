@@ -13,6 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
 use Clavia\Application\Authentication\ResolveEndUser;
+use Clavia\Application\Port\IdentityProviders;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Identity\UserRepository;
@@ -30,7 +31,9 @@ final class DescribeLoginPageFactory
         $resolveEndUser = $container->get(ResolveEndUser::class);
         /** @var UserRepository $users */
         $users = $container->get(UserRepository::class);
+        /** @var IdentityProviders $providers */
+        $providers = $container->get(IdentityProviders::class);
 
-        return new DescribeLoginPage($loginStates, $clients, $resolveEndUser, $users);
+        return new DescribeLoginPage($loginStates, $clients, $resolveEndUser, $users, $providers);
     }
 }

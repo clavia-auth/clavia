@@ -95,7 +95,7 @@ final readonly class LoginHandler implements RequestHandlerInterface
 
         return $this->responder->page(
             $request,
-            LoginPages::form($loginState, $origins, $email, $error, $status),
+            LoginPages::form($loginState, $origins, $this->describe->providers(), $email, $error, $status),
         );
     }
 }

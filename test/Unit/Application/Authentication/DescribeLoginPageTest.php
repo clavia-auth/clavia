@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace ClaviaTest\Unit\Application\Authentication;
 
 use Clavia\Application\Authentication\DevelopmentAutoLogin;
+use Clavia\Application\Authentication\External\ExternalProviderOption;
 use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
 use Clavia\Application\Authentication\ResolveEndUser;
 use Clavia\Application\Authentication\Sessions;
@@ -22,6 +23,8 @@ use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\SecretGenerator;
 use ClaviaTest\Support\Clients;
+use ClaviaTest\Support\Fake\FakeIdentityProvider;
+use ClaviaTest\Support\Fake\FakeIdentityProviders;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
 use ClaviaTest\Support\Fake\InMemoryLoginStateStore;
@@ -68,6 +71,10 @@ final class DescribeLoginPageTest extends TestCase
             $clients,
             new ResolveEndUser($this->sessions, $users, new DevelopmentAutoLogin($users, null, true)),
             $users,
+            new FakeIdentityProviders(
+                new FakeIdentityProvider('google', 'Google'),
+                new FakeIdentityProvider('github', 'GitHub'),
+            ),
         );
     }
 
@@ -79,12 +86,28 @@ final class DescribeLoginPageTest extends TestCase
         self::assertSame([], $page->formOrigins);
     }
 
+    public function testTheFormOffersEveryConfiguredProviderInOrder(): void
+    {
+        $this->loginStates->put('handle', new LoginState('/oauth2/authorize?x=y', ClientId::fromString('spa')));
+
+        foreach ([($this->describe)(null, null), ($this->describe)('handle', null)] as $page) {
+            self::assertSame(
+                [['google', 'Google'], ['github', 'GitHub']],
+                array_map(
+                    static fn (ExternalProviderOption $option): array => [$option->name, $option->label],
+                    $page->providers,
+                ),
+            );
+        }
+    }
+
     public function testASignedInVisitorWithNothingPendingIsToldWhoTheyAre(): void
     {
         $sessionId = $this->sessions->establish($this->user->id, [AuthenticationMethod::Password], null);
 
         self::assertSame('jane@example.com', ($this->describe)(null, $sessionId)->signedInAs);
         self::assertSame('jane@example.com', ($this->describe)('', $sessionId)->signedInAs);
+        self::assertSame([], ($this->describe)(null, $sessionId)->providers, 'No form, so nothing to offer.');
     }
 
     public function testAPendingRequestShowsTheFormEvenToASignedInVisitorAndNamesTheApplicationsOrigins(): void

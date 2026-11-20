@@ -12,22 +12,17 @@ declare(strict_types=1);
 namespace Clavia\Application\Authentication\SignIn;
 
 use Clavia\Application\Authentication\LoginThrottle;
-use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Port\LoginStateStore;
-use Clavia\Application\Port\MfaChallengeStore;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\LocalPath;
-use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
-use Clavia\Domain\Authentication\MfaChallenge;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserRepository;
-use Clavia\Domain\Shared\SecretGenerator;
 
 /**
  * Check an email and a password and, when they match an active account, start a session —
  * or, when the account has a confirmed second factor, a challenge for it instead: a
- * correct password alone is then not a sign-in ({@see SecondFactorRequired}).
+ * correct password alone is then not a sign-in ({@see CompleteFirstFactor}).
  *
  * Every failure takes the same time and gives the same answer. When no account could
  * match, a verification is still simulated, so how fast the server answers does not
@@ -37,19 +32,12 @@ use Clavia\Domain\Shared\SecretGenerator;
  */
 final readonly class SignInWithPassword
 {
-    /**
-     * @param positive-int $challengeLifetimeSeconds How long the second step may take.
-     */
     public function __construct(
         private UserRepository $users,
         private PasswordHasher $hasher,
         private LoginThrottle $throttle,
         private LoginStateStore $loginStates,
-        private Sessions $sessions,
-        private MfaFactorRepository $factors,
-        private MfaChallengeStore $challenges,
-        private SecretGenerator $secrets,
-        private int $challengeLifetimeSeconds,
+        private CompleteFirstFactor $completeFirstFactor,
     ) {
     }
 
@@ -72,24 +60,13 @@ final readonly class SignInWithPassword
         // Re-validated even though it came from this server's own store.
         $nextUrl = LocalPath::orDefault($pending?->nextUrl)->value;
 
-        if ($this->factors->find($user->id)?->isConfirmed() === true) {
-            $handle = $this->secrets->token();
-            $this->challenges->open(
-                $handle,
-                new MfaChallenge($user->id, $nextUrl, $pending?->clientId, [AuthenticationMethod::Password]),
-                $this->challengeLifetimeSeconds,
-            );
-
-            return new SecondFactorRequired($handle);
-        }
-
-        $sessionId = $this->sessions->establish(
+        return ($this->completeFirstFactor)(
             $user->id,
             [AuthenticationMethod::Password],
+            $nextUrl,
+            $pending?->clientId,
             $attempt->currentSessionId,
         );
-
-        return new SignedIn($sessionId, $nextUrl);
     }
 
     private function authenticate(PasswordSignIn $attempt): ?User

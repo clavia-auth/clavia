@@ -13,6 +13,7 @@ namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\Shared\PageRenderer;
 use Clavia\Adapter\Primary\Http\Shared\SetCookie;
+use Clavia\Domain\Authentication\PendingExternalSignIn;
 
 /**
  * The cookies of the auth surface: their names, paths and lifetimes in one place, so a
@@ -25,6 +26,10 @@ use Clavia\Adapter\Primary\Http\Shared\SetCookie;
  * - **Second-factor challenge** (`clavia_mfa`, path `/auth`): the handle of a sign-in
  *   waiting for its second factor. Lasts as long as the challenge may; deleted when it
  *   ends, either way.
+ * - **External sign-in** (`clavia_external_state`, path `/auth`): the `state` of a sign-in
+ *   sent out to an external provider. The provider echoes the same value; the cookie is
+ *   what proves the browser coming back is the one that left. `SameSite=Lax` still sends
+ *   it on the provider's top-level redirect back.
  * - **Theme** (`clavia_theme`, path `/`): the colour scheme; absent means "follow the
  *   system". Read by nothing but the page's `data-theme` attribute.
  */
@@ -39,6 +44,10 @@ final readonly class AuthCookies
     public const string MFA_CHALLENGE = 'clavia_mfa';
 
     public const string MFA_CHALLENGE_PATH = '/auth';
+
+    public const string EXTERNAL_SIGN_IN = 'clavia_external_state';
+
+    public const string EXTERNAL_SIGN_IN_PATH = '/auth';
 
     public const string THEME = PageRenderer::THEME_COOKIE;
 
@@ -104,6 +113,22 @@ final readonly class AuthCookies
     public function expireMfaChallenge(): SetCookie
     {
         return SetCookie::expire(self::MFA_CHALLENGE, self::MFA_CHALLENGE_PATH, $this->secure);
+    }
+
+    public function externalSignIn(#[\SensitiveParameter] string $state): SetCookie
+    {
+        return SetCookie::create(
+            self::EXTERNAL_SIGN_IN,
+            $state,
+            PendingExternalSignIn::LIFETIME_SECONDS,
+            self::EXTERNAL_SIGN_IN_PATH,
+            $this->secure,
+        );
+    }
+
+    public function expireExternalSignIn(): SetCookie
+    {
+        return SetCookie::expire(self::EXTERNAL_SIGN_IN, self::EXTERNAL_SIGN_IN_PATH, $this->secure);
     }
 
     public function theme(string $theme): SetCookie

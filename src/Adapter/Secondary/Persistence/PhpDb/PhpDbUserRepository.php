@@ -55,6 +55,17 @@ final readonly class PhpDbUserRepository implements UserRepository
     }
 
     #[\Override]
+    public function matchingEmail(string $email): array
+    {
+        $rows = $this->database->fetchAll(
+            'SELECT ' . self::COLUMNS . ' FROM users WHERE lower(email) = lower(:email) ORDER BY created_at, id',
+            ['email' => $email],
+        );
+
+        return array_map($this->hydrate(...), $rows);
+    }
+
+    #[\Override]
     public function save(User $user): void
     {
         try {

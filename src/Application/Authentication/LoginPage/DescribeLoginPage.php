@@ -11,7 +11,10 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Authentication\LoginPage;
 
+use Clavia\Application\Authentication\External\ExternalProviderOption;
 use Clavia\Application\Authentication\ResolveEndUser;
+use Clavia\Application\Port\IdentityProvider;
+use Clavia\Application\Port\IdentityProviders;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Identity\UserRepository;
@@ -26,6 +29,7 @@ final readonly class DescribeLoginPage
         private ClientRepository $clients,
         private ResolveEndUser $resolveEndUser,
         private UserRepository $users,
+        private IdentityProviders $providers,
     ) {
     }
 
@@ -44,10 +48,24 @@ final readonly class DescribeLoginPage
             $endUser = ($this->resolveEndUser)($sessionId);
             $user = $endUser === null ? null : $this->users->find($endUser->userId);
 
-            return new LoginPage($user?->email, []);
+            return new LoginPage($user?->email, [], $user === null ? $this->providers() : []);
         }
 
-        return new LoginPage(null, $this->formOrigins($loginState));
+        return new LoginPage(null, $this->formOrigins($loginState), $this->providers());
+    }
+
+    /**
+     * The external providers the form offers — every configured one.
+     *
+     * @return list<ExternalProviderOption>
+     */
+    public function providers(): array
+    {
+        return array_map(
+            static fn (IdentityProvider $provider): ExternalProviderOption
+                => new ExternalProviderOption($provider->name()->value, $provider->label()),
+            $this->providers->all(),
+        );
     }
 
     /**

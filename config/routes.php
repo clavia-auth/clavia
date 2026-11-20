@@ -9,6 +9,8 @@
 
 declare(strict_types=1);
 
+use Clavia\Adapter\Primary\Http\Auth\ExternalSignInCallbackHandler;
+use Clavia\Adapter\Primary\Http\Auth\ExternalSignInHandler;
 use Clavia\Adapter\Primary\Http\Auth\LoginHandler;
 use Clavia\Adapter\Primary\Http\Auth\LoginPageHandler;
 use Clavia\Adapter\Primary\Http\Auth\LogoutHandler;
@@ -64,6 +66,14 @@ return static function (Application $app): void {
     $app->route('/auth/mfa/enroll', MfaSettingsHandler::class, ['GET', 'POST'], 'auth.mfa.enroll');
     $app->post('/auth/mfa/enroll/confirm', MfaSettingsHandler::class, 'auth.mfa.enroll.confirm');
     $app->post('/auth/mfa/disable', MfaSettingsHandler::class, 'auth.mfa.disable');
+    // Signing in through an external provider: out, then back. Both are navigations (GET);
+    // the callback's path is the redirect URI registered at the provider.
+    $app->get('/auth/social/{provider:[a-z][a-z0-9-]*}', ExternalSignInHandler::class, 'auth.social');
+    $app->get(
+        '/auth/social/{provider:[a-z][a-z0-9-]*}/callback',
+        ExternalSignInCallbackHandler::class,
+        'auth.social.callback',
+    );
 
     // ── /api/v1/* — the Management API, a machine plane: a bearer token for this API on
     // every route, through ManagementApiMiddleware, which also checks each request

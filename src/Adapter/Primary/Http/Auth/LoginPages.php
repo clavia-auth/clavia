@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
+use Clavia\Application\Authentication\External\ExternalProviderOption;
 
 /**
  * The view models of the login page, shared by the handler that shows it and the one
@@ -30,11 +31,13 @@ final class LoginPages
     /**
      * The sign-in form.
      *
-     * @param list<string> $formOrigins
+     * @param list<string>                 $formOrigins
+     * @param list<ExternalProviderOption> $providers   Offered as links below the form.
      */
     public static function form(
         ?string $loginState,
         array $formOrigins,
+        array $providers = [],
         ?string $email = null,
         ?string $error = null,
         int $status = 200,
@@ -44,7 +47,22 @@ final class LoginPages
             title: 'Sign in',
             heading: 'Sign in',
             returnTo: self::address($loginState),
-            variables: ['loginState' => $loginState ?? '', 'email' => $email ?? '', 'signedInAs' => null],
+            variables: [
+                'loginState' => $loginState ?? '',
+                'email' => $email ?? '',
+                'signedInAs' => null,
+                'providers' => array_map(
+                    static fn (ExternalProviderOption $provider): array => [
+                        'label' => $provider->label,
+                        'href' => '/auth/social/' . rawurlencode($provider->name) . (
+                            $loginState === null || $loginState === ''
+                                ? ''
+                                : '?' . http_build_query(['state' => $loginState], '', '&', PHP_QUERY_RFC3986)
+                        ),
+                    ],
+                    $providers,
+                ),
+            ],
             error: $error,
             status: $status,
             formOrigins: $formOrigins,
@@ -61,7 +79,7 @@ final class LoginPages
             title: 'Signed in',
             heading: 'You are signed in',
             returnTo: self::address(null),
-            variables: ['loginState' => '', 'email' => '', 'signedInAs' => $email],
+            variables: ['loginState' => '', 'email' => '', 'signedInAs' => $email, 'providers' => []],
         );
     }
 

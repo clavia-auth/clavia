@@ -15,6 +15,7 @@ use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
+use Clavia\Domain\Identity\ExternalIdentityRepository;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
@@ -22,12 +23,14 @@ use Clavia\Domain\ResourceServer\ClientGrantRepository;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use ClaviaTest\Support\Contract\AuthorizationCodeRepositoryContract;
 use ClaviaTest\Support\Contract\ClientRepositoryContract;
+use ClaviaTest\Support\Contract\ExternalIdentityRepositoryContract;
 use ClaviaTest\Support\Contract\MfaRepositoriesContract;
 use ClaviaTest\Support\Contract\ResourceServerRepositoryContract;
 use ClaviaTest\Support\Contract\UserRepositoryContract;
 use ClaviaTest\Support\Fake\InMemoryAuthorizationCodeRepository;
 use ClaviaTest\Support\Fake\InMemoryClientGrantRepository;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
+use ClaviaTest\Support\Fake\InMemoryExternalIdentityRepository;
 use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
 use ClaviaTest\Support\Fake\InMemoryRecoveryCodeRepository;
 use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
@@ -47,6 +50,7 @@ final class InMemoryRepositoriesTest extends TestCase
     use AuthorizationCodeRepositoryContract;
     use ResourceServerRepositoryContract;
     use MfaRepositoriesContract;
+    use ExternalIdentityRepositoryContract;
 
     private InMemoryUserRepository $users;
     private InMemoryClientRepository $clients;
@@ -56,6 +60,7 @@ final class InMemoryRepositoriesTest extends TestCase
     private InMemoryClientGrantRepository $clientGrants;
     private InMemoryMfaFactorRepository $factors;
     private InMemoryRecoveryCodeRepository $recoveryCodes;
+    private InMemoryExternalIdentityRepository $identities;
 
     #[\Override]
     protected function setUp(): void
@@ -68,12 +73,19 @@ final class InMemoryRepositoriesTest extends TestCase
         $this->resourceServers = new InMemoryResourceServerRepository($this->clientGrants);
         $this->factors = new InMemoryMfaFactorRepository($this->transactions);
         $this->recoveryCodes = new InMemoryRecoveryCodeRepository();
+        $this->identities = new InMemoryExternalIdentityRepository();
     }
 
     #[\Override]
     protected function users(): UserRepository
     {
         return $this->users;
+    }
+
+    #[\Override]
+    protected function identities(): ExternalIdentityRepository
+    {
+        return $this->identities;
     }
 
     #[\Override]

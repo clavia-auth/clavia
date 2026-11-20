@@ -102,6 +102,14 @@ knows what changes.
 | Counting the wrong codes | Read, increment, write back | One Redis script (`EXISTS`, `HINCRBY`, `DEL` at the limit) | Concurrent guesses are each counted, and a challenge that expired meanwhile is not written back. |
 | The challenge's connection | Recorded | Not yet recorded | As for sessions: connections arrive in Step 13. |
 
+## Social login
+
+| Area | Python | PHP | Why |
+|---|---|---|---|
+| PKCE towards GitHub | Not sent | Sent to every provider | A provider that does not implement RFC 7636 ignores the parameters; one that does gets the protection. |
+| The `state` cookie | `clavia_social_state` | `clavia_external_state` | Named for what it is, whatever kind of provider. |
+| Where a matching address is looked for | The pools the application enables, and the provider's own accounts | Every account, until connections exist (Step 13) | There are no pools yet. |
+
 ## Errors shown to browsers
 
 | Area | Python | PHP | Why |

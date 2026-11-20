@@ -64,6 +64,18 @@ final class User
     }
 
     /**
+     * Create an account for a person an external provider vouched for: no password, and
+     * the address verified, because the provider just reported it as verified — an
+     * account is never created from an address the provider does not vouch for.
+     *
+     * @throws InvalidValue When the email address cannot be one.
+     */
+    public static function registerFromProvider(UserId $id, string $verifiedEmail, DateTimeImmutable $now): self
+    {
+        return new self($id, self::email($verifiedEmail), null, true, true, Profile::empty(), $now, $now);
+    }
+
+    /**
      * Rebuild an account from storage.
      *
      * @throws InvalidValue

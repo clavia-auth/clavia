@@ -12,15 +12,11 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Authentication\LoginThrottle;
-use Clavia\Application\Authentication\Sessions;
+use Clavia\Application\Authentication\SignIn\CompleteFirstFactor;
 use Clavia\Application\Authentication\SignIn\SignInWithPassword;
 use Clavia\Application\Port\LoginStateStore;
-use Clavia\Application\Port\MfaChallengeStore;
 use Clavia\Application\Port\PasswordHasher;
-use Clavia\Configuration\Settings;
-use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Identity\UserRepository;
-use Clavia\Domain\Shared\SecretGenerator;
 use Psr\Container\ContainerInterface;
 
 final class SignInWithPasswordFactory
@@ -35,29 +31,9 @@ final class SignInWithPasswordFactory
         $throttle = $container->get(LoginThrottle::class);
         /** @var LoginStateStore $loginStates */
         $loginStates = $container->get(LoginStateStore::class);
-        /** @var Sessions $sessions */
-        $sessions = $container->get(Sessions::class);
-        /** @var MfaFactorRepository $factors */
-        $factors = $container->get(MfaFactorRepository::class);
-        /** @var MfaChallengeStore $challenges */
-        $challenges = $container->get(MfaChallengeStore::class);
-        /** @var SecretGenerator $secrets */
-        $secrets = $container->get(SecretGenerator::class);
-        /** @var Settings $settings */
-        $settings = $container->get(Settings::class);
-        $challengeLifetime = $settings->mfaChallengeLifetime;
-        assert($challengeLifetime > 0);
+        /** @var CompleteFirstFactor $completeFirstFactor */
+        $completeFirstFactor = $container->get(CompleteFirstFactor::class);
 
-        return new SignInWithPassword(
-            $users,
-            $hasher,
-            $throttle,
-            $loginStates,
-            $sessions,
-            $factors,
-            $challenges,
-            $secrets,
-            $challengeLifetime,
-        );
+        return new SignInWithPassword($users, $hasher, $throttle, $loginStates, $completeFirstFactor);
     }
 }

@@ -44,7 +44,7 @@ final readonly class LoginPageHandler implements RequestHandlerInterface
             $request,
             $page->signedInAs !== null
                 ? LoginPages::signedIn($page->signedInAs)
-                : LoginPages::form($loginState, $page->formOrigins),
+                : LoginPages::form($loginState, $page->formOrigins, $page->providers),
         );
     }
 }

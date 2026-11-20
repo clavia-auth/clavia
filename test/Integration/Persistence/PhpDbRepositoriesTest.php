@@ -15,6 +15,7 @@ use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbAuthorizationCodeRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientGrantRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbExternalIdentityRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbMfaFactorRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbRecoveryCodeRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbResourceServerRepository;
@@ -30,6 +31,7 @@ use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\ResponseType;
+use Clavia\Domain\Identity\ExternalIdentityRepository;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
@@ -44,6 +46,7 @@ use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\Url;
 use ClaviaTest\Support\Contract\AuthorizationCodeRepositoryContract;
 use ClaviaTest\Support\Contract\ClientRepositoryContract;
+use ClaviaTest\Support\Contract\ExternalIdentityRepositoryContract;
 use ClaviaTest\Support\Contract\MfaRepositoriesContract;
 use ClaviaTest\Support\Contract\ResourceServerRepositoryContract;
 use ClaviaTest\Support\Contract\UserRepositoryContract;
@@ -66,11 +69,18 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
     use AuthorizationCodeRepositoryContract;
     use ResourceServerRepositoryContract;
     use MfaRepositoriesContract;
+    use ExternalIdentityRepositoryContract;
 
     #[\Override]
     protected function users(): UserRepository
     {
         return new PhpDbUserRepository(TestStorage::database());
+    }
+
+    #[\Override]
+    protected function identities(): ExternalIdentityRepository
+    {
+        return new PhpDbExternalIdentityRepository(TestStorage::database());
     }
 
     #[\Override]

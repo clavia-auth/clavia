@@ -26,6 +26,8 @@ use Clavia\Adapter\Primary\Cli\SeedDevelopmentDataCommand;
 use Clavia\Adapter\Primary\Cli\ShowConfigCommand;
 use Clavia\Adapter\Primary\Http\Auth\AuthCookies;
 use Clavia\Adapter\Primary\Http\Auth\AuthPageResponder;
+use Clavia\Adapter\Primary\Http\Auth\ExternalSignInCallbackHandler;
+use Clavia\Adapter\Primary\Http\Auth\ExternalSignInHandler;
 use Clavia\Adapter\Primary\Http\Auth\LoginHandler;
 use Clavia\Adapter\Primary\Http\Auth\LoginPageHandler;
 use Clavia\Adapter\Primary\Http\Auth\LogoutHandler;
@@ -51,17 +53,20 @@ use Clavia\Adapter\Primary\Http\Oidc\JwksHandler;
 use Clavia\Adapter\Primary\Http\Oidc\UserInfoHandler;
 use Clavia\Adapter\Primary\Http\Shared\BearerChallenger;
 use Clavia\Adapter\Primary\Http\Shared\ErrorResponder;
-use Clavia\Adapter\Primary\Http\Shared\ErrorResponseGenerator;
 use Clavia\Adapter\Primary\Http\Shared\HealthHandler;
 use Clavia\Adapter\Primary\Http\Shared\MethodNotAllowedMiddleware;
 use Clavia\Adapter\Primary\Http\Shared\NotFoundHandler;
 use Clavia\Adapter\Primary\Http\Shared\PageRenderer;
 use Clavia\Adapter\Secondary\Crypto\BcryptPasswordHasher;
+use Clavia\Adapter\Secondary\IdentityProvider\ProviderHttp;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use Clavia\Adapter\Secondary\Redis\RedisConnection;
 use Clavia\Adapter\Secondary\System\SystemClock;
 use Clavia\Adapter\Secondary\System\SystemRandomSource;
 use Clavia\Application\Authentication\DevelopmentAutoLogin;
+use Clavia\Application\Authentication\External\BeginExternalSignIn;
+use Clavia\Application\Authentication\External\CompleteExternalSignIn;
+use Clavia\Application\Authentication\External\ResolveExternalAccount;
 use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
 use Clavia\Application\Authentication\LoginThrottle;
 use Clavia\Application\Authentication\Mfa\BeginTotpEnrollment;
@@ -75,6 +80,7 @@ use Clavia\Application\Authentication\Mfa\TotpSeeds;
 use Clavia\Application\Authentication\RequireSignIn;
 use Clavia\Application\Authentication\ResolveEndUser;
 use Clavia\Application\Authentication\Sessions;
+use Clavia\Application\Authentication\SignIn\CompleteFirstFactor;
 use Clavia\Application\Authentication\SignIn\SignInWithPassword;
 use Clavia\Application\Authentication\SignOut;
 use Clavia\Application\Clients\RegisterMachineClient;
@@ -112,6 +118,8 @@ use Clavia\Application\Oidc\Keys\PublishSigningKeys;
 use Clavia\Application\Oidc\Keys\RotateSigningKey;
 use Clavia\Application\Oidc\UserInfo\ReadUserInfo;
 use Clavia\Application\Port\AttemptCounter;
+use Clavia\Application\Port\ExternalSignInStore;
+use Clavia\Application\Port\IdentityProviders;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Application\Port\MfaChallengeStore;
 use Clavia\Application\Port\NonceRegistry;
@@ -127,6 +135,7 @@ use Clavia\Configuration\Settings;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
 use Clavia\Domain\Client\ClientRepository;
+use Clavia\Domain\Identity\ExternalIdentityRepository;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
@@ -136,10 +145,13 @@ use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\RandomSource;
 use Clavia\Domain\Shared\SecretGenerator;
+use Laminas\Diactoros\RequestFactory;
 use Laminas\Diactoros\ResponseFactory;
 use Laminas\Diactoros\ServerRequestFilter\FilterServerRequestInterface;
 use Laminas\Diactoros\StreamFactory;
 use Mezzio\Middleware\ErrorResponseGenerator as MezzioErrorResponseGenerator;
+use Psr\Http\Client\ClientInterface;
+use Psr\Http\Message\RequestFactoryInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\StreamFactoryInterface;
 use Psr\Log\LoggerInterface;
@@ -189,6 +201,7 @@ final class ConfigProvider
                 'invokables' => [
                     ResponseFactoryInterface::class => ResponseFactory::class,
                     StreamFactoryInterface::class => StreamFactory::class,
+                    RequestFactoryInterface::class => RequestFactory::class,
 
                     // Ports whose adapter needs nothing to be built
                     Clock::class => SystemClock::class,
@@ -234,6 +247,17 @@ final class ConfigProvider
                     RotateSigningKey::class => Container\RotateSigningKeyFactory::class,
                     ListSigningKeys::class => Container\ListSigningKeysFactory::class,
                     ReadUserInfo::class => Container\ReadUserInfoFactory::class,
+                    CompleteFirstFactor::class => Container\CompleteFirstFactorFactory::class,
+                    ExternalIdentityRepository::class => Container\ExternalIdentityRepositoryFactory::class,
+                    ExternalSignInStore::class => Container\ExternalSignInStoreFactory::class,
+                    ProviderHttp::class => Container\ProviderHttpFactory::class,
+                    BeginExternalSignIn::class => Container\BeginExternalSignInFactory::class,
+                    ResolveExternalAccount::class => Container\ResolveExternalAccountFactory::class,
+                    CompleteExternalSignIn::class => Container\CompleteExternalSignInFactory::class,
+                    ExternalSignInHandler::class => Container\ExternalSignInHandlerFactory::class,
+                    ExternalSignInCallbackHandler::class => Container\ExternalSignInCallbackHandlerFactory::class,
+                    ClientInterface::class => Container\HttpClientFactory::class,
+                    IdentityProviders::class => Container\IdentityProvidersFactory::class,
                     MfaFactorRepository::class => Container\MfaFactorRepositoryFactory::class,
                     RecoveryCodeRepository::class => Container\RecoveryCodeRepositoryFactory::class,
                     MfaChallengeStore::class => Container\MfaChallengeStoreFactory::class,
