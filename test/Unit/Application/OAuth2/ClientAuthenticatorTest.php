@@ -137,14 +137,67 @@ final class ClientAuthenticatorTest extends TestCase
         );
     }
 
-    public function testFailedBasicCredentialsDoNotFallBackToAnIdInTheBody(): void
+    public function testABasicClientMayRepeatItsOwnIdInTheBody(): void
     {
-        // Wrong Basic credentials plus a public client's id in the body: the body names a
-        // public client that did authenticate with "none", so that is who the caller is.
-        // What must not happen is the Basic client being let in.
-        $client = $this->authenticate($this->basic('basic-app', 'wrong'), ['client_id' => 'spa']);
+        // Many client libraries do; it names the same client and is not a second method.
+        $client = $this->authenticate(
+            $this->basic('basic-app', 's3cret:with colon'),
+            ['client_id' => 'basic-app'],
+        );
 
-        self::assertSame('spa', $client->id->value);
+        self::assertSame('basic-app', $client->id->value);
+    }
+
+    /**
+     * RFC 6749 §2.3: "The client MUST NOT use more than one authentication method in
+     * each request." Credentials that fail are a failed request — never a reason to
+     * look for other credentials elsewhere in it.
+     *
+     * @param array<string, string> $body
+     */
+    #[DataProvider('mixedMethods')]
+    public function testARequestMixingMethodsIsRefusedEvenWhenOneWouldSucceed(string $header, array $body): void
+    {
+        try {
+            $this->authenticate($header, $body);
+            self::fail('The client was authenticated.');
+        } catch (OAuth2Error $error) {
+            self::assertSame(ErrorCode::InvalidClient, $error->error);
+        }
+    }
+
+    /** @return iterable<string, array{string, array<string, string>}> */
+    public static function mixedMethods(): iterable
+    {
+        $basic = static fn (string $id, string $secret): string
+            => 'Basic ' . base64_encode(urlencode($id) . ':' . urlencode($secret));
+
+        yield 'failed Basic, a valid public client in the body' => [
+            $basic('basic-app', 'wrong'),
+            ['client_id' => 'spa'],
+        ];
+        yield 'unknown Basic client, a valid public client in the body' => [
+            $basic('nobody', 'x'),
+            ['client_id' => 'spa'],
+        ];
+        yield 'malformed Basic, a valid public client in the body' => ['Basic !!!', ['client_id' => 'spa']];
+        yield 'another scheme, a valid public client in the body' => ['Bearer abc', ['client_id' => 'spa']];
+        yield 'failed Basic, valid body credentials' => [
+            $basic('basic-app', 'wrong'),
+            ['client_id' => 'post-app', 'client_secret' => 's3cret'],
+        ];
+        yield 'valid Basic, valid body credentials of another client' => [
+            $basic('basic-app', 's3cret:with colon'),
+            ['client_id' => 'post-app', 'client_secret' => 's3cret'],
+        ];
+        yield 'valid Basic, the same secret repeated in the body' => [
+            $basic('basic-app', 's3cret:with colon'),
+            ['client_id' => 'basic-app', 'client_secret' => 's3cret:with colon'],
+        ];
+        yield 'valid Basic, another client named in the body' => [
+            $basic('basic-app', 's3cret:with colon'),
+            ['client_id' => 'spa'],
+        ];
     }
 
     /**

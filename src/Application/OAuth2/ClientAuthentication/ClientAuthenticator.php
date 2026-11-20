@@ -22,27 +22,23 @@ use Clavia\Domain\Shared\InvalidValue;
 /**
  * Establishes which client is calling an endpoint (RFC 6749 §2.3, §3.2.1).
  *
- * Each method the endpoint accepts is tried in turn — HTTP Basic, then credentials in
- * the body, then no authentication at all — and a method only succeeds when it is the
- * one the client is *registered* with. That last condition is what stops a confidential
- * client's id from being used as if it were a public client: naming the client without
- * its secret is a valid `none` authentication only for a client registered as `none`.
+ * A request uses exactly one method, and which one is read from what it carries: an
+ * `Authorization` header means HTTP Basic, a `client_secret` in the body means
+ * `client_secret_post`, a bare `client_id` means no authentication. Nothing is tried
+ * "in turn": credentials that fail are a failed request, never a reason to look for
+ * other credentials elsewhere in it (§2.3: "The client MUST NOT use more than one
+ * authentication method in each request").
+ *
+ * The method then has to be one the endpoint accepts and the one the client is
+ * *registered* with. That last condition is what stops a confidential client's id from
+ * being used as if it were a public client: naming the client without its secret is a
+ * valid `none` authentication only for a client registered as `none`.
  *
  * Every failure is the same `invalid_client`, whatever went wrong: an unknown client, a
- * wrong secret and the wrong method are not told apart for the caller.
+ * wrong secret, the wrong method and mixed methods are not told apart for the caller.
  */
 final readonly class ClientAuthenticator
 {
-    /**
-     * The order in which presented credentials are looked at: the strongest proof first,
-     * a bare identifier last.
-     */
-    private const array ORDER = [
-        ClientAuthMethod::ClientSecretBasic,
-        ClientAuthMethod::ClientSecretPost,
-        ClientAuthMethod::None,
-    ];
-
     public function __construct(
         private ClientRepository $clients,
         private PasswordHasher $hasher,
@@ -52,36 +48,60 @@ final readonly class ClientAuthenticator
     /**
      * @param list<ClientAuthMethod> $accepted The methods the endpoint accepts.
      *
-     * @throws OAuth2Error `invalid_client` when no accepted method identifies a client.
+     * @throws OAuth2Error `invalid_client` when the request does not authenticate a client with one
+     *                     accepted method, the one that client is registered with.
      */
     public function authenticate(ClientCredentials $credentials, array $accepted): Client
     {
-        foreach (self::ORDER as $method) {
-            if (! in_array($method, $accepted, true)) {
-                continue;
-            }
+        [$method, $client] = $this->presented($credentials);
 
-            $client = match ($method) {
-                ClientAuthMethod::ClientSecretBasic => $this->withBasic($credentials),
-                ClientAuthMethod::ClientSecretPost => $this->withPostedSecret($credentials),
-                ClientAuthMethod::None => $this->withoutSecret($credentials),
-            };
-
-            if ($client !== null && $client->authMethod === $method) {
-                return $client;
-            }
+        if ($client === null || ! in_array($method, $accepted, true) || $client->authMethod !== $method) {
+            throw OAuth2Error::invalidClient('Client authentication failed.');
         }
 
-        throw OAuth2Error::invalidClient('Client authentication failed.');
+        return $client;
     }
 
     /**
-     * HTTP Basic (RFC 6749 §2.3.1): `client_id:client_secret`, each form-urlencoded
-     * before being joined and base64-encoded.
+     * The one method the request uses, and the client it proves — null when it proves none.
+     *
+     * @return array{ClientAuthMethod, Client|null}
      */
-    private function withBasic(ClientCredentials $credentials): ?Client
+    private function presented(ClientCredentials $credentials): array
     {
-        $header = $credentials->authorizationHeader ?? '';
+        $clientId = $credentials->body->get('client_id');
+        $secret = $credentials->body->get('client_secret');
+
+        if ($credentials->authorizationHeader !== null) {
+            return [
+                ClientAuthMethod::ClientSecretBasic,
+                $this->withBasic($credentials->authorizationHeader, $clientId, $secret),
+            ];
+        }
+
+        if ($secret !== null) {
+            return [
+                ClientAuthMethod::ClientSecretPost,
+                $clientId === null ? null : $this->verified($clientId, $secret),
+            ];
+        }
+
+        return [ClientAuthMethod::None, $clientId === null ? null : $this->find($clientId)];
+    }
+
+    /**
+     * HTTP Basic (RFC 6749 §2.3.1, RFC 7617).
+     *
+     * An `Authorization` header commits the request to this method: any other scheme,
+     * malformed credentials, or a wrong secret fail it. So does a body that also
+     * carries a secret, or names another client — many libraries repeat the client's
+     * own id in the body, which is harmless and accepted.
+     */
+    private function withBasic(
+        #[\SensitiveParameter] string $header,
+        ?string $bodyClientId,
+        #[\SensitiveParameter] ?string $bodySecret,
+    ): ?Client {
         if (preg_match('/^Basic +([A-Za-z0-9+\/]+=*)$/Di', $header, $match) !== 1) {
             return null;
         }
@@ -92,29 +112,16 @@ final readonly class ClientAuthenticator
             return null;
         }
 
-        // Split at the first colon: a client id cannot hold one, a secret can.
-        $clientId = substr($decoded, 0, $separator);
-        $secret = substr($decoded, $separator + 1);
+        // Split at the first colon: a client id cannot hold one, a secret can. Each half
+        // was form-encoded before being joined (RFC 6749 §2.3.1).
+        $clientId = urldecode(substr($decoded, 0, $separator));
+        $secret = urldecode(substr($decoded, $separator + 1));
 
-        return $this->verified(urldecode($clientId), urldecode($secret));
-    }
-
-    private function withPostedSecret(ClientCredentials $credentials): ?Client
-    {
-        $clientId = $credentials->body->get('client_id');
-        $secret = $credentials->body->get('client_secret');
-
-        return $clientId === null || $secret === null ? null : $this->verified($clientId, $secret);
-    }
-
-    private function withoutSecret(ClientCredentials $credentials): ?Client
-    {
-        $clientId = $credentials->body->get('client_id');
-        if ($clientId === null || $credentials->body->get('client_secret') !== null) {
+        if ($bodySecret !== null || ($bodyClientId !== null && $bodyClientId !== $clientId)) {
             return null;
         }
 
-        return $this->find($clientId);
+        return $this->verified($clientId, $secret);
     }
 
     private function verified(string $clientId, #[\SensitiveParameter] string $secret): ?Client

@@ -201,9 +201,14 @@ Conventions established in Step 2:
   returned from the transaction and thrown after commit — throwing inside would roll the
   spend back. A replay revokes what the code minted; a code presented by another client
   changes nothing.
-- **Client authentication uses exactly the method the client registered**
-  (`token_endpoint_auth_method`): the right secret through the wrong door fails, and a
-  confidential client presenting only its id fails. Every failure is the same `invalid_client`.
+- **Client authentication is one method per request, and it must be the registered one.**
+  The method is read from what the request carries — an `Authorization` header means Basic, a
+  body `client_secret` means `client_secret_post`, a bare `client_id` means `none` — and is
+  never "tried in turn": failed Basic credentials fail the request even if the body names a
+  valid public client, and mixing methods is refused (RFC 6749 §2.3). The method must equal
+  the client's `token_endpoint_auth_method`, so the right secret through the wrong door
+  fails, and a confidential client presenting only its id fails. Every failure is the same
+  `invalid_client`.
 - **A grant is a class implementing `Token\Grant`**, registered in `IssueTokenFactory`.
   `IssueToken` owns what every grant shares: repetitions, `grant_type`, client authentication,
   the client's permission to use the grant.
