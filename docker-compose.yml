@@ -1,0 +1,137 @@
+services:
+  # ── Caddy — reverse proxy / TLS termination ──────────────────
+  # Terminates mkcert TLS for auth.{CLAVIA_ROOT_DOMAIN} and
+  # management.{CLAVIA_ROOT_DOMAIN}, serves the static assets itself and hands
+  # everything else to PHP-FPM over FastCGI. The dashboard's Vite dev server
+  # runs on the host.
+  caddy:
+    image: caddy:2-alpine
+    container_name: clavia-caddy
+    restart: unless-stopped
+    ports:
+      - "${CLAVIA_HTTP_PORT:-80}:80"
+      - "${CLAVIA_HTTPS_PORT:-443}:443"
+    environment:
+      CLAVIA_ROOT_DOMAIN: ${CLAVIA_ROOT_DOMAIN:?set CLAVIA_ROOT_DOMAIN in .env}
+      CLAVIA_MANAGEMENT_CSP: ${CLAVIA_MANAGEMENT_CSP:-csp_dev}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/etc/caddy/certs:ro
+      # Same path as in the php container: Caddy resolves a request to a file
+      # under /app/public and passes that path to PHP-FPM as SCRIPT_FILENAME.
+      - ./public:/app/public:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    # The dashboard's dev server runs on the host, so Caddy reaches it through
+    # the host gateway. extra_hosts makes host.docker.internal resolve on Linux
+    # too, where it is not built in.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - php
+    networks:
+      - clavia-net
+    healthcheck:
+      test: [ "CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── PHP-FPM — the application ────────────────────────────────
+  # Share-nothing: every request builds the application and throws it away.
+  # Also where the tooling runs: `docker compose exec php bin/clavia …`,
+  # `composer check` (see the Makefile).
+  php:
+    build: ./docker/php
+    container_name: clavia-php
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - .:/app
+    # The application reads /app/.env itself. These override it for the one
+    # thing that differs inside the Compose network: services are reached by
+    # name on their own ports, not through the ports published on the host.
+    environment:
+      CLAVIA_POSTGRES_HOST: db
+      CLAVIA_POSTGRES_PORT: 5432
+      CLAVIA_REDIS_HOST: redis
+      CLAVIA_REDIS_PORT: 6379
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - clavia-net
+
+  db:
+    image: postgres:17-alpine
+    container_name: clavia-db
+    # The image requires the plain POSTGRES_* names inside the container; the
+    # CLAVIA_-prefixed keys are ours, so .env cannot collide with another
+    # project's Postgres settings on the same machine.
+    environment:
+      POSTGRES_USER: ${CLAVIA_POSTGRES_USER:-clavia}
+      POSTGRES_PASSWORD: ${CLAVIA_POSTGRES_PASSWORD:-clavia}
+      POSTGRES_DB: ${CLAVIA_POSTGRES_DB:-clavia}
+    ports:
+      - "${CLAVIA_POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - clavia-pgdata:/var/lib/postgresql/data
+    networks:
+      - clavia-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CLAVIA_POSTGRES_USER:-clavia} -d ${CLAVIA_POSTGRES_DB:-clavia}"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  # Sessions and the other short-TTL material described in CLAUDE.md
+  # (failed-login counters, MFA challenges, social-login state, device codes).
+  redis:
+    image: redis:7-alpine
+    container_name: clavia-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${CLAVIA_REDIS_PORT:-6379}:6379"
+    volumes:
+      - clavia-redisdata:/data
+    networks:
+      - clavia-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  # Separate database for the test suite so it never touches dev data.
+  # The database name is the dev one with a _test suffix, so the two stay in step
+  # when CLAVIA_POSTGRES_DB is overridden.
+  db-test:
+    image: postgres:17-alpine
+    container_name: clavia-db-test
+    environment:
+      POSTGRES_USER: ${CLAVIA_POSTGRES_USER:-clavia}
+      POSTGRES_PASSWORD: ${CLAVIA_POSTGRES_PASSWORD:-clavia}
+      POSTGRES_DB: ${CLAVIA_POSTGRES_DB:-clavia}_test
+    ports:
+      - "${CLAVIA_POSTGRES_TEST_PORT:-5434}:5432"
+    tmpfs:
+      - /var/lib/postgresql/data  # ephemeral: tests start from a clean slate
+    networks:
+      - clavia-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CLAVIA_POSTGRES_USER:-clavia} -d ${CLAVIA_POSTGRES_DB:-clavia}_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+networks:
+  clavia-net:
+    driver: bridge
+
+volumes:
+  clavia-pgdata:
+  clavia-redisdata:
+  caddy-data:
+  caddy-config:

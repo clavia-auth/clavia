@@ -1,0 +1,74 @@
+# The hexagonal dependency rules, enforced. See "Hexagonal architecture — the rules"
+# in CLAUDE.md: dependencies point inward only, and a violation fails the build.
+#
+# Adding an exception here requires a note in CLAUDE.md explaining why.
+deptrac:
+  paths:
+    - ./src
+
+  layers:
+    # Pure PHP: aggregates, value objects, policies, repository interfaces.
+    - name: Domain
+      collectors:
+        - type: classLike
+          value: ^Clavia\\Domain\\.*
+
+    # Use cases and technical outbound ports.
+    - name: Application
+      collectors:
+        - type: classLike
+          value: ^Clavia\\Application\\.*
+
+    # Driven adapters: persistence, Redis, signing, crypto, mail, HTTP client.
+    - name: Infrastructure
+      collectors:
+        - type: classLike
+          value: ^Clavia\\Infrastructure\\.*
+
+    # Driving adapters: HTTP handlers and middleware, console commands.
+    - name: Ui
+      collectors:
+        - type: classLike
+          value: ^Clavia\\Ui\\.*
+
+    # The typed CLAVIA_* settings. Plain data; no ring of the hexagon.
+    - name: Configuration
+      collectors:
+        - type: classLike
+          value: ^Clavia\\Configuration\\.*
+
+    # The composition root: the only code allowed to know everything.
+    - name: Bootstrap
+      collectors:
+        - type: classLike
+          value: ^Clavia\\Bootstrap\\.*
+
+    # Every third-party namespace. PHP's own classes are not a layer and are
+    # therefore allowed everywhere.
+    - name: Vendor
+      collectors:
+        - type: classLike
+          value: ^(Psr|Mezzio|Laminas|Symfony|Monolog|FastRoute|PhpDb|Fig)\\.*
+
+  ruleset:
+    Domain: ~
+    Application:
+      - Domain
+    Infrastructure:
+      - Domain
+      - Application
+      - Configuration
+      - Vendor
+    Ui:
+      - Domain
+      - Application
+      - Configuration
+      - Vendor
+    Configuration: ~
+    Bootstrap:
+      - Domain
+      - Application
+      - Infrastructure
+      - Ui
+      - Configuration
+      - Vendor

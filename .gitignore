@@ -1,0 +1,33 @@
+# Environment
+.env
+
+# SSL — never commit private keys or generated certs
+certs/*.pem
+
+# PHP
+/vendor/
+/build/
+.phpunit.cache/
+.phpunit.result.cache
+.phpcs-cache
+.deptrac.cache
+
+# Node
+node_modules/
+frontend/dist/
+# Written by `clavia seed-dev`: the dashboard's client id for this machine.
+frontend/.env.local
+frontend/*.tsbuildinfo
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+
+# Browser automation output
+.playwright-mcp/
+
+# Files Claude hands back that could not be written in place
+/Claude outputs/

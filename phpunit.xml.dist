@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         cacheDirectory=".phpunit.cache"
+         colors="true"
+         failOnDeprecation="true"
+         failOnNotice="true"
+         failOnWarning="true"
+         failOnRisky="true"
+         displayDetailsOnTestsThatTriggerDeprecations="true"
+         displayDetailsOnTestsThatTriggerWarnings="true">
+    <testsuites>
+        <!-- Domain and application rules, with in-memory adapters. No I/O. -->
+        <testsuite name="Unit">
+            <directory>test/Unit</directory>
+        </testsuite>
+        <!-- Each driven adapter against the real thing (PostgreSQL, Redis). -->
+        <testsuite name="Integration">
+            <directory>test/Integration</directory>
+        </testsuite>
+        <!-- The ported Python tests: whole features through the PSR-15 pipeline. -->
+        <testsuite name="Acceptance">
+            <directory>test/Acceptance</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>src</directory>
+        </include>
+    </source>
+</phpunit>

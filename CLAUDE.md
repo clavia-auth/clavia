@@ -1,0 +1,648 @@
+# CLAUDE.md
+
+Guidance for Claude Code when working in this repository.
+
+## Project
+
+Clavia is an open-source OAuth 2.1 / OpenID Connect authorization server — an Auth0 equivalent
+covering OAuth2 flows, interactive login/logout with MFA, and a Management API. The bar is
+unchanged from the Python project: *"The code and architecture need to be perfectly coded and
+documented."* Spec conformance and public-API documentation are part of "done".
+
+**This repository is the PHP 8.5 port of Clavia.** The reference implementation is the Python
+project at `../Clavia Python/clavia` (FastAPI + Authlib + SQLAlchemy; ~10k lines of source, 21
+test files, 404 tests, 31 commits). It is feature-complete for everything below except audit logs
+and multi-tenancy.
+
+## Current state
+
+**Step 0 is done: the repository, the toolchain and the local infrastructure exist; no feature
+does.** The application answers `GET /healthz` and nothing else. Update this section at the end
+of every step (what exists, where it lives, which conventions it established).
+
+What exists:
+
+- **Skeleton**: `public/index.php` → `config/container.php` (laminas-servicemanager) →
+  `config/pipeline.php` → `config/routes.php`. The pipeline is `ErrorHandler` → routing →
+  implicit `HEAD` → 405 → dispatch → 404. `src/Domain`, `src/Application` and
+  `src/Infrastructure` are empty.
+- **Settings** (`src/Configuration`): `Settings` is a readonly class whose constructor
+  parameters *are* the `CLAVIA_*` variables (`rootDomain` ⇄ `CLAVIA_ROOT_DOMAIN`);
+  `Settings::fromEnvironment()` coerces, bounds-checks (`#[Range]`) and cross-checks them, with
+  every validator of the Python `config.py`. `bin/clavia config` prints them from the class.
+- **Composition root** (`src/Bootstrap`): `ConfigProvider` maps every service to a factory in
+  `Bootstrap\Container`; `EnvironmentVariables` merges the process environment over `.env`.
+- **Local infrastructure**: `docker-compose.yml` (Caddy, `php` = PHP-FPM 8.5, Postgres :5433,
+  `db-test` :5434, Redis), `docker/php/`, the ported `Caddyfile`, `Makefile`, `setup-ssl.sh`.
+- **QA**: `composer check` = PHPCS (PSR-12, 120 columns) + Psalm level 1 + deptrac + PHPUnit.
+  `.github/workflows/ci.yml` runs it.
+
+Conventions established in Step 0 that later steps keep:
+
+- **Two namespaces sit outside the three rings.** `Clavia\Configuration` is the typed settings:
+  plain data with no dependency, readable by adapters and the composition root, never by
+  `Domain` or `Application` (they receive the few values they need as constructor arguments).
+  `Clavia\Bootstrap` is the composition root: the only code that reads the container, the only
+  code allowed to import every layer. `deptrac.yaml` encodes both.
+- **One factory class per service**, in `Bootstrap\Container`, registered in
+  `Bootstrap\ConfigProvider`. No closures in configuration, no autowiring, no service location
+  anywhere else in `src/`.
+- **A new setting is a constructor parameter of `Settings`** — with a default, a doc comment
+  saying why it exists, a `#[Range]` when it is a number, and a test. Nothing else needs editing.
+- **A new console command** is a `symfony/console` command in `Ui\Cli`, a factory, and one line
+  in `ConfigProvider::CONSOLE_COMMANDS`. `bin/clavia` refuses to run any command on an invalid
+  configuration (exit 78) and prints `Settings::warnings()` to stderr.
+- **Responses go through `Ui\Http\Shared\JsonResponder`** (slashes and Unicode unescaped, as
+  the Python server emitted them). The generic answers mirror FastAPI's so clients see no
+  difference: `{"detail":"Not Found"}`, `{"detail":"Method Not Allowed"}` + `Allow`, and a bare
+  `Internal Server Error` in plain text.
+- **An uncaught error never describes itself to the client, in any environment.** The cause is
+  logged (monolog → stderr → the PHP-FPM/container log). Every PHP warning or notice is an error:
+  the entry points set `error_reporting(E_ALL)` and the pipeline turns them into exceptions.
+- **No `X-Forwarded-*` header is trusted by default.** Behind Caddy over FastCGI the scheme and
+  client address come from the web server. `CLAVIA_TRUSTED_PROXIES` names the proxies whose
+  `X-Forwarded-Proto` is believed; the host is never taken from a header.
+- **Caddy owns the files, PHP owns everything else.** `/auth/static/*` and `/favicon.ico` are
+  served from `public/` by Caddy; `php_fastcgi` runs `index.php` and no other script. The host
+  split (`/api/v1/*` only on `management.*`) is still enforced in the `Caddyfile`.
+- **Acceptance tests extend `ClaviaTest\Support\AcceptanceTestCase`**: the real container,
+  pipeline and routes, in-process, with settings built from an explicit array — never from the
+  machine's `.env` — and a `RecordingLogger`. PHPUnit lowers `error_reporting` while a test
+  runs; the base class restores `E_ALL`.
+- **Every PHP file starts with the header in `.docheader`** (`LicenseHeaderTest`).
+- **A deliberate difference from the Python server is recorded in `docs/DEVIATIONS.md`** in the
+  same change that introduces it.
+
+Running it: `cp .env.example .env`, `./setup-ssl.sh`, `make up install`, then
+`https://auth.{domain}/healthz`. Tooling runs in the container: `make check`, `make config`.
+
+## How the migration works
+
+- **The Python code is the specification, not the source.** Port *behaviour*, not structure:
+  Authlib subclasses, FastAPI dependencies and SQLAlchemy models do not map onto a hexagonal PHP
+  codebase and must not be transliterated. Read the Python module, its tests and the matching
+  paragraph of `../Clavia Python/clavia/CLAUDE.md`, then design the PHP feature from the domain out.
+- **The Python tests are the acceptance contract.** Each step names the `tests/test_*.py` files it
+  must port. Every Python test becomes a PHP acceptance test with the same name and intent; a step
+  is done when all of them pass. Extra unit tests for the domain come on top.
+- **The HTTP contract is frozen.** Same paths, methods, parameters, status codes, JSON shapes,
+  error codes, cookie names, id prefixes (`rol_`, `tpc_`, …) and `CLAVIA_*` setting names as the
+  Python server, so the React dashboard (`frontend/`) is copied over unmodified and any relying
+  party cannot tell the two servers apart. A deliberate deviation is recorded in
+  `docs/DEVIATIONS.md` with its reason.
+- **Port the final design, not the history.** The Python project changed its mind along the way
+  (client scope column dropped, `client_id` became the primary key, `audience`/`sid`/`amr` added
+  later). Each step creates its tables and models directly in their final shape.
+- **One step = one end-to-end feature**, merged only when green: acceptance tests, unit tests,
+  Psalm, PHPCS and the architecture check.
+
+## Decisions (made 2026-11-20)
+
+| Topic | Decision |
+|---|---|
+| Language | PHP 8.5, `declare(strict_types=1)` everywhere |
+| HTTP | **Mezzio** (PSR-7/11/15, laminas-servicemanager, FastRoute) — as a driving adapter only |
+| Architecture | **Strict hexagonal** (ports & adapters) + DDD tactical patterns, enforced by tooling |
+| OAuth2/OIDC engine | **Own implementation, inside Clavia**, written from the RFCs in the domain/application layers. No league/oauth2-server, no external protocol library |
+| Persistence | PostgreSQL through **`php-db/phpdb-pgsql`** (on `php-db/phpdb`), behind repository ports |
+| Migrations | Plain SQL files, **written step by step** as each feature needs its tables — no upfront schema |
+| Runtime | **PHP-FPM behind Caddy** (share-nothing; no worker mode) |
+| Short-TTL state | Redis (`ext-redis`), behind store ports |
+| Dashboard | The existing **React** dashboard (`frontend/`), copied unchanged |
+| Auth pages | **Plain HTML templates, no Twig, no template engine**, no JavaScript — see "Auth pages" |
+| Namespace / licence | `Clavia\` · BSD-3-Clause |
+| Existing data | None to carry over — the PHP schema is free to be designed cleanly |
+
+
+## Hexagonal architecture — the rules
+
+Three rings. Dependencies point inward only; nothing in an inner ring knows an outer one exists.
+
+```
+            driving adapters                                  driven adapters
+ ┌──────────────────────────────┐                    ┌──────────────────────────────┐
+ │ Http (Mezzio handlers,       │                    │ Persistence (phpdb-pgsql)    │
+ │   middleware, HTML pages)    │                    │ Redis stores                 │
+ │ Cli (console commands)       │                    │ Signing (postgres, KMS…)     │
+ └──────────────┬───────────────┘                    │ Crypto, Mail, HttpClient,    │
+                │ calls                              │ Clock, Random, Deferred      │
+        ┌───────▼────────────────────────────┐       └──────────────▲───────────────┘
+        │ Application                        │                      │ implements
+        │   use cases (inbound ports)        │──── outbound ports ──┘
+        │   ┌────────────────────────────┐   │
+        │   │ Domain                     │   │
+        │   │ aggregates, value objects, │   │
+        │   │ policies, domain services, │   │
+        │   │ repository interfaces      │   │
+        │   └────────────────────────────┘   │
+        └────────────────────────────────────┘
+```
+
+### Layout
+
+```
+src/
+  Domain/                     # pure PHP. No vendor import at all — not even PSR interfaces.
+    Shared/                   #   Clock, ids, Digest, Url, Scope, Audience, DomainException…
+    Client/                   #   applications: Client, RedirectUri, ClientAuthMethod, ownership
+    Identity/                 #   User, Connection, ExternalIdentity, credentials, linking policy
+    ResourceServer/           #   APIs, Permission, ClientGrant
+    Rbac/                     #   Role, assignments, effective permissions
+    OAuth2/                   #   AuthorizationRequest, Pkce, AuthorizationCode, AccessToken,
+                              #   RefreshToken + family, DeviceAuthorization, Consent, OAuth2Error
+    Oidc/                     #   IdTokenClaims, LogoutToken, SigningKey, Nonce, discovery metadata
+    Authentication/           #   Session, LoginState, Amr, Totp, RecoveryCode, PasswordlessChallenge,
+                              #   throttling policy
+  Application/                # orchestration. Imports Domain only.
+    <Context>/<UseCase>/      #   Command|Query (readonly DTO) + Handler + Result — one folder each
+    Port/                     #   technical outbound ports: TokenSigner, SecretCipher, PasswordHasher,
+                              #   RandomSource, TransactionManager, Mailer, OutboundHttp,
+                              #   OutboundUrlPolicy, DeferredTasks, *Store (Redis-shaped state)
+  Infrastructure/             # driven adapters. Implements Domain + Application ports.
+    Persistence/PhpDb/        #   repositories, row↔aggregate mappers, migrations runner
+    Redis/  Signing/  Crypto/  Mail/  HttpClient/  System/ (clock, random, deferred)
+  Ui/                         # driving adapters. Calls Application use cases only.
+    Http/OAuth2/  Http/Oidc/  Http/Auth/  Http/Management/  Http/Shared/ (middleware)
+    Cli/
+  Configuration/              # the typed CLAVIA_* settings. Plain data; depends on nothing.
+  Bootstrap/                  # composition root: ConfigProvider + one factory per service.
+config/                       # Mezzio entry files: config, container, pipeline, routes
+templates/                    # auth pages: plain HTML templates + partials
+public/                       # index.php, auth/static/ (auth.css, icon — served by Caddy)
+frontend/                     # the React dashboard, copied from the Python project
+migrations/  docs/
+test/
+  Unit/ (Domain, Application with in-memory adapters)   Integration/ (each driven adapter)
+  Acceptance/ (ported Python tests, through the PSR-15 pipeline)   Support/
+```
+
+### Rules — a violation is a build failure, not a review comment
+
+1. **Domain imports nothing** outside `Clavia\Domain` and PHP core. No Mezzio, PSR-7, phpdb,
+   Redis, `DateTimeImmutable::now()`, `random_bytes()`, `getenv()`. Time and randomness arrive
+   through `Clock` and `RandomSource`.
+2. **Application imports Domain only.** Use cases receive a Command/Query of scalars and value
+   objects and return a Result or throw a domain exception. They never see a PSR-7 request, a
+   session cookie, an SQL row or an HTTP status.
+3. **Repository interfaces live with their aggregate in Domain**; purely technical ports live in
+   `Application/Port`. Ports speak the domain's language and express intent, never mechanism:
+   `RefreshTokenRepository::lockForRedemption(Digest)` — not `selectForUpdate()`.
+4. **Adapters never call each other.** An HTTP handler does not touch a repository or Redis; a
+   repository does not sign tokens. Cross-cutting needs go through a use case or a port.
+5. **Driving adapters are translators.** A Mezzio handler does exactly: parse and validate the
+   transport shape → build a Command → call one use case → map Result/exception to a response.
+   Protocol decisions (which OAuth2 error, whether consent is needed, scope narrowing) are domain
+   or application code; *encoding* them (redirect vs JSON, `WWW-Authenticate`) is the adapter's.
+6. **The composition root is the only place that knows everything.** Wiring is in
+   `Clavia\Bootstrap` (ConfigProvider and factories) and the `config/` entry files; nothing
+   else in `src/` reads the container.
+7. **Transactions are an application concern**: `TransactionManager::transactional(callable)`
+   wraps a use case; the adapter decides what that means.
+8. **Domain objects are immutable where they can be** (`readonly` classes, PHP 8.5 `clone with`),
+   always valid (constructors/named constructors enforce invariants), and never anaemic: the rule
+   lives on the aggregate that owns the data.
+9. **Each port has an in-memory fake** in `test/Support`, and each real adapter has a contract
+   test that runs the same suite against the fake and the real thing.
+
+### Enforcement
+
+- **deptrac** (`deptrac.yaml`; layers Domain, Application, Infrastructure, Ui, Configuration,
+  Bootstrap, plus a Vendor layer that Domain, Application and Configuration may not touch) runs
+  in `composer check` and CI. Adding an exception to its config requires a note in this file.
+- **Psalm** at level 1, no baseline. **PHPCS** PSR-12. **PHPUnit** 12.
+- `DependencyRuleTest` asserts that no file under `src/Domain` has a `use` statement outside
+  `Clavia\Domain` (and likewise for `Application` and `Configuration`) — the cheap, unarguable
+  version of rules 1 and 2.
+
+## What changes from Python, and why it matters
+
+| Python | PHP | Consequence |
+|---|---|---|
+| Authlib `AuthorizationServer` + subclasses closing its gaps | Own protocol core in `Domain/OAuth2` | The "Authlib gaps" list becomes plain invariants. No per-request server object, no threadpool. |
+| FastAPI routers + `Depends` | Mezzio handlers + PSR-15 middleware per surface | Four pipelines (`/oauth2`, `/oidc`, `/auth`, `/api/v1`), each with its own authentication middleware. |
+| Pydantic, `extra="forbid"` | OpenAPI document + `phayne-io/openapi-psr7-validator` (`additionalProperties: false`) at the edge, then typed Commands | The Management API becomes contract-first: `docs/openapi/management-api.yaml` is the source of truth. Error bodies keep FastAPI's shape (`{"detail": …}`) — the contract is frozen. |
+| SQLAlchemy models + Alembic | Aggregates + phpdb-pgsql repositories + SQL migrations | Models are not table-shaped; mappers live in the adapter. |
+| `pydantic-settings` | A typed, validated `Settings` object built once in the composition root | Same `CLAVIA_*` names and the same validators (e.g. console mail refused outside development). |
+| Jinja2 | Plain HTML templates with partials and one escaping helper | No Twig, no template engine. Still **no JavaScript** on the auth origin. |
+| `BackgroundTask` (back-channel logout) | `DeferredTasks` port; FPM adapter runs after `fastcgi_finish_request()` | Must work without a queue; keep the port so a queue adapter can replace it. |
+| `httpx` + `MockTransport` | PSR-18 client behind `OutboundHttp`; fake in tests | `OutboundUrlPolicy` (SSRF guard) must pin the resolved address it validated. |
+| `cryptography` | `ext-openssl`: RSASSA-PKCS1-v1_5/SHA-256, AES-256-GCM with AAD | JWS assembled by hand, as in Python. |
+| `pwdlib[bcrypt]` | `password_hash(PASSWORD_BCRYPT)` behind `PasswordHasher` | |
+| `joserfc` | `web-token/jwt-library` — **verification and JWK handling only** | Never used to sign. |
+| `qrcode` (SVG) | `bacon/bacon-qr-code` SVG writer | Server-side only. |
+| Typer CLI | `symfony/console` commands in `Ui/Cli`, run by `bin/clavia` | Same command names: `clavia seed-dev`, `keys rotate`, … |
+| uvicorn `--forwarded-allow-ips` | `CLAVIA_TRUSTED_PROXIES`, applied when the request is built | Empty by default: over FastCGI the web server reports the scheme itself. |
+| pytest, `db-test` :5434, Redis db 1 | PHPUnit, same databases, real migrations | Acceptance tests run the PSR-15 pipeline in-process. |
+
+PHP 8.5 features to use on purpose: the `Uri\Rfc3986\Uri` extension for redirect-URI and issuer
+parsing (exact-match comparison must not depend on `parse_url`), `clone with` for immutable value
+objects, `#[\NoDiscard]` on results that must be checked (signature verification, consume/spend
+operations), the pipe operator where it clarifies a transformation chain.
+
+### Risk to handle first: the database layer
+
+`php-db/phpdb-pgsql` (https://github.com/php-db/phpdb-pgsql, read 2026-11-20): branch `0.1.x`,
+allows PHP 8.3–8.5, requires `php-db/phpdb ^0.6.0`, has a test suite (PHPUnit + Infection) — but
+it is **pre-1.0 with no tagged release** and `minimum-stability: dev`. Clavia's hardest
+correctness properties (single-use codes, refresh-token rotation under `SELECT … FOR UPDATE`,
+family revocation) sit on it. Step 1 therefore pins an exact commit in `composer.lock`, and
+proves with integration tests that transactions, row locking and `RETURNING` behave as needed
+before anything depends on them. Persistence is behind ports, so an API break in a 0.x release
+touches `Infrastructure/Persistence/PhpDb` and nothing else.
+
+## Auth pages
+
+The pages on `auth.{domain}` (login, MFA, consent, device, passwordless) are **plain HTML**:
+no Twig, no template engine, no front-end framework, no JavaScript.
+
+- `templates/layout.html.php` + one template per page + reusable partials (`field`, `alert`,
+  `button`, `connection-list`). A repeated block becomes a partial, never a copy.
+- Templates are HTML with the minimum of PHP needed to print a value or loop; no logic beyond
+  that — the handler passes a ready-made view model.
+- A small `PageRenderer` in `Ui/Http/Shared` renders them, escapes every value by default and
+  attaches the per-page CSP.
+- One stylesheet, `public/auth/static/auth.css` (served at `/auth/static/auth.css`), copied from the Python project; light/dark through
+  custom properties; the theme toggle stays a POST.
+- No JavaScript on this origin is a security property, not a style choice.
+
+The management dashboard is a separate concern: the React app in `frontend/`, kept as is.
+
+## Invariants carried over
+
+Copied from `../Clavia Python/clavia/CLAUDE.md` and adapted to this codebase. They follow from the
+RFCs and from mistakes already made once; violating one is a security bug, not a style issue.
+
+### Four surfaces, four authentication mechanisms
+
+| Namespace   | Purpose                                              | Caller authenticates with |
+|-------------|-------------------------------------------------------|---------------------------|
+| `/oauth2/*` | Authorization server (authorize, token, introspect…) | Client credentials / PKCE |
+| `/oidc/*`   | OIDC endpoints (discovery, jwks, userinfo, logout)   | Bearer token, or public   |
+| `/auth/*`   | Interactive login/logout/MFA, serves the login UI    | Browser session cookie    |
+| `/api/v1/*` | Management API (CRUD, RBAC, audit)                   | Bearer access token       |
+
+Keeping them separate is the central design constraint. The failure mode to avoid: authenticating
+`/api/v1/*` with the `/auth/*` session cookie. The Management API is a machine plane reachable
+only with an access token — the dashboard is an OAuth2 client like any other, not a trusted first
+party with cookie access. In this codebase that means authentication middleware is attached **per
+route group** in `config/routes.php`, never piped globally.
+
+### Protocol invariants
+
+- PKCE is mandatory with `S256`; `plain` does not exist.
+- Authorization codes are single-use, short-lived, bound to `client_id`, `redirect_uri`, and
+  `code_challenge`. Redirect URIs are pre-registered and matched exactly.
+- Refresh token rotation issues a new token on every use; replay of a consumed token revokes the
+  whole token family. No reuse grace period.
+- Client Credentials is for confidential clients only, issues no refresh token, and a token from
+  it has no subject — every surface that answers questions about a person must refuse it.
+- A scope means nothing without an audience — check `aud` before checking scope.
+- A permission belongs to an API (`read:users` on two different APIs are different permissions),
+  and a client holds none of its own: no scope column on the client. Narrow scope at token
+  issuance — the API's declared permissions, then the user's effective permissions (or, for a
+  machine, its client grant) — and re-check at redemption, not at authorization time.
+- A TOTP code is single-use: spend the matched time step, don't just accept-and-forget.
+- Tokens are signed (RS256/ES256) and verified via JWKS; retired keys stay published until every
+  token they signed has expired.
+- Passwords and client secrets are hashed (bcrypt); authorization codes and access tokens are
+  stored as SHA-256 digests, not encrypted or hashed-with-salt — they need indexed lookup.
+- `prompt`, `max_age`, `request` and `request_uri` are part of the authorize decision, made once:
+  no session, a session through a connection the client does not enable, `prompt=login` /
+  `select_account`, or `max_age` exceeded all mean "the person must be seen";
+  `prompt=none` then answers `login_required`. Request objects are refused
+  (`request_not_supported` / `request_uri_not_supported`).
+- Discovery states every field whose spec default differs from what the server does, and a test
+  fetches every endpoint it advertises.
+
+### Browser-facing invariants
+
+- The login page is on the same origin as `/oauth2/authorize`, the session cookie has no
+  `Domain` attribute, and there is **no JavaScript** on that origin.
+- Never put a post-login redirect target in a URL parameter; hold it server-side (Redis) behind
+  an opaque handle, and re-validate whatever it resolves to before using it as a `Location` —
+  even when it came from our own store.
+- Every `/auth/*` state change is a POST with a CSRF token.
+- **The auth pages' CSP is built per page, not a constant.** Chromium applies `form-action` to a
+  form submission's whole redirect chain, and a successful sign-in ends at the application's
+  `redirect_uri`; a page tied to an authorization request therefore lists that client's origins
+  next to `'self'`, and a page tied to nothing gets `'self'` alone. Leave `'self'` on its own and
+  Chromium/Brave block the final hop, leaving the person on a stale login page whose CSRF token
+  has just been spent.
+- Social login: resolve identity by `(provider, subject)`, never by email; only use a *verified*
+  email to link to an existing account; pair `state` with a cookie so the callback can tell the
+  browser that started the flow from any other. Provider errors are never echoed.
+- Every URL the server fetches on an operator's say-so (OIDC connection discovery and endpoints,
+  back-channel logout URIs) goes through the outbound-URL policy: https only, never a
+  non-global address as a literal or as resolved, checked at registration *and* at send time.
+- Caddy sets `Cache-Control: no-store` on everything under `auth.*` except discovery, the JWKS
+  and static assets, whose cacheability the application owns (the JWKS max-age is a
+  rotation-safety number, not an HTTP detail).
+
+### Storage split
+
+- **PostgreSQL** — anything that must survive a restart, be auditable, or be consumed exactly once:
+  users, clients, APIs, roles/permissions, authorization codes, access and refresh tokens, audit
+  logs, signing-key metadata.
+- **Redis** — short-TTL material: browser sessions, failed-login counters, pending MFA challenges,
+  the `state`/PKCE verifier of an outbound social login, device/user codes, magic-link/OTP tokens.
+
+Authorization codes and refresh tokens *look* like they belong in Redis and deliberately don't:
+single-use enforcement needs an atomic `SELECT ... FOR UPDATE`, and refresh-token replay detection
+needs to survive longer than any sensible TTL.
+
+Authorization codes and refresh tokens are the reason `TransactionManager` and row locking are
+proven in Step 1 before any feature uses them.
+
+### Signing keys
+
+The load-bearing decision from the prior attempt, carried over as-is: the port everything
+issuing a token goes through is **sign**, not **fetch the key**.
+
+```php
+interface TokenSigner
+{
+    public function sign(string $kid, string $signingInput): string;   // raw signature bytes
+
+    /** @return array{keys: list<array<string, string>>} */
+    public function publicJwks(): array;
+}
+```
+
+That shape is the whole design, decided before any signing code is written. An interface that
+returns a private key can only be implemented by backends that let key material into application
+memory, which excludes every non-extractable option — cloud KMS, Vault Transit, a PKCS#11 HSM.
+Those are the ones worth having in production, because an IdP signing key mints valid tokens for
+any user and forgeries are indistinguishable from real tokens.
+
+Consequences worth knowing before touching the OIDC/signing code:
+
+- **No JOSE library signs.** Every one of them wants the private key in-process. The compact JWS
+  is assembled by hand — header, claims, `base64url`, then `TokenSigner::sign()`.
+  `web-token/jwt-library` is for JWK handling and *verification* (tests, external ID tokens) only.
+- **There is no "load the private key" helper, ever, even temporarily.** Exactly one class reads
+  a private key (or a reference to one): the signing adapter's own `sign`. For the postgres
+  backend that is the only code that ever decrypts one.
+- **RS256 is spelled out as RSASSA-PKCS1-v1_5 over SHA-256** (`openssl_sign(…, OPENSSL_ALGO_SHA256)`)
+  rather than delegated to a generic helper, because a remote backend has to name the same
+  primitive precisely — AWS KMS's `RSASSA_PKCS1_V1_5_SHA_256`. Get it wrong and signatures verify
+  locally and nowhere else.
+- **Two differences between providers are easy to get wrong**: AWS hashes the message itself; GCP
+  and Azure expect a pre-computed digest. Send the wrong shape and the signature covers the wrong
+  bytes — a failure that shows up at every verifier and nowhere in this code. And the same
+  primitive has three names: `RS256` is AWS's `RSASSA_PKCS1_V1_5_SHA_256`, GCP's
+  `RSA_SIGN_PKCS1_2048_SHA256`, and Azure's own `RS256`.
+- **`kid` is deliberately not the provider's full key reference.** An AWS ARN carries the account
+  number, a GCP resource name carries the project — neither needs publishing to every client that
+  fetches the JWKS.
+- **`CLAVIA_SIGNING_BACKEND`** selects `postgres`, `aws-kms`, `gcp-kms`, `azure-key-vault`, or a
+  custom adapter's class name, with `CLAVIA_SIGNING_KEY_REF` naming the provider's key. Cloud SDKs
+  are Composer suggestions so a deployment installs one, not three. `postgres` (the key stored,
+  AES-256-GCM-encrypted with `kid` as associated data, in the database) is the only extractable
+  option and the only one needing no external service: right for development, a warning in
+  production. `CLAVIA_SECRET_ENCRYPTION_KEY` is required by it; there is no plaintext fallback.
+- **Production runs on `aws-kms`.** KMS does not rotate an asymmetric key itself; rotation means
+  creating a second key and publishing both in the JWKS until every token signed with the old one
+  has expired. The task role needs only `kms:Sign` and `kms:GetPublicKey`.
+
+### Domain configuration
+
+Clavia must not hard-code a domain. The prior attempt bound everything to `clavia.local` in
+development and `clavia.io` in production — a `Caddyfile` full of literal hostnames and a CDK stack
+that provisions `*.clavia.io` (see `../Clavia Python/clavia-old/Caddyfile` and `docs/DEPLOYMENT.md`). That pattern
+is right; the literal domain baked into it is what needs generalizing so any operator can point
+their own domain at Clavia.
+
+A single setting — e.g. `CLAVIA_ROOT_DOMAIN` — names the deployment's domain (`clavia.io`,
+`acme-idp.com`, whatever DNS an operator controls), and every host Clavia needs is derived from it
+rather than written down anywhere. Two subdomains are non-negotiable and must exist wherever Clavia
+runs:
+
+- **`auth.{domain}`** — the OAuth2/OIDC/login origin. This is the same load-bearing origin the prior
+  attempt's login design depends on: a host-only session cookie with no `Domain` attribute, so it is
+  never shared with any other subdomain, and `redirect_uri`s that are validated against this origin
+  specifically. Whatever `{domain}` is, this subdomain is where credentials get typed and tokens get
+  minted — nothing else should share it.
+- **`management.{domain}`** — the backoffice SPA *and* the Management API. Kept on its own origin,
+  separate from `auth.*` and from the apex, for the same reason as before: an XSS in the end-user
+  login UI must not be able to reach the administrative dashboard's token, and vice versa.
+
+**There is deliberately no `api.{domain}` subdomain.** The Management API is served at
+`management.{domain}/api/v1/*` — a path on the same origin as the dashboard — rather than its own
+host; the prior attempt's `api.clavia.local` is not carried forward. Same-origin means the
+dashboard's own calls to `/api/v1/*` need no CORS at all; the only cross-origin concern left on
+`management.*` is the OAuth2/PKCE exchange against `auth.*`, not a second API host to whitelist. This
+doesn't change *who* may call `/api/v1/*` — it's still the bearer-token-only machine plane described
+in "Four surfaces" above, reachable by any client holding a valid access token regardless of
+the origin it calls from. Putting it under `management.*` only fixes where the first-party dashboard
+finds it, not who else is allowed to call it.
+
+Other hosts (a landing page at the apex, per-tenant `{slug}.{domain}` if multi-tenancy is built) can
+be added, merged toward the apex, or reshaped per deployment — those are conveniences. `auth.*` and
+`management.*` are the two whose *separation* is a security property, not a routing choice, and a
+deployment config that collapses them onto one origin is a regression regardless of what domain it's
+for.
+
+Consequences of making the domain a variable rather than a constant:
+
+- **TLS has to cover whatever `{domain}` turns out to be** — a wildcard certificate for `*.{domain}`
+  (plus the apex if it serves anything), issued per deployment rather than assumed to be
+  `*.clavia.io`. Locally this is `mkcert` against a domain the operator has put in `/etc/hosts`; in
+  production it's ACME/a CDK-managed certificate against whatever's actually registered.
+- **Reserved subdomain labels must be domain-agnostic constants, not project-name coincidences.**
+  The prior attempt reserved the tenant slug `clavia` because the deployment happened to be named
+  `clavia.io` — a slug that collides with the project's own name, not with a real subdomain risk.
+  The general rule that has to survive the rename is: `auth`, `management`, `www`, and any other
+  infrastructure subdomain Clavia itself uses are reserved, on *any* `{domain}`, and tenant or client
+  provisioning must check against that list rather than a single hard-coded string. `api` is not on
+  it — it's a path under `management.*`, not a subdomain, so it needs no reservation of its own.
+- **Provisioning a new host should stay a database row, not a redeploy**, on whatever domain is
+  configured — the prior attempt's DEPLOYMENT.md already establishes this for `*.clavia.io`
+  specifically (wildcard cert + `Host`-header routing); the requirement is the same mechanism, just
+  parameterized by `{domain}` instead of assuming it.
+
+## Migration plan
+
+Each step lists: the Python sources to read, what to build per ring, and the tests to port.
+Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests are green.
+
+### Phase A — Foundations
+
+#### [x] Step 0 — Repository and toolchain
+- `composer.json` (PHP 8.5, Mezzio, servicemanager, FastRoute, symfony/console, monolog;
+  BSD-3-Clause, header enforced by `LicenseHeaderTest`), `Clavia\` PSR-4, `public/index.php`,
+  `config/`, the rings under `src/` plus `Configuration` and `Bootstrap`.
+- QA: PHPCS, Psalm level 1, PHPUnit, **deptrac with the full ruleset from day one**, `composer check`, CI.
+- Infra: `docker-compose.yml` (Postgres :5433, `db-test` :5434, Redis, Caddy, **php-fpm 8.5**),
+  `Caddyfile` ported to `php_fastcgi` (same hosts, same `Cache-Control` rules), `setup-ssl.sh`,
+  `Makefile`, `.env.example`.
+- `Settings`: every `CLAVIA_*` field of `config.py` with its validators; `clavia config`.
+- Proxy trust (`CLAVIA_TRUSTED_PROXIES`); error handling that leaks nothing; FastAPI-shaped 404/405.
+- `static/auth.css` and the icon under `public/auth/static/`; the invariant sections copied below.
+- Python: `config.py`, `main.py`, `Caddyfile`, `docker-compose.yml`, `Makefile`.
+- Verified: `GET /healthz` through Caddy over HTTPS (FastCGI to PHP-FPM 8.5), `composer check` green.
+  Not yet exercised: the Docker image build itself and the GitHub workflow.
+
+#### [ ] Step 1 — Shared kernel, technical ports, persistence base
+- Domain/Shared: `Clock`, typed ids, `Digest` (SHA-256), `Url`, `Scope`/`ScopeSet`, `Audience`.
+- Ports + adapters: `RandomSource`, `PasswordHasher` (bcrypt), `SecretCipher` (AES-256-GCM, AAD
+  context, no plaintext fallback), `TransactionManager`, Redis connection + key-prefix convention.
+- **Database adapter on `php-db/phpdb-pgsql`**, pinned to a commit: connection factory,
+  `TransactionManager`, and integration tests for transactions, `FOR UPDATE` and `RETURNING`.
+- Migrations: a minimal runner (`clavia db:migrate`, `db:status`, a `schema_migrations` table)
+  over versioned SQL files in `migrations/`. **The runner is built here; the migrations are
+  not.** Each later step adds the files for the tables it introduces, in their final shape.
+- Test kit: in-memory fakes for every port, acceptance harness (in-process pipeline, cookie jar,
+  DB reset through real migrations, Redis db 1 flush), contract-test base classes.
+- Python: `security/*`, `redis_store.py`, `db/session.py`, `tests/conftest.py`.
+
+### Phase B — The original build order (Python steps 1–6)
+
+#### [ ] Step 2 — Authorization Code + PKCE
+- Domain: `Client` (final shape: `client_id` PK, auth method, grant types, redirect URIs, no
+  scope column), `AuthorizationRequest` validation, `Pkce` (S256 only), `AuthorizationCode`,
+  opaque `AccessToken`, `OAuth2Error` taxonomy (RFC 6749 §4.1.2.1/§5.2).
+- Application: `Authorize`, `ExchangeAuthorizationCode`, `AuthenticateClient`.
+- Ui: `GET /oauth2/authorize`, `POST /oauth2/token`; `state` echoed on every error redirect;
+  RFC 9207 `iss`; `WWW-Authenticate` on 401; exact redirect-URI match; a replayed code revokes
+  what it issued. Dev auto-login (`CLAVIA_DEV_AUTOLOGIN_EMAIL`) as a development-only adapter.
+- CLI: `seed-dev` (first version), `authorize-url`.
+- Python: `oauth2/{server,grants,requests,router}.py`, `db/models/{client,oauth2,user}.py`.
+- Tests: `test_authorization_code_flow` (9), `test_pkce_security` (16).
+
+#### [ ] Step 3 — Login page and sessions
+- Domain: `Session` (idle + absolute lifetime, `sid`, `amr`, `connection`), `LoginState`,
+  throttling policy, redirect-target validation.
+- Ports: `SessionStore`, `LoginStateStore`, `AttemptCounter` (Redis adapters).
+- Ui: `GET/POST /auth/login`, `POST /auth/logout`, `POST /auth/theme`; `templates/` layout + `login` page, page renderer;
+  per-page CSP builder; per-browser CSRF double-submit; host-only cookie; session rotation.
+- Python: `auth/{router,sessions,login_state,throttle,redirects,pages,current_user}.py`,
+  `forms.py`, `templates/`.
+- Tests: `test_login` (35).
+
+#### [ ] Step 4 — JWKS, ID token, discovery, userinfo
+- Domain: `IdTokenClaims` (incl. `at_hash`, `nonce`, `auth_time`, `amr`), shared
+  `identityClaims` for ID token and userinfo, `SigningKey` lifecycle (active/retired + grace).
+- Port: `TokenSigner` (`sign`, `publicJwks`). Adapter: postgres backend, compact JWS built by hand.
+- Ui: both `/.well-known/*` documents, `/oidc/jwks.json`, `/oidc/userinfo`; nonce replay guard.
+- CLI: `keys generate|rotate|list`, `secrets generate-key`.
+- Python: `oidc/{router,grant,claims,keys,nonce}.py`, `oidc/signing/{__init__,_core,postgres}.py`.
+- Tests: `test_oidc` (26), postgres part of `test_signing_backends`.
+
+#### [ ] Step 5 — Client Credentials
+- Confidential only, no refresh token, refuses `openid`, subject-less tokens refused by userinfo.
+- CLI: `clients create-m2m`.
+- Tests: `test_client_credentials` (19).
+
+#### [ ] Step 6 — Management API, resource servers, audiences
+- Domain: `ResourceServer`, `Permission` keyed `(resource_server, value)`, `ClientGrant`,
+  audience rules (a machine client holding a grant must name an audience).
+- Ui/Http/Management: bearer middleware (`aud` checked before scope, RFC 6750 challenges),
+  OpenAPI validation, pagination, `/api/v1/{users,clients,resource-servers}`, secret rotation.
+- Write `docs/openapi/management-api.yaml` from `api/schemas.py`; it validates requests *and* is
+  asserted against responses in the acceptance tests.
+- CLI: `management-api register|scopes`, `clients grant`.
+- Python: `api/*`, `db/models/resource_server.py`.
+- Tests: `test_management_api` (36), `test_audience` (12).
+
+#### [ ] Step 7 — MFA (TOTP)
+- Domain: own RFC 6238 `Totp` (single-use by time step), `RecoveryCode` digests, enrollment.
+- Ports: `MfaChallengeStore`, `QrRenderer`. Seeds encrypted through `SecretCipher`.
+- Ui: `/auth/mfa`, `/auth/mfa/enroll`, `/enroll/confirm`, `/disable`; `DELETE /users/{id}/mfa`.
+- Python: `mfa/*`, `db/models/mfa.py`. Tests: `test_mfa` (17).
+
+#### [ ] Step 8 — Social login
+- Domain: `ExternalIdentity` keyed `(provider, subject)`, linking policy (verified email only,
+  ambiguity refused). Port: `IdentityProvider::fetchIdentity()`; adapters Google, GitHub.
+- Ui: `/auth/social/{provider}` and `/callback`; `state` paired with a cookie; provider errors
+  never echoed.
+- Python: `social/*`, `db/models/identity.py`. Tests: `test_social_login` (18).
+
+#### [ ] Step 9 — RP-Initiated Logout and the dashboard  ← first usable milestone
+- `GET /oidc/logout` (`id_token_hint` verified against the JWKS, `post_logout_redirect_uri`).
+- Copy `frontend/` unchanged; `seed-dev` registers it and writes `frontend/.env.local`; Caddy
+  serves it at `management.{domain}/dashboard/`.
+- Tests: `test_rp_logout` (6). Manual: sign in to the dashboard against the PHP server. Pages
+  whose API arrives later (roles, connections, consents, sessions) light up with their step.
+
+### Phase C — Everything built after the chain
+
+#### [ ] Step 10 — RBAC
+- `Role`, `user_roles`, composite FK onto permissions; `enforce_policies` narrowing at redemption;
+  `access_denied` for a user holding nothing; Management API always enforces.
+- `/api/v1/roles/*`, `/users/{id}/roles`, `/users/{id}/permissions`; CLI `roles create|assign|list`.
+- Python: `db/models/rbac.py`, `api/roles.py`. Tests: `test_rbac` (17).
+
+#### [ ] Step 11 — Refresh token rotation
+- `RefreshToken` + `family_id`, spend under lock, replay revokes the family and its access
+  tokens, idle + absolute lifetimes, scope narrowing checked before the spend.
+- Tests: `test_refresh_token` (15).
+
+#### [ ] Step 12 — Application ownership and consent
+- `isFirstParty`, `tpc_` ids, `UserConsent`, the consent decision table (`prompt=consent`,
+  third-party, `allow_skipping_consent`), `ConsentStateStore`, `/auth/consent`,
+  `/users/{id}/consents`.
+- Python: `oauth2/consent.py`, `auth/consent.py`. Tests: `test_consent` (23).
+
+#### [ ] Step 13 — Connections
+- Database pools, built-in social, operator-registered OIDC connections (discovery, nonce + PKCE,
+  ID-token verification, JWKS cache), per-application enablement, `OutboundUrlPolicy`.
+- `/api/v1/connections/*`, `PUT /clients/{id}/connections`, identity unlinking.
+- Python: `auth/connections.py`, `api/connections.py`, `social/providers.py`,
+  `db/models/connection.py`. Tests: `test_connections` (29), `test_oidc_connection` (16).
+
+#### [ ] Step 14 — Introspection and revocation
+- RFC 7662 / RFC 7009, per-endpoint client-auth methods, permission rules, family revocation.
+- Tests: `test_introspection_revocation` (17).
+
+#### [ ] Step 15 — Device authorization
+- RFC 8628: `/oauth2/device/code`, the device grant, polling (`slow_down`, `expired_token`),
+  `/auth/device` review page. Python: `oauth2/device.py`, `auth/device.py`.
+- Tests: `test_device_authorization` (22).
+
+#### [ ] Step 16 — Passwordless and mail
+- `Mailer` port (console/outbox, SMTP, none); code and link challenges; send limits; the built-in
+  `email` connection; CLI `mail outbox`.
+- Python: `auth/passwordless.py`, `mail.py`. Tests: `test_passwordless` (19).
+
+#### [ ] Step 17 — Back-channel logout and session management
+- Logout token (`typ: logout+jwt`), `sid` on codes and ID tokens, session→clients index,
+  `DeferredTasks`, `/users/{id}/sessions`.
+- Python: `oidc/backchannel.py`. Tests: `test_backchannel_logout` (22).
+
+#### [ ] Step 18 — Authentication-request parameters and complete metadata
+- `prompt`, `max_age`, `request`/`request_uri` refusal; discovery states every non-default
+  field; a test fetches every endpoint the document advertises.
+- Python: `oauth2/prompt.py`. Tests: `test_authorize_prompt` (15).
+
+#### [ ] Step 19 — Remote signing backends
+- `aws-kms`, `gcp-kms`, `azure-key-vault` and custom-class adapters behind `TokenSigner`
+  (message-vs-digest semantics per provider); SDKs as optional Composer suggestions.
+- Tests: rest of `test_signing_backends` (15), against fakes.
+
+### Phase D — Parity and cut-over
+
+#### [ ] Step 20 — Parity gate
+- Parity matrix: every Python test mapped to its PHP counterpart (404/404).
+- Run the OpenID Foundation conformance suite (Basic OP, Config OP) against both servers.
+- Black-box diff: the same scripted flows against Python and PHP, responses compared.
+- README, deployment docs, `docs/DEVIATIONS.md` reviewed; security review of every adapter.
+
+#### [ ] Step 21 — Cut-over
+- Publish the repository; archive the Python project as reference.
+
+### Phase E — Beyond the Python project
+- [ ] Audit logs (domain events → `AuditLog` port; the hexagonal seams make this an adapter).
+- [ ] Multi-tenancy, if it turns out to be worth the complexity (see `clavia-old/CLAUDE.md`).
+
+## Definition of done for a step
+
+1. Every listed Python test has a passing PHP acceptance test of the same name.
+2. Domain rules have unit tests that use no adapter.
+3. Each new port has a fake and a contract test; each new adapter passes it.
+4. `composer check` is green: PHPCS, Psalm level 1, deptrac, PHPUnit.
+5. Public classes and every non-obvious decision are documented, with the RFC section cited.
+6. "Current state" in this file is updated.
+
+## Open questions
+
+None at the moment. Record new ones here as they come up.
