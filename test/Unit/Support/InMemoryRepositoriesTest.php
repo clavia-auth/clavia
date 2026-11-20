@@ -19,13 +19,18 @@ use Clavia\Domain\OAuth2\AuthorizationCode;
 use Clavia\Domain\OAuth2\AuthorizationCodeId;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
 use Clavia\Domain\OAuth2\CodeChallenge;
+use Clavia\Domain\ResourceServer\ClientGrantRepository;
+use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\ScopeSet;
 use ClaviaTest\Support\Contract\AuthorizationCodeRepositoryContract;
 use ClaviaTest\Support\Contract\ClientRepositoryContract;
+use ClaviaTest\Support\Contract\ResourceServerRepositoryContract;
 use ClaviaTest\Support\Contract\UserRepositoryContract;
 use ClaviaTest\Support\Fake\InMemoryAuthorizationCodeRepository;
+use ClaviaTest\Support\Fake\InMemoryClientGrantRepository;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
+use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
 use ClaviaTest\Support\Fake\SeededRandomSource;
@@ -40,11 +45,14 @@ final class InMemoryRepositoriesTest extends TestCase
     use UserRepositoryContract;
     use ClientRepositoryContract;
     use AuthorizationCodeRepositoryContract;
+    use ResourceServerRepositoryContract;
 
     private InMemoryUserRepository $users;
     private InMemoryClientRepository $clients;
     private InMemoryTransactionManager $transactions;
     private InMemoryAuthorizationCodeRepository $codes;
+    private InMemoryResourceServerRepository $resourceServers;
+    private InMemoryClientGrantRepository $clientGrants;
 
     #[\Override]
     protected function setUp(): void
@@ -53,6 +61,8 @@ final class InMemoryRepositoriesTest extends TestCase
         $this->clients = new InMemoryClientRepository();
         $this->transactions = new InMemoryTransactionManager();
         $this->codes = new InMemoryAuthorizationCodeRepository($this->transactions);
+        $this->resourceServers = new InMemoryResourceServerRepository();
+        $this->clientGrants = new InMemoryClientGrantRepository();
     }
 
     #[\Override]
@@ -83,5 +93,23 @@ final class InMemoryRepositoriesTest extends TestCase
     protected function anOwner(): array
     {
         return [ClientId::fromString('spa'), UserId::generate(new SeededRandomSource(7))];
+    }
+
+    #[\Override]
+    protected function resourceServers(): ResourceServerRepository
+    {
+        return $this->resourceServers;
+    }
+
+    #[\Override]
+    protected function clientGrants(): ClientGrantRepository
+    {
+        return $this->clientGrants;
+    }
+
+    #[\Override]
+    protected function aClient(string $clientId): ClientId
+    {
+        return ClientId::fromString($clientId);
     }
 }

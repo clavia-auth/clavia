@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap;
 
 use Clavia\Adapter\Primary\Cli\AuthorizeUrlCommand;
+use Clavia\Adapter\Primary\Cli\CreateMachineClientCommand;
 use Clavia\Adapter\Primary\Cli\DatabaseStatusCommand;
 use Clavia\Adapter\Primary\Cli\GenerateEncryptionKeyCommand;
 use Clavia\Adapter\Primary\Cli\GenerateSigningKeyCommand;
@@ -45,6 +46,7 @@ use Clavia\Adapter\Secondary\Redis\RedisConnection;
 use Clavia\Adapter\Secondary\System\SystemClock;
 use Clavia\Adapter\Secondary\System\SystemRandomSource;
 use Clavia\Application\Authentication\DevelopmentAutoLogin;
+use Clavia\Application\Clients\RegisterMachineClient;
 use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
 use Clavia\Application\Authentication\LoginThrottle;
 use Clavia\Application\Authentication\ResolveEndUser;
@@ -56,6 +58,7 @@ use Clavia\Application\Development\SeedDevelopmentData;
 use Clavia\Application\OAuth2\Authorize\Authorize;
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
 use Clavia\Application\OAuth2\Token\AuthorizationCodeGrant;
+use Clavia\Application\OAuth2\Token\ClientCredentialsGrant;
 use Clavia\Application\OAuth2\Token\IssueToken;
 use Clavia\Application\Oidc\CompactJws;
 use Clavia\Application\Oidc\Discovery\ProviderMetadata;
@@ -82,6 +85,8 @@ use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
 use Clavia\Domain\Oidc\SigningAlgorithm;
+use Clavia\Domain\ResourceServer\ClientGrantRepository;
+use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\RandomSource;
 use Clavia\Domain\Shared\SecretGenerator;
@@ -119,6 +124,7 @@ final class ConfigProvider
         'keys:generate' => GenerateSigningKeyCommand::class,
         'keys:rotate' => RotateSigningKeyCommand::class,
         'keys:list' => ListSigningKeysCommand::class,
+        'clients:create-m2m' => CreateMachineClientCommand::class,
     ];
 
     /**
@@ -156,6 +162,8 @@ final class ConfigProvider
                     ClientAuthenticator::class => Container\ClientAuthenticatorFactory::class,
                     Authorize::class => Container\AuthorizeFactory::class,
                     AuthorizationCodeGrant::class => Container\AuthorizationCodeGrantFactory::class,
+                    ClientCredentialsGrant::class => Container\ClientCredentialsGrantFactory::class,
+                    RegisterMachineClient::class => Container\RegisterMachineClientFactory::class,
                     IssueToken::class => Container\IssueTokenFactory::class,
                     SeedDevelopmentData::class => Container\SeedDevelopmentDataFactory::class,
                     BuildAuthorizationUrl::class => Container\BuildAuthorizationUrlFactory::class,
@@ -184,6 +192,8 @@ final class ConfigProvider
                     ClientRepository::class => Container\ClientRepositoryFactory::class,
                     AuthorizationCodeRepository::class => Container\AuthorizationCodeRepositoryFactory::class,
                     AccessTokenRepository::class => Container\AccessTokenRepositoryFactory::class,
+                    ResourceServerRepository::class => Container\ResourceServerRepositoryFactory::class,
+                    ClientGrantRepository::class => Container\ClientGrantRepositoryFactory::class,
                     LoginStateStore::class => Container\LoginStateStoreFactory::class,
                     SessionStore::class => Container\SessionStoreFactory::class,
                     AttemptCounter::class => Container\AttemptCounterFactory::class,
@@ -223,6 +233,7 @@ final class ConfigProvider
                     GenerateSigningKeyCommand::class => Container\GenerateSigningKeyCommandFactory::class,
                     RotateSigningKeyCommand::class => Container\RotateSigningKeyCommandFactory::class,
                     ListSigningKeysCommand::class => Container\ListSigningKeysCommandFactory::class,
+                    CreateMachineClientCommand::class => Container\CreateMachineClientCommandFactory::class,
                 ],
             ],
             // The server-rendered pages: `layout::page`, `auth::login`, `error::page`,

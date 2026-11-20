@@ -1,0 +1,57 @@
+<?php
+
+/**
+ * This file is part of Clavia, an open-source OAuth 2.1 / OpenID Connect authorization server.
+ *
+ * @license   BSD-3-Clause — see the LICENSE file distributed with this source code.
+ * @copyright Copyright (c) 2026 Phayne Limited. (https://phayne.io)
+ */
+
+declare(strict_types=1);
+
+namespace ClaviaTest\Support\Fake;
+
+use Clavia\Domain\ResourceServer\ResourceServer;
+use Clavia\Domain\ResourceServer\ResourceServerId;
+use Clavia\Domain\ResourceServer\ResourceServerRepository;
+use Clavia\Domain\Shared\Audience;
+use LogicException;
+
+final class InMemoryResourceServerRepository implements ResourceServerRepository
+{
+    /** @var array<string, ResourceServer> By id. */
+    private array $resourceServers = [];
+
+    #[\Override]
+    public function find(ResourceServerId $id): ?ResourceServer
+    {
+        return $this->resourceServers[$id->value] ?? null;
+    }
+
+    #[\Override]
+    public function findByIdentifier(Audience $identifier): ?ResourceServer
+    {
+        foreach ($this->resourceServers as $resourceServer) {
+            if ($resourceServer->identifier->equals($identifier)) {
+                return $resourceServer;
+            }
+        }
+
+        return null;
+    }
+
+    #[\Override]
+    public function save(ResourceServer $resourceServer): void
+    {
+        $stored = $this->resourceServers[$resourceServer->id->value] ?? null;
+        if ($stored !== null && ! $stored->identifier->equals($resourceServer->identifier)) {
+            throw new LogicException("An API's identifier cannot change.");
+        }
+        $other = $this->findByIdentifier($resourceServer->identifier);
+        if ($other !== null && ! $other->id->equals($resourceServer->id)) {
+            throw new LogicException('Another API already has this identifier.');
+        }
+
+        $this->resourceServers[$resourceServer->id->value] = $resourceServer;
+    }
+}

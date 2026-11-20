@@ -60,6 +60,7 @@ final class AccessTokenTest extends TestCase
             $fresh->clientId,
             $fresh->userId,
             $fresh->authorizationCodeId,
+            $fresh->audience,
             $fresh->scope,
             $fresh->issuedAt,
             $fresh->expiresAt,

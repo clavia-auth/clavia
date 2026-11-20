@@ -29,14 +29,16 @@ and multi-tenancy.
 
 ## Current state
 
-**Steps 0 to 4 are done: the foundations, Authorization Code + PKCE, the login page with
-browser sessions, and OpenID Connect (ID tokens, discovery, JWKS, userinfo).** The application
+**Steps 0 to 5 are done: the foundations, Authorization Code + PKCE, the login page with
+browser sessions, OpenID Connect (ID tokens, discovery, JWKS, userinfo), and Client
+Credentials for machine clients holding a grant on an API.** The application
 answers `GET /healthz`, `GET|POST /oauth2/authorize`, `POST /oauth2/token`,
 `GET /.well-known/openid-configuration`, `GET /.well-known/oauth-authorization-server`,
 `GET /oidc/jwks.json`, `GET|POST /oidc/userinfo`, `GET|POST /auth/login`, `POST /auth/logout`
 and `POST /auth/theme`: a person can sign in with a password, complete the flow in a browser,
-and the client gets an RS256 ID token it can verify against the published JWKS. Update this section at the end of every step (what exists, where it lives, which
-conventions it established).
+and the client gets an RS256 ID token it can verify against the published JWKS; a machine
+client gets a subject-less token for an API it holds a grant on. Update this section at the
+end of every step (what exists, where it lives, which conventions it established).
 
 What exists:
 
@@ -67,14 +69,16 @@ What exists:
   `PhpDbTransactionManager`; `Persistence\Migrations\SqlFileMigrator`; `Redis\RedisConnection`
   and `Redis\Keys`.
 - **Console**: `clavia db:migrate`, `clavia db:status`, `clavia secrets:generate-key`,
-  `clavia seed-dev`, `clavia authorize-url`, `clavia keys:generate|rotate|list`.
+  `clavia seed-dev`, `clavia authorize-url`, `clavia keys:generate|rotate|list`,
+  `clavia clients:create-m2m`.
 - **Test kit** (`test/Support`): `Fake\*` (one in-memory double per port), `Contract\*`
   (traits run against both the double and the real adapter), `TestEnvironment`, `TestStorage`,
   `IntegrationTestCase`, `AcceptanceTestCase` (`get`/`post`/`locationQuery`, a cookie jar,
   `freezeClock()`, an active signing key installed before every test), `OAuth2Fixtures`
   (users, clients, PKCE pairs and whole flows), `LoginFixtures` (`submitLogin`, login-state
   handles), `OidcFixtures` (`completeFlow`, `verifiedIdToken` — checked against the JWKS
-  fetched over HTTP), `TestSigningKeys` (RSA keys generated once per run), `Clients`
+  fetched over HTTP), `MachineFixtures` (a machine client, an API, a grant,
+  `requestMachineToken`), `TestSigningKeys` (RSA keys generated once per run), `Clients`
   (ready-made registrations for unit tests).
 - **Authorization Code + PKCE** (Step 2):
   - `Domain\Identity` — `User`, `UserId`, `UserRepository`. `Domain\Client` — `Client`
@@ -137,6 +141,18 @@ What exists:
     every backend but `postgres` by name.
   - Migrations `0005_user_profiles`, `0006_authorization_code_authentication`,
     `0007_oidc_signing_keys` (a partial unique index allows one active key).
+- **Client Credentials** (Step 5):
+  - `Domain\ResourceServer` — `ResourceServer` (an API: `rs_…` id, its `Audience`
+    identifier, its permissions), `ResourceServerId`, `Permission`, `ClientGrant`
+    (`grantableOn()`: the grant narrowed to what the API still defines), their repositories.
+    `GrantType::ClientCredentials`; `ErrorCode::InvalidTarget` (RFC 8707) and `AccessDenied`;
+    `AccessToken::issueToClient()` and `AccessToken::$audience`.
+  - `Application\OAuth2\Token\ClientCredentialsGrant` (registered in `IssueTokenFactory`,
+    so discovery lists it); `Application\Clients\RegisterMachineClient`.
+  - `Adapter\Secondary\Persistence\PhpDb\{PhpDbResourceServerRepository,PhpDbClientGrantRepository}`;
+    `Adapter\Primary\Cli\CreateMachineClientCommand`.
+  - Migrations `0008_resource_servers` (with `permissions`), `0009_client_grants`,
+    `0010_access_token_audience`.
 - **Error pages for browsers** (after Step 3): `Adapter\Primary\Http\Shared\ClientPreference`
   (`Accept` negotiation), `ErrorResponder` + `ErrorPage`, `PageRenderer` + `HtmlPage` (the
   layout, headers and CSP every server-rendered page shares). 404, 405, 500 and the
@@ -372,6 +388,23 @@ Conventions established in Step 4:
 - **An exchange that cannot be completed is not completed at all**: the ID token is signed
   inside the redemption's transaction, so a signing failure rolls back the access token and
   leaves the code unspent.
+
+Conventions established in Step 5:
+
+- **A client holds nothing of its own.** Acting as itself, what it may take from an API is its
+  `ClientGrant` there, read through `grantableOn()` — intersected with the API's permissions
+  *now*, so withdrawing a permission takes effect on the next token. A grant naming a scope
+  the API does not define cannot be created.
+- **A machine token always names its API.** `audience` is required by the grant and stored
+  on the token (`aud`); `openid` is refused before anything else; a scope beyond the grant
+  is refused, never narrowed; an omitted scope is the whole grant. The errors tell the
+  caller what to fix: `invalid_request` (no audience), `invalid_target` (unknown API),
+  `access_denied` (no grant there), `invalid_scope`.
+- **A token without a subject answers no question about a person.** Every surface that
+  describes a user (userinfo now; introspection's `sub`, the Management API's "me" later)
+  refuses a token whose `userId` is null.
+- **Client grants are written from the shell only**, never over HTTP: an endpoint that wrote
+  them would let a caller widen its own access.
 
 **Known defect in the database library, worked around.** At the pinned commit,
 `php-db/phpdb-pgsql` runs `SELECT LASTVAL()` after every statement to fetch a "last generated
@@ -880,14 +913,22 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
   against the JWKS as served. Left for the steps that own them: `sid` in the ID token (17),
   `prompt`/`max_age` (18), remote signing backends (19).
 
-#### [ ] Step 5 — Client Credentials
+#### [x] Step 5 — Client Credentials
 - Confidential only, no refresh token, refuses `openid`, subject-less tokens refused by userinfo.
-- CLI: `clients create-m2m`.
-- Tests: `test_client_credentials` (19).
+- Domain brought forward from Step 6, because the final design gives a client no scope of
+  its own: `ResourceServer`, `Permission` keyed `(resource_server, value)`, `ClientGrant`, and
+  their storage; the token's `audience`.
+- CLI: `clients:create-m2m`.
+- Python: `oauth2/grants.py` (`ClaviaClientCredentialsGrant`), `db/models/resource_server.py`,
+  `api/provisioning.py` (`grant_client`), `cli.py` (`clients create-m2m`).
+- Tests: `test_client_credentials` (19) — ported as `ClientCredentialsTest` (23 cases), plus
+  unit tests and `ResourceServerRepositoryContract` run against the doubles and PostgreSQL.
+- Left for Step 6: registering APIs and writing grants from the shell (`management-api
+  register|scopes`, `clients grant`), `audience` at the authorization endpoint, system APIs.
 
 #### [ ] Step 6 — Management API, resource servers, audiences
-- Domain: `ResourceServer`, `Permission` keyed `(resource_server, value)`, `ClientGrant`,
-  audience rules (a machine client holding a grant must name an audience).
+- Domain (the rest of it): `is_system` APIs, audience rules at the authorization endpoint
+  (scopes of the named API), grant provisioning (`GrantClientAccess`).
 - Primary adapter (`Http/Management`): bearer middleware (`aud` checked before scope, RFC 6750 challenges),
   OpenAPI validation, pagination, `/api/v1/{users,clients,resource-servers}`, secret rotation.
 - Write `docs/openapi/management-api.yaml` from `api/schemas.py`; it validates requests *and* is

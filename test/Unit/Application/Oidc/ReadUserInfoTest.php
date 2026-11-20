@@ -127,6 +127,7 @@ final class ReadUserInfoTest extends TestCase
             ClientId::fromString('spa'),
             $withUser ? $this->user->id : null,
             null,
+            null,
             ScopeSet::fromString($scope),
             $now,
             $now->modify('+3600 seconds'),

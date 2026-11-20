@@ -19,4 +19,10 @@ enum GrantType: string
 {
     /** RFC 6749 §4.1, always with PKCE (RFC 7636). */
     case AuthorizationCode = 'authorization_code';
+
+    /**
+     * RFC 6749 §4.4: a confidential client authenticating as itself. The token it gets
+     * has no subject.
+     */
+    case ClientCredentials = 'client_credentials';
 }

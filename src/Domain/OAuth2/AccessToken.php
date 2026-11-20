@@ -13,6 +13,7 @@ namespace Clavia\Domain\OAuth2;
 
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\UserId;
+use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\ScopeSet;
 use DateTimeImmutable;
@@ -23,7 +24,8 @@ use DateTimeImmutable;
  * Opaque: a random string whose digest is looked up here, which is what lets every
  * surface that accepts a token honour revocation the instant it happens.
  * `authorizationCodeId` records which code minted it, so a replayed code can revoke
- * everything it produced (RFC 6749 §4.1.2).
+ * everything it produced (RFC 6749 §4.1.2). `audience` is the API the token is for —
+ * its `aud` — when the client named one.
  */
 final class AccessToken
 {
@@ -35,6 +37,7 @@ final class AccessToken
         public readonly ClientId $clientId,
         public readonly ?UserId $userId,
         public readonly ?AuthorizationCodeId $authorizationCodeId,
+        public readonly ?Audience $audience,
         public readonly ScopeSet $scope,
         public readonly DateTimeImmutable $issuedAt,
         public readonly DateTimeImmutable $expiresAt,
@@ -62,6 +65,39 @@ final class AccessToken
             $code->clientId,
             $code->userId,
             $code->id,
+            null,
+            $scope,
+            $now,
+            $now->modify(sprintf('+%d seconds', $lifetimeSeconds)),
+            null,
+        );
+    }
+
+    /**
+     * Record a token a client obtained as itself (RFC 6749 §4.4): no subject, no code,
+     * and the API it is for.
+     *
+     * The missing subject is the point. Such a token represents a machine, and every
+     * surface that answers questions about a person must refuse it.
+     *
+     * @param positive-int $lifetimeSeconds
+     */
+    public static function issueToClient(
+        AccessTokenId $id,
+        Digest $digest,
+        ClientId $clientId,
+        Audience $audience,
+        ScopeSet $scope,
+        DateTimeImmutable $now,
+        int $lifetimeSeconds,
+    ): self {
+        return new self(
+            $id,
+            $digest,
+            $clientId,
+            null,
+            null,
+            $audience,
             $scope,
             $now,
             $now->modify(sprintf('+%d seconds', $lifetimeSeconds)),
@@ -76,6 +112,7 @@ final class AccessToken
         ClientId $clientId,
         ?UserId $userId,
         ?AuthorizationCodeId $authorizationCodeId,
+        ?Audience $audience,
         ScopeSet $scope,
         DateTimeImmutable $issuedAt,
         DateTimeImmutable $expiresAt,
@@ -87,6 +124,7 @@ final class AccessToken
             $clientId,
             $userId,
             $authorizationCodeId,
+            $audience,
             $scope,
             $issuedAt,
             $expiresAt,

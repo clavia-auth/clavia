@@ -13,6 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
 use Clavia\Application\OAuth2\Token\AuthorizationCodeGrant;
+use Clavia\Application\OAuth2\Token\ClientCredentialsGrant;
 use Clavia\Application\OAuth2\Token\IssueToken;
 use Psr\Container\ContainerInterface;
 
@@ -24,8 +25,10 @@ final class IssueTokenFactory
         $authenticator = $container->get(ClientAuthenticator::class);
         /** @var AuthorizationCodeGrant $authorizationCode */
         $authorizationCode = $container->get(AuthorizationCodeGrant::class);
+        /** @var ClientCredentialsGrant $clientCredentials */
+        $clientCredentials = $container->get(ClientCredentialsGrant::class);
 
         // Every grant the token endpoint offers. A grant not listed here does not exist.
-        return new IssueToken($authenticator, $authorizationCode);
+        return new IssueToken($authenticator, $authorizationCode, $clientCredentials);
     }
 }

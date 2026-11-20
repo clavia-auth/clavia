@@ -37,4 +37,18 @@ enum ErrorCode: string
 
     /** The requested scope is unknown, malformed, or more than may be granted. */
     case InvalidScope = 'invalid_scope';
+
+    /**
+     * The `audience` names no API this server issues tokens for. RFC 8707 §2 registers
+     * the code for exactly this condition; this server spells the parameter `audience`,
+     * as the hosted providers do, rather than RFC 8707's multi-valued `resource`.
+     */
+    case InvalidTarget = 'invalid_target';
+
+    /**
+     * The API exists, but this client may not have a token for it. Registered for the
+     * authorization endpoint (RFC 6749 §4.1.2.1) and used at the token endpoint the way
+     * Auth0 uses it: a different fix from an unknown API, and from a scope too wide.
+     */
+    case AccessDenied = 'access_denied';
 }

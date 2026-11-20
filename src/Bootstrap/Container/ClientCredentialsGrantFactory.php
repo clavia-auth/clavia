@@ -1,0 +1,56 @@
+<?php
+
+/**
+ * This file is part of Clavia, an open-source OAuth 2.1 / OpenID Connect authorization server.
+ *
+ * @license   BSD-3-Clause — see the LICENSE file distributed with this source code.
+ * @copyright Copyright (c) 2026 Phayne Limited. (https://phayne.io)
+ */
+
+declare(strict_types=1);
+
+namespace Clavia\Bootstrap\Container;
+
+use Clavia\Application\OAuth2\Token\ClientCredentialsGrant;
+use Clavia\Configuration\Settings;
+use Clavia\Domain\OAuth2\AccessTokenRepository;
+use Clavia\Domain\ResourceServer\ClientGrantRepository;
+use Clavia\Domain\ResourceServer\ResourceServerRepository;
+use Clavia\Domain\Shared\Clock;
+use Clavia\Domain\Shared\RandomSource;
+use Clavia\Domain\Shared\SecretGenerator;
+use Psr\Container\ContainerInterface;
+
+final class ClientCredentialsGrantFactory
+{
+    public function __invoke(ContainerInterface $container): ClientCredentialsGrant
+    {
+        /** @var ResourceServerRepository $resourceServers */
+        $resourceServers = $container->get(ResourceServerRepository::class);
+        /** @var ClientGrantRepository $clientGrants */
+        $clientGrants = $container->get(ClientGrantRepository::class);
+        /** @var AccessTokenRepository $tokens */
+        $tokens = $container->get(AccessTokenRepository::class);
+        /** @var SecretGenerator $secrets */
+        $secrets = $container->get(SecretGenerator::class);
+        /** @var RandomSource $random */
+        $random = $container->get(RandomSource::class);
+        /** @var Clock $clock */
+        $clock = $container->get(Clock::class);
+        /** @var Settings $settings */
+        $settings = $container->get(Settings::class);
+
+        $lifetime = $settings->accessTokenLifetime;
+        assert($lifetime > 0);
+
+        return new ClientCredentialsGrant(
+            $resourceServers,
+            $clientGrants,
+            $tokens,
+            $secrets,
+            $random,
+            $clock,
+            $lifetime,
+        );
+    }
+}

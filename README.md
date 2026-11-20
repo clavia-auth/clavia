@@ -11,7 +11,10 @@ completes the Authorization Code + PKCE flow in a browser; `/oauth2/token` issue
 access token and, for an OpenID Connect request, an RS256 ID token. The provider metadata is
 published at `/.well-known/openid-configuration` (and `/.well-known/oauth-authorization-server`),
 the signing keys at `/oidc/jwks.json`, and `/oidc/userinfo` answers bearer tokens. Signing keys
-are managed with `clavia keys:generate|rotate|list`. Client Credentials comes next.
+are managed with `clavia keys:generate|rotate|list`. Machine clients (`clavia
+clients:create-m2m`) get subject-less tokens through the Client Credentials grant for the API
+they name in `audience`, within what their client grant on it allows. The Management API comes
+next.
 
 ## Architecture
 

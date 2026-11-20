@@ -65,4 +65,14 @@ final class OAuth2Error extends DomainException
     {
         return new self(ErrorCode::InvalidScope, $description);
     }
+
+    public static function invalidTarget(string $description): self
+    {
+        return new self(ErrorCode::InvalidTarget, $description);
+    }
+
+    public static function accessDenied(string $description): self
+    {
+        return new self(ErrorCode::AccessDenied, $description);
+    }
 }

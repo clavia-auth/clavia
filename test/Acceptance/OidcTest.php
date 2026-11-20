@@ -59,7 +59,7 @@ final class OidcTest extends AcceptanceTestCase
         // PKCE is mandatory here, so `plain` is not advertised.
         self::assertSame(['S256'], $document['code_challenge_methods_supported']);
         // Only the grants that exist: clients trust this document.
-        self::assertSame(['authorization_code'], $document['grant_types_supported']);
+        self::assertSame(['authorization_code', 'client_credentials'], $document['grant_types_supported']);
         self::assertSame(['code'], $document['response_types_supported']);
         self::assertSame(['query'], $document['response_modes_supported']);
         self::assertSame(['public'], $document['subject_types_supported']);

@@ -17,6 +17,7 @@ use Clavia\Domain\OAuth2\AccessToken;
 use Clavia\Domain\OAuth2\AccessTokenId;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\AuthorizationCodeId;
+use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\ScopeSet;
 use DateTimeImmutable;
@@ -36,10 +37,10 @@ final readonly class PhpDbAccessTokenRepository implements AccessTokenRepository
         $this->database->execute(
             <<<'SQL'
                 INSERT INTO oauth2_access_tokens (
-                    id, token_hash, client_id, user_id, authorization_code_id, token_type, scope,
+                    id, token_hash, client_id, user_id, authorization_code_id, audience, token_type, scope,
                     issued_at, expires_at, revoked_at
                 ) VALUES (
-                    :id, :token_hash, :client_id, :user_id, :authorization_code_id, :token_type, :scope,
+                    :id, :token_hash, :client_id, :user_id, :authorization_code_id, :audience, :token_type, :scope,
                     :issued_at, :expires_at, :revoked_at
                 )
                 SQL,
@@ -49,6 +50,7 @@ final readonly class PhpDbAccessTokenRepository implements AccessTokenRepository
                 'client_id' => $token->clientId->value,
                 'user_id' => $token->userId?->value,
                 'authorization_code_id' => $token->authorizationCodeId?->value,
+                'audience' => $token->audience?->value,
                 'token_type' => AccessToken::TOKEN_TYPE,
                 'scope' => $token->scope->toString(),
                 'issued_at' => Timestamp::toDatabase($token->issuedAt),
@@ -63,12 +65,12 @@ final readonly class PhpDbAccessTokenRepository implements AccessTokenRepository
     {
         /**
          * @var array{id: string, token_hash: string, client_id: string, user_id: string|null,
-         *            authorization_code_id: string|null, scope: string, issued_at: string,
+         *            authorization_code_id: string|null, audience: string|null, scope: string, issued_at: string,
          *            expires_at: string, revoked_at: string|null}|null $row
          */
         $row = $this->database->fetchOne(
             <<<'SQL'
-                SELECT id, token_hash, client_id, user_id, authorization_code_id, scope,
+                SELECT id, token_hash, client_id, user_id, authorization_code_id, audience, scope,
                        issued_at, expires_at, revoked_at
                 FROM oauth2_access_tokens
                 WHERE token_hash = :token_hash
@@ -88,6 +90,7 @@ final readonly class PhpDbAccessTokenRepository implements AccessTokenRepository
             $row['authorization_code_id'] === null
                 ? null
                 : AuthorizationCodeId::fromString($row['authorization_code_id']),
+            $row['audience'] === null ? null : Audience::fromString($row['audience']),
             ScopeSet::fromString($row['scope']),
             Timestamp::fromDatabase($row['issued_at']),
             Timestamp::fromDatabase($row['expires_at']),

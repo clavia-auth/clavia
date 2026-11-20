@@ -55,4 +55,12 @@ final class InMemoryClientRepository implements ClientRepository
     {
         $this->clients[$client->id->value] = $client;
     }
+
+    /**
+     * @return list<Client> Everything stored, for assertions.
+     */
+    public function all(): array
+    {
+        return array_values($this->clients);
+    }
 }

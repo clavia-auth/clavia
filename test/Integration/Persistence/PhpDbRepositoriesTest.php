@@ -13,7 +13,9 @@ namespace ClaviaTest\Integration\Persistence;
 
 use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbAuthorizationCodeRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientGrantRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbResourceServerRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbTransactionManager;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbUserRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PostgresUrl;
@@ -29,16 +31,23 @@ use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AuthorizationCode;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
+use Clavia\Domain\ResourceServer\ClientGrantRepository;
+use Clavia\Domain\ResourceServer\ResourceServer;
+use Clavia\Domain\ResourceServer\ResourceServerId;
+use Clavia\Domain\ResourceServer\ResourceServerRepository;
+use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\Url;
 use ClaviaTest\Support\Contract\AuthorizationCodeRepositoryContract;
 use ClaviaTest\Support\Contract\ClientRepositoryContract;
+use ClaviaTest\Support\Contract\ResourceServerRepositoryContract;
 use ClaviaTest\Support\Contract\UserRepositoryContract;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use ClaviaTest\Support\IntegrationTestCase;
 use ClaviaTest\Support\TestEnvironment;
 use ClaviaTest\Support\TestStorage;
 use DateTimeImmutable;
+use LogicException;
 use Throwable;
 
 /**
@@ -50,6 +59,7 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
     use UserRepositoryContract;
     use ClientRepositoryContract;
     use AuthorizationCodeRepositoryContract;
+    use ResourceServerRepositoryContract;
 
     #[\Override]
     protected function users(): UserRepository
@@ -73,6 +83,75 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
     protected function transactional(callable $work): mixed
     {
         return new PhpDbTransactionManager(TestStorage::database())->transactional($work);
+    }
+
+    #[\Override]
+    protected function resourceServers(): ResourceServerRepository
+    {
+        return new PhpDbResourceServerRepository(
+            TestStorage::database(),
+            new PhpDbTransactionManager(TestStorage::database()),
+        );
+    }
+
+    #[\Override]
+    protected function clientGrants(): ClientGrantRepository
+    {
+        return new PhpDbClientGrantRepository(TestStorage::database());
+    }
+
+    #[\Override]
+    protected function aClient(string $clientId): ClientId
+    {
+        $id = ClientId::fromString($clientId);
+        $this->clients()->save(Client::register(
+            $id,
+            'Machine',
+            ClientType::Confidential,
+            ClientAuthMethod::ClientSecretBasic,
+            '$hash$',
+            [],
+            [GrantType::ClientCredentials],
+            [],
+            new DateTimeImmutable('2026-01-15T10:00:00Z'),
+        ));
+
+        return $id;
+    }
+
+    public function testAnApiIdentifierIsUniqueAndImmutable(): void
+    {
+        $at = new DateTimeImmutable('2026-01-15T10:00:00Z');
+        $first = ResourceServer::register(
+            ResourceServerId::fromString('rs_aaaaaaaaaaaaaaaa'),
+            Audience::fromString('https://api.example/'),
+            'First',
+            [],
+            $at,
+        );
+        $this->resourceServers()->save($first);
+
+        try {
+            $this->resourceServers()->save(ResourceServer::register(
+                ResourceServerId::fromString('rs_bbbbbbbbbbbbbbbb'),
+                Audience::fromString('https://api.example/'),
+                'Second',
+                [],
+                $at,
+            ));
+            self::fail('Two APIs share an identifier.');
+        } catch (Throwable $refused) {
+            self::assertStringContainsString('uq_resource_servers_identifier', $this->messages($refused));
+        }
+
+        $this->expectException(LogicException::class);
+        $this->resourceServers()->save(ResourceServer::register(
+            $first->id,
+            Audience::fromString('https://elsewhere.example/'),
+            'Renamed',
+            [],
+            $at,
+        ));
     }
 
     #[\Override]

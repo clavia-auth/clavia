@@ -54,6 +54,7 @@ final class InMemoryAccessTokenRepository implements AccessTokenRepository
                 $token->clientId,
                 $token->userId,
                 $token->authorizationCodeId,
+                $token->audience,
                 $token->scope,
                 $token->issuedAt,
                 $token->expiresAt,

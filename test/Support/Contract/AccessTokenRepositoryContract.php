@@ -15,6 +15,7 @@ use Clavia\Domain\OAuth2\AccessToken;
 use Clavia\Domain\OAuth2\AccessTokenId;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\AuthorizationCode;
+use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\ScopeSet;
 use ClaviaTest\Support\Fake\SeededRandomSource;
@@ -49,9 +50,34 @@ trait AccessTokenRepositoryContract
         self::assertTrue($stored->userId?->equals($code->userId));
         self::assertTrue($stored->authorizationCodeId?->equals($code->id));
         self::assertSame('openid', $stored->scope->toString());
+        self::assertNull($stored->audience);
         self::assertEquals(new DateTimeImmutable('2026-01-15T10:00:10Z'), $stored->issuedAt);
         self::assertEquals(new DateTimeImmutable('2026-01-15T11:00:10Z'), $stored->expiresAt);
         self::assertFalse($stored->isRevoked());
+    }
+
+    #[Test]
+    public function aTokenAClientObtainedAsItselfIsReadBackWithItsAudienceAndNoSubject(): void
+    {
+        $code = $this->aStoredCode('code-1');
+        $this->tokens()->add(AccessToken::issueToClient(
+            AccessTokenId::generate(new SeededRandomSource(9)),
+            Digest::of('machine-token'),
+            $code->clientId,
+            Audience::fromString('https://invoices.example/api/'),
+            ScopeSet::fromString('invoices:read'),
+            new DateTimeImmutable('2026-01-15T10:00:00Z'),
+            600,
+        ));
+
+        $stored = $this->tokens()->findByDigest(Digest::of('machine-token'));
+
+        self::assertNotNull($stored);
+        self::assertNull($stored->userId);
+        self::assertNull($stored->authorizationCodeId);
+        self::assertSame('https://invoices.example/api/', $stored->audience?->value);
+        self::assertSame('invoices:read', $stored->scope->toString());
+        self::assertEquals(new DateTimeImmutable('2026-01-15T10:10:00Z'), $stored->expiresAt);
     }
 
     #[Test]
