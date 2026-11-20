@@ -21,7 +21,12 @@ namespace Clavia\Application\Management;
  * is what stops an operation from demanding a permission nobody can be granted.
  *
  * `read` covers listing and fetching one: they disclose the same facts. Resources that
- * do not exist yet (roles, connections) have no permission yet either.
+ * do not exist yet (connections) have no permission yet either.
+ *
+ * `update:roles` is the one to guard most carefully: it can attach any permission on any
+ * API to a role and give that role to anyone, the caller included. Giving somebody a role
+ * needs it wherever that happens — on the role or on the account — and `update:users`
+ * never suffices.
  */
 enum ManagementPermission: string
 {
@@ -37,6 +42,10 @@ enum ManagementPermission: string
     case CreateResourceServers = 'create:resource_servers';
     case UpdateResourceServers = 'update:resource_servers';
     case DeleteResourceServers = 'delete:resource_servers';
+    case ReadRoles = 'read:roles';
+    case CreateRoles = 'create:roles';
+    case UpdateRoles = 'update:roles';
+    case DeleteRoles = 'delete:roles';
 
     /** A sentence for the permission, shown wherever one is assigned. */
     public function description(): string
@@ -51,6 +60,7 @@ enum ManagementPermission: string
         } . ' ' . match ($resource) {
             'users' => 'end users',
             'clients' => 'client applications',
+            'roles' => 'roles and who holds them',
             default => 'APIs',
         };
     }

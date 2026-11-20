@@ -7,8 +7,8 @@ info:
     name: BSD-3-Clause
     url: https://opensource.org/licenses/BSD-3-Clause
   description: |
-    Administration of a Clavia deployment: end users, client applications and the APIs
-    tokens are issued for.
+    Administration of a Clavia deployment: end users, client applications, the APIs
+    tokens are issued for, and the roles that grant people permissions on them.
 
     **A machine plane.** Every operation takes a bearer access token issued for this API
     (its `aud` is the Management API identifier, `https://management.{domain}/api/v1/` by
@@ -39,6 +39,10 @@ tags:
     description: Applications registered to obtain tokens.
   - name: resource-servers
     description: The APIs tokens are issued for, and the permissions each defines.
+  - name: roles
+    description: |
+      Named sets of permissions, across APIs, that users are given. On an API that enforces
+      roles, a person's token carries only what their roles grant there.
 
 paths:
   /api/v1/users:
@@ -215,6 +219,105 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/users/{user_id}/roles:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [users, roles]
+      operationId: listUserRoles
+      summary: The roles a user holds, by name.
+      security:
+        - managementToken: [read:users]
+      responses:
+        '200':
+          description: The user's roles.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Role'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    put:
+      tags: [users, roles]
+      operationId: setUserRoles
+      summary: Make a user hold exactly these roles.
+      description: |
+        Needs `update:roles`, not `update:users`: this confers authority, and conferring it
+        takes the scope that guards authority wherever it happens. Refused whole (404) when
+        one of the roles does not exist. Takes effect on the user's next token.
+      security:
+        - managementToken: [update:roles]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleIds'
+      responses:
+        '200':
+          description: The roles the user holds now, by name.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Role'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/users/{user_id}/permissions:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [users, roles]
+      operationId: listUserPermissions
+      summary: Every permission a user holds through their roles, and which roles grant each.
+      description: |
+        Several roles can grant the same permission; all of them are listed, because
+        taking one away does not necessarily take the permission.
+      security:
+        - managementToken: [read:users]
+      responses:
+        '200':
+          description: The permissions, by API identifier, then value.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EffectivePermission'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
   /api/v1/clients:
     get:
       tags: [clients]
@@ -516,7 +619,7 @@ paths:
       tags: [resource-servers]
       operationId: deleteResourceServer
       summary: Delete an API, its permissions and every client grant on it.
-      description: Refused for a system API (409).
+      description: Refused for a system API (409). Every role stops granting its permissions.
       security:
         - managementToken: [delete:resource_servers]
       responses:
@@ -535,6 +638,236 @@ paths:
         '422':
           $ref: '#/components/responses/Unprocessable'
 
+  /api/v1/roles:
+    get:
+      tags: [roles]
+      operationId: listRoles
+      summary: List roles, newest first, optionally searching the name and the description.
+      security:
+        - managementToken: [read:roles]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200':
+          description: One page of roles.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    post:
+      tags: [roles]
+      operationId: createRole
+      summary: Define a role, and the permissions it grants.
+      description: A permission an API does not define is refused (422).
+      security:
+        - managementToken: [create:roles]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleCreate'
+      responses:
+        '201':
+          description: The role, as defined.
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleWithPermissions'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/roles/{role_id}:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+    get:
+      tags: [roles]
+      operationId: getRole
+      summary: Read one role, with the permissions it grants.
+      security:
+        - managementToken: [read:roles]
+      responses:
+        '200':
+          description: The role.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleWithPermissions'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    patch:
+      tags: [roles]
+      operationId: updateRole
+      summary: Rename a role, describe it, or replace the permissions it grants.
+      description: |
+        `permissions`, when present, is the whole new set. Takes effect on the next token
+        each holder obtains: roles are read at issuance, never trusted from a token.
+      security:
+        - managementToken: [update:roles]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleUpdate'
+      responses:
+        '200':
+          description: The role, as updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleWithPermissions'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    delete:
+      tags: [roles]
+      operationId: deleteRole
+      summary: Delete a role, and every assignment of it.
+      description: Its holders lose what it granted at their next token.
+      security:
+        - managementToken: [delete:roles]
+      responses:
+        '204':
+          description: Deleted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/roles/{role_id}/users:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+    get:
+      tags: [roles]
+      operationId: listRoleUsers
+      summary: The users holding a role, most recently given first.
+      security:
+        - managementToken: [read:roles]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+      responses:
+        '200':
+          description: One page of users.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    post:
+      tags: [roles]
+      operationId: assignRole
+      summary: Give a role to some users.
+      description: |
+        Idempotent: giving it to somebody who holds it changes nothing. Refused whole (404)
+        when one of the users does not exist.
+      security:
+        - managementToken: [update:roles]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserIds'
+      responses:
+        '204':
+          description: Every user named holds the role.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/roles/{role_id}/users/{user_id}:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+      - $ref: '#/components/parameters/UserId'
+    delete:
+      tags: [roles]
+      operationId: unassignRole
+      summary: Take a role from a user.
+      description: Idempotent — the user does not hold the role afterwards, whether they did or not.
+      security:
+        - managementToken: [update:roles]
+      responses:
+        '204':
+          description: The user does not hold the role.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
 components:
   securitySchemes:
     managementToken:
@@ -542,7 +875,8 @@ components:
       description: |
         An access token whose audience is the Management API. A machine client obtains one
         with the client credentials grant, naming the API in `audience`, within the scopes
-        its client grant allows.
+        its client grant allows. A person — through the dashboard — obtains one with the
+        authorization code grant, within what their roles grant on this API.
       flows:
         clientCredentials:
           tokenUrl: /oauth2/token
@@ -559,6 +893,10 @@ components:
             create:resource_servers: Create APIs
             update:resource_servers: Modify APIs
             delete:resource_servers: Delete APIs
+            read:roles: View roles and who holds them
+            create:roles: Create roles and who holds them
+            update:roles: Modify roles and who holds them
+            delete:roles: Delete roles and who holds them
 
   headers:
     Location:
@@ -613,6 +951,13 @@ components:
       schema:
         type: string
         pattern: '^rs_[A-Za-z0-9]{16}$'
+    RoleId:
+      name: role_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^rol_[A-Za-z0-9]{16}$'
 
   responses:
     BadRequest:
@@ -766,6 +1111,23 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ResourceServer'
+        total:
+          $ref: '#/components/schemas/Total'
+        page:
+          $ref: '#/components/schemas/PageNumber'
+        per_page:
+          $ref: '#/components/schemas/PerPage'
+
+    RolePage:
+      description: One page of roles, newest first.
+      type: object
+      additionalProperties: false
+      required: [items, total, page, per_page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
         total:
           $ref: '#/components/schemas/Total'
         page:
@@ -1105,7 +1467,7 @@ components:
     ResourceServer:
       type: object
       additionalProperties: false
-      required: [id, identifier, name, permissions, is_system, created_at]
+      required: [id, identifier, name, permissions, is_system, enforce_policies, created_at]
       properties:
         id:
           type: string
@@ -1121,9 +1483,18 @@ components:
         is_system:
           type: boolean
           description: An API the server itself depends on. Not deletable; its permissions are the server's own.
+        enforce_policies:
+          $ref: '#/components/schemas/EnforcePolicies'
         created_at:
           type: string
           format: date-time
+
+    EnforcePolicies:
+      type: boolean
+      description: |
+        Whether a token issued on a person's behalf carries only the permissions their roles
+        grant on this API, and is refused to somebody holding none. Machine clients are
+        governed by their client grants either way. Always on for a system API.
 
     ResourceServerCreate:
       type: object
@@ -1144,11 +1515,18 @@ components:
           maxItems: 200
           items:
             $ref: '#/components/schemas/PermissionInput'
+        enforce_policies:
+          type: boolean
+          default: false
+          description: See `ResourceServer.enforce_policies`.
 
     ResourceServerUpdate:
       type: object
       additionalProperties: false
       minProperties: 1
+      description: |
+        A system API may be renamed and nothing else: its permissions are the server's own,
+        and turning its roles off would hand them to anybody who can sign in (409).
       properties:
         name:
           type: string
@@ -1158,3 +1536,167 @@ components:
           maxItems: 200
           items:
             $ref: '#/components/schemas/PermissionInput'
+        enforce_policies:
+          type: boolean
+
+    RoleName:
+      type: string
+      minLength: 1
+      maxLength: 64
+      description: One line; unique across roles, matched exactly.
+
+    RoleDescription:
+      type: string
+      maxLength: 500
+      description: One line.
+
+    Role:
+      type: object
+      additionalProperties: false
+      required: [id, name, description, created_at]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    RoleWithPermissions:
+      description: A role, with what it grants.
+      type: object
+      additionalProperties: false
+      required: [id, name, description, created_at, permissions]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        permissions:
+          type: array
+          description: By API identifier, then value.
+          items:
+            $ref: '#/components/schemas/RolePermission'
+
+    RolePermission:
+      description: |
+        A permission and the API that defines it — a role spans APIs, so a bare value would
+        be ambiguous.
+      type: object
+      additionalProperties: false
+      required: [resource_server_id, resource_server_identifier, value, description]
+      properties:
+        resource_server_id:
+          type: string
+        resource_server_identifier:
+          type: string
+        value:
+          type: string
+        description:
+          type: string
+
+    EffectivePermission:
+      description: A permission a user holds, and every one of their roles that grants it.
+      type: object
+      additionalProperties: false
+      required: [resource_server_id, resource_server_identifier, value, description, roles]
+      properties:
+        resource_server_id:
+          type: string
+        resource_server_identifier:
+          type: string
+        value:
+          type: string
+        description:
+          type: string
+        roles:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name]
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+
+    PermissionReference:
+      description: A permission, named by the API that defines it and its value.
+      type: object
+      additionalProperties: false
+      required: [resource_server_id, value]
+      properties:
+        resource_server_id:
+          type: string
+          pattern: '^rs_[A-Za-z0-9]{16}$'
+        value:
+          type: string
+          minLength: 1
+          maxLength: 128
+
+    RoleCreate:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          $ref: '#/components/schemas/RoleName'
+        description:
+          $ref: '#/components/schemas/RoleDescription'
+        permissions:
+          type: array
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/PermissionReference'
+
+    RoleUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          $ref: '#/components/schemas/RoleName'
+        description:
+          $ref: '#/components/schemas/RoleDescription'
+        permissions:
+          type: array
+          maxItems: 500
+          description: The whole new set.
+          items:
+            $ref: '#/components/schemas/PermissionReference'
+
+    UserIds:
+      type: object
+      additionalProperties: false
+      required: [user_ids]
+      properties:
+        user_ids:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: string
+            format: uuid
+
+    RoleIds:
+      type: object
+      additionalProperties: false
+      required: [role_ids]
+      properties:
+        role_ids:
+          type: array
+          maxItems: 100
+          description: Every role the user is to hold; empty takes them all away.
+          items:
+            type: string
+            pattern: '^rol_[A-Za-z0-9]{16}$'

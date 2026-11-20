@@ -56,16 +56,21 @@ final class ManagementContractTest extends TestCase
 
     public function testAPathOrMethodTheDocumentDoesNotDescribeIsNoOperation(): void
     {
-        self::assertNull(self::contract()->operationFor(self::request('GET', '/api/v1/roles')));
+        self::assertNull(self::contract()->operationFor(self::request('GET', '/api/v1/connections')));
         self::assertNull(self::contract()->operationFor(self::request('PUT', '/api/v1/users')));
+        self::assertNull(
+            self::contract()->operationFor(self::request('DELETE', '/api/v1/roles/rol_aaaaaaaaaaaaaaaa/users')),
+        );
         self::assertNull(self::contract()->operationFor(self::request('HEAD', '/api/v1/users')));
     }
 
     public function testOnlyCreationsAndUpdatesTakeABody(): void
     {
+        // A DELETE never does: OpenAPI 3.0 gives a body on it no meaning, so taking a role
+        // from somebody names them in the path.
         foreach (self::contract()->operations() as $operation) {
             self::assertSame(
-                in_array($operation->method, ['POST', 'PATCH'], true)
+                in_array($operation->method, ['POST', 'PATCH', 'PUT'], true)
                     && ! str_ends_with($operation->path->template, 'rotate-secret'),
                 $operation->requestBody !== null,
                 (string) $operation,

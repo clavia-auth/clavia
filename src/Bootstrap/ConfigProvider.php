@@ -11,13 +11,16 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap;
 
+use Clavia\Adapter\Primary\Cli\AssignRoleCommand;
 use Clavia\Adapter\Primary\Cli\AuthorizeUrlCommand;
 use Clavia\Adapter\Primary\Cli\CreateMachineClientCommand;
+use Clavia\Adapter\Primary\Cli\CreateRoleCommand;
 use Clavia\Adapter\Primary\Cli\DatabaseStatusCommand;
 use Clavia\Adapter\Primary\Cli\GenerateEncryptionKeyCommand;
 use Clavia\Adapter\Primary\Cli\GenerateSigningKeyCommand;
 use Clavia\Adapter\Primary\Cli\GrantClientAccessCommand;
 use Clavia\Adapter\Primary\Cli\ListManagementScopesCommand;
+use Clavia\Adapter\Primary\Cli\ListRolesCommand;
 use Clavia\Adapter\Primary\Cli\ListSigningKeysCommand;
 use Clavia\Adapter\Primary\Cli\MigrateDatabaseCommand;
 use Clavia\Adapter\Primary\Cli\RegisterManagementApiCommand;
@@ -41,9 +44,14 @@ use Clavia\Adapter\Primary\Http\Management\ManagementContract;
 use Clavia\Adapter\Primary\Http\Management\ManagementResponder;
 use Clavia\Adapter\Primary\Http\Management\ResourceServerHandler;
 use Clavia\Adapter\Primary\Http\Management\ResourceServersHandler;
+use Clavia\Adapter\Primary\Http\Management\RoleHandler;
+use Clavia\Adapter\Primary\Http\Management\RolesHandler;
+use Clavia\Adapter\Primary\Http\Management\RoleUsersHandler;
 use Clavia\Adapter\Primary\Http\Management\RotateClientSecretHandler;
 use Clavia\Adapter\Primary\Http\Management\UserHandler;
 use Clavia\Adapter\Primary\Http\Management\UserMfaHandler;
+use Clavia\Adapter\Primary\Http\Management\UserPermissionsHandler;
+use Clavia\Adapter\Primary\Http\Management\UserRolesHandler;
 use Clavia\Adapter\Primary\Http\Management\UsersHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\OAuth2Responder;
@@ -96,12 +104,22 @@ use Clavia\Application\Management\Clients\ReadClients;
 use Clavia\Application\Management\Clients\RegisterClient;
 use Clavia\Application\Management\Clients\RotateClientSecret;
 use Clavia\Application\Management\Clients\UpdateClient;
+use Clavia\Application\Management\Provisioning\AssignRole;
+use Clavia\Application\Management\Provisioning\EnsureRole;
 use Clavia\Application\Management\Provisioning\GrantClientAccess;
 use Clavia\Application\Management\Provisioning\RegisterManagementApi;
 use Clavia\Application\Management\ResourceServers\DeleteResourceServer;
 use Clavia\Application\Management\ResourceServers\ReadResourceServers;
 use Clavia\Application\Management\ResourceServers\RegisterResourceServer;
 use Clavia\Application\Management\ResourceServers\UpdateResourceServer;
+use Clavia\Application\Management\Roles\CreateRole;
+use Clavia\Application\Management\Roles\DeleteRole;
+use Clavia\Application\Management\Roles\ReadEffectivePermissions;
+use Clavia\Application\Management\Roles\ReadRoleHolders;
+use Clavia\Application\Management\Roles\ReadRoles;
+use Clavia\Application\Management\Roles\RoleAssignments;
+use Clavia\Application\Management\Roles\RolePermissions;
+use Clavia\Application\Management\Roles\UpdateRole;
 use Clavia\Application\Management\Users\CreateUser;
 use Clavia\Application\Management\Users\DeleteUser;
 use Clavia\Application\Management\Users\ReadUsers;
@@ -145,6 +163,7 @@ use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
 use Clavia\Domain\Oidc\SigningAlgorithm;
+use Clavia\Domain\Rbac\RoleRepository;
 use Clavia\Domain\ResourceServer\ClientGrantRepository;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\Shared\Clock;
@@ -191,6 +210,9 @@ final class ConfigProvider
         'clients:grant' => GrantClientAccessCommand::class,
         'management-api:register' => RegisterManagementApiCommand::class,
         'management-api:scopes' => ListManagementScopesCommand::class,
+        'roles:create' => CreateRoleCommand::class,
+        'roles:assign' => AssignRoleCommand::class,
+        'roles:list' => ListRolesCommand::class,
     ];
 
     /**
@@ -299,6 +321,16 @@ final class ConfigProvider
                     GrantClientAccess::class => Container\GrantClientAccessFactory::class,
                     RegisterManagementApi::class => Container\RegisterManagementApiFactory::class,
                     AuthenticateManagementCaller::class => Container\AuthenticateManagementCallerFactory::class,
+                    RolePermissions::class => Container\RolePermissionsFactory::class,
+                    ReadRoles::class => Container\ReadRolesFactory::class,
+                    CreateRole::class => Container\CreateRoleFactory::class,
+                    UpdateRole::class => Container\UpdateRoleFactory::class,
+                    DeleteRole::class => Container\DeleteRoleFactory::class,
+                    RoleAssignments::class => Container\RoleAssignmentsFactory::class,
+                    ReadRoleHolders::class => Container\ReadRoleHoldersFactory::class,
+                    ReadEffectivePermissions::class => Container\ReadEffectivePermissionsFactory::class,
+                    EnsureRole::class => Container\EnsureRoleFactory::class,
+                    AssignRole::class => Container\AssignRoleFactory::class,
 
                     // Secondary adapters, each registered under the port it implements
                     Database::class => Container\DatabaseFactory::class,
@@ -312,6 +344,7 @@ final class ConfigProvider
                     AccessTokenRepository::class => Container\AccessTokenRepositoryFactory::class,
                     ResourceServerRepository::class => Container\ResourceServerRepositoryFactory::class,
                     ClientGrantRepository::class => Container\ClientGrantRepositoryFactory::class,
+                    RoleRepository::class => Container\RoleRepositoryFactory::class,
                     LoginStateStore::class => Container\LoginStateStoreFactory::class,
                     SessionStore::class => Container\SessionStoreFactory::class,
                     AttemptCounter::class => Container\AttemptCounterFactory::class,
@@ -349,6 +382,11 @@ final class ConfigProvider
                     RotateClientSecretHandler::class => Container\RotateClientSecretHandlerFactory::class,
                     ResourceServersHandler::class => Container\ResourceServersHandlerFactory::class,
                     ResourceServerHandler::class => Container\ResourceServerHandlerFactory::class,
+                    RolesHandler::class => Container\RolesHandlerFactory::class,
+                    RoleHandler::class => Container\RoleHandlerFactory::class,
+                    RoleUsersHandler::class => Container\RoleUsersHandlerFactory::class,
+                    UserRolesHandler::class => Container\UserRolesHandlerFactory::class,
+                    UserPermissionsHandler::class => Container\UserPermissionsHandlerFactory::class,
 
                     // Primary adapter: CLI
                     ConsoleApplication::class => Container\ConsoleApplicationFactory::class,
@@ -364,6 +402,9 @@ final class ConfigProvider
                     CreateMachineClientCommand::class => Container\CreateMachineClientCommandFactory::class,
                     GrantClientAccessCommand::class => Container\GrantClientAccessCommandFactory::class,
                     RegisterManagementApiCommand::class => Container\RegisterManagementApiCommandFactory::class,
+                    CreateRoleCommand::class => Container\CreateRoleCommandFactory::class,
+                    AssignRoleCommand::class => Container\AssignRoleCommandFactory::class,
+                    ListRolesCommand::class => Container\ListRolesCommandFactory::class,
                 ],
             ],
             // The server-rendered pages: `layout::page`, `auth::login`, `error::page`,

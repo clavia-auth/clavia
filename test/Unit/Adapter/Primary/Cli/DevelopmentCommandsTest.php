@@ -18,6 +18,8 @@ use Clavia\Application\Development\BuildAuthorizationUrl;
 use Clavia\Application\Development\SeedDashboardClient;
 use Clavia\Application\Development\SeedDevelopmentData;
 use Clavia\Application\Development\SeedManagementAccess;
+use Clavia\Application\Management\Provisioning\AssignRole;
+use Clavia\Application\Management\Provisioning\EnsureRole;
 use Clavia\Application\Management\Provisioning\GrantClientAccess;
 use Clavia\Application\Management\Provisioning\RegisterManagementApi;
 use Clavia\Domain\OAuth2\CodeChallenge;
@@ -31,6 +33,7 @@ use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryClientGrantRepository;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
 use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
+use ClaviaTest\Support\Fake\InMemoryRoleRepository;
 use ClaviaTest\Support\Fake\InMemorySigningKeys;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
@@ -79,6 +82,7 @@ final class DevelopmentCommandsTest extends TestCase
             . "Created signing key {$this->signingKeys->activeKey()->kid}\n"
             . "Registered the Management API as https://management.clavia.test/api/v1/\n"
             . "Created machine client {$machine->id->value}, granted every management scope\n"
+            . "Gave dev@clavia.test the 'Administrator' role\n"
             . "Created dashboard client {$dashboard->id->value}\n"
             . "\n"
             . "Seeded. Sign in at https://auth.clavia.test/auth/login as dev@clavia.test / devpassword\n"
@@ -302,6 +306,7 @@ final class DevelopmentCommandsTest extends TestCase
         $apis = new InMemoryResourceServerRepository($grants);
         $clock = new FrozenClock();
         $secrets = new SecretGenerator($random);
+        $roles = new InMemoryRoleRepository($apis, $this->users);
 
         return new SeedManagementAccess(
             $this->clients,
@@ -314,6 +319,8 @@ final class DevelopmentCommandsTest extends TestCase
             ),
             new RegisterMachineClient($this->clients, $this->hasher, $secrets, $clock),
             new GrantClientAccess($this->clients, $apis, $grants, $clock),
+            new EnsureRole($roles, $apis, new InMemoryTransactionManager(), $secrets, $clock),
+            new AssignRole($roles, $this->users, $clock),
             new InMemoryTransactionManager(),
             $isDevelopment,
         );

@@ -36,13 +36,27 @@ final readonly class ReadUsers
     public function page(PageRequest $request): Page
     {
         $page = $this->users->page($request);
+
+        return new Page($this->describeAll($page->items), $page->total, $page->request);
+    }
+
+    /**
+     * Several accounts with what lives beside them, in one look-up rather than one each.
+     *
+     * @param list<User> $users
+     *
+     * @return list<ManagedUser> In the order given.
+     */
+    public function describeAll(array $users): array
+    {
         $enrolled = array_map(
             static fn (UserId $id): string => $id->value,
-            $this->factors->confirmedAmong(array_map(static fn (User $user): UserId => $user->id, $page->items)),
+            $this->factors->confirmedAmong(array_map(static fn (User $user): UserId => $user->id, $users)),
         );
 
-        return $page->map(
+        return array_map(
             static fn (User $user): ManagedUser => new ManagedUser($user, in_array($user->id->value, $enrolled, true)),
+            $users,
         );
     }
 

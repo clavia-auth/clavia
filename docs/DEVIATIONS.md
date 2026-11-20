@@ -62,8 +62,7 @@ knows what changes.
 | `token_endpoint_auth_method` when omitted | One default for every client | `none` for a public client, `client_secret_basic` for a confidential one | The only coherent value for each type; RFC 6749 §2.3.1 requires every server to support Basic. |
 | The code flow on a registration | `authorization_code` and the `code` response type checked separately | They must come together, and either needs a redirect URI | Half of the code flow is a client no request can succeed for, refused where the mistake is made (also by `PATCH`). |
 | Grant types and fields not built yet | `refresh_token`, the device grant, `is_first_party`, `allowed_connections`… | Absent from the contract, so refused as unknown; they arrive with their steps | A field the server would ignore is a promise it does not keep. |
-| Management scopes | Included roles and connections | Users, clients and APIs only; `read|create|update|delete:roles` and the connection scopes arrive with Steps 10 and 13 | A scope no route checks would be granted for nothing. |
-| A system API's permissions in a user's flow | Narrowed by the user's roles (RBAC) | Refused with `access_denied` at the authorization endpoint, and dropped at redemption, until roles exist (Step 10) | Without roles there is nobody they could be granted to, and granting them to every signed-in person would make every account an administrator. |
+| Management scopes | Included roles and connections | Users, clients, APIs and roles; the connection scopes arrive with Step 13 | A scope no route checks would be granted for nothing. |
 | `audience` in a user's flow | Checked at the authorization endpoint | Checked there, stored on the code, and checked again at redemption: a permission withdrawn meanwhile is not issued, and a code for an API deleted meanwhile is `invalid_grant` | Scope is narrowed at issuance and re-checked at redemption, not trusted from authorization time. |
 | `seed-dev` | Created the machine client and granted it the Management API | The same, with a fixed, printed secret (`dev-m2m-secret-for-local-development-only`) and the token request to run | A development deployment should reach `/api/v1/*` straight after seeding. |
 | Missing credentials | `401` with a bare challenge and `{}` | The same, at `/oidc/userinfo` too; the realm is the Management API's identifier here and the issuer there | RFC 6750 §3.1: no error information when nothing was presented; every refusal is still a JSON document. |
@@ -109,6 +108,20 @@ knows what changes.
 | PKCE towards GitHub | Not sent | Sent to every provider | A provider that does not implement RFC 7636 ignores the parameters; one that does gets the protection. |
 | The `state` cookie | `clavia_social_state` | `clavia_external_state` | Named for what it is, whatever kind of provider. |
 | Where a matching address is looked for | The pools the application enables, and the provider's own accounts | Every account, until connections exist (Step 13) | There are no pools yet. |
+
+## Roles
+
+| Area | Python | PHP | Why |
+|---|---|---|---|
+| Redeeming a code after the person's roles were taken away | `access_denied` from the token endpoint | `invalid_grant` | `access_denied` is not a token-endpoint error (RFC 6749 §5.2); the grant is what became worthless. The authorization endpoint still answers `access_denied` before a code exists. |
+| Taking a role from people | `DELETE /api/v1/roles/{id}/users` with `{"user_ids": […]}` | `DELETE /api/v1/roles/{id}/users/{user_id}`, one account per request; the dashboard sends one each | OpenAPI 3.0 gives a `DELETE` body no meaning, and intermediaries may drop it. |
+| Giving a role | `200` with every holder | `204` | The holders are a page of their own (`GET …/users`); a list that grows has no place in a response that does not page it. |
+| The holders of a role | By email, searchable | Most recently given first, not searched | The assignments are one table and know no address; the list is short, and finding a person is `GET /api/v1/users?q=`. |
+| Roles listed | Alphabetically | Newest first, like every other list (`roles:list` is alphabetical) | One ordering across the API. |
+| An unknown role or account in an assignment | `404`, some assignments possibly written | `404`, nothing written | A request is applied whole or not at all. |
+| Role names and descriptions | Any string up to 64 / 500 characters | One line, and a name not blank | They are labels shown in lists and pickers. |
+| Saving an API | Permission rows updated in place | The same, now required: rows are reconciled, never replaced | A role holds a permission by a foreign key onto its row; replacing the rows would take every role's grant of them along. |
+| `roles create` / `roles assign` / `roles list` | Typer subcommands | `roles:create` (`--audience`, `--scope`, `--description`), `roles:assign`, `roles:list` | The CLI's `group:verb` convention. |
 
 ## RP-Initiated Logout
 

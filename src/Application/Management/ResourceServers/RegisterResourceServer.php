@@ -49,6 +49,7 @@ final readonly class RegisterResourceServer
             $new->name,
             NewResourceServer::permissions($new->permissions),
             $this->clock->now(),
+            enforcePolicies: $new->enforcePolicies,
         );
         $this->resourceServers->save($resourceServer);
 

@@ -19,12 +19,13 @@ use Clavia\Domain\ResourceServer\SystemApiProtected;
 use Clavia\Domain\Shared\InvalidValue;
 
 /**
- * `PATCH /api/v1/resource-servers/{resource_server_id}`: rename an API, or replace the
- * permissions it defines. The identifier never changes — it is the `aud` of every token
- * already issued.
+ * `PATCH /api/v1/resource-servers/{resource_server_id}`: rename an API, replace the
+ * permissions it defines, or turn roles on or off for it. The identifier never changes —
+ * it is the `aud` of every token already issued.
  *
  * A permission dropped from an API stops being issued on the next token, client grants
- * included: they are narrowed to what the API defines at issuance.
+ * included: they are narrowed to what the API defines at issuance. Every role that
+ * granted it stops granting it.
  */
 final readonly class UpdateResourceServer
 {
@@ -34,18 +35,27 @@ final readonly class UpdateResourceServer
 
     /**
      * @param string|null                     $name
-     * @param list<PermissionDefinition>|null $permissions The whole new set; null leaves it alone.
+     * @param list<PermissionDefinition>|null $permissions     The whole new set; null leaves it alone.
+     * @param bool|null                       $enforcePolicies Null leaves it alone.
      *
      * @throws NotFound
      * @throws InvalidValue
-     * @throws SystemApiProtected When the permissions of a system API would change.
+     * @throws SystemApiProtected When the permissions of a system API would change, or its roles be
+     *                            turned off.
      */
-    public function __invoke(ResourceServerId $id, ?string $name, ?array $permissions): ResourceServer
-    {
+    public function __invoke(
+        ResourceServerId $id,
+        ?string $name,
+        ?array $permissions,
+        ?bool $enforcePolicies = null,
+    ): ResourceServer {
         $resourceServer = $this->resourceServers->find($id) ?? throw NotFound::of('API');
 
         if ($permissions !== null) {
             $resourceServer = $resourceServer->withPermissions(NewResourceServer::permissions($permissions));
+        }
+        if ($enforcePolicies !== null) {
+            $resourceServer = $resourceServer->enforcingPolicies($enforcePolicies);
         }
         if ($name !== null) {
             $resourceServer = $resourceServer->renamed($name);

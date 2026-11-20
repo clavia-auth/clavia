@@ -28,6 +28,7 @@ use Clavia\Domain\OAuth2\CodeVerifier;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use Clavia\Domain\OAuth2\Redemption;
 use Clavia\Domain\Oidc\OidcScope;
+use Clavia\Domain\Rbac\RoleRepository;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\Digest;
@@ -71,6 +72,7 @@ final readonly class AuthorizationCodeGrant implements Grant
         private Clock $clock,
         private IdTokenIssuer $idTokens,
         private ResourceServerRepository $resourceServers,
+        private RoleRepository $roles,
         private ScopeSet $supportedScopes,
         private int $accessTokenLifetimeSeconds,
     ) {
@@ -145,7 +147,7 @@ final readonly class AuthorizationCodeGrant implements Grant
             return OAuth2Error::invalidGrant("There is no active user for this 'code'.");
         }
 
-        $scope = $this->scopeNow($code);
+        $scope = $this->scopeNow($code, $user);
         if ($scope instanceof OAuth2Error) {
             return $scope;
         }
@@ -156,9 +158,11 @@ final readonly class AuthorizationCodeGrant implements Grant
     /**
      * The scope the token gets: the code's, re-checked against the API it names as that
      * API is now, rather than trusted from when the code was issued. A permission the API
-     * dropped in between is not issued; an API removed in between issues nothing.
+     * dropped in between is not issued; an API removed in between issues nothing. On an
+     * API that enforces roles, its permissions are further cut to what the person's roles
+     * grant there now; holding nothing any more is `invalid_grant`.
      */
-    private function scopeNow(AuthorizationCode $code): ScopeSet|OAuth2Error
+    private function scopeNow(AuthorizationCode $code, User $user): ScopeSet|OAuth2Error
     {
         if ($code->audience === null) {
             return $code->scope;
@@ -169,8 +173,16 @@ final readonly class AuthorizationCodeGrant implements Grant
             return OAuth2Error::invalidGrant("The API this 'code' was issued for is no longer registered.");
         }
 
-        // Until roles exist (Step 10) nobody holds a permission on a system API.
-        $apiScopes = $resourceServer->isSystem ? ScopeSet::empty() : $resourceServer->permissionScopes();
+        $apiScopes = $resourceServer->permissionScopes();
+        if ($resourceServer->enforcePolicies) {
+            $held = $this->roles->permissionsHeld($user->id, $resourceServer->id);
+            if ($held->isEmpty()) {
+                return OAuth2Error::invalidGrant(
+                    "The account no longer holds any permission on the API this 'code' was issued for.",
+                );
+            }
+            $apiScopes = $apiScopes->intersect($held);
+        }
 
         return $code->scope->intersect($this->supportedScopes->union($apiScopes));
     }

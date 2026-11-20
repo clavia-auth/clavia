@@ -68,7 +68,8 @@ final readonly class RegisterManagementApi
                     self::NAME,
                     $permissions,
                     $this->clock->now(),
-                    true,
+                    isSystem: true,
+                    enforcePolicies: true,
                 )
                 // An operator's rename is kept; the permissions are the code's.
                 : $existing->asSystem($existing->name === '' ? self::NAME : $existing->name, $permissions);

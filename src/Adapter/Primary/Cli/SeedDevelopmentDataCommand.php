@@ -14,6 +14,7 @@ namespace Clavia\Adapter\Primary\Cli;
 use Clavia\Application\Development\SeedDashboardClient;
 use Clavia\Application\Development\SeedDevelopmentData;
 use Clavia\Application\Development\SeedManagementAccess;
+use Clavia\Application\Management\NotFound;
 use Clavia\Domain\Shared\InvalidValue;
 use LogicException;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -23,8 +24,9 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
- * `clavia seed-dev` — seed a development user, a public PKCE client, the Management API
- * with a machine client, and the dashboard's client and build configuration.
+ * `clavia seed-dev` — seed a development user holding the Administrator role, a public
+ * PKCE client, the Management API with a machine client, and the dashboard's client and
+ * build configuration.
  *
  * Development only, and safe to run again: it creates what is missing and reports what
  * was already there.
@@ -86,9 +88,9 @@ final class SeedDevelopmentDataCommand extends Command
 
         try {
             $seeded = ($this->seed)($email, $password, $redirectUri);
-            $management = ($this->seedManagementAccess)();
+            $management = ($this->seedManagementAccess)($email);
             $dashboard = ($this->seedDashboard)($this->managementHost);
-        } catch (LogicException | InvalidValue $refusal) {
+        } catch (LogicException | InvalidValue | NotFound $refusal) {
             $output->writeln('<error>' . $refusal->getMessage() . '</error>');
 
             return Command::FAILURE;
@@ -114,6 +116,7 @@ final class SeedDevelopmentDataCommand extends Command
             $management->clientCreated ? 'Created' : 'Kept',
             $management->clientId->value,
         ));
+        $output->writeln(sprintf("Gave %s the '%s' role", $email, SeedManagementAccess::ADMINISTRATOR_ROLE));
         $output->writeln(sprintf(
             '%s dashboard client %s',
             $dashboard->created ? 'Created' : 'Kept',

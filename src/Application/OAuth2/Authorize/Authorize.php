@@ -26,6 +26,7 @@ use Clavia\Domain\OAuth2\CodeChallenge;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use Clavia\Domain\Oidc\Nonce;
 use Clavia\Domain\Oidc\OidcScope;
+use Clavia\Domain\Rbac\RoleRepository;
 use Clavia\Domain\ResourceServer\ResourceServer;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\Shared\Audience;
@@ -67,6 +68,7 @@ final readonly class Authorize
         private LoginStateStore $loginStates,
         private NonceRegistry $nonces,
         private ResourceServerRepository $resourceServers,
+        private RoleRepository $roles,
         private SecretGenerator $secrets,
         private RandomSource $random,
         private Clock $clock,
@@ -105,11 +107,15 @@ final readonly class Authorize
             return new LoginRequired($handle);
         }
 
-        // The person must hold what is asked of an API on their behalf. Roles arrive with
-        // Step 10; until then nobody holds a permission on an API that enforces them — a
-        // system API always does — so asking for one is refused rather than granted to
-        // every account that can sign in.
-        if ($target !== null && $target->isSystem && ! $scope->intersect($target->permissionScopes())->isEmpty()) {
+        // On an API that enforces roles, somebody holding nothing there is refused now —
+        // the first point where both the API and the person are known — rather than given
+        // a code for a token that would fail every call with nothing to say why. What they
+        // do hold is applied at redemption, where roles are read again.
+        if (
+            $target !== null
+            && $target->enforcePolicies
+            && $this->roles->permissionsHeld($request->endUser->userId, $target->id)->isEmpty()
+        ) {
             return new RequestRefused(
                 $redirectUri,
                 OAuth2Error::accessDenied('Your account holds no permission on this API.'),

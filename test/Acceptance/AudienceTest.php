@@ -279,10 +279,10 @@ final class AudienceTest extends AcceptanceTestCase
         self::assertSame(0, TestStorage::database()->fetchValue('SELECT count(*) FROM oauth2_access_tokens'));
     }
 
-    public function testASystemApisPermissionsAreNotIssuedToAUserYet(): void
+    public function testASystemApiIsRefusedToAUserHoldingNoRoleOnIt(): void
     {
-        // Until roles exist (Step 10) no user holds any of the Management API's
-        // permissions, so asking for one is refused rather than granted to everybody.
+        // A system API always enforces roles: its permissions are not handed to
+        // everybody who can sign in. The rest of that story is RbacTest's.
         $this->loggedIn();
         $this->publicClient();
         $api = $this->container()->get(RegisterManagementApi::class)();

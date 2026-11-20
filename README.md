@@ -6,7 +6,7 @@ Auth0: OAuth2 flows, interactive login with MFA, and a Management API.
 This is the PHP 8.5 implementation. It is being ported feature by feature from the Python
 reference implementation; `CLAUDE.md` holds the migration plan and the current state.
 
-**Status: Step 9 — RP-Initiated Logout.** A person signs in with a password at `/auth/login`, or with
+**Status: Step 10 — roles.** A person signs in with a password at `/auth/login`, or with
 Google or GitHub once their credentials are configured (`CLAVIA_GOOGLE_CLIENT_ID` / `_SECRET`,
 `CLAVIA_GITHUB_CLIENT_ID` / `_SECRET`; register
 `https://auth.{domain}/auth/social/{provider}/callback` at the provider) — followed, once they
@@ -29,11 +29,19 @@ the server signed for the signed-in person ends the session at once; without one
 asked first. The browser is then sent to one of the client's registered
 `post_logout_redirect_uris`, with `state`, or to the login page.
 
+Roles are how a person comes to hold an API's permissions. A role grants permissions on one
+or several APIs and is given to users; on an API with `enforce_policies` on — always the case
+for the Management API — a person's token carries only what their roles grant there, and
+somebody holding nothing is refused. Roles are managed under `/api/v1/roles`; giving one
+needs `update:roles`. The first holder is made at the shell: `clavia roles:create
+Administrator` (every Management API permission by default), then `clavia roles:assign
+Administrator you@example.com`. `clavia seed-dev` does both for the development user.
+
 The dashboard (`frontend/`, React) is registered by `clavia seed-dev` as a public client, which
 also writes its build configuration to `frontend/.env.local`. Run it with
 `cd frontend && npm install && npm run dev`; Caddy serves it at
-`https://management.{domain}/dashboard/`. It cannot sign in yet: it needs role-based access to
-the Management API (Step 10) and refresh tokens (Step 11).
+`https://management.{domain}/dashboard/`. It keeps no session yet: renewing its token needs
+refresh tokens (Step 11).
 
 ## Architecture
 

@@ -18,6 +18,7 @@ use Clavia\Configuration\Settings;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
+use Clavia\Domain\Rbac\RoleRepository;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\RandomSource;
@@ -47,6 +48,8 @@ final class AuthorizationCodeGrantFactory
         $idTokens = $container->get(IdTokenIssuer::class);
         /** @var ResourceServerRepository $resourceServers */
         $resourceServers = $container->get(ResourceServerRepository::class);
+        /** @var RoleRepository $roles */
+        $roles = $container->get(RoleRepository::class);
         /** @var Settings $settings */
         $settings = $container->get(Settings::class);
 
@@ -63,6 +66,7 @@ final class AuthorizationCodeGrantFactory
             $clock,
             $idTokens,
             $resourceServers,
+            $roles,
             ScopeSet::fromString(implode(' ', $settings->scopesSupported)),
             $lifetime,
         );

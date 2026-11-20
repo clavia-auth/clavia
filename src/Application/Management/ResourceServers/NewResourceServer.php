@@ -25,11 +25,14 @@ final readonly class NewResourceServer
      *                                               owns, so that it cannot collide across deployments. Never
      *                                               dereferenced (RFC 8707 §2).
      * @param list<PermissionDefinition> $permissions
+     * @param bool                       $enforcePolicies Whether a person's token carries only what their
+     *                                                    roles grant on the API.
      */
     public function __construct(
         public string $identifier,
         public string $name = '',
         public array $permissions = [],
+        public bool $enforcePolicies = false,
     ) {
     }
 

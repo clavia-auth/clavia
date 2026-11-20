@@ -27,7 +27,9 @@ use DateTimeImmutable;
  * invalidate every token already issued for the API.
  *
  * A client holds no scope of its own. Acting as itself, what it may take from an API
- * is its {@see ClientGrant} there, narrowed to what the API still defines.
+ * is its {@see ClientGrant} there, narrowed to what the API still defines. On someone's
+ * behalf, it is what the API defines — or, when the API enforces roles, what that
+ * person's roles grant there.
  */
 final readonly class ResourceServer
 {
@@ -45,6 +47,7 @@ final readonly class ResourceServer
         public array $permissions,
         public DateTimeImmutable $createdAt,
         public bool $isSystem,
+        public bool $enforcePolicies,
     ) {
     }
 
@@ -52,13 +55,18 @@ final readonly class ResourceServer
      * Register an API, or rebuild one from storage: the same rules apply to both.
      *
      * @param list<Permission> $permissions
-     * @param bool             $isSystem    An API this server itself depends on — the Management API.
-     *                                      Its permissions are the server's to define and it cannot be
-     *                                      deleted: either would revoke the credentials needed to undo
-     *                                      the mistake. Only provisioning on the machine sets it.
+     * @param bool             $isSystem        An API this server itself depends on — the Management API.
+     *                                          Its permissions are the server's to define and it cannot be
+     *                                          deleted: either would revoke the credentials needed to undo
+     *                                          the mistake. Only provisioning on the machine sets it.
+     * @param bool             $enforcePolicies Whether a token issued on a person's behalf carries only what
+     *                                          their roles grant here, and is refused to somebody holding
+     *                                          nothing. Always on for a system API: what an operator may do
+     *                                          there has to depend on who they are.
      *
      * @throws InvalidValue When the identifier is longer than 255 bytes, the name longer than
-     *                      120 characters, or a permission is defined twice.
+     *                      120 characters, a permission is defined twice, or a system API would
+     *                      not enforce roles.
      */
     public static function register(
         ResourceServerId $id,
@@ -67,12 +75,16 @@ final readonly class ResourceServer
         array $permissions,
         DateTimeImmutable $createdAt,
         bool $isSystem = false,
+        bool $enforcePolicies = false,
     ): self {
         if (strlen($identifier->value) > self::MAX_IDENTIFIER_LENGTH) {
             throw new InvalidValue('An API identifier is at most 255 bytes.');
         }
         if (! mb_check_encoding($name, 'UTF-8') || mb_strlen($name, 'UTF-8') > self::MAX_NAME_LENGTH) {
             throw new InvalidValue('An API name is at most 120 characters.');
+        }
+        if ($isSystem && ! $enforcePolicies) {
+            throw new InvalidValue('A system API always enforces roles.');
         }
 
         $byValue = [];
@@ -87,7 +99,7 @@ final readonly class ResourceServer
         $sorted = array_values($byValue);
         usort($sorted, static fn (Permission $a, Permission $b): int => strcmp($a->value->value, $b->value->value));
 
-        return new self($id, $identifier, $name, $sorted, $createdAt, $isSystem);
+        return new self($id, $identifier, $name, $sorted, $createdAt, $isSystem, $enforcePolicies);
     }
 
     /**
@@ -104,6 +116,32 @@ final readonly class ResourceServer
             $this->permissions,
             $this->createdAt,
             $this->isSystem,
+            $this->enforcePolicies,
+        );
+    }
+
+    /**
+     * The same API, enforcing roles or not.
+     *
+     * Refused for a system API: turning roles off there would hand every permission it
+     * defines to anybody who can sign in.
+     *
+     * @throws SystemApiProtected
+     */
+    public function enforcingPolicies(bool $enforce): self
+    {
+        if ($this->isSystem && ! $enforce) {
+            throw SystemApiProtected::policies($this);
+        }
+
+        return new self(
+            $this->id,
+            $this->identifier,
+            $this->name,
+            $this->permissions,
+            $this->createdAt,
+            $this->isSystem,
+            $enforce,
         );
     }
 
@@ -125,12 +163,20 @@ final readonly class ResourceServer
             throw SystemApiProtected::permissions($this);
         }
 
-        return self::register($this->id, $this->identifier, $this->name, $permissions, $this->createdAt);
+        return self::register(
+            $this->id,
+            $this->identifier,
+            $this->name,
+            $permissions,
+            $this->createdAt,
+            false,
+            $this->enforcePolicies,
+        );
     }
 
     /**
-     * The same API, marked as one the server depends on, defining exactly `$permissions`.
-     * For provisioning on the machine only.
+     * The same API, marked as one the server depends on — enforcing roles, as a system API
+     * always does — defining exactly `$permissions`. For provisioning on the machine only.
      *
      * @param list<Permission> $permissions
      *
@@ -138,7 +184,7 @@ final readonly class ResourceServer
      */
     public function asSystem(string $name, array $permissions): self
     {
-        return self::register($this->id, $this->identifier, $name, $permissions, $this->createdAt, true);
+        return self::register($this->id, $this->identifier, $name, $permissions, $this->createdAt, true, true);
     }
 
     /**

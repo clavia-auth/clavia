@@ -22,9 +22,14 @@ use Clavia\Adapter\Primary\Http\Management\ClientsHandler;
 use Clavia\Adapter\Primary\Http\Management\ManagementApiMiddleware;
 use Clavia\Adapter\Primary\Http\Management\ResourceServerHandler;
 use Clavia\Adapter\Primary\Http\Management\ResourceServersHandler;
+use Clavia\Adapter\Primary\Http\Management\RoleHandler;
+use Clavia\Adapter\Primary\Http\Management\RolesHandler;
+use Clavia\Adapter\Primary\Http\Management\RoleUsersHandler;
 use Clavia\Adapter\Primary\Http\Management\RotateClientSecretHandler;
 use Clavia\Adapter\Primary\Http\Management\UserHandler;
 use Clavia\Adapter\Primary\Http\Management\UserMfaHandler;
+use Clavia\Adapter\Primary\Http\Management\UserPermissionsHandler;
+use Clavia\Adapter\Primary\Http\Management\UserRolesHandler;
 use Clavia\Adapter\Primary\Http\Management\UsersHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\TokenHandler;
@@ -90,6 +95,17 @@ return static function (Application $app): void {
         'api.user',
     );
     $app->delete('/api/v1/users/{user_id}/mfa', $management(UserMfaHandler::class), 'api.user.mfa');
+    $app->route(
+        '/api/v1/users/{user_id}/roles',
+        $management(UserRolesHandler::class),
+        ['GET', 'PUT'],
+        'api.user.roles',
+    );
+    $app->get(
+        '/api/v1/users/{user_id}/permissions',
+        $management(UserPermissionsHandler::class),
+        'api.user.permissions',
+    );
     $app->route('/api/v1/clients', $management(ClientsHandler::class), ['GET', 'POST'], 'api.clients');
     $app->route(
         '/api/v1/clients/{client_id}',
@@ -113,5 +129,23 @@ return static function (Application $app): void {
         $management(ResourceServerHandler::class),
         ['GET', 'PATCH', 'DELETE'],
         'api.resource-server',
+    );
+    $app->route('/api/v1/roles', $management(RolesHandler::class), ['GET', 'POST'], 'api.roles');
+    $app->route(
+        '/api/v1/roles/{role_id}',
+        $management(RoleHandler::class),
+        ['GET', 'PATCH', 'DELETE'],
+        'api.role',
+    );
+    $app->route(
+        '/api/v1/roles/{role_id}/users',
+        $management(RoleUsersHandler::class),
+        ['GET', 'POST'],
+        'api.role.users',
+    );
+    $app->delete(
+        '/api/v1/roles/{role_id}/users/{user_id}',
+        $management(RoleUsersHandler::class),
+        'api.role.user',
     );
 };

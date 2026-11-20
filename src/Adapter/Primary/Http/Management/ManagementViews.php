@@ -12,11 +12,15 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Management;
 
 use Clavia\Application\Management\Clients\ClientWithSecret;
+use Clavia\Application\Management\Roles\DescribedPermission;
+use Clavia\Application\Management\Roles\DescribedRole;
+use Clavia\Application\Management\Roles\EffectivePermission;
 use Clavia\Application\Management\Users\ManagedUser;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\ResponseType;
 use Clavia\Domain\Identity\User;
+use Clavia\Domain\Rbac\Role;
 use Clavia\Domain\ResourceServer\Permission;
 use Clavia\Domain\ResourceServer\ResourceServer;
 use Clavia\Domain\Shared\Page;
@@ -26,7 +30,8 @@ use DateTimeZone;
 
 /**
  * The JSON shape of each resource, as `docs/openapi/management-api.yaml` describes it
- * (`User`, `Client`, `ClientWithSecret`, `ResourceServer`, the `…Page` envelopes).
+ * (`User`, `Client`, `ClientWithSecret`, `ResourceServer`, `Role`, `RoleWithPermissions`,
+ * `EffectivePermission`, the `…Page` envelopes).
  *
  * What is left out is left out on purpose: a password hash or a client secret hash is
  * never part of a resource, and a client secret appears only in {@see self::clientWithSecret()}.
@@ -130,7 +135,57 @@ final class ManagementViews
                 $api->permissions,
             ),
             'is_system' => $api->isSystem,
+            'enforce_policies' => $api->enforcePolicies,
             'created_at' => self::instant($api->createdAt),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public static function role(Role $role): array
+    {
+        return [
+            'id' => $role->id->value,
+            'name' => $role->name,
+            'description' => $role->description,
+            'created_at' => self::instant($role->createdAt),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public static function roleWithPermissions(DescribedRole $described): array
+    {
+        return self::role($described->role) + [
+            'permissions' => array_map(self::rolePermission(...), $described->permissions),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public static function effectivePermission(EffectivePermission $effective): array
+    {
+        return self::rolePermission($effective->permission) + [
+            'roles' => array_map(
+                static fn (Role $role): array => ['id' => $role->id->value, 'name' => $role->name],
+                $effective->roles,
+            ),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function rolePermission(DescribedPermission $permission): array
+    {
+        return [
+            'resource_server_id' => $permission->resourceServerId->value,
+            'resource_server_identifier' => $permission->resourceServerIdentifier->value,
+            'value' => $permission->value,
+            'description' => $permission->description,
         ];
     }
 

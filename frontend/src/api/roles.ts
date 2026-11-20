@@ -84,7 +84,7 @@ export function useAssignRole(id: string) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (userIds: string[]) =>
-      api<User[]>(`/roles/${id}/users`, { method: "POST", body: JSON.stringify({ user_ids: userIds }) }),
+      api<void>(`/roles/${id}/users`, { method: "POST", body: JSON.stringify({ user_ids: userIds }) }),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: roleKeys.users(id) });
       void client.invalidateQueries({ queryKey: ["users"] });
@@ -95,8 +95,10 @@ export function useAssignRole(id: string) {
 export function useUnassignRole(id: string) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (userIds: string[]) =>
-      api<User[]>(`/roles/${id}/users`, { method: "DELETE", body: JSON.stringify({ user_ids: userIds }) }),
+    // One account per request: a DELETE carries no body, so the account is in the path.
+    mutationFn: async (userIds: string[]) => {
+      await Promise.all(userIds.map((userId) => api<void>(`/roles/${id}/users/${userId}`, { method: "DELETE" })));
+    },
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: roleKeys.users(id) });
       void client.invalidateQueries({ queryKey: ["users"] });

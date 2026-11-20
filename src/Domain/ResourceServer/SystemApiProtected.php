@@ -28,6 +28,15 @@ final class SystemApiProtected extends DomainException
         ));
     }
 
+    public static function policies(ResourceServer $api): self
+    {
+        return new self(sprintf(
+            "The system API '%s' always enforces roles: without them, every permission it defines "
+            . 'would be issued to anybody who can sign in.',
+            $api->identifier->value,
+        ));
+    }
+
     public static function deletion(ResourceServer $api): self
     {
         return new self(sprintf(

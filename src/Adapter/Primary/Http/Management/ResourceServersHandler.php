@@ -53,6 +53,7 @@ final readonly class ResourceServersHandler implements RequestHandlerInterface
             $body->string('identifier') ?? throw new LogicException("The contract requires 'identifier'."),
             $body->string('name') ?? '',
             ResourceServerFields::permissions($body) ?? [],
+            $body->bool('enforce_policies') ?? false,
         ));
 
         return $this->responder->created(

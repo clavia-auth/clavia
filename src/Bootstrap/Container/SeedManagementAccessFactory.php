@@ -13,6 +13,8 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Clients\RegisterMachineClient;
 use Clavia\Application\Development\SeedManagementAccess;
+use Clavia\Application\Management\Provisioning\AssignRole;
+use Clavia\Application\Management\Provisioning\EnsureRole;
 use Clavia\Application\Management\Provisioning\GrantClientAccess;
 use Clavia\Application\Management\Provisioning\RegisterManagementApi;
 use Clavia\Application\Port\TransactionManager;
@@ -32,6 +34,10 @@ final class SeedManagementAccessFactory
         $registerMachineClient = $container->get(RegisterMachineClient::class);
         /** @var GrantClientAccess $grantClientAccess */
         $grantClientAccess = $container->get(GrantClientAccess::class);
+        /** @var EnsureRole $ensureRole */
+        $ensureRole = $container->get(EnsureRole::class);
+        /** @var AssignRole $assignRole */
+        $assignRole = $container->get(AssignRole::class);
         /** @var TransactionManager $transactions */
         $transactions = $container->get(TransactionManager::class);
         /** @var Settings $settings */
@@ -42,6 +48,8 @@ final class SeedManagementAccessFactory
             $registerManagementApi,
             $registerMachineClient,
             $grantClientAccess,
+            $ensureRole,
+            $assignRole,
             $transactions,
             $settings->isDevelopment(),
         );

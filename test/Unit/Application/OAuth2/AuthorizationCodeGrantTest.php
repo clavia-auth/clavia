@@ -39,6 +39,7 @@ use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryAccessTokenRepository;
 use ClaviaTest\Support\Fake\InMemoryAuthorizationCodeRepository;
 use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
+use ClaviaTest\Support\Fake\InMemoryRoleRepository;
 use ClaviaTest\Support\Fake\InMemorySigningKeys;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
@@ -84,6 +85,7 @@ final class AuthorizationCodeGrantTest extends TestCase
             $this->clock,
             new IdTokenIssuer($this->keys, new CompactJws($this->keys), 'https://auth.clavia.test', 300),
             $this->resourceServers,
+            new InMemoryRoleRepository($this->resourceServers, $this->users),
             ScopeSet::fromString('openid profile email'),
             3600,
         );

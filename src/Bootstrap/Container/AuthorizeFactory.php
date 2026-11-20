@@ -17,6 +17,7 @@ use Clavia\Application\Port\NonceRegistry;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
+use Clavia\Domain\Rbac\RoleRepository;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\RandomSource;
@@ -38,6 +39,8 @@ final class AuthorizeFactory
         $nonces = $container->get(NonceRegistry::class);
         /** @var ResourceServerRepository $resourceServers */
         $resourceServers = $container->get(ResourceServerRepository::class);
+        /** @var RoleRepository $roles */
+        $roles = $container->get(RoleRepository::class);
         /** @var SecretGenerator $secrets */
         $secrets = $container->get(SecretGenerator::class);
         /** @var RandomSource $random */
@@ -60,6 +63,7 @@ final class AuthorizeFactory
             $loginStates,
             $nonces,
             $resourceServers,
+            $roles,
             $secrets,
             $random,
             $clock,

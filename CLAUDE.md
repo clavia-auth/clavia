@@ -29,11 +29,12 @@ and multi-tenancy.
 
 ## Current state
 
-**Steps 0 to 9 are done: the foundations, Authorization Code + PKCE, the login page with
+**Steps 0 to 10 are done: the foundations, Authorization Code + PKCE, the login page with
 browser sessions, OpenID Connect (ID tokens, discovery, JWKS, userinfo), Client
 Credentials for machine clients holding a grant on an API, the Management API with
 audiences in the user's flow, two-factor authentication (TOTP and recovery codes),
-signing in with Google or GitHub, and RP-Initiated Logout; the dashboard is in `frontend/`.**
+signing in with Google or GitHub, RP-Initiated Logout and roles (RBAC); the dashboard is in
+`frontend/`.**
 The application answers `GET /healthz`,
 `GET|POST /oauth2/authorize`, `POST /oauth2/token`, `GET /.well-known/openid-configuration`,
 `GET /.well-known/oauth-authorization-server`, `GET /oidc/jwks.json`, `GET|POST /oidc/userinfo`,
@@ -42,12 +43,14 @@ The application answers `GET /healthz`,
 `POST /auth/mfa/enroll/confirm`, `POST /auth/mfa/disable`, `GET /auth/social/{provider}` and
 its `/callback`, `POST /auth/logout`,
 `POST /auth/theme` and the Management API under `/api/v1/` (users with their second factor,
-clients with secret rotation, resource servers): a person can sign in with a
+roles and effective permissions, clients with secret rotation, resource servers, roles and
+their holders): a person can sign in with a
 password or through Google or GitHub — and, once they have turned it on, a code from their authenticator app or a
 recovery code — complete the flow in a browser, naming an API in `audience` if the client
-wants its permissions, and the client gets an RS256 ID token it can verify against the published
+wants its permissions — on an API that enforces roles, only what their roles grant there —
+and the client gets an RS256 ID token it can verify against the published
 JWKS; a machine client gets a subject-less token for an API it holds a grant on, and with one
-for the Management API it administers the deployment. Update this section at the
+for the Management API it administers the deployment, as a person holding a role there does. Update this section at the
 end of every step (what exists, where it lives, which conventions it established).
 
 What exists:
@@ -247,7 +250,30 @@ What exists:
     `Development\{SeedDashboardClient,SeededDashboard}`.
   - `Adapter\Secondary\Signing\Jose\JoseSignatureVerifier`; `Adapter\Primary\Http\Oidc\EndSessionHandler`
     and `templates/auth/logout-confirm.phtml`; `post_logout_redirect_uris` in the Management API.
-  - Migration `0015_post_logout_redirect_uris`. `frontend/` (the React dashboard, unchanged).
+  - Migration `0015_post_logout_redirect_uris`. `frontend/` (the React dashboard; unchanged
+    until Step 10 moved taking a role away to one request per account).
+- **Roles** (Step 10):
+  - `Domain\Rbac\{Role,RoleId,GrantedPermission,RoleRepository}`: a role grants permissions
+    named `(API id, value)`, possibly across APIs; the repository also holds the assignments
+    (`assign`, `unassign`, `replaceRolesOf`, `rolesOf`, `holders`) and answers the one question
+    issuance asks, `permissionsHeld(user, API)`. `ResourceServer::$enforcePolicies` and
+    `enforcingPolicies()` (refused off for a system API: `SystemApiProtected::policies()`).
+  - `Application\Management\Roles\{ReadRoles,CreateRole,UpdateRole,DeleteRole,RoleAssignments,ReadRoleHolders,ReadEffectivePermissions,RolePermissions}`
+    with `NewRole`, `RoleChanges`, `PermissionReference`, `DescribedRole`, `DescribedPermission`,
+    `EffectivePermission`; `Provisioning\{EnsureRole,AssignRole}` for the shell and `seed-dev`.
+    `ManagementPermission` gains `read|create|update|delete:roles`. `ReadUsers::describeAll()`.
+  - `Authorize` refuses `access_denied` to somebody holding nothing on an API that enforces
+    roles; `AuthorizationCodeGrant` narrows the API's permissions to what they hold at
+    redemption (`invalid_grant` if that is now nothing).
+  - `Adapter\Secondary\Persistence\PhpDb\PhpDbRoleRepository`; `PhpDbResourceServerRepository`
+    reconciles permission rows instead of replacing them. Migration `0016_roles`
+    (`roles`, `role_permissions` with a composite foreign key onto `permissions`, `user_roles`,
+    `resource_servers.enforce_policies`).
+  - `Adapter\Primary\Http\Management\{RolesHandler,RoleHandler,RoleUsersHandler,UserRolesHandler,UserPermissionsHandler,RoleFields}`;
+    `ManagementResponder::jsonList()`; `enforce_policies` on resource servers.
+    `Adapter\Primary\Cli\{CreateRoleCommand,AssignRoleCommand,ListRolesCommand}`
+    (`roles:create|assign|list`). `seed-dev` gives the development user an `Administrator` role
+    holding every management permission.
 - **Error pages for browsers** (after Step 3): `Adapter\Primary\Http\Shared\ClientPreference`
   (`Accept` negotiation), `ErrorResponder` + `ErrorPage`, `PageRenderer` + `HtmlPage` (the
   layout, headers and CSP every server-rendered page shares). 404, 405, 500 and the
@@ -532,9 +558,8 @@ Conventions established in Step 6:
   `AlreadyExists`; nobody checks first and inserts second.
 - **A system API is the server's own.** The Management API is registered from the shell,
   marked `is_system`: it can be renamed, never deleted, and its permissions are
-  `ManagementPermission`'s — re-registering after an upgrade brings them up to date. Until
-  roles exist (Step 10), a user's flow asking for a system API's permissions is
-  `access_denied`, and they are dropped at redemption.
+  `ManagementPermission`'s — re-registering after an upgrade brings them up to date. It
+  always enforces roles (Step 10).
 - **`audience` in a user's flow** names the API whose permissions the scope may hold next to
   the OIDC scopes; an unknown API is `invalid_target`, a malformed one `invalid_request`. It is
   stored on the code and re-checked at redemption: the scope is cut to what is still defined,
@@ -613,6 +638,31 @@ Conventions established in Step 9:
 - **The dashboard is an ordinary public client**, registered by `seed-dev` with its callback
   and its signed-out page under `management.{domain}/dashboard/`; `frontend/.env.local` is
   written from the same values.
+
+Conventions established in Step 10:
+
+- **A person comes to hold a permission only through a role.** On an API with
+  `enforce_policies`, the authorization endpoint refuses `access_denied` to somebody who holds
+  nothing there (before a code exists, the error sent to the client), and redemption cuts the
+  API's permissions in the scope to what their roles grant *then* — roles are read for every
+  token, never trusted from a code. OIDC scopes pass untouched. Without `enforce_policies`, the
+  API's definitions are the only bound. A machine client is governed by its client grant
+  either way. A system API always enforces roles.
+- **Links are foreign keys onto what they name.** A role grants `(resource_server_id, value)`
+  through a composite key onto `permissions`, so a permission an API stops defining leaves every
+  role; deleting a role or an account takes its assignments. Because of that,
+  `PhpDbResourceServerRepository` reconciles permission rows (delete what went, upsert what
+  stays) — a row deleted and inserted again would take every role's grant of it along. The
+  in-memory doubles apply the same cascades as they read.
+- **Conferring authority needs `update:roles`**, wherever it happens: on the role
+  (`/roles/{id}/users`) or on the account (`PUT /users/{id}/roles`); `update:users` never
+  suffices. The first holder is made at the shell (`roles:create`, `roles:assign`).
+- **Assignments are idempotent and refused whole.** Giving a held role or taking one not held
+  changes nothing; naming one account or role that does not exist is a 404 and changes
+  nothing. A `DELETE` carries no body (OpenAPI 3.0 gives one no meaning): taking a role names the
+  account in the path.
+- **A collection small by nature is a JSON array** (`ManagementResponder::jsonList()`: an
+  account's roles, its effective permissions); anything that grows is a page.
 
 **Known defect in the database library, worked around.** At the pinned commit,
 `php-db/phpdb-pgsql` runs `SELECT LASTVAL()` after every statement to fetch a "last generated
@@ -694,7 +744,7 @@ Management API scope.
 | Runtime | **PHP-FPM behind Caddy** (share-nothing; no worker mode) |
 | Short-TTL state | Redis (`ext-redis`), behind store ports |
 | Outbound HTTP | **Guzzle** as the PSR-18 client, injected by interface with PSR-17 factories (decided 2026-11-20) |
-| Dashboard | The existing **React** dashboard (`frontend/`), copied unchanged |
+| Dashboard | The existing **React** dashboard (`frontend/`), copied, changed only where the API it calls is designed differently |
 | Auth pages | **laminas-view** PHP templates through `mezzio/mezzio-laminasviewrenderer` — no Twig, no other template language, no JavaScript — see "Auth pages" |
 | Namespace / licence | `Clavia\` · BSD-3-Clause |
 | Existing data | None to carry over — the PHP schema is free to be designed cleanly |
@@ -1240,17 +1290,26 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
   `JoseSignatureVerifierTest`, the client contract and Management API cases for the new field,
   the confirmation page in `AuthPagesEscapingTest`.
 - **Not yet usable end to end:** the dashboard asks for Management API permissions in a user's
-  flow, which stays `access_denied` until roles exist (Step 10), and it renews tokens with a
-  refresh token (Step 11). It signs in once both land; pages whose API arrives later (roles,
-  connections, consents, sessions) light up with their step.
+  flow, which stays `access_denied` until roles exist (Step 10, done), and it renews tokens with
+  a refresh token (Step 11). It signs in once both land; pages whose API arrives later
+  (connections, consents, sessions) light up with their step.
 
 ### Phase C — Everything built after the chain
 
-#### [ ] Step 10 — RBAC
-- `Role`, `user_roles`, composite FK onto permissions; `enforce_policies` narrowing at redemption;
-  `access_denied` for a user holding nothing; Management API always enforces.
-- `/api/v1/roles/*`, `/users/{id}/roles`, `/users/{id}/permissions`; CLI `roles create|assign|list`.
-- Python: `db/models/rbac.py`, `api/roles.py`. Tests: `test_rbac` (17).
+#### [x] Step 10 — RBAC
+- `Role`, `user_roles`, `role_permissions` with a composite foreign key onto `permissions`
+  (migration `0016`); `enforce_policies` on APIs, always on for a system API; `access_denied`
+  at the authorization endpoint for somebody holding nothing, narrowing at redemption
+  (`invalid_grant` once nothing is held).
+- `/api/v1/roles` (CRUD), `/roles/{id}/users` (`GET`, `POST`), `/roles/{id}/users/{user_id}`
+  (`DELETE`), `/users/{id}/roles` (`GET`, `PUT`), `/users/{id}/permissions`; the four `roles`
+  scopes. CLI `roles:create|assign|list`; `seed-dev` gives the development user an
+  Administrator role.
+- Python: `db/models/rbac.py`, `api/roles.py`. Tests: `test_rbac` (17) — ported as `RbacTest`
+  (17 cases); `RoleTest`, `RolesTest`, `RoleCommandsTest`, `RoleRepositoryContract` against the
+  fakes and PostgreSQL, and the resource-server, seeding and contract cases for the new field.
+- The dashboard now gets a token for the Management API; it keeps one once refresh tokens
+  land (Step 11).
 
 #### [ ] Step 11 — Refresh token rotation
 - `RefreshToken` + `family_id`, spend under lock, replay revokes the family and its access

@@ -220,6 +220,43 @@ final class ResourceServerTest extends TestCase
         self::assertSame(['b', 'c'], $api->permissionScopes()->toList());
     }
 
+    public function testRolesAreOffUntilTurnedOnAndSurviveOtherChanges(): void
+    {
+        $api = $this->api(['a']);
+        self::assertFalse($api->enforcePolicies);
+
+        $enforcing = $api->enforcingPolicies(true);
+
+        self::assertTrue($enforcing->enforcePolicies);
+        self::assertTrue($enforcing->renamed('Billing')->enforcePolicies);
+        self::assertTrue($enforcing->withPermissions([Permission::of('b')])->enforcePolicies);
+        self::assertFalse($enforcing->enforcingPolicies(false)->enforcePolicies);
+    }
+
+    public function testASystemApiAlwaysEnforcesRoles(): void
+    {
+        $system = $this->api(['a'])->asSystem('Management', [Permission::of('a')]);
+        self::assertTrue($system->enforcePolicies);
+        self::assertTrue($system->renamed('Admin')->enforcingPolicies(true)->enforcePolicies);
+
+        $this->expectException(SystemApiProtected::class);
+        $system->enforcingPolicies(false);
+    }
+
+    public function testASystemApiCannotBeBuiltWithoutRoles(): void
+    {
+        $this->expectException(InvalidValue::class);
+
+        ResourceServer::register(
+            ResourceServerId::fromString('rs_aaaaaaaaaaaaaaaa'),
+            Audience::fromString('https://management.example/api/v1/'),
+            'Management',
+            [],
+            new DateTimeImmutable('2026-01-15T10:00:00Z'),
+            isSystem: true,
+        );
+    }
+
     /**
      * @param list<string> $permissions
      */

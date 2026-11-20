@@ -1,5 +1,5 @@
 /**
- * The Management API's permissions, mirrored from `clavia.api.scopes`.
+ * The Management API's permissions, mirrored from `ManagementPermission` on the server.
  *
  * Mirrored rather than fetched because the dashboard has to name them *before* it
  * holds a token — they are what it asks for at sign-in. A scope added on the server
@@ -14,7 +14,8 @@ export const RESOURCE_ACTIONS = {
   clients: ACTIONS,
   resource_servers: ACTIONS,
   roles: ACTIONS,
-  connections: ACTIONS,
+  // `connections` joins when the server defines it (Step 13): it refuses a scope it does
+  // not define, so asking for it now would fail every sign-in with `invalid_scope`.
 } as const satisfies Record<string, readonly (typeof ACTIONS)[number][]>;
 
 export const RESOURCES = Object.keys(RESOURCE_ACTIONS) as (keyof typeof RESOURCE_ACTIONS)[];

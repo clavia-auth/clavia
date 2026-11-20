@@ -41,6 +41,17 @@ final readonly class ManagementResponder
     }
 
     /**
+     * A JSON array: a collection small enough by nature to be sent whole, such as the
+     * roles of one account.
+     *
+     * @param list<array<string, mixed>> $items
+     */
+    public function jsonList(array $items): ResponseInterface
+    {
+        return new JsonResponse($items, 200, self::NO_STORE, self::JSON_FLAGS);
+    }
+
+    /**
      * @param array<string, mixed> $document
      * @param string               $location Where the new resource is read: an absolute path.
      */

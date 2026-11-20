@@ -26,12 +26,17 @@ use Throwable;
 /**
  * APIs in `resource_servers`, their permissions in `permissions`.
  *
- * Saving replaces the permission rows as a whole, inside a transaction of its own (or
- * of the caller's), so an API is never seen with half its permissions.
+ * Saving reconciles the permission rows with the API's, inside a transaction of its own
+ * (or of the caller's), so an API is never seen with half its permissions. Reconciles
+ * rather than replaces: roles hold a permission by a foreign key onto its row, so a row
+ * deleted and inserted again would have taken every role's grant of it along.
+ *
+ * @psalm-type ResourceServerRow = array{id: string, identifier: string, name: string, is_system: bool,
+ *     enforce_policies: bool, created_at: string}
  */
 final readonly class PhpDbResourceServerRepository implements ResourceServerRepository
 {
-    private const string COLUMNS = 'id, identifier, name, is_system, created_at';
+    private const string COLUMNS = 'id, identifier, name, is_system, enforce_policies, created_at';
 
     public function __construct(
         private Database $database,
@@ -82,7 +87,7 @@ final readonly class PhpDbResourceServerRepository implements ResourceServerRepo
             'SELECT count(*) FROM resource_servers ' . $search->where,
             $search->parameters,
         );
-        /** @var list<array{id: string, identifier: string, name: string, is_system: bool, created_at: string}> $rows */
+        /** @var list<ResourceServerRow> $rows */
         $rows = $this->database->fetchAll(
             'SELECT ' . self::COLUMNS . ' FROM resource_servers ' . $search->where
             . ' ORDER BY created_at DESC, id LIMIT :limit OFFSET :offset',
@@ -97,9 +102,12 @@ final readonly class PhpDbResourceServerRepository implements ResourceServerRepo
         /** @var mixed $stored */
         $stored = $this->database->fetchValue(
             <<<'SQL'
-                INSERT INTO resource_servers (id, identifier, name, is_system, created_at)
-                VALUES (:id, :identifier, :name, :is_system, :created_at)
-                ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, is_system = EXCLUDED.is_system
+                INSERT INTO resource_servers (id, identifier, name, is_system, enforce_policies, created_at)
+                VALUES (:id, :identifier, :name, :is_system, :enforce_policies, :created_at)
+                ON CONFLICT (id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    is_system = EXCLUDED.is_system,
+                    enforce_policies = EXCLUDED.enforce_policies
                 RETURNING identifier
                 SQL,
             [
@@ -107,6 +115,7 @@ final readonly class PhpDbResourceServerRepository implements ResourceServerRepo
                 'identifier' => $resourceServer->identifier->value,
                 'name' => $resourceServer->name,
                 'is_system' => $resourceServer->isSystem,
+                'enforce_policies' => $resourceServer->enforcePolicies,
                 'created_at' => Timestamp::toDatabase($resourceServer->createdAt),
             ],
         );
@@ -115,15 +124,28 @@ final readonly class PhpDbResourceServerRepository implements ResourceServerRepo
             throw new LogicException("An API's identifier cannot change.");
         }
 
-        $this->database->execute(
-            'DELETE FROM permissions WHERE resource_server_id = :id',
-            ['id' => $resourceServer->id->value],
+        $wanted = array_map(
+            static fn (Permission $permission): string => $permission->value->value,
+            $resourceServer->permissions,
         );
+        /** @var list<string> $existing */
+        $existing = array_column($this->database->fetchAll(
+            'SELECT value FROM permissions WHERE resource_server_id = :id',
+            ['id' => $resourceServer->id->value],
+        ), 'value');
+        foreach (array_diff($existing, $wanted) as $dropped) {
+            // Cascades to every role that granted it.
+            $this->database->execute(
+                'DELETE FROM permissions WHERE resource_server_id = :id AND value = :value',
+                ['id' => $resourceServer->id->value, 'value' => $dropped],
+            );
+        }
         foreach ($resourceServer->permissions as $permission) {
             $this->database->execute(
                 <<<'SQL'
                     INSERT INTO permissions (resource_server_id, value, description)
                     VALUES (:id, :value, :description)
+                    ON CONFLICT (resource_server_id, value) DO UPDATE SET description = EXCLUDED.description
                     SQL,
                 [
                     'id' => $resourceServer->id->value,
@@ -136,7 +158,7 @@ final readonly class PhpDbResourceServerRepository implements ResourceServerRepo
 
     private function one(string $condition, string $key): ?ResourceServer
     {
-        /** @var array{id: string, identifier: string, name: string, is_system: bool, created_at: string}|null $row */
+        /** @var ResourceServerRow|null $row */
         $row = $this->database->fetchOne(
             'SELECT ' . self::COLUMNS . ' FROM resource_servers WHERE ' . $condition,
             ['key' => $key],
@@ -146,7 +168,7 @@ final readonly class PhpDbResourceServerRepository implements ResourceServerRepo
     }
 
     /**
-     * @param array{id: string, identifier: string, name: string, is_system: bool, created_at: string} $row
+     * @param ResourceServerRow $row
      */
     private function hydrate(array $row): ResourceServer
     {
@@ -169,6 +191,7 @@ final readonly class PhpDbResourceServerRepository implements ResourceServerRepo
             ),
             Timestamp::fromDatabase($row['created_at']),
             $row['is_system'],
+            $row['enforce_policies'],
         );
     }
 }

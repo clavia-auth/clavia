@@ -154,7 +154,20 @@ trait ResourceServerRepositoryContract
         $this->resourceServers()->save($api->asSystem('Management', $api->permissions));
 
         self::assertTrue($this->resourceServers()->find($api->id)?->isSystem);
+        self::assertTrue($this->resourceServers()->find($api->id)?->enforcePolicies);
         self::assertTrue($this->resourceServers()->page(PageRequest::of())->items[0]->isSystem);
+    }
+
+    #[Test]
+    public function whetherAnApiEnforcesRolesIsKept(): void
+    {
+        $api = $this->anApi('https://invoices.example/api/', ['a']);
+        $this->resourceServers()->save($api);
+        self::assertFalse($this->resourceServers()->find($api->id)?->enforcePolicies);
+
+        $this->resourceServers()->save($api->enforcingPolicies(true));
+
+        self::assertTrue($this->resourceServers()->find($api->id)?->enforcePolicies);
     }
 
     #[Test]

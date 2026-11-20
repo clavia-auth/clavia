@@ -37,6 +37,7 @@ use ClaviaTest\Support\Fake\InMemoryClientRepository;
 use ClaviaTest\Support\Fake\InMemoryLoginStateStore;
 use ClaviaTest\Support\Fake\InMemoryNonceRegistry;
 use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
+use ClaviaTest\Support\Fake\InMemoryRoleRepository;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -52,6 +53,7 @@ final class AuthorizeTest extends TestCase
     private InMemoryLoginStateStore $loginStates;
     private InMemoryNonceRegistry $nonces;
     private InMemoryResourceServerRepository $resourceServers;
+    private InMemoryRoleRepository $roles;
     private Authorize $authorize;
     private UserId $userId;
 
@@ -65,6 +67,7 @@ final class AuthorizeTest extends TestCase
         $this->loginStates = new InMemoryLoginStateStore($clock);
         $this->nonces = new InMemoryNonceRegistry($clock);
         $this->resourceServers = new InMemoryResourceServerRepository();
+        $this->roles = new InMemoryRoleRepository($this->resourceServers);
         $this->userId = UserId::generate(new SeededRandomSource(2));
         $this->authorize = new Authorize(
             $this->clients,
@@ -72,6 +75,7 @@ final class AuthorizeTest extends TestCase
             $this->loginStates,
             $this->nonces,
             $this->resourceServers,
+            $this->roles,
             new SecretGenerator($random),
             $random,
             $clock,
@@ -369,6 +373,7 @@ final class AuthorizeTest extends TestCase
             $this->loginStates,
             $raced,
             $this->resourceServers,
+            $this->roles,
             new SecretGenerator($random),
             $random,
             new FrozenClock(),
