@@ -12,7 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Secrets\GenerateEncryptionKey;
-use Clavia\Ui\Cli\GenerateEncryptionKeyCommand;
+use Clavia\Adapter\Primary\Cli\GenerateEncryptionKeyCommand;
 use Psr\Container\ContainerInterface;
 
 final class GenerateEncryptionKeyCommandFactory

@@ -37,15 +37,15 @@ final class DependencyRuleTest extends TestCase
         self::assertSame([], $this->foreignImports('src/Configuration', ['Clavia\\Configuration\\']));
     }
 
-    public function testTheDrivingAdaptersNeverReachADrivenAdapter(): void
+    public function testThePrimaryAdaptersNeverReachASecondaryAdapter(): void
     {
         $offenders = [];
-        foreach (SourceFiles::in(['src/Ui']) as $file) {
+        foreach (SourceFiles::in(['src/Adapter/Primary']) as $file) {
             foreach (SourceFiles::imports($file) as $import) {
-                $reachesInfrastructure = str_starts_with($import, 'Clavia\\Infrastructure\\');
+                $reachesSecondary = str_starts_with($import, 'Clavia\\Adapter\\Secondary\\');
                 $reachesBootstrap = str_starts_with($import, 'Clavia\\Bootstrap\\');
 
-                if ($reachesInfrastructure || $reachesBootstrap) {
+                if ($reachesSecondary || $reachesBootstrap) {
                     $offenders[] = sprintf('%s imports %s', $this->relative($file), $import);
                 }
             }
@@ -56,7 +56,9 @@ final class DependencyRuleTest extends TestCase
 
     public function testTheImportScannerSeesWhatAFileImports(): void
     {
-        $imports = SourceFiles::imports(SourceFiles::PROJECT_ROOT . '/src/Ui/Http/Shared/HealthHandler.php');
+        $imports = SourceFiles::imports(
+            SourceFiles::PROJECT_ROOT . '/src/Adapter/Primary/Http/Shared/HealthHandler.php',
+        );
 
         self::assertContains('Psr\\Http\\Server\\RequestHandlerInterface', $imports);
     }

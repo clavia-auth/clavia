@@ -12,7 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Configuration\Settings;
-use Clavia\Ui\Http\OAuth2\OAuth2Responder;
+use Clavia\Adapter\Primary\Http\OAuth2\OAuth2Responder;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
 

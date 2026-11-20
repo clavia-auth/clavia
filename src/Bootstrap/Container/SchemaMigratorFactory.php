@@ -12,8 +12,8 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Domain\Shared\Clock;
-use Clavia\Infrastructure\Persistence\Migrations\SqlFileMigrator;
-use Clavia\Infrastructure\Persistence\PhpDb\Database;
+use Clavia\Adapter\Secondary\Persistence\Migrations\SqlFileMigrator;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use Psr\Container\ContainerInterface;
 
 final class SchemaMigratorFactory

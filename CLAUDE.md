@@ -59,7 +59,7 @@ What exists:
 - **Technical ports** (`src/Application/Port`): `TransactionManager`, `PasswordHasher`,
   `SecretCipher`, `SchemaMigrator` and their exceptions. One use case so far:
   `Application\Secrets\GenerateEncryptionKey`.
-- **Driven adapters** (`src/Infrastructure`): `System\SystemClock`/`SystemRandomSource`;
+- **Secondary adapters** (`src/Adapter/Secondary`): `System\SystemClock`/`SystemRandomSource`;
   `Crypto\BcryptPasswordHasher` (cost 12) and `Crypto\AesGcmSecretCipher`;
   `Persistence\PhpDb\Database` (the one door to PostgreSQL), `PostgresUrl`,
   `PhpDbTransactionManager`; `Persistence\Migrations\SqlFileMigrator`; `Redis\RedisConnection`
@@ -85,10 +85,10 @@ What exists:
     and `Token\AuthorizationCodeGrant`; `RequestParameters` (keeps repetitions);
     `Authentication\DevelopmentAutoLogin`; `Development\SeedDevelopmentData` and
     `BuildAuthorizationUrl`; the `LoginStateStore` port.
-  - `Infrastructure\Persistence\PhpDb\PhpDb{User,Client,AuthorizationCode,AccessToken}Repository`,
-    `Timestamp`; `Infrastructure\Redis\RedisLoginStateStore`.
-  - `Ui\Http\OAuth2\{AuthorizeHandler,TokenHandler,OAuth2Responder}`,
-    `Ui\Http\Shared\RequestParameterReader`, `Ui\Cli\{SeedDevelopmentData,AuthorizeUrl}Command`.
+  - `Adapter\Secondary\Persistence\PhpDb\PhpDb{User,Client,AuthorizationCode,AccessToken}Repository`,
+    `Timestamp`; `Adapter\Secondary\Redis\RedisLoginStateStore`.
+  - `Adapter\Primary\Http\OAuth2\{AuthorizeHandler,TokenHandler,OAuth2Responder}`,
+    `Adapter\Primary\Http\Shared\RequestParameterReader`, `Adapter\Primary\Cli\{SeedDevelopmentData,AuthorizeUrl}Command`.
   - Migrations `0001_users` … `0004_oauth2_access_tokens`.
 
 Conventions established in Step 0 that later steps keep:
@@ -103,7 +103,7 @@ Conventions established in Step 0 that later steps keep:
   anywhere else in `src/`.
 - **A new setting is a constructor parameter of `Settings`** — with a default, a doc comment
   saying why it exists, a `#[Range]` when it is a number, and a test. Nothing else needs editing.
-- **A new console command** is a `symfony/console` command in `Ui\Cli`, a factory, and one line
+- **A new console command** is a `symfony/console` command in `Adapter\Primary\Cli`, a factory, and one line
   in `ConfigProvider::CONSOLE_COMMANDS`. `bin/clavia` refuses to run any command on an invalid
   configuration (exit 78) and prints `Settings::warnings()` to stderr.
 - **JSON responses use the standard tooling** (Diactoros `JsonResponse`, or a thin PSR-17-based
@@ -137,7 +137,7 @@ Conventions established in Step 1:
   without it `$` accepts a trailing newline.
 - **Never read a value back from an array key.** PHP turns an all-digit string key into an
   integer (`'10'` → `10`); `ScopeSet` and the migrator keep keys for lookup only.
-- **Every repository goes through `Infrastructure\Persistence\PhpDb\Database`**: SQL written
+- **Every repository goes through `Adapter\Secondary\Persistence\PhpDb\Database`**: SQL written
   out, named parameters (`:client_id`), plain rows back. `fetchAll` / `fetchOne` / `fetchValue`
   / `execute` (returns the affected-row count — the answer to "did I win?" for a conditional
   `UPDATE … WHERE used_at IS NULL`). The library's query builder is reachable through
@@ -178,7 +178,7 @@ Conventions established in Step 2:
 - **A use case is an invokable class named for what it does** (`Authorize`, `IssueToken`),
   taking one request object and returning a result object. Expected outcomes are return values
   (`CodeIssued | RequestRefused | LoginRequired`); `OAuth2Error` is thrown only where the
-  protocol answers with an error document. `Ui` turns both into HTTP and decides nothing.
+  protocol answers with an error document. The primary adapter turns both into HTTP and decides nothing.
 - **The authorization endpoint settles the client and the redirect URI before anything else,
   and throws if it cannot** — that error is shown, never redirected. Everything validated
   afterwards is reported *to* the registered redirect URI with `state` and `iss`. Validation
@@ -224,7 +224,7 @@ Conventions established in Step 2:
 - **Development-only code checks for itself.** `DevelopmentAutoLogin` and
   `SeedDevelopmentData` receive `isDevelopment` and throw outside it, on top of the settings
   validation that already forbids the combination.
-- **OAuth2 responses go through `Ui\Http\OAuth2\OAuth2Responder`**, built on Diactoros
+- **OAuth2 responses go through `Adapter\Primary\Http\OAuth2\OAuth2Responder`**, built on Diactoros
   `JsonResponse` and a PSR-17 `ResponseFactoryInterface`. Token-endpoint errors are 400, or 401
   with `WWW-Authenticate` for `invalid_client`; an authorization-endpoint error that cannot be
   redirected is a plain 400 and never a challenge (a browser would prompt for a client secret).
@@ -272,8 +272,9 @@ Step 3 exists, set `CLAVIA_DEV_AUTOLOGIN_EMAIL=dev@{domain}` in `.env` and follo
 | Topic | Decision |
 |---|---|
 | Language | PHP 8.5, `declare(strict_types=1)` everywhere |
-| HTTP | **Mezzio** (PSR-7/11/15, laminas-servicemanager, FastRoute) — as a driving adapter only |
+| HTTP | **Mezzio** (PSR-7/11/15, laminas-servicemanager, FastRoute) — as a primary adapter only |
 | Architecture | **Strict hexagonal** (ports & adapters) + DDD tactical patterns, enforced by tooling |
+| Adapter naming | `Clavia\Adapter\Primary` (driving: HTTP, CLI) and `Clavia\Adapter\Secondary` (driven: persistence, Redis, crypto…) — Cockburn's terms; no `Ui` / `Infrastructure` |
 | OAuth2/OIDC engine | **Own implementation, inside Clavia**, written from the RFCs in the domain/application layers. No league/oauth2-server, no external protocol library |
 | Persistence | PostgreSQL through **`php-db/phpdb-pgsql`** (on `php-db/phpdb`), behind repository ports |
 | Migrations | Plain SQL files, **written step by step** as each feature needs its tables — no upfront schema |
@@ -290,7 +291,7 @@ Step 3 exists, set `CLAVIA_DEV_AUTOLOGIN_EMAIL=dev@{domain}` in `.env` and follo
 Three rings. Dependencies point inward only; nothing in an inner ring knows an outer one exists.
 
 ```
-            driving adapters                                  driven adapters
+            primary adapters                                  secondary adapters
  ┌──────────────────────────────┐                    ┌──────────────────────────────┐
  │ Http (Mezzio handlers,       │                    │ Persistence (phpdb-pgsql)    │
  │   middleware, HTML pages)    │                    │ Redis stores                 │
@@ -330,13 +331,16 @@ src/
     Port/                     #   technical outbound ports: TokenSigner, SecretCipher, PasswordHasher,
                               #   TransactionManager, SchemaMigrator, Mailer, OutboundHttp,
                               #   OutboundUrlPolicy, DeferredTasks, *Store (Redis-shaped state)
-  Infrastructure/             # driven adapters. Implements Domain + Application ports.
-    Persistence/PhpDb/        #   Database (the one door to PostgreSQL), repositories, mappers
-    Persistence/Migrations/   #   SqlFileMigrator
-    Redis/  Signing/  Crypto/  Mail/  HttpClient/  System/ (clock, random, deferred)
-  Ui/                         # driving adapters. Calls Application use cases only.
-    Http/OAuth2/  Http/Oidc/  Http/Auth/  Http/Management/  Http/Shared/ (middleware)
-    Cli/
+  Adapter/                    # everything that touches the outside world, in two kinds.
+    Primary/                  #   primary (driving) adapters: what calls the application.
+                              #   Calls Application use cases only.
+      Http/OAuth2/  Http/Oidc/  Http/Auth/  Http/Management/  Http/Shared/ (middleware)
+      Cli/
+    Secondary/                #   secondary (driven) adapters: what the application calls.
+                              #   Implements Domain + Application ports.
+      Persistence/PhpDb/      #     Database (the one door to PostgreSQL), repositories, mappers
+      Persistence/Migrations/ #     SqlFileMigrator
+      Redis/  Signing/  Crypto/  Mail/  HttpClient/  System/ (clock, random, deferred)
   Configuration/              # the typed CLAVIA_* settings. Plain data; depends on nothing.
   Bootstrap/                  # composition root: ConfigProvider + one factory per service.
 config/                       # Mezzio entry files: config, container, pipeline, routes
@@ -345,7 +349,7 @@ public/                       # index.php, auth/static/ (auth.css, icon — serv
 frontend/                     # the React dashboard, copied from the Python project
 migrations/  docs/
 test/
-  Unit/ (Domain, Application with in-memory adapters)   Integration/ (each driven adapter)
+  Unit/ (Domain, Application with in-memory adapters)   Integration/ (each secondary adapter)
   Acceptance/ (ported Python tests, through the PSR-15 pipeline)
   Support/ (Fake/ doubles, Contract/ shared suites, the three base test cases)
 ```
@@ -363,7 +367,7 @@ test/
    `RefreshTokenRepository::lockForRedemption(Digest)` — not `selectForUpdate()`.
 4. **Adapters never call each other.** An HTTP handler does not touch a repository or Redis; a
    repository does not sign tokens. Cross-cutting needs go through a use case or a port.
-5. **Driving adapters are translators.** A Mezzio handler does exactly: parse and validate the
+5. **Primary adapters are translators.** A Mezzio handler does exactly: parse and validate the
    transport shape → build a Command → call one use case → map Result/exception to a response.
    Protocol decisions (which OAuth2 error, whether consent is needed, scope narrowing) are domain
    or application code; *encoding* them (redirect vs JSON, `WWW-Authenticate`) is the adapter's.
@@ -380,7 +384,7 @@ test/
 
 ### Enforcement
 
-- **deptrac** (`deptrac.yaml`; layers Domain, Application, Infrastructure, Ui, Configuration,
+- **deptrac** (`deptrac.yaml`; layers Domain, Application, PrimaryAdapter, SecondaryAdapter, Configuration,
   Bootstrap, plus a Vendor layer that Domain, Application and Configuration may not touch) runs
   in `composer check` and CI. Adding an exception to its config requires a note in this file.
 - **Psalm** at level 1, no baseline. **PHPCS** PSR-12. **PHPUnit** 12.
@@ -404,7 +408,7 @@ test/
 | `pwdlib[bcrypt]` | `password_hash(PASSWORD_BCRYPT)` behind `PasswordHasher` | |
 | `joserfc` | `web-token/jwt-library` — **verification and JWK handling only** | Never used to sign. |
 | `qrcode` (SVG) | `bacon/bacon-qr-code` SVG writer | Server-side only. |
-| Typer CLI | `symfony/console` commands in `Ui/Cli`, run by `bin/clavia` | Same command names: `clavia seed-dev`, `keys rotate`, … |
+| Typer CLI | `symfony/console` commands in `Adapter/Primary/Cli`, run by `bin/clavia` | Same command names: `clavia seed-dev`, `keys rotate`, … |
 | uvicorn `--forwarded-allow-ips` | `CLAVIA_TRUSTED_PROXIES`, applied when the request is built | Empty by default: over FastCGI the web server reports the scheme itself. |
 | pytest, `db-test` :5434, Redis db 1 | PHPUnit, same databases, real migrations | Acceptance tests run the PSR-15 pipeline in-process. |
 
@@ -422,7 +426,7 @@ correctness properties (single-use codes, refresh-token rotation under `SELECT �
 family revocation) sit on it. Step 1 therefore pins an exact commit in `composer.lock`, and
 proves with integration tests that transactions, row locking and `RETURNING` behave as needed
 before anything depends on them. Persistence is behind ports, so an API break in a 0.x release
-touches `Infrastructure/Persistence/PhpDb` and nothing else.
+touches `Adapter/Secondary/Persistence/PhpDb` and nothing else.
 
 ## Auth pages
 
@@ -433,7 +437,7 @@ no Twig, no template engine, no front-end framework, no JavaScript.
   `button`, `connection-list`). A repeated block becomes a partial, never a copy.
 - Templates are HTML with the minimum of PHP needed to print a value or loop; no logic beyond
   that — the handler passes a ready-made view model.
-- A small `PageRenderer` in `Ui/Http/Shared` renders them, escapes every value by default and
+- A small `PageRenderer` in `Adapter/Primary/Http/Shared` renders them, escapes every value by default and
   attaches the per-page CSP.
 - One stylesheet, `public/auth/static/auth.css` (served at `/auth/static/auth.css`), copied from the Python project; light/dark through
   custom properties; the theme toggle stays a POST.
@@ -683,7 +687,7 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
   scope column), `AuthorizationRequest` validation, `Pkce` (S256 only), `AuthorizationCode`,
   opaque `AccessToken`, `OAuth2Error` taxonomy (RFC 6749 §4.1.2.1/§5.2).
 - Application: `Authorize`, `IssueToken` + `AuthorizationCodeGrant`, `ClientAuthenticator`.
-- Ui: `GET /oauth2/authorize`, `POST /oauth2/token`; `state` echoed on every error redirect;
+- Primary adapters: `GET /oauth2/authorize`, `POST /oauth2/token`; `state` echoed on every error redirect;
   RFC 9207 `iss`; `WWW-Authenticate` on 401; exact redirect-URI match; a replayed code revokes
   what it issued. Dev auto-login (`CLAVIA_DEV_AUTOLOGIN_EMAIL`) as a development-only adapter.
 - CLI: `seed-dev` (first version), `authorize-url`. First migrations: `users`, `oauth2_clients`,
@@ -699,7 +703,7 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
 - Domain: `Session` (idle + absolute lifetime, `sid`, `amr`, `connection`), `LoginState`,
   throttling policy, redirect-target validation.
 - Ports: `SessionStore`, `LoginStateStore`, `AttemptCounter` (Redis adapters).
-- Ui: `GET/POST /auth/login`, `POST /auth/logout`, `POST /auth/theme`; `templates/` layout + `login` page, page renderer;
+- Primary adapters: `GET/POST /auth/login`, `POST /auth/logout`, `POST /auth/theme`; `templates/` layout + `login` page, page renderer;
   per-page CSP builder; per-browser CSRF double-submit; host-only cookie; session rotation.
 - Python: `auth/{router,sessions,login_state,throttle,redirects,pages,current_user}.py`,
   `forms.py`, `templates/`.
@@ -709,7 +713,7 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
 - Domain: `IdTokenClaims` (incl. `at_hash`, `nonce`, `auth_time`, `amr`), shared
   `identityClaims` for ID token and userinfo, `SigningKey` lifecycle (active/retired + grace).
 - Port: `TokenSigner` (`sign`, `publicJwks`). Adapter: postgres backend, compact JWS built by hand.
-- Ui: both `/.well-known/*` documents, `/oidc/jwks.json`, `/oidc/userinfo`; nonce replay guard.
+- Primary adapters: both `/.well-known/*` documents, `/oidc/jwks.json`, `/oidc/userinfo`; nonce replay guard.
 - CLI: `keys:generate|rotate|list`.
 - Python: `oidc/{router,grant,claims,keys,nonce}.py`, `oidc/signing/{__init__,_core,postgres}.py`.
 - Tests: `test_oidc` (26), postgres part of `test_signing_backends`.
@@ -722,7 +726,7 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
 #### [ ] Step 6 — Management API, resource servers, audiences
 - Domain: `ResourceServer`, `Permission` keyed `(resource_server, value)`, `ClientGrant`,
   audience rules (a machine client holding a grant must name an audience).
-- Ui/Http/Management: bearer middleware (`aud` checked before scope, RFC 6750 challenges),
+- Primary adapter (`Http/Management`): bearer middleware (`aud` checked before scope, RFC 6750 challenges),
   OpenAPI validation, pagination, `/api/v1/{users,clients,resource-servers}`, secret rotation.
 - Write `docs/openapi/management-api.yaml` from `api/schemas.py`; it validates requests *and* is
   asserted against responses in the acceptance tests.
@@ -733,13 +737,13 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
 #### [ ] Step 7 — MFA (TOTP)
 - Domain: own RFC 6238 `Totp` (single-use by time step), `RecoveryCode` digests, enrollment.
 - Ports: `MfaChallengeStore`, `QrRenderer`. Seeds encrypted through `SecretCipher`.
-- Ui: `/auth/mfa`, `/auth/mfa/enroll`, `/enroll/confirm`, `/disable`; `DELETE /users/{id}/mfa`.
+- Primary adapters: `/auth/mfa`, `/auth/mfa/enroll`, `/enroll/confirm`, `/disable`; `DELETE /users/{id}/mfa`.
 - Python: `mfa/*`, `db/models/mfa.py`. Tests: `test_mfa` (17).
 
 #### [ ] Step 8 — Social login
 - Domain: `ExternalIdentity` keyed `(provider, subject)`, linking policy (verified email only,
   ambiguity refused). Port: `IdentityProvider::fetchIdentity()`; adapters Google, GitHub.
-- Ui: `/auth/social/{provider}` and `/callback`; `state` paired with a cookie; provider errors
+- Primary adapters: `/auth/social/{provider}` and `/callback`; `state` paired with a cookie; provider errors
   never echoed.
 - Python: `social/*`, `db/models/identity.py`. Tests: `test_social_login` (18).
 

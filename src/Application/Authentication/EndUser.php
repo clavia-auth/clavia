@@ -15,7 +15,7 @@ use Clavia\Domain\Identity\UserId;
 
 /**
  * The person on whose behalf a request is being made: the resource owner, as far as
- * the driving adapter could establish.
+ * the primary adapter could establish.
  *
  * The authorization endpoint cannot issue a code until it knows *which* user is
  * granting it; this is that answer, so the endpoint never has to know how

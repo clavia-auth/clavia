@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
-use Clavia\Ui\Http\Shared\MethodNotAllowedMiddleware;
+use Clavia\Adapter\Primary\Http\Shared\MethodNotAllowedMiddleware;
 use Psr\Container\ContainerInterface;
 
 final class MethodNotAllowedMiddlewareFactory

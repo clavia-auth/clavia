@@ -11,8 +11,8 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Integration\Redis;
 
-use Clavia\Infrastructure\Redis\Keys;
-use Clavia\Infrastructure\Redis\RedisConnection;
+use Clavia\Adapter\Secondary\Redis\Keys;
+use Clavia\Adapter\Secondary\Redis\RedisConnection;
 use ClaviaTest\Support\IntegrationTestCase;
 use ClaviaTest\Support\TestEnvironment;
 use InvalidArgumentException;

@@ -9,9 +9,9 @@
 
 declare(strict_types=1);
 
-use Clavia\Ui\Http\OAuth2\AuthorizeHandler;
-use Clavia\Ui\Http\OAuth2\TokenHandler;
-use Clavia\Ui\Http\Shared\HealthHandler;
+use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
+use Clavia\Adapter\Primary\Http\OAuth2\TokenHandler;
+use Clavia\Adapter\Primary\Http\Shared\HealthHandler;
 use Mezzio\Application;
 
 /**

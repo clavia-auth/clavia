@@ -13,9 +13,9 @@ namespace ClaviaTest\Integration\Redis;
 
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Domain\Authentication\LoginState;
-use Clavia\Infrastructure\Redis\Keys;
-use Clavia\Infrastructure\Redis\RedisConnection;
-use Clavia\Infrastructure\Redis\RedisLoginStateStore;
+use Clavia\Adapter\Secondary\Redis\Keys;
+use Clavia\Adapter\Secondary\Redis\RedisConnection;
+use Clavia\Adapter\Secondary\Redis\RedisLoginStateStore;
 use ClaviaTest\Support\Contract\LoginStateStoreContract;
 use ClaviaTest\Support\IntegrationTestCase;
 use ClaviaTest\Support\TestEnvironment;

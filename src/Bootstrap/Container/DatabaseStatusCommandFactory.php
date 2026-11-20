@@ -12,7 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Port\SchemaMigrator;
-use Clavia\Ui\Cli\DatabaseStatusCommand;
+use Clavia\Adapter\Primary\Cli\DatabaseStatusCommand;
 use Psr\Container\ContainerInterface;
 
 final class DatabaseStatusCommandFactory

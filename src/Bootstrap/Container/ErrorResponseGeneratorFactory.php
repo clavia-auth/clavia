@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
-use Clavia\Ui\Http\Shared\ErrorResponseGenerator;
+use Clavia\Adapter\Primary\Http\Shared\ErrorResponseGenerator;
 use Psr\Http\Message\StreamFactoryInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Container\ContainerInterface;

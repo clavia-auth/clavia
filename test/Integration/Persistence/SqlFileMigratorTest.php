@@ -13,8 +13,8 @@ namespace ClaviaTest\Integration\Persistence;
 
 use Clavia\Application\Port\MigrationStatus;
 use Clavia\Application\Port\SchemaMigrationFailed;
-use Clavia\Infrastructure\Persistence\Migrations\SqlFileMigrator;
-use Clavia\Infrastructure\Persistence\PhpDb\Database;
+use Clavia\Adapter\Secondary\Persistence\Migrations\SqlFileMigrator;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\IntegrationTestCase;
 

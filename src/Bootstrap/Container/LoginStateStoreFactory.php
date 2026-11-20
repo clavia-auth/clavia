@@ -11,8 +11,8 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
-use Clavia\Infrastructure\Redis\RedisConnection;
-use Clavia\Infrastructure\Redis\RedisLoginStateStore;
+use Clavia\Adapter\Secondary\Redis\RedisConnection;
+use Clavia\Adapter\Secondary\Redis\RedisLoginStateStore;
 use Psr\Container\ContainerInterface;
 
 final class LoginStateStoreFactory

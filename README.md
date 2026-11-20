@@ -19,8 +19,8 @@ Strict hexagonal (ports and adapters), enforced by the build:
 |---|---|---|
 | `Clavia\Domain` | Aggregates, value objects, policies, repository interfaces | nothing |
 | `Clavia\Application` | Use cases and technical ports | `Domain` |
-| `Clavia\Infrastructure` | Driven adapters: PostgreSQL, Redis, signing, mail… | `Domain`, `Application`, libraries |
-| `Clavia\Ui` | Driving adapters: HTTP (Mezzio, PSR-15) and the console | `Domain`, `Application`, libraries |
+| `Clavia\Adapter\Primary` | Primary (driving) adapters — what calls the application: HTTP (Mezzio, PSR-15) and the console | `Domain`, `Application`, libraries |
+| `Clavia\Adapter\Secondary` | Secondary (driven) adapters — what the application calls: PostgreSQL, Redis, signing, mail… | `Domain`, `Application`, libraries |
 | `Clavia\Configuration` | The typed `CLAVIA_*` settings | nothing |
 | `Clavia\Bootstrap` | Composition root: wires adapters to ports | everything |
 

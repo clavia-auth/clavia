@@ -11,8 +11,8 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Integration\Persistence;
 
-use Clavia\Infrastructure\Persistence\PhpDb\Database;
-use Clavia\Infrastructure\Persistence\PhpDb\PhpDbTransactionManager;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbTransactionManager;
 use ClaviaTest\Support\IntegrationTestCase;
 use RuntimeException;
 use Throwable;

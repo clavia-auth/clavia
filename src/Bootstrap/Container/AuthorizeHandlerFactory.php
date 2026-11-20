@@ -13,8 +13,8 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Authentication\DevelopmentAutoLogin;
 use Clavia\Application\OAuth2\Authorize\Authorize;
-use Clavia\Ui\Http\OAuth2\AuthorizeHandler;
-use Clavia\Ui\Http\OAuth2\OAuth2Responder;
+use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
+use Clavia\Adapter\Primary\Http\OAuth2\OAuth2Responder;
 use Psr\Container\ContainerInterface;
 
 final class AuthorizeHandlerFactory

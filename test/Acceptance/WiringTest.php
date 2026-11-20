@@ -18,7 +18,7 @@ use Clavia\Application\Port\TransactionManager;
 use Clavia\Bootstrap\ConfigProvider;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\RandomSource;
-use Clavia\Infrastructure\Persistence\PhpDb\Database;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use ClaviaTest\Support\AcceptanceTestCase;
 use Symfony\Component\Console\Application as ConsoleApplication;
 

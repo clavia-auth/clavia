@@ -11,8 +11,8 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
-use Clavia\Infrastructure\Persistence\PhpDb\Database;
-use Clavia\Infrastructure\Persistence\PhpDb\PhpDbAccessTokenRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbAccessTokenRepository;
 use Psr\Container\ContainerInterface;
 
 final class AccessTokenRepositoryFactory

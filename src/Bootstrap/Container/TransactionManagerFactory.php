@@ -11,8 +11,8 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
-use Clavia\Infrastructure\Persistence\PhpDb\Database;
-use Clavia\Infrastructure\Persistence\PhpDb\PhpDbTransactionManager;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbTransactionManager;
 use Psr\Container\ContainerInterface;
 
 final class TransactionManagerFactory

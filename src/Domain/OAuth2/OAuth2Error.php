@@ -19,7 +19,7 @@ use DomainException;
  * Carries the registered error code and a description written for the developer of the
  * client, never for an end user and never containing a secret. How the refusal travels —
  * a JSON body, a redirect back to the client, a `WWW-Authenticate` challenge — is the
- * driving adapter's business; which code applies is decided here, by the rule that was
+ * primary adapter's business; which code applies is decided here, by the rule that was
  * broken.
  */
 final class OAuth2Error extends DomainException

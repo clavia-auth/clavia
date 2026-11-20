@@ -13,7 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Development\SeedDevelopmentData;
 use Clavia\Configuration\Settings;
-use Clavia\Ui\Cli\SeedDevelopmentDataCommand;
+use Clavia\Adapter\Primary\Cli\SeedDevelopmentDataCommand;
 use Psr\Container\ContainerInterface;
 
 final class SeedDevelopmentDataCommandFactory

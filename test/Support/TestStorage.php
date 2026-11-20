@@ -11,11 +11,11 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Support;
 
-use Clavia\Infrastructure\Persistence\Migrations\SqlFileMigrator;
-use Clavia\Infrastructure\Persistence\PhpDb\Database;
-use Clavia\Infrastructure\Persistence\PhpDb\PostgresUrl;
-use Clavia\Infrastructure\Redis\RedisConnection;
-use Clavia\Infrastructure\System\SystemClock;
+use Clavia\Adapter\Secondary\Persistence\Migrations\SqlFileMigrator;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PostgresUrl;
+use Clavia\Adapter\Secondary\Redis\RedisConnection;
+use Clavia\Adapter\Secondary\System\SystemClock;
 use Redis;
 
 /**

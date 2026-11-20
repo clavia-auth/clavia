@@ -11,13 +11,13 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Support;
 
-use Clavia\Infrastructure\Persistence\PhpDb\Database;
-use Clavia\Infrastructure\Persistence\PhpDb\PostgresUrl;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PostgresUrl;
 use PHPUnit\Framework\TestCase;
 use Redis;
 
 /**
- * Base for tests of one driven adapter against the real PostgreSQL or Redis.
+ * Base for tests of one secondary adapter against the real PostgreSQL or Redis.
  *
  * Tests that need tables of their own get a scratch schema: a PostgreSQL schema created
  * for the test and dropped after it, so nothing they create can leak into the

@@ -12,7 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Port\SchemaMigrator;
-use Clavia\Ui\Cli\MigrateDatabaseCommand;
+use Clavia\Adapter\Primary\Cli\MigrateDatabaseCommand;
 use Psr\Container\ContainerInterface;
 
 final class MigrateDatabaseCommandFactory

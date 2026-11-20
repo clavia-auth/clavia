@@ -13,7 +13,7 @@ namespace ClaviaTest\Support;
 
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Configuration\Settings;
-use Clavia\Infrastructure\Crypto\BcryptPasswordHasher;
+use Clavia\Adapter\Secondary\Crypto\BcryptPasswordHasher;
 use Laminas\Diactoros\ServerRequest;
 use Laminas\Diactoros\Stream;
 use Laminas\ServiceManager\ServiceManager;

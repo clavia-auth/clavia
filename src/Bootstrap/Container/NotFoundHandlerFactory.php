@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
-use Clavia\Ui\Http\Shared\NotFoundHandler;
+use Clavia\Adapter\Primary\Http\Shared\NotFoundHandler;
 use Psr\Container\ContainerInterface;
 
 final class NotFoundHandlerFactory

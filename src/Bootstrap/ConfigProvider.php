@@ -23,11 +23,11 @@ use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
-use Clavia\Ui\Cli\AuthorizeUrlCommand;
-use Clavia\Ui\Cli\SeedDevelopmentDataCommand;
-use Clavia\Ui\Http\OAuth2\AuthorizeHandler;
-use Clavia\Ui\Http\OAuth2\OAuth2Responder;
-use Clavia\Ui\Http\OAuth2\TokenHandler;
+use Clavia\Adapter\Primary\Cli\AuthorizeUrlCommand;
+use Clavia\Adapter\Primary\Cli\SeedDevelopmentDataCommand;
+use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
+use Clavia\Adapter\Primary\Http\OAuth2\OAuth2Responder;
+use Clavia\Adapter\Primary\Http\OAuth2\TokenHandler;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Application\Port\SchemaMigrator;
 use Clavia\Application\Port\SecretCipher;
@@ -37,19 +37,19 @@ use Clavia\Configuration\Settings;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\RandomSource;
 use Clavia\Domain\Shared\SecretGenerator;
-use Clavia\Infrastructure\Crypto\BcryptPasswordHasher;
-use Clavia\Infrastructure\Persistence\PhpDb\Database;
-use Clavia\Infrastructure\Redis\RedisConnection;
-use Clavia\Infrastructure\System\SystemClock;
-use Clavia\Infrastructure\System\SystemRandomSource;
-use Clavia\Ui\Cli\DatabaseStatusCommand;
-use Clavia\Ui\Cli\GenerateEncryptionKeyCommand;
-use Clavia\Ui\Cli\MigrateDatabaseCommand;
-use Clavia\Ui\Cli\ShowConfigCommand;
-use Clavia\Ui\Http\Shared\ErrorResponseGenerator;
-use Clavia\Ui\Http\Shared\HealthHandler;
-use Clavia\Ui\Http\Shared\MethodNotAllowedMiddleware;
-use Clavia\Ui\Http\Shared\NotFoundHandler;
+use Clavia\Adapter\Secondary\Crypto\BcryptPasswordHasher;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
+use Clavia\Adapter\Secondary\Redis\RedisConnection;
+use Clavia\Adapter\Secondary\System\SystemClock;
+use Clavia\Adapter\Secondary\System\SystemRandomSource;
+use Clavia\Adapter\Primary\Cli\DatabaseStatusCommand;
+use Clavia\Adapter\Primary\Cli\GenerateEncryptionKeyCommand;
+use Clavia\Adapter\Primary\Cli\MigrateDatabaseCommand;
+use Clavia\Adapter\Primary\Cli\ShowConfigCommand;
+use Clavia\Adapter\Primary\Http\Shared\ErrorResponseGenerator;
+use Clavia\Adapter\Primary\Http\Shared\HealthHandler;
+use Clavia\Adapter\Primary\Http\Shared\MethodNotAllowedMiddleware;
+use Clavia\Adapter\Primary\Http\Shared\NotFoundHandler;
 use Laminas\Diactoros\ResponseFactory;
 use Laminas\Diactoros\ServerRequestFilter\FilterServerRequestInterface;
 use Laminas\Diactoros\StreamFactory;
@@ -116,7 +116,7 @@ final class ConfigProvider
                     SeedDevelopmentData::class => Container\SeedDevelopmentDataFactory::class,
                     BuildAuthorizationUrl::class => Container\BuildAuthorizationUrlFactory::class,
 
-                    // Driven adapters, each registered under the port it implements
+                    // Secondary adapters, each registered under the port it implements
                     Database::class => Container\DatabaseFactory::class,
                     TransactionManager::class => Container\TransactionManagerFactory::class,
                     SchemaMigrator::class => Container\SchemaMigratorFactory::class,
@@ -128,7 +128,7 @@ final class ConfigProvider
                     AccessTokenRepository::class => Container\AccessTokenRepositoryFactory::class,
                     LoginStateStore::class => Container\LoginStateStoreFactory::class,
 
-                    // Driving adapter: HTTP
+                    // Primary adapter: HTTP
                     HealthHandler::class => Container\HealthHandlerFactory::class,
                     NotFoundHandler::class => Container\NotFoundHandlerFactory::class,
                     MethodNotAllowedMiddleware::class => Container\MethodNotAllowedMiddlewareFactory::class,
@@ -137,7 +137,7 @@ final class ConfigProvider
                     AuthorizeHandler::class => Container\AuthorizeHandlerFactory::class,
                     TokenHandler::class => Container\TokenHandlerFactory::class,
 
-                    // Driving adapter: CLI
+                    // Primary adapter: CLI
                     ConsoleApplication::class => Container\ConsoleApplicationFactory::class,
                     ShowConfigCommand::class => Container\ShowConfigCommandFactory::class,
                     MigrateDatabaseCommand::class => Container\MigrateDatabaseCommandFactory::class,

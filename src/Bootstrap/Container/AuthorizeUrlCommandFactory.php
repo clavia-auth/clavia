@@ -13,7 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Development\BuildAuthorizationUrl;
 use Clavia\Configuration\Settings;
-use Clavia\Ui\Cli\AuthorizeUrlCommand;
+use Clavia\Adapter\Primary\Cli\AuthorizeUrlCommand;
 use Psr\Container\ContainerInterface;
 
 final class AuthorizeUrlCommandFactory

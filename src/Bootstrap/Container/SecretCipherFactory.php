@@ -13,7 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Shared\RandomSource;
-use Clavia\Infrastructure\Crypto\AesGcmSecretCipher;
+use Clavia\Adapter\Secondary\Crypto\AesGcmSecretCipher;
 use Psr\Container\ContainerInterface;
 
 final class SecretCipherFactory

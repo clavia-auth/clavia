@@ -11,8 +11,8 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Integration\Persistence;
 
-use Clavia\Infrastructure\Persistence\PhpDb\Database;
-use Clavia\Infrastructure\Persistence\PhpDb\PostgresUrl;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PostgresUrl;
 use ClaviaTest\Support\IntegrationTestCase;
 use PDOException;
 use Throwable;

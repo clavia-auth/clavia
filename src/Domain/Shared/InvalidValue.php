@@ -18,7 +18,7 @@ use InvalidArgumentException;
  *
  * Thrown by named constructors, so an instance that exists is always valid. The
  * message describes the rule that was broken and is safe to log; whether any of it is
- * shown to a client is the driving adapter's decision.
+ * shown to a client is the primary adapter's decision.
  */
 final class InvalidValue extends InvalidArgumentException
 {

@@ -9,8 +9,8 @@
 
 declare(strict_types=1);
 
-use Clavia\Ui\Http\Shared\MethodNotAllowedMiddleware;
-use Clavia\Ui\Http\Shared\NotFoundHandler;
+use Clavia\Adapter\Primary\Http\Shared\MethodNotAllowedMiddleware;
+use Clavia\Adapter\Primary\Http\Shared\NotFoundHandler;
 use Laminas\Stratigility\Middleware\ErrorHandler;
 use Mezzio\Application;
 use Mezzio\Router\Middleware\DispatchMiddleware;

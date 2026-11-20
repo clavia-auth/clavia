@@ -19,17 +19,19 @@ deptrac:
         - type: classLike
           value: ^Clavia\\Application\\.*
 
-    # Driven adapters: persistence, Redis, signing, crypto, mail, HTTP client.
-    - name: Infrastructure
+    # Primary (driving) adapters: what calls the application — HTTP handlers and
+    # middleware, console commands.
+    - name: PrimaryAdapter
       collectors:
         - type: classLike
-          value: ^Clavia\\Infrastructure\\.*
+          value: ^Clavia\\Adapter\\Primary\\.*
 
-    # Driving adapters: HTTP handlers and middleware, console commands.
-    - name: Ui
+    # Secondary (driven) adapters: what the application calls — persistence, Redis,
+    # signing, crypto, mail, HTTP client.
+    - name: SecondaryAdapter
       collectors:
         - type: classLike
-          value: ^Clavia\\Ui\\.*
+          value: ^Clavia\\Adapter\\Secondary\\.*
 
     # The typed CLAVIA_* settings. Plain data; no ring of the hexagon.
     - name: Configuration
@@ -54,12 +56,13 @@ deptrac:
     Domain: ~
     Application:
       - Domain
-    Infrastructure:
+    # The two kinds of adapter never depend on each other.
+    PrimaryAdapter:
       - Domain
       - Application
       - Configuration
       - Vendor
-    Ui:
+    SecondaryAdapter:
       - Domain
       - Application
       - Configuration
@@ -68,7 +71,7 @@ deptrac:
     Bootstrap:
       - Domain
       - Application
-      - Infrastructure
-      - Ui
+      - PrimaryAdapter
+      - SecondaryAdapter
       - Configuration
       - Vendor
