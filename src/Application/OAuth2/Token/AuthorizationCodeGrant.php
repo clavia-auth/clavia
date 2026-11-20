@@ -28,10 +28,12 @@ use Clavia\Domain\OAuth2\CodeVerifier;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use Clavia\Domain\OAuth2\Redemption;
 use Clavia\Domain\Oidc\OidcScope;
+use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\RandomSource;
+use Clavia\Domain\Shared\ScopeSet;
 use Clavia\Domain\Shared\SecretGenerator;
 
 /**
@@ -56,6 +58,7 @@ use Clavia\Domain\Shared\SecretGenerator;
 final readonly class AuthorizationCodeGrant implements Grant
 {
     /**
+     * @param ScopeSet     $supportedScopes            The OIDC scopes, valid whatever API a code names.
      * @param positive-int $accessTokenLifetimeSeconds
      */
     public function __construct(
@@ -67,6 +70,8 @@ final readonly class AuthorizationCodeGrant implements Grant
         private RandomSource $random,
         private Clock $clock,
         private IdTokenIssuer $idTokens,
+        private ResourceServerRepository $resourceServers,
+        private ScopeSet $supportedScopes,
         private int $accessTokenLifetimeSeconds,
     ) {
     }
@@ -140,7 +145,34 @@ final readonly class AuthorizationCodeGrant implements Grant
             return OAuth2Error::invalidGrant("There is no active user for this 'code'.");
         }
 
-        return $this->mint($code, $user);
+        $scope = $this->scopeNow($code);
+        if ($scope instanceof OAuth2Error) {
+            return $scope;
+        }
+
+        return $this->mint($code, $user, $scope);
+    }
+
+    /**
+     * The scope the token gets: the code's, re-checked against the API it names as that
+     * API is now, rather than trusted from when the code was issued. A permission the API
+     * dropped in between is not issued; an API removed in between issues nothing.
+     */
+    private function scopeNow(AuthorizationCode $code): ScopeSet|OAuth2Error
+    {
+        if ($code->audience === null) {
+            return $code->scope;
+        }
+
+        $resourceServer = $this->resourceServers->findByIdentifier($code->audience);
+        if ($resourceServer === null) {
+            return OAuth2Error::invalidGrant("The API this 'code' was issued for is no longer registered.");
+        }
+
+        // Until roles exist (Step 10) nobody holds a permission on a system API.
+        $apiScopes = $resourceServer->isSystem ? ScopeSet::empty() : $resourceServer->permissionScopes();
+
+        return $code->scope->intersect($this->supportedScopes->union($apiScopes));
     }
 
     /**
@@ -177,7 +209,7 @@ final readonly class AuthorizationCodeGrant implements Grant
      * token cannot be signed, no access token survives without it, and the code is not
      * spent.
      */
-    private function mint(AuthorizationCode $code, User $user): IssuedToken
+    private function mint(AuthorizationCode $code, User $user, ScopeSet $scope): IssuedToken
     {
         $now = $this->clock->now();
         $value = $this->secrets->token();
@@ -186,13 +218,13 @@ final readonly class AuthorizationCodeGrant implements Grant
             AccessTokenId::generate($this->random),
             Digest::of($value),
             $code,
-            $code->scope,
+            $scope,
             $now,
             $this->accessTokenLifetimeSeconds,
         );
         $this->tokens->add($token);
 
-        $idToken = $code->scope->contains(OidcScope::OPENID)
+        $idToken = $scope->contains(OidcScope::OPENID)
             ? $this->idTokens->issue($code, $user, $value, $now)
             : null;
 

@@ -15,6 +15,8 @@ use Clavia\Domain\Identity\Profile;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
+use Clavia\Domain\Shared\AlreadyExists;
+use Clavia\Domain\Shared\PageRequest;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\Test;
@@ -134,6 +136,57 @@ trait UserRepositoryContract
         $this->users()->save($user);
 
         self::assertNull($this->users()->find($user->id)?->passwordHash());
+    }
+
+    #[Test]
+    public function anAddressAlreadyInUseIsRefusedAsSuch(): void
+    {
+        $this->users()->save($this->aUser('jane@example.com'));
+
+        $this->expectException(AlreadyExists::class);
+
+        $this->users()->save(User::register(
+            UserId::generate(new SeededRandomSource(1234)),
+            'jane@example.com',
+            null,
+            new DateTimeImmutable('2026-01-15T10:00:00Z'),
+        ));
+    }
+
+    #[Test]
+    public function usersArePagedNewestFirstAndSearchedByEmail(): void
+    {
+        $at = new DateTimeImmutable('2026-01-15T10:00:00Z');
+        foreach (['alice@clavia.dev', 'bob@clavia.dev', 'alice@other.test', '100%@x.test'] as $i => $email) {
+            $this->users()->save(User::register(
+                UserId::generate(new SeededRandomSource(500 + $i)),
+                $email,
+                null,
+                $at->modify(sprintf('+%d minutes', $i)),
+            ));
+        }
+
+        $first = $this->users()->page(PageRequest::of(1, 2));
+        self::assertSame(4, $first->total);
+        self::assertSame(
+            ['100%@x.test', 'alice@other.test'],
+            array_map(static fn (User $u): string => $u->email, $first->items),
+        );
+        self::assertSame(2, $this->users()->page(PageRequest::of(search: 'ALICE'))->total);
+        self::assertSame(1, $this->users()->page(PageRequest::of(search: '100%'))->total);
+        self::assertSame([], $this->users()->page(PageRequest::of(3, 2))->items);
+    }
+
+    #[Test]
+    public function aDeletedUserIsGone(): void
+    {
+        $user = $this->aUser('jane@example.com');
+        $this->users()->save($user);
+
+        $this->users()->delete($user->id);
+
+        self::assertNull($this->users()->find($user->id));
+        self::assertNull($this->users()->findByEmail('jane@example.com'));
     }
 
     private function aUser(string $email): User

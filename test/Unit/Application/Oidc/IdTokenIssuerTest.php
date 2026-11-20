@@ -130,6 +130,7 @@ final class IdTokenIssuerTest extends TestCase
             'https://app.example/cb',
             ScopeSet::fromString('openid email'),
             CodeChallenge::fromString(str_repeat('a', 43)),
+            null,
             Nonce::fromString('n-1'),
             AuthenticationContext::unknown(),
             $this->clock->now(),

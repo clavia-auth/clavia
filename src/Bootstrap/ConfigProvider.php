@@ -16,8 +16,11 @@ use Clavia\Adapter\Primary\Cli\CreateMachineClientCommand;
 use Clavia\Adapter\Primary\Cli\DatabaseStatusCommand;
 use Clavia\Adapter\Primary\Cli\GenerateEncryptionKeyCommand;
 use Clavia\Adapter\Primary\Cli\GenerateSigningKeyCommand;
+use Clavia\Adapter\Primary\Cli\GrantClientAccessCommand;
+use Clavia\Adapter\Primary\Cli\ListManagementScopesCommand;
 use Clavia\Adapter\Primary\Cli\ListSigningKeysCommand;
 use Clavia\Adapter\Primary\Cli\MigrateDatabaseCommand;
+use Clavia\Adapter\Primary\Cli\RegisterManagementApiCommand;
 use Clavia\Adapter\Primary\Cli\RotateSigningKeyCommand;
 use Clavia\Adapter\Primary\Cli\SeedDevelopmentDataCommand;
 use Clavia\Adapter\Primary\Cli\ShowConfigCommand;
@@ -27,6 +30,16 @@ use Clavia\Adapter\Primary\Http\Auth\LoginHandler;
 use Clavia\Adapter\Primary\Http\Auth\LoginPageHandler;
 use Clavia\Adapter\Primary\Http\Auth\LogoutHandler;
 use Clavia\Adapter\Primary\Http\Auth\ThemeHandler;
+use Clavia\Adapter\Primary\Http\Management\ClientHandler;
+use Clavia\Adapter\Primary\Http\Management\ClientsHandler;
+use Clavia\Adapter\Primary\Http\Management\ManagementApiMiddleware;
+use Clavia\Adapter\Primary\Http\Management\ManagementContract;
+use Clavia\Adapter\Primary\Http\Management\ManagementResponder;
+use Clavia\Adapter\Primary\Http\Management\ResourceServerHandler;
+use Clavia\Adapter\Primary\Http\Management\ResourceServersHandler;
+use Clavia\Adapter\Primary\Http\Management\RotateClientSecretHandler;
+use Clavia\Adapter\Primary\Http\Management\UserHandler;
+use Clavia\Adapter\Primary\Http\Management\UsersHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\OAuth2Responder;
 use Clavia\Adapter\Primary\Http\OAuth2\TokenHandler;
@@ -46,15 +59,32 @@ use Clavia\Adapter\Secondary\Redis\RedisConnection;
 use Clavia\Adapter\Secondary\System\SystemClock;
 use Clavia\Adapter\Secondary\System\SystemRandomSource;
 use Clavia\Application\Authentication\DevelopmentAutoLogin;
-use Clavia\Application\Clients\RegisterMachineClient;
 use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
 use Clavia\Application\Authentication\LoginThrottle;
 use Clavia\Application\Authentication\ResolveEndUser;
 use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Authentication\SignIn\SignInWithPassword;
 use Clavia\Application\Authentication\SignOut;
+use Clavia\Application\Clients\RegisterMachineClient;
 use Clavia\Application\Development\BuildAuthorizationUrl;
 use Clavia\Application\Development\SeedDevelopmentData;
+use Clavia\Application\Development\SeedManagementAccess;
+use Clavia\Application\Management\Caller\AuthenticateManagementCaller;
+use Clavia\Application\Management\Clients\DeleteClient;
+use Clavia\Application\Management\Clients\ReadClients;
+use Clavia\Application\Management\Clients\RegisterClient;
+use Clavia\Application\Management\Clients\RotateClientSecret;
+use Clavia\Application\Management\Clients\UpdateClient;
+use Clavia\Application\Management\Provisioning\GrantClientAccess;
+use Clavia\Application\Management\Provisioning\RegisterManagementApi;
+use Clavia\Application\Management\ResourceServers\DeleteResourceServer;
+use Clavia\Application\Management\ResourceServers\ReadResourceServers;
+use Clavia\Application\Management\ResourceServers\RegisterResourceServer;
+use Clavia\Application\Management\ResourceServers\UpdateResourceServer;
+use Clavia\Application\Management\Users\CreateUser;
+use Clavia\Application\Management\Users\DeleteUser;
+use Clavia\Application\Management\Users\ReadUsers;
+use Clavia\Application\Management\Users\UpdateUser;
 use Clavia\Application\OAuth2\Authorize\Authorize;
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
 use Clavia\Application\OAuth2\Token\AuthorizationCodeGrant;
@@ -125,6 +155,9 @@ final class ConfigProvider
         'keys:rotate' => RotateSigningKeyCommand::class,
         'keys:list' => ListSigningKeysCommand::class,
         'clients:create-m2m' => CreateMachineClientCommand::class,
+        'clients:grant' => GrantClientAccessCommand::class,
+        'management-api:register' => RegisterManagementApiCommand::class,
+        'management-api:scopes' => ListManagementScopesCommand::class,
     ];
 
     /**
@@ -145,6 +178,9 @@ final class ConfigProvider
                     Clock::class => SystemClock::class,
                     RandomSource::class => SystemRandomSource::class,
                     PasswordHasher::class => BcryptPasswordHasher::class,
+
+                    // Console commands with no collaborator
+                    ListManagementScopesCommand::class => ListManagementScopesCommand::class,
                 ],
                 'factories' => [
                     // Configuration and cross-cutting services
@@ -166,6 +202,7 @@ final class ConfigProvider
                     RegisterMachineClient::class => Container\RegisterMachineClientFactory::class,
                     IssueToken::class => Container\IssueTokenFactory::class,
                     SeedDevelopmentData::class => Container\SeedDevelopmentDataFactory::class,
+                    SeedManagementAccess::class => Container\SeedManagementAccessFactory::class,
                     BuildAuthorizationUrl::class => Container\BuildAuthorizationUrlFactory::class,
                     Sessions::class => Container\SessionsFactory::class,
                     LoginThrottle::class => Container\LoginThrottleFactory::class,
@@ -181,6 +218,22 @@ final class ConfigProvider
                     RotateSigningKey::class => Container\RotateSigningKeyFactory::class,
                     ListSigningKeys::class => Container\ListSigningKeysFactory::class,
                     ReadUserInfo::class => Container\ReadUserInfoFactory::class,
+                    ReadUsers::class => Container\ReadUsersFactory::class,
+                    CreateUser::class => Container\CreateUserFactory::class,
+                    UpdateUser::class => Container\UpdateUserFactory::class,
+                    DeleteUser::class => Container\DeleteUserFactory::class,
+                    ReadClients::class => Container\ReadClientsFactory::class,
+                    RegisterClient::class => Container\RegisterClientFactory::class,
+                    UpdateClient::class => Container\UpdateClientFactory::class,
+                    RotateClientSecret::class => Container\RotateClientSecretFactory::class,
+                    DeleteClient::class => Container\DeleteClientFactory::class,
+                    ReadResourceServers::class => Container\ReadResourceServersFactory::class,
+                    RegisterResourceServer::class => Container\RegisterResourceServerFactory::class,
+                    UpdateResourceServer::class => Container\UpdateResourceServerFactory::class,
+                    DeleteResourceServer::class => Container\DeleteResourceServerFactory::class,
+                    GrantClientAccess::class => Container\GrantClientAccessFactory::class,
+                    RegisterManagementApi::class => Container\RegisterManagementApiFactory::class,
+                    AuthenticateManagementCaller::class => Container\AuthenticateManagementCallerFactory::class,
 
                     // Secondary adapters, each registered under the port it implements
                     Database::class => Container\DatabaseFactory::class,
@@ -221,6 +274,16 @@ final class ConfigProvider
                     DiscoveryHandler::class => Container\DiscoveryHandlerFactory::class,
                     JwksHandler::class => Container\JwksHandlerFactory::class,
                     UserInfoHandler::class => Container\UserInfoHandlerFactory::class,
+                    ManagementContract::class => Container\ManagementContractFactory::class,
+                    ManagementResponder::class => Container\ManagementResponderFactory::class,
+                    ManagementApiMiddleware::class => Container\ManagementApiMiddlewareFactory::class,
+                    UsersHandler::class => Container\UsersHandlerFactory::class,
+                    UserHandler::class => Container\UserHandlerFactory::class,
+                    ClientsHandler::class => Container\ClientsHandlerFactory::class,
+                    ClientHandler::class => Container\ClientHandlerFactory::class,
+                    RotateClientSecretHandler::class => Container\RotateClientSecretHandlerFactory::class,
+                    ResourceServersHandler::class => Container\ResourceServersHandlerFactory::class,
+                    ResourceServerHandler::class => Container\ResourceServerHandlerFactory::class,
 
                     // Primary adapter: CLI
                     ConsoleApplication::class => Container\ConsoleApplicationFactory::class,
@@ -234,6 +297,8 @@ final class ConfigProvider
                     RotateSigningKeyCommand::class => Container\RotateSigningKeyCommandFactory::class,
                     ListSigningKeysCommand::class => Container\ListSigningKeysCommandFactory::class,
                     CreateMachineClientCommand::class => Container\CreateMachineClientCommandFactory::class,
+                    GrantClientAccessCommand::class => Container\GrantClientAccessCommandFactory::class,
+                    RegisterManagementApiCommand::class => Container\RegisterManagementApiCommandFactory::class,
                 ],
             ],
             // The server-rendered pages: `layout::page`, `auth::login`, `error::page`,

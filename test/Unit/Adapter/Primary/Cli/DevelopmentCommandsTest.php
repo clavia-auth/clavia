@@ -13,16 +13,23 @@ namespace ClaviaTest\Unit\Adapter\Primary\Cli;
 
 use Clavia\Adapter\Primary\Cli\AuthorizeUrlCommand;
 use Clavia\Adapter\Primary\Cli\SeedDevelopmentDataCommand;
+use Clavia\Application\Clients\RegisterMachineClient;
 use Clavia\Application\Development\BuildAuthorizationUrl;
 use Clavia\Application\Development\SeedDevelopmentData;
+use Clavia\Application\Development\SeedManagementAccess;
+use Clavia\Application\Management\Provisioning\GrantClientAccess;
+use Clavia\Application\Management\Provisioning\RegisterManagementApi;
 use Clavia\Domain\OAuth2\CodeChallenge;
 use Clavia\Domain\OAuth2\CodeVerifier;
 use Clavia\Domain\Oidc\SigningAlgorithm;
+use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\ScopeSet;
 use Clavia\Domain\Shared\SecretGenerator;
 use ClaviaTest\Support\Fake\FakePasswordHasher;
 use ClaviaTest\Support\Fake\FrozenClock;
+use ClaviaTest\Support\Fake\InMemoryClientGrantRepository;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
+use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
 use ClaviaTest\Support\Fake\InMemorySigningKeys;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
@@ -58,16 +65,26 @@ final class DevelopmentCommandsTest extends TestCase
         self::assertSame(Command::SUCCESS, $tester->execute([]));
 
         $client = $this->clients->findByName(SeedDevelopmentData::CLIENT_NAME);
+        $machine = $this->clients->findByName(SeedManagementAccess::CLIENT_NAME);
         self::assertNotNull($client);
+        self::assertNotNull($machine);
         self::assertTrue($client->hasRedirectUri('http://localhost:3000/callback'));
         self::assertNotNull($this->users->findByEmail('dev@clavia.test'));
         self::assertSame(
             "Created user dev@clavia.test\n"
             . "Created public client {$client->id->value}\n"
             . "Created signing key {$this->signingKeys->activeKey()->kid}\n"
+            . "Registered the Management API as https://management.clavia.test/api/v1/\n"
+            . "Created machine client {$machine->id->value}, granted every management scope\n"
             . "\n"
             . "Seeded. Sign in at https://auth.clavia.test/auth/login as dev@clavia.test / devpassword\n"
-            . "Run `clavia authorize-url` to get a link that exercises the whole flow.\n",
+            . "Run `clavia authorize-url` to get a link that exercises the whole flow.\n"
+            . "Call the Management API with a token from:\n"
+            . "\n"
+            . "  curl -s https://auth.clavia.test/oauth2/token \\\n"
+            . "    -u '{$machine->id->value}:dev-m2m-secret-for-local-development-only' \\\n"
+            . "    -d grant_type=client_credentials \\\n"
+            . "    -d audience=https://management.clavia.test/api/v1/\n",
             $tester->getDisplay(true),
         );
     }
@@ -216,9 +233,33 @@ final class DevelopmentCommandsTest extends TestCase
                 new FrozenClock(),
                 $isDevelopment,
             ),
+            $this->seedManagementAccess($random, $isDevelopment),
             'clavia.test',
             self::ISSUER,
         ));
+    }
+
+    private function seedManagementAccess(SeededRandomSource $random, bool $isDevelopment): SeedManagementAccess
+    {
+        $grants = new InMemoryClientGrantRepository();
+        $apis = new InMemoryResourceServerRepository($grants);
+        $clock = new FrozenClock();
+        $secrets = new SecretGenerator($random);
+
+        return new SeedManagementAccess(
+            $this->clients,
+            new RegisterManagementApi(
+                $apis,
+                new InMemoryTransactionManager(),
+                $secrets,
+                $clock,
+                Audience::fromString('https://management.clavia.test/api/v1/'),
+            ),
+            new RegisterMachineClient($this->clients, $this->hasher, $secrets, $clock),
+            new GrantClientAccess($this->clients, $apis, $grants, $clock),
+            new InMemoryTransactionManager(),
+            $isDevelopment,
+        );
     }
 
     private function authorizeUrlCommand(?string $devAutologinEmail = null): CommandTester

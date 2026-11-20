@@ -27,7 +27,7 @@ final class User
      */
     private function __construct(
         public readonly UserId $id,
-        public readonly string $email,
+        public private(set) string $email,
         private ?string $passwordHash,
         private bool $emailVerified,
         private bool $active,
@@ -99,6 +99,45 @@ final class User
     public function isActive(): bool
     {
         return $this->active;
+    }
+
+    /**
+     * Move the account to another address. A new address has proven nothing yet, so it
+     * is unverified until something proves it; the same address changes nothing.
+     *
+     * @throws InvalidValue When the address cannot be one.
+     */
+    public function changeEmail(string $email, DateTimeImmutable $now): void
+    {
+        $email = self::email($email);
+        if ($email !== $this->email) {
+            $this->email = $email;
+            $this->emailVerified = false;
+            $this->updatedAt = $now;
+        }
+    }
+
+    /**
+     * Record whether the address is confirmed to belong to this person — by whatever
+     * proved it: an operator, a verification link, a provider's verified claim.
+     */
+    public function recordEmailVerification(bool $verified, DateTimeImmutable $now): void
+    {
+        if ($verified !== $this->emailVerified) {
+            $this->emailVerified = $verified;
+            $this->updatedAt = $now;
+        }
+    }
+
+    /**
+     * Replace the password.
+     *
+     * @param non-empty-string $passwordHash A hash from the password hasher, never a password.
+     */
+    public function changePassword(#[\SensitiveParameter] string $passwordHash, DateTimeImmutable $now): void
+    {
+        $this->passwordHash = $passwordHash;
+        $this->updatedAt = $now;
     }
 
     public function deactivate(DateTimeImmutable $now): void

@@ -29,15 +29,18 @@ and multi-tenancy.
 
 ## Current state
 
-**Steps 0 to 5 are done: the foundations, Authorization Code + PKCE, the login page with
-browser sessions, OpenID Connect (ID tokens, discovery, JWKS, userinfo), and Client
-Credentials for machine clients holding a grant on an API.** The application
-answers `GET /healthz`, `GET|POST /oauth2/authorize`, `POST /oauth2/token`,
-`GET /.well-known/openid-configuration`, `GET /.well-known/oauth-authorization-server`,
-`GET /oidc/jwks.json`, `GET|POST /oidc/userinfo`, `GET|POST /auth/login`, `POST /auth/logout`
-and `POST /auth/theme`: a person can sign in with a password, complete the flow in a browser,
-and the client gets an RS256 ID token it can verify against the published JWKS; a machine
-client gets a subject-less token for an API it holds a grant on. Update this section at the
+**Steps 0 to 6 are done: the foundations, Authorization Code + PKCE, the login page with
+browser sessions, OpenID Connect (ID tokens, discovery, JWKS, userinfo), Client
+Credentials for machine clients holding a grant on an API, and the Management API with
+audiences in the user's flow.** The application answers `GET /healthz`,
+`GET|POST /oauth2/authorize`, `POST /oauth2/token`, `GET /.well-known/openid-configuration`,
+`GET /.well-known/oauth-authorization-server`, `GET /oidc/jwks.json`, `GET|POST /oidc/userinfo`,
+`GET|POST /auth/login`, `POST /auth/logout`, `POST /auth/theme` and the Management API under
+`/api/v1/` (users, clients with secret rotation, resource servers): a person can sign in with a
+password, complete the flow in a browser — naming an API in `audience` if the client wants
+its permissions — and the client gets an RS256 ID token it can verify against the published
+JWKS; a machine client gets a subject-less token for an API it holds a grant on, and with one
+for the Management API it administers the deployment. Update this section at the
 end of every step (what exists, where it lives, which conventions it established).
 
 What exists:
@@ -70,7 +73,7 @@ What exists:
   and `Redis\Keys`.
 - **Console**: `clavia db:migrate`, `clavia db:status`, `clavia secrets:generate-key`,
   `clavia seed-dev`, `clavia authorize-url`, `clavia keys:generate|rotate|list`,
-  `clavia clients:create-m2m`.
+  `clavia clients:create-m2m`, `clavia clients:grant`, `clavia management-api:register|scopes`.
 - **Test kit** (`test/Support`): `Fake\*` (one in-memory double per port), `Contract\*`
   (traits run against both the double and the real adapter), `TestEnvironment`, `TestStorage`,
   `IntegrationTestCase`, `AcceptanceTestCase` (`get`/`post`/`locationQuery`, a cookie jar,
@@ -78,8 +81,9 @@ What exists:
   (users, clients, PKCE pairs and whole flows), `LoginFixtures` (`submitLogin`, login-state
   handles), `OidcFixtures` (`completeFlow`, `verifiedIdToken` — checked against the JWKS
   fetched over HTTP), `MachineFixtures` (a machine client, an API, a grant,
-  `requestMachineToken`), `TestSigningKeys` (RSA keys generated once per run), `Clients`
-  (ready-made registrations for unit tests).
+  `requestMachineToken`), `ManagementFixtures` (the Management API, `adminToken()`, `api()` —
+  every response checked against the OpenAPI document), `TestSigningKeys` (RSA keys generated
+  once per run), `Clients` (ready-made registrations for unit tests).
 - **Authorization Code + PKCE** (Step 2):
   - `Domain\Identity` — `User`, `UserId`, `UserRepository`. `Domain\Client` — `Client`
     (`client_id` is the key; type, auth method and secret must agree), `ClientId`, the
@@ -153,6 +157,35 @@ What exists:
     `Adapter\Primary\Cli\CreateMachineClientCommand`.
   - Migrations `0008_resource_servers` (with `permissions`), `0009_client_grants`,
     `0010_access_token_audience`.
+- **Management API and audiences** (Step 6):
+  - `Domain\Shared` — `PageRequest` (page ≥ 1, 1–100 per page, a literal search of at most
+    200 characters) and `Page<T>`; `AlreadyExists` (thrown by a repository on a unique
+    violation). `Domain\Identity\PasswordPolicy` (≥ 8 characters, ≤ 72 bytes, the hash's
+    limit); `User::changeEmail()` (a new address is unverified), `recordEmailVerification()`,
+    `changePassword()`. `Client::reconfigure()` / `withSecretHash()` and the coherence rules
+    (the `code` response type and the `authorization_code` grant come together and need a
+    redirect URI; `client_credentials` needs a confidential client). `ResourceServer::$isSystem`
+    with `renamed()`, `withPermissions()`, `asSystem()`, `assertDeletable()` and
+    `SystemApiProtected`. Every repository of the three gains `delete()` and `page()`.
+    `AuthorizationCode::$audience`.
+  - `Application\Management` — `ManagementPermission` (the twelve scopes), `NotFound`,
+    `Conflict`; `Caller\{AuthenticateManagementCaller,ManagementCaller}`; per resource a
+    `ReadX` query (`page()`, `one()`) and one use case per change: `Users\{CreateUser,UpdateUser,DeleteUser}`,
+    `Clients\{RegisterClient,UpdateClient,RotateClientSecret,DeleteClient}`,
+    `ResourceServers\{RegisterResourceServer,UpdateResourceServer,DeleteResourceServer}`;
+    `Provisioning\{RegisterManagementApi,GrantClientAccess}` (shell only).
+    `Development\SeedManagementAccess`. `Authorize` resolves `audience` and
+    `AuthorizationCodeGrant` re-checks it at redemption.
+  - `Adapter\Primary\Http\Management` — `ManagementContract` (the OpenAPI document:
+    operation lookup, required permission, request and response validation),
+    `ManagementApiMiddleware` (the front door of every `/api/v1/*` route), `ManagementRequest`,
+    `JsonObject`, `Paging`, `UserFields`, `ResourceServerFields`, `ContractViolation`, `Problem`,
+    `ManagementResponder`, `ManagementViews`, and seven handlers (`UsersHandler`,
+    `UserHandler`, `ClientsHandler`, `ClientHandler`, `RotateClientSecretHandler`,
+    `ResourceServersHandler`, `ResourceServerHandler`). `Cli\{RegisterManagementApi,ListManagementScopes,GrantClientAccess}Command`.
+  - `Adapter\Secondary\Persistence\PhpDb\{Constraint,Search}`.
+  - `docs/openapi/management-api.yaml` (OpenAPI 3.0.3). Migrations
+    `0011_system_resource_servers`, `0012_authorization_code_audience`.
 - **Error pages for browsers** (after Step 3): `Adapter\Primary\Http\Shared\ClientPreference`
   (`Accept` negotiation), `ErrorResponder` + `ErrorPage`, `PageRenderer` + `HtmlPage` (the
   layout, headers and CSP every server-rendered page shares). 404, 405, 500 and the
@@ -406,6 +439,44 @@ Conventions established in Step 5:
 - **Client grants are written from the shell only**, never over HTTP: an endpoint that wrote
   them would let a caller widen its own access.
 
+Conventions established in Step 6:
+
+- **The Management API is contract-first.** `docs/openapi/management-api.yaml` is written by
+  hand and is the source of truth: `ManagementApiMiddleware` validates every request against
+  it, the scope each route enforces is the one its operation's `security` requirement names
+  (there is no second list), and `ManagementFixtures::api()` checks every response the
+  acceptance tests receive. A new operation is a path in the document, a route in
+  `config/routes.php` behind `ManagementApiMiddleware`, and a handler; `ManagementApiTest`
+  fails if the routes and the document disagree, and `ManagementContractTest` if the
+  document's scopes are not exactly `ManagementPermission::cases()`.
+- **One order of checks**: credentials, the token (live, issued for this API — `aud` before
+  any scope — its subject still active), the scope, then the request: a parameter twice or
+  unreadable JSON (400), not JSON (415), anything the contract or the domain refuses (422).
+  `NotFound` is 404; `Conflict`, `AlreadyExists` and `SystemApiProtected` are 409.
+- **Errors are RFC 9457 problem documents** (`type: about:blank`, `title`, `status`,
+  `detail`, and `errors[]` with a `pointer` or a `parameter` for a contract violation).
+  Bearer refusals stay RFC 6750 documents. An error never repeats the value at fault.
+  Nothing the Management API answers is cacheable.
+- **Handlers state the success only.** They read a `ManagementRequest` (the caller and the
+  validated body and query), call one use case and render with `ManagementViews`; the
+  middleware turns the use cases' expected refusals into problems. A `JsonObject` value of
+  the wrong type is a `LogicException`: the contract let something through it should not.
+- **Lists are `ReadX::page(PageRequest)`**, newest first (`created_at DESC, id`), the search a
+  case-insensitive literal (`Search` escapes `%` and `_`), returned as `{items, total, page,
+  per_page}`.
+- **A unique constraint is the arbiter of uniqueness.** A repository turns its violation
+  (SQLSTATE 23505 on the named constraint, `Constraint::isUniqueViolation()`) into
+  `AlreadyExists`; nobody checks first and inserts second.
+- **A system API is the server's own.** The Management API is registered from the shell,
+  marked `is_system`: it can be renamed, never deleted, and its permissions are
+  `ManagementPermission`'s — re-registering after an upgrade brings them up to date. Until
+  roles exist (Step 10), a user's flow asking for a system API's permissions is
+  `access_denied`, and they are dropped at redemption.
+- **`audience` in a user's flow** names the API whose permissions the scope may hold next to
+  the OIDC scopes; an unknown API is `invalid_target`, a malformed one `invalid_request`. It is
+  stored on the code and re-checked at redemption: the scope is cut to what is still defined,
+  and a code for an API that is gone is `invalid_grant`.
+
 **Known defect in the database library, worked around.** At the pinned commit,
 `php-db/phpdb-pgsql` runs `SELECT LASTVAL()` after every statement to fetch a "last generated
 value". In a session that has not used a sequence that query fails; the library swallows the
@@ -415,10 +486,24 @@ that lookup; `DatabaseTest::testReadingInsideATransactionDoesNotDiscardItsWrites
 after it fail without the override. **Do not `composer update php-db/*` without running the
 Integration suite**, and report the defect upstream.
 
+**Known defects in the OpenAPI validator, worked around.** At the pinned
+`phayne-io/openapi-psr7-validator` (`dev-master`), `SpecFinder::findSecuritySpecs()` expects an
+array where `phayne-io/php-openapi` gives a `SecurityRequirements` object (so
+`SecurityValidator`, and with it `ServerRequestValidator`, throws a `TypeError` on any
+operation with `security`), and `SpecFinder::findResponseSpec()` calls a
+`ResponseAddress::responseCode()` method that does not exist (so `ResponseValidator` cannot
+run). `ManagementContract` therefore builds its own request chain without
+`SecurityValidator` — the middleware authenticates anyway — reads `security` itself, and
+checks responses with the library's `UnipartValidator`. Installing it downgraded
+`webmozart/assert` to 1.x and `symfony/yaml` to 7.4 (its constraints). Report both defects
+upstream; when they are fixed, `ManagementContract` can go back to `ValidatorBuilder`.
+
 Running it: `cp .env.example .env`, `./setup-ssl.sh`, `make up install migrate seed`, then
 `https://auth.{domain}/healthz`. Tooling runs in the container: `make check`, `make config`,
 `make migrate`, `make db-status`, `make seed`, `make authorize-url`. To walk the flow, open the
-link `make authorize-url` prints and sign in as `dev@{domain}` / `devpassword`.
+link `make authorize-url` prints and sign in as `dev@{domain}` / `devpassword`. `make seed`
+also prints the token request for the development machine client, which holds every
+Management API scope.
 
 ## How the migration works
 
@@ -569,7 +654,7 @@ test/
 |---|---|---|
 | Authlib `AuthorizationServer` + subclasses closing its gaps | Own protocol core in `Domain/OAuth2` | The "Authlib gaps" list becomes plain invariants. No per-request server object, no threadpool. |
 | FastAPI routers + `Depends` | Mezzio handlers + PSR-15 middleware per surface | Four pipelines (`/oauth2`, `/oidc`, `/auth`, `/api/v1`), each with its own authentication middleware. |
-| Pydantic, `extra="forbid"` | OpenAPI document + `phayne-io/openapi-psr7-validator` (`additionalProperties: false`) at the edge, then typed Commands | The Management API becomes contract-first: `docs/openapi/management-api.yaml` is the source of truth. Error bodies keep FastAPI's shape (`{"detail": …}`) — the contract is frozen. |
+| Pydantic, `extra="forbid"` | OpenAPI document + `phayne-io/openapi-psr7-validator` (`additionalProperties: false`) at the edge, then typed Commands | The Management API is contract-first: `docs/openapi/management-api.yaml` is the source of truth. Errors are RFC 9457 problem documents, not FastAPI's `{"detail": …}`. |
 | SQLAlchemy models + Alembic | Aggregates + phpdb-pgsql repositories + SQL migrations | Models are not table-shaped; mappers live in the adapter. |
 | `pydantic-settings` | A typed, validated `Settings` object built once in the composition root | Same `CLAVIA_*` names and the same validators (e.g. console mail refused outside development). |
 | Jinja2 | laminas-view PHP templates (layout, pages, partials) behind Mezzio's `TemplateRendererInterface` | No Twig. Escaping is explicit (`escapeHtml`/`escapeHtmlAttr`) and tested. Still **no JavaScript** on the auth origin. |
@@ -926,16 +1011,25 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
 - Left for Step 6: registering APIs and writing grants from the shell (`management-api
   register|scopes`, `clients grant`), `audience` at the authorization endpoint, system APIs.
 
-#### [ ] Step 6 — Management API, resource servers, audiences
+#### [x] Step 6 — Management API, resource servers, audiences
 - Domain (the rest of it): `is_system` APIs, audience rules at the authorization endpoint
-  (scopes of the named API), grant provisioning (`GrantClientAccess`).
-- Primary adapter (`Http/Management`): bearer middleware (`aud` checked before scope, RFC 6750 challenges),
-  OpenAPI validation, pagination, `/api/v1/{users,clients,resource-servers}`, secret rotation.
-- Write `docs/openapi/management-api.yaml` from `api/schemas.py`; it validates requests *and* is
-  asserted against responses in the acceptance tests.
-- CLI: `management-api register|scopes`, `clients grant`.
+  (scopes of the named API), grant provisioning (`GrantClientAccess`); paging, uniqueness
+  (`AlreadyExists`), the password policy, user and client changes, the client coherence rules.
+- Primary adapter (`Http/Management`): `ManagementApiMiddleware` (bearer token, `aud` checked
+  before scope, RFC 6750 challenges with the Management API as realm), OpenAPI validation,
+  RFC 9457 problems, pagination, `/api/v1/{users,clients,resource-servers}`, secret rotation.
+- `docs/openapi/management-api.yaml`, written from `api/schemas.py`: it validates requests
+  *and* is asserted against every response in the acceptance tests.
+- CLI: `management-api:register|scopes`, `clients:grant`; `seed-dev` registers the Management
+  API and a machine client holding every management scope.
 - Python: `api/*`, `db/models/resource_server.py`.
-- Tests: `test_management_api` (36), `test_audience` (12).
+- Tests: `test_management_api` (36) — ported as `ManagementApiTest` (47 cases),
+  `test_audience` (12) — ported as `AudienceTest` (16 cases); `ManagementContractTest`, unit
+  tests for every new use case, the domain rules and the commands; the repository contracts
+  gained paging, deletion and uniqueness.
+- Left for the steps that own them: roles and the RBAC narrowing that replaces the
+  system-API refusal (10), the connection scopes and endpoints (13), `refresh_token` and the
+  device grant on registrations (11, 15), `is_first_party` (12).
 
 #### [ ] Step 7 — MFA (TOTP)
 - Domain: own RFC 6238 `Totp` (single-use by time step), `RecoveryCode` digests, enrollment.

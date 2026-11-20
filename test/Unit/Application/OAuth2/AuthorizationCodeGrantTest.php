@@ -14,9 +14,9 @@ namespace ClaviaTest\Unit\Application\OAuth2;
 use Clavia\Application\OAuth2\RequestParameters;
 use Clavia\Application\OAuth2\Token\AuthorizationCodeGrant;
 use Clavia\Application\OAuth2\Token\IssuedToken;
-use Clavia\Application\Port\NoActiveSigningKey;
 use Clavia\Application\Oidc\CompactJws;
 use Clavia\Application\Oidc\IdTokenIssuer;
+use Clavia\Application\Port\NoActiveSigningKey;
 use Clavia\Domain\Authentication\AuthenticationContext;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
@@ -38,6 +38,7 @@ use ClaviaTest\Support\Clients;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryAccessTokenRepository;
 use ClaviaTest\Support\Fake\InMemoryAuthorizationCodeRepository;
+use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
 use ClaviaTest\Support\Fake\InMemorySigningKeys;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
@@ -56,6 +57,7 @@ final class AuthorizationCodeGrantTest extends TestCase
     private InMemoryAccessTokenRepository $tokens;
     private InMemoryUserRepository $users;
     private InMemorySigningKeys $keys;
+    private InMemoryResourceServerRepository $resourceServers;
     private AuthorizationCodeGrant $grant;
     private Client $client;
     private User $user;
@@ -70,6 +72,7 @@ final class AuthorizationCodeGrantTest extends TestCase
         $this->tokens = new InMemoryAccessTokenRepository();
         $this->users = new InMemoryUserRepository();
         $this->keys = new InMemorySigningKeys($this->clock);
+        $this->resourceServers = new InMemoryResourceServerRepository();
         $this->keys->create(SigningAlgorithm::RS256, $this->clock->now());
         $this->grant = new AuthorizationCodeGrant(
             $this->codes,
@@ -80,6 +83,8 @@ final class AuthorizationCodeGrantTest extends TestCase
             $random,
             $this->clock,
             new IdTokenIssuer($this->keys, new CompactJws($this->keys), 'https://auth.clavia.test', 300),
+            $this->resourceServers,
+            ScopeSet::fromString('openid profile email'),
             3600,
         );
 
@@ -99,6 +104,7 @@ final class AuthorizationCodeGrantTest extends TestCase
             Clients::REDIRECT_URI,
             ScopeSet::fromString('openid profile'),
             CodeChallenge::forVerifier(CodeVerifier::fromString(self::VERIFIER)),
+            null,
             null,
             AuthenticationContext::unknown(),
             $this->clock->now(),
@@ -286,6 +292,7 @@ final class AuthorizationCodeGrantTest extends TestCase
             ScopeSet::fromString('profile'),
             CodeChallenge::forVerifier(CodeVerifier::fromString(self::VERIFIER)),
             null,
+            null,
             AuthenticationContext::unknown(),
             $this->clock->now(),
             60,
@@ -317,6 +324,7 @@ final class AuthorizationCodeGrantTest extends TestCase
             Clients::REDIRECT_URI,
             ScopeSet::empty(),
             CodeChallenge::forVerifier(CodeVerifier::fromString(self::VERIFIER)),
+            null,
             null,
             AuthenticationContext::unknown(),
             $this->clock->now(),

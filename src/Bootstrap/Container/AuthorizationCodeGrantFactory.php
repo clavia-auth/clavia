@@ -18,8 +18,10 @@ use Clavia\Configuration\Settings;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
+use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\RandomSource;
+use Clavia\Domain\Shared\ScopeSet;
 use Clavia\Domain\Shared\SecretGenerator;
 use Psr\Container\ContainerInterface;
 
@@ -43,6 +45,8 @@ final class AuthorizationCodeGrantFactory
         $clock = $container->get(Clock::class);
         /** @var IdTokenIssuer $idTokens */
         $idTokens = $container->get(IdTokenIssuer::class);
+        /** @var ResourceServerRepository $resourceServers */
+        $resourceServers = $container->get(ResourceServerRepository::class);
         /** @var Settings $settings */
         $settings = $container->get(Settings::class);
 
@@ -58,6 +62,8 @@ final class AuthorizationCodeGrantFactory
             $random,
             $clock,
             $idTokens,
+            $resourceServers,
+            ScopeSet::fromString(implode(' ', $settings->scopesSupported)),
             $lifetime,
         );
     }

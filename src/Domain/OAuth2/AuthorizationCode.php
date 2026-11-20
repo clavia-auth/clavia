@@ -15,6 +15,7 @@ use Clavia\Domain\Authentication\AuthenticationContext;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Oidc\Nonce;
+use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\ScopeSet;
 use DateTimeImmutable;
@@ -38,6 +39,7 @@ final class AuthorizationCode
         public readonly string $redirectUri,
         public readonly ScopeSet $scope,
         public readonly CodeChallenge $challenge,
+        public readonly ?Audience $audience,
         public readonly ?Nonce $nonce,
         public readonly AuthenticationContext $authentication,
         public readonly DateTimeImmutable $expiresAt,
@@ -53,6 +55,7 @@ final class AuthorizationCode
      *
      * @param string       $redirectUri     The `redirect_uri` the response is being sent to, exactly as
      *                                      validated; the token request must present the same one.
+     * @param Audience|null $audience       The API the request named; its permissions bounded the scope.
      * @param Nonce|null   $nonce           The `nonce` of an OpenID Connect request, for the ID token.
      * @param positive-int $lifetimeSeconds OAuth 2.1 recommends one minute at most.
      */
@@ -64,6 +67,7 @@ final class AuthorizationCode
         string $redirectUri,
         ScopeSet $scope,
         CodeChallenge $challenge,
+        ?Audience $audience,
         ?Nonce $nonce,
         AuthenticationContext $authentication,
         DateTimeImmutable $now,
@@ -77,6 +81,7 @@ final class AuthorizationCode
             $redirectUri,
             $scope,
             $challenge,
+            $audience,
             $nonce,
             $authentication,
             $now->modify(sprintf('+%d seconds', $lifetimeSeconds)),
@@ -94,6 +99,7 @@ final class AuthorizationCode
         string $redirectUri,
         ScopeSet $scope,
         CodeChallenge $challenge,
+        ?Audience $audience,
         ?Nonce $nonce,
         AuthenticationContext $authentication,
         DateTimeImmutable $expiresAt,
@@ -108,6 +114,7 @@ final class AuthorizationCode
             $redirectUri,
             $scope,
             $challenge,
+            $audience,
             $nonce,
             $authentication,
             $expiresAt,

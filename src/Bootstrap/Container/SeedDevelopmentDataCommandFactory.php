@@ -13,6 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Adapter\Primary\Cli\SeedDevelopmentDataCommand;
 use Clavia\Application\Development\SeedDevelopmentData;
+use Clavia\Application\Development\SeedManagementAccess;
 use Clavia\Configuration\Settings;
 use Psr\Container\ContainerInterface;
 
@@ -22,9 +23,16 @@ final class SeedDevelopmentDataCommandFactory
     {
         /** @var SeedDevelopmentData $seed */
         $seed = $container->get(SeedDevelopmentData::class);
+        /** @var SeedManagementAccess $seedManagementAccess */
+        $seedManagementAccess = $container->get(SeedManagementAccess::class);
         /** @var Settings $settings */
         $settings = $container->get(Settings::class);
 
-        return new SeedDevelopmentDataCommand($seed, $settings->rootDomain, $settings->issuer());
+        return new SeedDevelopmentDataCommand(
+            $seed,
+            $seedManagementAccess,
+            $settings->rootDomain,
+            $settings->issuer(),
+        );
     }
 }

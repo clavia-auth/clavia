@@ -41,7 +41,7 @@ final class IssueTokenTest extends TestCase
     {
         $this->clients = new InMemoryClientRepository();
         $this->clients->save(Clients::public('spa'));
-        $this->clients->save(Clients::public('no-grant', grantTypes: []));
+        $this->clients->save(Clients::public('no-grant', grantTypes: [], responseTypes: []));
         $this->authenticator = new ClientAuthenticator($this->clients, new FakePasswordHasher());
     }
 

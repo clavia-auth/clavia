@@ -18,6 +18,8 @@ use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\ResponseType;
+use Clavia\Domain\Shared\Page;
+use Clavia\Domain\Shared\PageRequest;
 use Clavia\Domain\Shared\Url;
 
 /**
@@ -70,6 +72,33 @@ final readonly class PhpDbClientRepository implements ClientRepository
         }
 
         return false;
+    }
+
+    #[\Override]
+    public function delete(ClientId $id): void
+    {
+        $this->database->execute(
+            'DELETE FROM oauth2_clients WHERE client_id = :client_id',
+            ['client_id' => $id->value],
+        );
+    }
+
+    #[\Override]
+    public function page(PageRequest $request): Page
+    {
+        $search = Search::across($request, ['client_id', 'name']);
+        /** @var int|string $total */
+        $total = $this->database->fetchValue(
+            'SELECT count(*) FROM oauth2_clients ' . $search->where,
+            $search->parameters,
+        );
+        $rows = $this->database->fetchAll(
+            'SELECT ' . self::COLUMNS . ' FROM oauth2_clients ' . $search->where
+            . ' ORDER BY created_at DESC, client_id LIMIT :limit OFFSET :offset',
+            $search->pageParameters($request),
+        );
+
+        return new Page(array_map($this->hydrate(...), $rows), max(0, (int) $total), $request);
     }
 
     #[\Override]

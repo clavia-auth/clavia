@@ -61,8 +61,8 @@ final class InMemoryRepositoriesTest extends TestCase
         $this->clients = new InMemoryClientRepository();
         $this->transactions = new InMemoryTransactionManager();
         $this->codes = new InMemoryAuthorizationCodeRepository($this->transactions);
-        $this->resourceServers = new InMemoryResourceServerRepository();
         $this->clientGrants = new InMemoryClientGrantRepository();
+        $this->resourceServers = new InMemoryResourceServerRepository($this->clientGrants);
     }
 
     #[\Override]

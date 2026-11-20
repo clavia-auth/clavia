@@ -80,6 +80,7 @@ final class PhpDbAccessTokenRepositoryTest extends IntegrationTestCase
             ScopeSet::fromString('openid'),
             CodeChallenge::fromString(str_repeat('a', 43)),
             null,
+            null,
             AuthenticationContext::unknown(),
             $at,
             60,

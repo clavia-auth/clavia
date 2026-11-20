@@ -14,6 +14,8 @@ namespace ClaviaTest\Support\Fake;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
+use Clavia\Domain\Shared\Page;
+use Clavia\Domain\Shared\PageRequest;
 
 /**
  * Clients kept in an array, in the order they were first saved.
@@ -54,6 +56,23 @@ final class InMemoryClientRepository implements ClientRepository
     public function save(Client $client): void
     {
         $this->clients[$client->id->value] = $client;
+    }
+
+    #[\Override]
+    public function delete(ClientId $id): void
+    {
+        unset($this->clients[$id->value]);
+    }
+
+    #[\Override]
+    public function page(PageRequest $request): Page
+    {
+        return InMemoryPaging::page(
+            array_values($this->clients),
+            $request,
+            static fn (Client $client): array => [$client->id->value, $client->name],
+            static fn (Client $client): array => [$client->createdAt, $client->id->value],
+        );
     }
 
     /**

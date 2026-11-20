@@ -11,6 +11,9 @@ declare(strict_types=1);
 
 namespace Clavia\Domain\Client;
 
+use Clavia\Domain\Shared\Page;
+use Clavia\Domain\Shared\PageRequest;
+
 /**
  * Where registered client applications are kept.
  */
@@ -39,4 +42,17 @@ interface ClientRepository
 
     /** Insert the client, or update it when it already exists. */
     public function save(Client $client): void;
+
+    /**
+     * Remove the client, and with it every code, token and grant it holds.
+     */
+    public function delete(ClientId $id): void;
+
+    /**
+     * Clients newest first, searching the id and the name: an operator arrives with
+     * whichever one they were given.
+     *
+     * @return Page<Client>
+     */
+    public function page(PageRequest $request): Page;
 }

@@ -1,0 +1,1106 @@
+openapi: 3.0.3
+
+info:
+  title: Clavia Management API
+  version: 1.0.0
+  license:
+    name: BSD-3-Clause
+    url: https://opensource.org/licenses/BSD-3-Clause
+  description: |
+    Administration of a Clavia deployment: end users, client applications and the APIs
+    tokens are issued for.
+
+    **A machine plane.** Every operation takes a bearer access token issued for this API
+    (its `aud` is the Management API identifier, `https://management.{domain}/api/v1/` by
+    default) and carrying the scope the operation names. The browser session of
+    `auth.{domain}` is never accepted here, and neither is a token in the query string or
+    the body. Checks are made in this order: the token is live (known, unrevoked,
+    unexpired, its subject still active), it was issued for this API, it carries the
+    scope. Failures are RFC 6750 challenges.
+
+    **This document is the contract.** Every request is validated against it before it
+    reaches the application: a body carrying a field not described here is refused, not
+    ignored. Errors other than authentication failures are RFC 9457 problem documents.
+
+    **Secrets appear once.** A password is never returned; a client secret only in the
+    response that creates or rotates it.
+
+    There is no endpoint that grants a client access to an API: a scope that could write
+    client grants would be the scope that grants every other scope. Grants are written
+    from the shell (`clavia clients:grant`).
+
+servers:
+  - url: /
+
+tags:
+  - name: users
+    description: End users — the resource owners, and the subjects of ID tokens.
+  - name: clients
+    description: Applications registered to obtain tokens.
+  - name: resource-servers
+    description: The APIs tokens are issued for, and the permissions each defines.
+
+paths:
+  /api/v1/users:
+    get:
+      tags: [users]
+      operationId: listUsers
+      summary: List users, newest first, optionally searching the email address.
+      security:
+        - managementToken: [read:users]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200':
+          description: One page of users.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    post:
+      tags: [users]
+      operationId: createUser
+      summary: Create a user with a password. The password is hashed and never returned.
+      security:
+        - managementToken: [create:users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+      responses:
+        '201':
+          description: The user, as created.
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/users/{user_id}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [users]
+      operationId: getUser
+      summary: Read one user.
+      security:
+        - managementToken: [read:users]
+      responses:
+        '200':
+          description: The user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    patch:
+      tags: [users]
+      operationId: updateUser
+      summary: Change some of a user's fields; absent fields are left alone.
+      description: |
+        A profile field set to `null` is cleared. A new email address is unverified
+        unless the same request says otherwise. Deactivating an account stops every
+        session and token it holds from being accepted on their next use.
+      security:
+        - managementToken: [update:users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+      responses:
+        '200':
+          description: The user, as updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    delete:
+      tags: [users]
+      operationId: deleteUser
+      summary: Delete a user, and every code and token issued on their behalf.
+      description: Refused for the account the token is acting as.
+      security:
+        - managementToken: [delete:users]
+      responses:
+        '204':
+          description: Deleted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/clients:
+    get:
+      tags: [clients]
+      operationId: listClients
+      summary: List clients, newest first, optionally searching the id and the name.
+      security:
+        - managementToken: [read:clients]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200':
+          description: One page of clients.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    post:
+      tags: [clients]
+      operationId: createClient
+      summary: Register a client. Its id — and, when confidential, its secret — are generated.
+      description: |
+        The secret is in this response and nowhere else: only its hash is kept. A
+        registration that no flow could serve is refused — a confidential client without
+        a secret method, a public one with one, the client credentials grant for a public
+        client, the code flow without a redirect URI or with only half of it.
+      security:
+        - managementToken: [create:clients]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientCreate'
+      responses:
+        '201':
+          description: The client, with its secret.
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientWithSecret'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/clients/{client_id}:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [clients]
+      operationId: getClient
+      summary: Read one client. Its secret is never part of it.
+      security:
+        - managementToken: [read:clients]
+      responses:
+        '200':
+          description: The client.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    patch:
+      tags: [clients]
+      operationId: updateClient
+      summary: Change some of a client's registration; the result is checked as a new one would be.
+      description: The type is not changeable — switching between public and confidential is a different client.
+      security:
+        - managementToken: [update:clients]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientUpdate'
+      responses:
+        '200':
+          description: The client, as updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    delete:
+      tags: [clients]
+      operationId: deleteClient
+      summary: Delete a client, and every code, token and grant it holds.
+      description: Refused for the client the token was issued to.
+      security:
+        - managementToken: [delete:clients]
+      responses:
+        '204':
+          description: Deleted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/clients/{client_id}/rotate-secret:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    post:
+      tags: [clients]
+      operationId: rotateClientSecret
+      summary: Replace a confidential client's secret. The old one stops working at once.
+      description: Tokens already issued are not affected; only the next token request needs the new secret.
+      security:
+        - managementToken: [update:clients]
+      responses:
+        '200':
+          description: The client, with its new secret.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientWithSecret'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/resource-servers:
+    get:
+      tags: [resource-servers]
+      operationId: listResourceServers
+      summary: List APIs, newest first, optionally searching the identifier and the name.
+      security:
+        - managementToken: [read:resource_servers]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200':
+          description: One page of APIs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceServerPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    post:
+      tags: [resource-servers]
+      operationId: createResourceServer
+      summary: Register an API.
+      description: A system API — one the server depends on — cannot be created here.
+      security:
+        - managementToken: [create:resource_servers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceServerCreate'
+      responses:
+        '201':
+          description: The API, as registered.
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceServer'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/resource-servers/{resource_server_id}:
+    parameters:
+      - $ref: '#/components/parameters/ResourceServerId'
+    get:
+      tags: [resource-servers]
+      operationId: getResourceServer
+      summary: Read one API.
+      security:
+        - managementToken: [read:resource_servers]
+      responses:
+        '200':
+          description: The API.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceServer'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    patch:
+      tags: [resource-servers]
+      operationId: updateResourceServer
+      summary: Rename an API, or replace the permissions it defines.
+      description: |
+        The identifier never changes: it is the `aud` of every token already issued.
+        A system API may be renamed, but its permissions are the server's own (409).
+      security:
+        - managementToken: [update:resource_servers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceServerUpdate'
+      responses:
+        '200':
+          description: The API, as updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceServer'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    delete:
+      tags: [resource-servers]
+      operationId: deleteResourceServer
+      summary: Delete an API, its permissions and every client grant on it.
+      description: Refused for a system API (409).
+      security:
+        - managementToken: [delete:resource_servers]
+      responses:
+        '204':
+          description: Deleted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+components:
+  securitySchemes:
+    managementToken:
+      type: oauth2
+      description: |
+        An access token whose audience is the Management API. A machine client obtains one
+        with the client credentials grant, naming the API in `audience`, within the scopes
+        its client grant allows.
+      flows:
+        clientCredentials:
+          tokenUrl: /oauth2/token
+          scopes:
+            read:users: View end users
+            create:users: Create end users
+            update:users: Modify end users
+            delete:users: Delete end users
+            read:clients: View client applications
+            create:clients: Create client applications
+            update:clients: Modify client applications
+            delete:clients: Delete client applications
+            read:resource_servers: View APIs
+            create:resource_servers: Create APIs
+            update:resource_servers: Modify APIs
+            delete:resource_servers: Delete APIs
+
+  headers:
+    Location:
+      description: Where the created resource can be read.
+      schema:
+        type: string
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      description: 1-based page number.
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PerPage:
+      name: per_page
+      in: query
+      description: Items per page.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+    Search:
+      name: q
+      in: query
+      description: A case-insensitive substring, taken literally (`%` and `_` are not wildcards).
+      schema:
+        type: string
+        maxLength: 200
+    UserId:
+      name: user_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ClientId:
+      name: client_id
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
+    ResourceServerId:
+      name: resource_server_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^rs_[A-Za-z0-9]{16}$'
+
+  responses:
+    BadRequest:
+      description: |
+        The request could not be read: malformed JSON or a parameter sent twice (a problem
+        document), or a malformed `Authorization` header (`invalid_request`, an RFC 6750
+        challenge).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BearerError'
+    Unauthorized:
+      description: |
+        No usable token: none at all (a bare `Bearer` challenge and `{}`), or one that
+        is unknown, expired, revoked, issued for another API or for an account that cannot
+        be used (`invalid_token`).
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BearerError'
+    Forbidden:
+      description: The token does not carry the scope this operation requires (`insufficient_scope`).
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BearerError'
+    UnsupportedMediaType:
+      description: The body is not `application/json`.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: No such resource.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: The request contradicts what exists — a taken address or identifier, a protected resource.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: The request does not satisfy this document, or describes something that could never work.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+  schemas:
+    Problem:
+      description: An RFC 9457 problem document.
+      type: object
+      additionalProperties: false
+      required: [type, title, status, detail]
+      properties:
+        type:
+          type: string
+          description: Always `about:blank`; `title` is the HTTP status phrase.
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+          description: What went wrong, for a person to read.
+        errors:
+          type: array
+          description: For a request that did not satisfy this document, where and why.
+          items:
+            type: object
+            additionalProperties: false
+            required: [detail]
+            properties:
+              pointer:
+                type: string
+                description: An RFC 6901 JSON pointer into the request body, when the problem is there.
+              parameter:
+                type: string
+                description: The name of the parameter at fault, when the problem is one.
+              detail:
+                type: string
+
+    BearerError:
+      description: |
+        An RFC 6750 §3 error. Empty when the request carried no credentials at all: there
+        is nothing yet to be wrong with.
+      type: object
+      additionalProperties: false
+      properties:
+        error:
+          type: string
+          enum: [invalid_request, invalid_token, insufficient_scope]
+        error_description:
+          type: string
+
+    UserPage:
+      description: One page of users, newest first.
+      type: object
+      additionalProperties: false
+      required: [items, total, page, per_page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        total:
+          $ref: '#/components/schemas/Total'
+        page:
+          $ref: '#/components/schemas/PageNumber'
+        per_page:
+          $ref: '#/components/schemas/PerPage'
+
+    ClientPage:
+      description: One page of clients, newest first.
+      type: object
+      additionalProperties: false
+      required: [items, total, page, per_page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Client'
+        total:
+          $ref: '#/components/schemas/Total'
+        page:
+          $ref: '#/components/schemas/PageNumber'
+        per_page:
+          $ref: '#/components/schemas/PerPage'
+
+    ResourceServerPage:
+      description: One page of APIs, newest first.
+      type: object
+      additionalProperties: false
+      required: [items, total, page, per_page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResourceServer'
+        total:
+          $ref: '#/components/schemas/Total'
+        page:
+          $ref: '#/components/schemas/PageNumber'
+        per_page:
+          $ref: '#/components/schemas/PerPage'
+
+    Total:
+      type: integer
+      minimum: 0
+      description: Matching items across every page.
+    PageNumber:
+      type: integer
+      minimum: 1
+    PerPage:
+      type: integer
+      minimum: 1
+      maximum: 100
+
+    ProfileName:
+      type: string
+      minLength: 1
+      maxLength: 255
+
+    User:
+      type: object
+      additionalProperties: false
+      required: [id, email, email_verified, is_active, has_password, name, given_name, family_name,
+        nickname, picture, locale, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The OIDC `sub`. Stable and opaque.
+        email:
+          type: string
+        email_verified:
+          type: boolean
+        is_active:
+          type: boolean
+        has_password:
+          type: boolean
+          description: Whether the account can be signed into with a password at all.
+        name:
+          type: string
+          nullable: true
+        given_name:
+          type: string
+          nullable: true
+        family_name:
+          type: string
+          nullable: true
+        nickname:
+          type: string
+          nullable: true
+        picture:
+          type: string
+          nullable: true
+        locale:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    UserCreate:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          minLength: 3
+          maxLength: 320
+        password:
+          type: string
+          minLength: 8
+          maxLength: 256
+          description: At least 8 characters, at most 72 bytes once encoded.
+        email_verified:
+          type: boolean
+          default: false
+        is_active:
+          type: boolean
+          default: true
+        name:
+          $ref: '#/components/schemas/ProfileName'
+        given_name:
+          $ref: '#/components/schemas/ProfileName'
+        family_name:
+          $ref: '#/components/schemas/ProfileName'
+        nickname:
+          $ref: '#/components/schemas/ProfileName'
+        picture:
+          type: string
+          maxLength: 2048
+          description: An absolute http(s) URL.
+        locale:
+          type: string
+          maxLength: 35
+          description: A BCP 47 language tag, such as `en-GB`.
+
+    UserUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        email:
+          type: string
+          minLength: 3
+          maxLength: 320
+        password:
+          type: string
+          minLength: 8
+          maxLength: 256
+        email_verified:
+          type: boolean
+        is_active:
+          type: boolean
+        name:
+          type: string
+          maxLength: 255
+          nullable: true
+        given_name:
+          type: string
+          maxLength: 255
+          nullable: true
+        family_name:
+          type: string
+          maxLength: 255
+          nullable: true
+        nickname:
+          type: string
+          maxLength: 255
+          nullable: true
+        picture:
+          type: string
+          maxLength: 2048
+          nullable: true
+        locale:
+          type: string
+          maxLength: 35
+          nullable: true
+
+    ClientType:
+      type: string
+      enum: [public, confidential]
+    AuthMethod:
+      type: string
+      enum: [none, client_secret_basic, client_secret_post]
+    GrantType:
+      type: string
+      enum: [authorization_code, client_credentials]
+    ResponseType:
+      type: string
+      enum: [code]
+    RedirectUri:
+      type: string
+      minLength: 1
+      maxLength: 2048
+      description: An absolute URI without a fragment, matched exactly.
+
+    Client:
+      type: object
+      additionalProperties: false
+      required: [client_id, name, client_type, token_endpoint_auth_method, redirect_uris, grant_types,
+        response_types, created_at]
+      properties:
+        client_id:
+          type: string
+        name:
+          type: string
+        client_type:
+          $ref: '#/components/schemas/ClientType'
+        token_endpoint_auth_method:
+          $ref: '#/components/schemas/AuthMethod'
+        redirect_uris:
+          type: array
+          items:
+            type: string
+        grant_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/GrantType'
+        response_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResponseType'
+        created_at:
+          type: string
+          format: date-time
+
+    ClientWithSecret:
+      description: A client, with the only copy of its secret there will ever be.
+      type: object
+      additionalProperties: false
+      required: [client_id, name, client_type, token_endpoint_auth_method, redirect_uris, grant_types,
+        response_types, created_at, client_secret]
+      properties:
+        client_id:
+          type: string
+        name:
+          type: string
+        client_type:
+          $ref: '#/components/schemas/ClientType'
+        token_endpoint_auth_method:
+          $ref: '#/components/schemas/AuthMethod'
+        redirect_uris:
+          type: array
+          items:
+            type: string
+        grant_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/GrantType'
+        response_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResponseType'
+        created_at:
+          type: string
+          format: date-time
+        client_secret:
+          type: string
+          nullable: true
+          description: Null for a public client, which has none.
+
+    ClientCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          maxLength: 120
+          default: ''
+        client_type:
+          $ref: '#/components/schemas/ClientType'
+        token_endpoint_auth_method:
+          $ref: '#/components/schemas/AuthMethod'
+        redirect_uris:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/RedirectUri'
+        grant_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/GrantType'
+        response_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResponseType'
+      description: |
+        `client_type` defaults to `public`; `token_endpoint_auth_method` to `none` for a
+        public client and `client_secret_basic` for a confidential one.
+
+    ClientUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        token_endpoint_auth_method:
+          $ref: '#/components/schemas/AuthMethod'
+        redirect_uris:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/RedirectUri'
+        grant_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/GrantType'
+        response_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResponseType'
+
+    Permission:
+      type: object
+      additionalProperties: false
+      required: [value, description]
+      properties:
+        value:
+          type: string
+        description:
+          type: string
+
+    PermissionInput:
+      type: object
+      additionalProperties: false
+      required: [value]
+      properties:
+        value:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^[!#-\[\]-~]+$'
+          description: A scope token (RFC 6749 §3.3).
+        description:
+          type: string
+          maxLength: 500
+          default: ''
+
+    ResourceServer:
+      type: object
+      additionalProperties: false
+      required: [id, identifier, name, permissions, is_system, created_at]
+      properties:
+        id:
+          type: string
+        identifier:
+          type: string
+          description: The `audience` a client names and the `aud` its token carries.
+        name:
+          type: string
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+        is_system:
+          type: boolean
+          description: An API the server itself depends on. Not deletable; its permissions are the server's own.
+        created_at:
+          type: string
+          format: date-time
+
+    ResourceServerCreate:
+      type: object
+      additionalProperties: false
+      required: [identifier]
+      properties:
+        identifier:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: An absolute URI without a fragment, on a domain you own. Never dereferenced.
+        name:
+          type: string
+          maxLength: 120
+          default: ''
+        permissions:
+          type: array
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/PermissionInput'
+
+    ResourceServerUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        permissions:
+          type: array
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/PermissionInput'

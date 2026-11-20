@@ -14,7 +14,6 @@ namespace Clavia\Adapter\Primary\Http\Shared;
 use Clavia\Domain\OAuth2\BearerErrorCode;
 use Clavia\Domain\OAuth2\BearerTokenError;
 use Laminas\Diactoros\Response\JsonResponse;
-use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -29,24 +28,26 @@ final readonly class BearerChallenger
     private const array NO_STORE = ['Cache-Control' => 'no-store'];
 
     /**
-     * @param string $realm The protection space named in every challenge: the issuer.
+     * @param string $realm The protection space named in every challenge: the issuer for the
+     *                      OIDC endpoints, the Management API's identifier for `/api/v1/*`.
      */
-    public function __construct(
-        private ResponseFactoryInterface $responses,
-        private string $realm,
-    ) {
+    public function __construct(private string $realm)
+    {
     }
 
     /**
      * The request carried no bearer credentials. RFC 6750 §3.1: "the resource server
      * SHOULD NOT include an error code or other error information" — just the
-     * challenge saying which scheme to use.
+     * challenge saying which scheme to use, and an empty JSON object, so that every
+     * refusal a program receives is a JSON document it can parse.
      */
     public function missing(): ResponseInterface
     {
-        return $this->responses->createResponse(401)
-            ->withHeader('WWW-Authenticate', 'Bearer ' . self::parameters(['realm' => $this->realm]))
-            ->withHeader('Cache-Control', 'no-store');
+        return new JsonResponse(
+            new \stdClass(),
+            401,
+            self::NO_STORE + ['WWW-Authenticate' => 'Bearer ' . self::parameters(['realm' => $this->realm])],
+        );
     }
 
     /**

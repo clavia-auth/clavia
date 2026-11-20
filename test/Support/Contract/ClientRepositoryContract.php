@@ -18,6 +18,7 @@ use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\ResponseType;
+use Clavia\Domain\Shared\PageRequest;
 use Clavia\Domain\Shared\Url;
 use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\Test;
@@ -141,6 +142,44 @@ trait ClientRepositoryContract
     public function withoutClientsNoOriginIsRegistered(): void
     {
         self::assertFalse($this->clients()->registersRedirectOrigin('https://app.example'));
+    }
+
+    #[Test]
+    public function clientsArePagedNewestFirstAndSearchedByIdAndName(): void
+    {
+        $this->clients()->save($this->aPublicClient('alpha-app', 'Billing', '2026-01-15T10:00:00Z'));
+        $this->clients()->save($this->aPublicClient('beta-app', 'Reports', '2026-01-15T11:00:00Z'));
+        $this->clients()->save($this->aPublicClient('gamma-app', 'Billing 100%', '2026-01-15T12:00:00Z'));
+
+        $first = $this->clients()->page(PageRequest::of(1, 2));
+        self::assertSame(3, $first->total);
+        self::assertSame(
+            ['gamma-app', 'beta-app'],
+            array_map(static fn (Client $c): string => $c->id->value, $first->items),
+        );
+        self::assertSame(['alpha-app'], array_map(
+            static fn (Client $c): string => $c->id->value,
+            $this->clients()->page(PageRequest::of(2, 2))->items,
+        ));
+
+        self::assertSame(2, $this->clients()->page(PageRequest::of(search: 'BILLING'))->total);
+        self::assertSame(1, $this->clients()->page(PageRequest::of(search: 'beta-'))->total);
+        // `%` and `_` are characters, not wildcards.
+        self::assertSame(1, $this->clients()->page(PageRequest::of(search: '100%'))->total);
+        self::assertSame(0, $this->clients()->page(PageRequest::of(search: 'a_p'))->total);
+    }
+
+    #[Test]
+    public function aDeletedClientIsGone(): void
+    {
+        $this->clients()->save($this->aPublicClient('doomed', 'Doomed'));
+        $this->clients()->save($this->aPublicClient('kept', 'Kept'));
+
+        $this->clients()->delete(ClientId::fromString('doomed'));
+        $this->clients()->delete(ClientId::fromString('never-existed'));
+
+        self::assertNull($this->clients()->find(ClientId::fromString('doomed')));
+        self::assertNotNull($this->clients()->find(ClientId::fromString('kept')));
     }
 
     private function aPublicClient(string $id, string $name, string $createdAt = '2026-01-15T10:00:00Z'): Client

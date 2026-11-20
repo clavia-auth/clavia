@@ -14,13 +14,23 @@ namespace ClaviaTest\Support\Fake;
 use Clavia\Domain\ResourceServer\ResourceServer;
 use Clavia\Domain\ResourceServer\ResourceServerId;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
+use Clavia\Domain\Shared\AlreadyExists;
 use Clavia\Domain\Shared\Audience;
+use Clavia\Domain\Shared\Page;
+use Clavia\Domain\Shared\PageRequest;
 use LogicException;
 
 final class InMemoryResourceServerRepository implements ResourceServerRepository
 {
     /** @var array<string, ResourceServer> By id. */
     private array $resourceServers = [];
+
+    /**
+     * @param InMemoryClientGrantRepository|null $clientGrants The grants a deleted API takes with it.
+     */
+    public function __construct(private readonly ?InMemoryClientGrantRepository $clientGrants = null)
+    {
+    }
 
     #[\Override]
     public function find(ResourceServerId $id): ?ResourceServer
@@ -49,9 +59,30 @@ final class InMemoryResourceServerRepository implements ResourceServerRepository
         }
         $other = $this->findByIdentifier($resourceServer->identifier);
         if ($other !== null && ! $other->id->equals($resourceServer->id)) {
-            throw new LogicException('Another API already has this identifier.');
+            throw new AlreadyExists(
+                sprintf("An API is already registered as '%s'.", $resourceServer->identifier->value),
+            );
         }
 
         $this->resourceServers[$resourceServer->id->value] = $resourceServer;
+    }
+
+    #[\Override]
+    public function delete(ResourceServerId $id): void
+    {
+        unset($this->resourceServers[$id->value]);
+        // The table's ON DELETE CASCADE.
+        $this->clientGrants?->forgetApi($id);
+    }
+
+    #[\Override]
+    public function page(PageRequest $request): Page
+    {
+        return InMemoryPaging::page(
+            array_values($this->resourceServers),
+            $request,
+            static fn (ResourceServer $api): array => [$api->identifier->value, $api->name],
+            static fn (ResourceServer $api): array => [$api->createdAt, $api->id->value],
+        );
     }
 }

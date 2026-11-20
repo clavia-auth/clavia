@@ -26,6 +26,9 @@ use Clavia\Domain\OAuth2\CodeChallenge;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use Clavia\Domain\Oidc\Nonce;
 use Clavia\Domain\Oidc\OidcScope;
+use Clavia\Domain\ResourceServer\ResourceServer;
+use Clavia\Domain\ResourceServer\ResourceServerRepository;
+use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\InvalidValue;
@@ -63,6 +66,7 @@ final readonly class Authorize
         private AuthorizationCodeRepository $codes,
         private LoginStateStore $loginStates,
         private NonceRegistry $nonces,
+        private ResourceServerRepository $resourceServers,
         private SecretGenerator $secrets,
         private RandomSource $random,
         private Clock $clock,
@@ -87,7 +91,7 @@ final readonly class Authorize
         $state = $parameters->isRepeated('state') ? null : $parameters->get('state');
 
         try {
-            $scope = $this->validate($parameters, $client);
+            [$scope, $target] = $this->validate($parameters, $client);
             $challenge = $this->challenge($parameters);
             $nonce = $this->nonce($parameters, $client, $scope);
         } catch (OAuth2Error $refusal) {
@@ -99,6 +103,18 @@ final readonly class Authorize
             $this->loginStates->put($handle, new LoginState($request->requestTarget, $client->id));
 
             return new LoginRequired($handle);
+        }
+
+        // The person must hold what is asked of an API on their behalf. Roles arrive with
+        // Step 10; until then nobody holds a permission on an API that enforces them — a
+        // system API always does — so asking for one is refused rather than granted to
+        // every account that can sign in.
+        if ($target !== null && $target->isSystem && ! $scope->intersect($target->permissionScopes())->isEmpty()) {
+            return new RequestRefused(
+                $redirectUri,
+                OAuth2Error::accessDenied('Your account holds no permission on this API.'),
+                $state,
+            );
         }
 
         // Spent only now that a code is about to exist; atomic, so of two concurrent
@@ -116,6 +132,7 @@ final readonly class Authorize
             $redirectUri,
             $scope,
             $challenge,
+            $target?->identifier,
             $nonce,
             $request->endUser->authentication(),
             $this->clock->now(),
@@ -176,11 +193,13 @@ final readonly class Authorize
 
     /**
      * Everything that can be reported back to the client: repetition, the response
-     * type, and the scope.
+     * type, the audience and the scope.
+     *
+     * @return array{ScopeSet, ResourceServer|null} The scope, and the API it was checked against.
      *
      * @throws OAuth2Error
      */
-    private function validate(RequestParameters $parameters, Client $client): ScopeSet
+    private function validate(RequestParameters $parameters, Client $client): array
     {
         $repeated = $parameters->repeated();
         if ($repeated !== []) {
@@ -205,6 +224,8 @@ final readonly class Authorize
             );
         }
 
+        $target = $this->target($parameters);
+
         try {
             $scope = ScopeSet::fromString($parameters->get('scope') ?? '');
         } catch (InvalidValue) {
@@ -213,13 +234,46 @@ final readonly class Authorize
 
         // An unknown scope fails outright rather than being dropped. RFC 6749 §3.3 allows
         // either; failing surfaces a client's misconfiguration instead of silently issuing
-        // a token weaker than the one it asked for.
-        $unknown = $scope->without($this->supportedScopes);
+        // a token weaker than the one it asked for. What is known: the OIDC scopes, and the
+        // permissions of the API named in `audience`.
+        $known = $target === null ? $this->supportedScopes : $this->supportedScopes->union($target->permissionScopes());
+        $unknown = $scope->without($known);
         if (! $unknown->isEmpty()) {
-            throw OAuth2Error::invalidScope(sprintf('This server does not define: %s.', $unknown->toString()));
+            throw OAuth2Error::invalidScope(sprintf(
+                '%s does not define: %s.',
+                $target === null ? 'This server' : sprintf("The API '%s'", $target->identifier->value),
+                $unknown->toString(),
+            ));
         }
 
-        return $scope;
+        return [$scope, $target];
+    }
+
+    /**
+     * The API named in `audience`, whose permissions may then be asked for; null when the
+     * request names none and asks for the OIDC scopes alone.
+     *
+     * `audience` rather than RFC 8707's `resource`: single-valued, as the hosted providers
+     * spell it, and the value the token's `aud` becomes. An unknown one is RFC 8707's
+     * `invalid_target` nonetheless — the same failure, and a registered code for it.
+     *
+     * @throws OAuth2Error
+     */
+    private function target(RequestParameters $parameters): ?ResourceServer
+    {
+        $value = $parameters->get('audience');
+        if ($value === null) {
+            return null;
+        }
+
+        try {
+            $audience = Audience::fromString($value);
+        } catch (InvalidValue) {
+            throw OAuth2Error::invalidRequest("Invalid 'audience'.");
+        }
+
+        return $this->resourceServers->findByIdentifier($audience)
+            ?? throw OAuth2Error::invalidTarget('No API is registered with this audience.');
     }
 
     /**

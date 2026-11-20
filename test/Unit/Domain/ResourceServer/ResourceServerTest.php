@@ -16,6 +16,7 @@ use Clavia\Domain\ResourceServer\ClientGrant;
 use Clavia\Domain\ResourceServer\Permission;
 use Clavia\Domain\ResourceServer\ResourceServer;
 use Clavia\Domain\ResourceServer\ResourceServerId;
+use Clavia\Domain\ResourceServer\SystemApiProtected;
 use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\ScopeSet;
@@ -169,6 +170,54 @@ final class ResourceServerTest extends TestCase
         $this->expectException(InvalidValue::class);
 
         $grant->grantableOn($other);
+    }
+
+    // ── System APIs ─────────────────────────────────────────────────────────────
+
+    public function testAnApiIsNotASystemApiUnlessProvisionedAsOne(): void
+    {
+        $api = $this->api(['a']);
+        self::assertFalse($api->isSystem);
+
+        $system = $api->asSystem('Management', [Permission::of('read:users')]);
+
+        self::assertTrue($system->isSystem);
+        self::assertSame('Management', $system->name);
+        self::assertSame('read:users', $system->permissionScopes()->toString());
+        self::assertTrue($system->id->equals($api->id));
+    }
+
+    public function testASystemApiCanBeRenamedAndStaysOne(): void
+    {
+        $renamed = $this->api(['a'])->asSystem('Management', [])->renamed('Admin');
+
+        self::assertSame('Admin', $renamed->name);
+        self::assertTrue($renamed->isSystem);
+    }
+
+    public function testASystemApisPermissionsCannotBeReplaced(): void
+    {
+        $this->expectException(SystemApiProtected::class);
+
+        $this->api([])->asSystem('Management', [Permission::of('a')])->withPermissions([Permission::of('b')]);
+    }
+
+    public function testASystemApiCannotBeDeleted(): void
+    {
+        $ordinary = $this->api(['a']);
+        $ordinary->assertDeletable();
+        $system = $ordinary->asSystem('Management', []);
+
+        $this->expectException(SystemApiProtected::class);
+
+        $system->assertDeletable();
+    }
+
+    public function testAnOrdinaryApisPermissionsAreReplacedAsAWhole(): void
+    {
+        $api = $this->api(['a', 'b'])->withPermissions([Permission::of('c'), Permission::of('b')]);
+
+        self::assertSame(['b', 'c'], $api->permissionScopes()->toList());
     }
 
     /**

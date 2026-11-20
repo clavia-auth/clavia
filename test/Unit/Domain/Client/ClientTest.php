@@ -87,10 +87,70 @@ final class ClientTest extends TestCase
 
     public function testAClientThatAsksForNoCodeNeedsNoRedirectUri(): void
     {
-        $client = $this->register(redirectUris: [], responseTypes: []);
+        $client = $this->register(redirectUris: [], grantTypes: [], responseTypes: []);
 
         self::assertSame([], $client->redirectUris);
         self::assertNull($client->soleRedirectUri());
+    }
+
+    public function testTheCodeGrantNeedsSomewhereToSendTheCodeToo(): void
+    {
+        $this->expectException(InvalidValue::class);
+
+        $this->register(redirectUris: [], responseTypes: []);
+    }
+
+    public function testTheCodeResponseTypeAndTheCodeGrantComeTogether(): void
+    {
+        foreach ([[[GrantType::AuthorizationCode], []], [[], [ResponseType::Code]]] as [$grants, $responses]) {
+            try {
+                $this->register(grantTypes: $grants, responseTypes: $responses);
+                self::fail('Half of the code flow was registered.');
+            } catch (InvalidValue $refusal) {
+                self::assertStringContainsString('go together', $refusal->getMessage());
+            }
+        }
+    }
+
+    public function testOnlyAConfidentialClientMayUseClientCredentials(): void
+    {
+        $this->expectException(InvalidValue::class);
+        $this->expectExceptionMessage('confidential clients only');
+
+        $this->register(grantTypes: [GrantType::ClientCredentials], responseTypes: []);
+    }
+
+    public function testReconfiguringChecksTheResultAsANewRegistrationWouldBe(): void
+    {
+        $client = $this->register();
+
+        $renamed = $client->reconfigure(
+            'Renamed',
+            $client->redirectUris,
+            $client->grantTypes,
+            $client->responseTypes,
+            $client->authMethod,
+        );
+        self::assertSame('Renamed', $renamed->name);
+        self::assertTrue($renamed->id->equals($client->id));
+        self::assertEquals($client->createdAt, $renamed->createdAt);
+
+        $this->expectException(InvalidValue::class);
+        $client->reconfigure('App', [], $client->grantTypes, $client->responseTypes, $client->authMethod);
+    }
+
+    public function testOnlyAConfidentialClientHasASecretToRotate(): void
+    {
+        $confidential = $this->register(
+            type: ClientType::Confidential,
+            authMethod: ClientAuthMethod::ClientSecretBasic,
+            secretHash: 'old-hash',
+        );
+
+        self::assertSame('new-hash', $confidential->withSecretHash('new-hash')->secretHash());
+
+        $this->expectException(InvalidValue::class);
+        $this->register()->withSecretHash('new-hash');
     }
 
     public function testANameLongerThan120BytesIsRefused(): void

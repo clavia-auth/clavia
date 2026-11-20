@@ -183,6 +183,7 @@ trait AuthorizationCodeRepositoryContract
             'https://app.example/cb?x=1',
             ScopeSet::fromString('openid profile'),
             CodeChallenge::fromString(str_repeat('a', 43)),
+            null,
             $nonce,
             $authentication ?? AuthenticationContext::unknown(),
             new DateTimeImmutable('2026-01-15T10:00:00Z'),

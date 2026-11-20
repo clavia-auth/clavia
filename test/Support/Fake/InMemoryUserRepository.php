@@ -14,6 +14,9 @@ namespace ClaviaTest\Support\Fake;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
+use Clavia\Domain\Shared\AlreadyExists;
+use Clavia\Domain\Shared\Page;
+use Clavia\Domain\Shared\PageRequest;
 
 /**
  * Users kept in an array. Stores and returns copies, like a database would: changing an
@@ -41,6 +44,28 @@ final class InMemoryUserRepository implements UserRepository
     #[\Override]
     public function save(User $user): void
     {
+        $other = $this->findByEmail($user->email);
+        if ($other !== null && ! $other->id->equals($user->id)) {
+            throw new AlreadyExists(sprintf('Another account uses the address %s.', $user->email));
+        }
+
         $this->users[$user->id->value] = clone $user;
+    }
+
+    #[\Override]
+    public function delete(UserId $id): void
+    {
+        unset($this->users[$id->value]);
+    }
+
+    #[\Override]
+    public function page(PageRequest $request): Page
+    {
+        return InMemoryPaging::page(
+            array_map(static fn (User $user): User => clone $user, array_values($this->users)),
+            $request,
+            static fn (User $user): array => [$user->email],
+            static fn (User $user): array => [$user->createdAt, $user->id->value],
+        );
     }
 }

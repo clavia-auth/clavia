@@ -91,9 +91,23 @@ final readonly class Client
             }
         }
 
-        // A code can only be delivered by redirect.
-        if (in_array(ResponseType::Code, $responseTypes, true) && $redirectUris === []) {
+        // A code can only be delivered by redirect, and is worth nothing without the
+        // grant that redeems it — and the reverse: the grant needs a way to get codes.
+        $asksForCodes = in_array(ResponseType::Code, $responseTypes, true);
+        $redeemsCodes = in_array(GrantType::AuthorizationCode, $grantTypes, true);
+        if (($asksForCodes || $redeemsCodes) && $redirectUris === []) {
             throw new InvalidValue('A client that may ask for a code needs at least one redirect URI.');
+        }
+        if ($asksForCodes !== $redeemsCodes) {
+            throw new InvalidValue(
+                'The "code" response type and the "authorization_code" grant go together: '
+                . 'one issues what the other redeems.',
+            );
+        }
+
+        // RFC 6749 §4.4: the client credentials grant is for clients that can keep a secret.
+        if (in_array(GrantType::ClientCredentials, $grantTypes, true) && $type !== ClientType::Confidential) {
+            throw new InvalidValue('The client credentials grant is available to confidential clients only.');
         }
 
         return new self(
@@ -106,6 +120,66 @@ final readonly class Client
             array_values(array_unique($grantTypes, SORT_REGULAR)),
             array_values(array_unique($responseTypes, SORT_REGULAR)),
             $createdAt,
+        );
+    }
+
+    /**
+     * The same client with a new registration — name, redirect URIs, grants, response
+     * types and authentication method — checked by the same rules as a new one, so that
+     * an edit cannot leave behind a client no flow could serve.
+     *
+     * The type is not among them: switching between public and confidential changes
+     * how the client proves itself, which is a different client.
+     *
+     * @param list<Url>          $redirectUris
+     * @param list<GrantType>    $grantTypes
+     * @param list<ResponseType> $responseTypes
+     *
+     * @throws InvalidValue
+     */
+    public function reconfigure(
+        string $name,
+        array $redirectUris,
+        array $grantTypes,
+        array $responseTypes,
+        ClientAuthMethod $authMethod,
+    ): self {
+        return self::register(
+            $this->id,
+            $name,
+            $this->type,
+            $authMethod,
+            $this->secretHash,
+            $redirectUris,
+            $grantTypes,
+            $responseTypes,
+            $this->createdAt,
+        );
+    }
+
+    /**
+     * The same client with a new secret: the old one stops working at once.
+     *
+     * @param non-empty-string $secretHash A hash from the password hasher.
+     *
+     * @throws InvalidValue When the client is public: it has no secret to replace.
+     */
+    public function withSecretHash(#[\SensitiveParameter] string $secretHash): self
+    {
+        if ($this->type !== ClientType::Confidential) {
+            throw new InvalidValue('Only a confidential client has a secret to rotate.');
+        }
+
+        return self::register(
+            $this->id,
+            $this->name,
+            $this->type,
+            $this->authMethod,
+            $secretHash,
+            $this->redirectUris,
+            $this->grantTypes,
+            $this->responseTypes,
+            $this->createdAt,
         );
     }
 

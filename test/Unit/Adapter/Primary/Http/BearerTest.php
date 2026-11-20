@@ -16,7 +16,6 @@ use Clavia\Adapter\Primary\Http\Shared\BearerCredentials;
 use Clavia\Domain\OAuth2\BearerErrorCode;
 use Clavia\Domain\OAuth2\BearerTokenError;
 use Clavia\Domain\Shared\ScopeSet;
-use Laminas\Diactoros\ResponseFactory;
 use Laminas\Diactoros\ServerRequest;
 use Laminas\Diactoros\StreamFactory;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -92,7 +91,8 @@ final class BearerTest extends TestCase
         self::assertSame(401, $response->getStatusCode());
         self::assertSame('Bearer realm="https://auth.clavia.test"', $response->getHeaderLine('WWW-Authenticate'));
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
-        self::assertSame('', (string) $response->getBody());
+        self::assertSame('{}', (string) $response->getBody());
+        self::assertStringStartsWith('application/json', $response->getHeaderLine('Content-Type'));
     }
 
     public function testEachRefusalHasItsStatusAndSaysWhyInTheChallengeAndTheBody(): void
@@ -145,7 +145,7 @@ final class BearerTest extends TestCase
 
     private function challenger(): BearerChallenger
     {
-        return new BearerChallenger(new ResponseFactory(), self::REALM);
+        return new BearerChallenger(self::REALM);
     }
 
     private function request(string ...$authorization): ServerRequest

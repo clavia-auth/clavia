@@ -65,7 +65,7 @@ final class AccessToken
             $code->clientId,
             $code->userId,
             $code->id,
-            null,
+            $code->audience,
             $scope,
             $now,
             $now->modify(sprintf('+%d seconds', $lifetimeSeconds)),

@@ -35,6 +35,7 @@
         "mezzio/mezzio-laminasviewrenderer": "^3.1",
         "mezzio/mezzio-router": "^4.2",
         "monolog/monolog": "^3.13",
+        "phayne-io/openapi-psr7-validator": "dev-master",
         "php-db/phpdb": "0.6.x-dev",
         "php-db/phpdb-pgsql": "0.1.x-dev",
         "psr/container": "^2.0",

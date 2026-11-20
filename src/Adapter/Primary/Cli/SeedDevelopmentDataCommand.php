@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Cli;
 
 use Clavia\Application\Development\SeedDevelopmentData;
+use Clavia\Application\Development\SeedManagementAccess;
 use Clavia\Domain\Shared\InvalidValue;
 use LogicException;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -35,6 +36,7 @@ final class SeedDevelopmentDataCommand extends Command
      */
     public function __construct(
         private readonly SeedDevelopmentData $seed,
+        private readonly SeedManagementAccess $seedManagementAccess,
         private readonly string $rootDomain,
         private readonly string $issuer,
     ) {
@@ -76,6 +78,7 @@ final class SeedDevelopmentDataCommand extends Command
 
         try {
             $seeded = ($this->seed)($email, $password, $redirectUri);
+            $management = ($this->seedManagementAccess)();
         } catch (LogicException | InvalidValue $refusal) {
             $output->writeln('<error>' . $refusal->getMessage() . '</error>');
 
@@ -93,9 +96,27 @@ final class SeedDevelopmentDataCommand extends Command
                 ? "Created signing key {$seeded->signingKeyId}"
                 : "Signing key {$seeded->signingKeyId} is already active",
         );
+        $output->writeln(
+            "Registered the Management API as {$management->managementApi->value}",
+            OutputInterface::OUTPUT_RAW,
+        );
+        $output->writeln(sprintf(
+            '%s machine client %s, granted every management scope',
+            $management->clientCreated ? 'Created' : 'Kept',
+            $management->clientId->value,
+        ));
         $output->writeln('');
         $output->writeln("Seeded. Sign in at {$this->issuer}/auth/login as {$email} / {$password}");
         $output->writeln('Run `clavia authorize-url` to get a link that exercises the whole flow.');
+        $output->writeln('Call the Management API with a token from:');
+        $output->writeln('');
+        $output->writeln("  curl -s {$this->issuer}/oauth2/token \\", OutputInterface::OUTPUT_RAW);
+        $output->writeln(
+            sprintf("    -u '%s:%s' \\", $management->clientId->value, SeedManagementAccess::CLIENT_SECRET),
+            OutputInterface::OUTPUT_RAW,
+        );
+        $output->writeln('    -d grant_type=client_credentials \\', OutputInterface::OUTPUT_RAW);
+        $output->writeln("    -d audience={$management->managementApi->value}", OutputInterface::OUTPUT_RAW);
 
         return Command::SUCCESS;
     }

@@ -104,6 +104,7 @@ final class AccessTokenTest extends TestCase
             ScopeSet::fromString('openid'),
             CodeChallenge::fromString(str_repeat('a', 43)),
             null,
+            null,
             AuthenticationContext::unknown(),
             new DateTimeImmutable('2026-01-15T10:00:00Z'),
             60,

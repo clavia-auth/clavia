@@ -121,6 +121,52 @@ final class UserTest extends TestCase
         self::assertEquals(new DateTimeImmutable('2026-01-03T00:00:00Z'), $user->updatedAt());
     }
 
+    public function testANewAddressIsUnverifiedAndTheSameAddressChangesNothing(): void
+    {
+        $created = new DateTimeImmutable('2026-01-01T00:00:00Z');
+        $user = User::register($this->id(), 'ada@example.com', null, $created);
+        $user->recordEmailVerification(true, new DateTimeImmutable('2026-01-02T00:00:00Z'));
+        self::assertTrue($user->isEmailVerified());
+
+        $user->changeEmail('ada@example.com', new DateTimeImmutable('2026-01-03T00:00:00Z'));
+        self::assertTrue($user->isEmailVerified());
+        self::assertEquals(new DateTimeImmutable('2026-01-02T00:00:00Z'), $user->updatedAt());
+
+        $user->changeEmail('ada@elsewhere.example', new DateTimeImmutable('2026-01-04T00:00:00Z'));
+        self::assertSame('ada@elsewhere.example', $user->email);
+        self::assertFalse($user->isEmailVerified());
+        self::assertEquals(new DateTimeImmutable('2026-01-04T00:00:00Z'), $user->updatedAt());
+    }
+
+    public function testANewAddressFollowsTheSameRules(): void
+    {
+        $user = User::register($this->id(), 'ada@example.com', null, new DateTimeImmutable());
+
+        $this->expectException(InvalidValue::class);
+
+        $user->changeEmail('not-an-address', new DateTimeImmutable());
+    }
+
+    public function testRecordingTheSameVerificationIsNotAnUpdate(): void
+    {
+        $created = new DateTimeImmutable('2026-01-01T00:00:00Z');
+        $user = User::register($this->id(), 'ada@example.com', null, $created);
+
+        $user->recordEmailVerification(false, new DateTimeImmutable('2026-01-02T00:00:00Z'));
+
+        self::assertSame($created, $user->updatedAt());
+    }
+
+    public function testChangingThePasswordReplacesTheHash(): void
+    {
+        $user = User::register($this->id(), 'ada@example.com', null, new DateTimeImmutable('2026-01-01T00:00:00Z'));
+
+        $user->changePassword('$2y$12$hash', new DateTimeImmutable('2026-01-02T00:00:00Z'));
+
+        self::assertSame('$2y$12$hash', $user->passwordHash());
+        self::assertEquals(new DateTimeImmutable('2026-01-02T00:00:00Z'), $user->updatedAt());
+    }
+
     private function id(): UserId
     {
         return UserId::generate(new SeededRandomSource(1));

@@ -11,7 +11,10 @@ declare(strict_types=1);
 
 namespace Clavia\Domain\ResourceServer;
 
+use Clavia\Domain\Shared\AlreadyExists;
 use Clavia\Domain\Shared\Audience;
+use Clavia\Domain\Shared\Page;
+use Clavia\Domain\Shared\PageRequest;
 
 /**
  * The registered APIs.
@@ -23,6 +26,22 @@ interface ResourceServerRepository
     /** The API whose identifier is exactly `$identifier` — the `audience` a client names. */
     public function findByIdentifier(Audience $identifier): ?ResourceServer;
 
-    /** Create the API, or replace its name and permissions. The identifier never changes. */
+    /**
+     * Create the API, or replace its name and permissions. The identifier never changes.
+     *
+     * @throws AlreadyExists When another API is registered with the identifier.
+     */
     public function save(ResourceServer $resourceServer): void;
+
+    /**
+     * Remove the API, and with it its permissions and every client grant on it.
+     */
+    public function delete(ResourceServerId $id): void;
+
+    /**
+     * APIs newest first, searching the identifier and the name.
+     *
+     * @return Page<ResourceServer>
+     */
+    public function page(PageRequest $request): Page;
 }

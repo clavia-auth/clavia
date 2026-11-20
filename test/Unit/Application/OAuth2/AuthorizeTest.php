@@ -36,6 +36,7 @@ use ClaviaTest\Support\Fake\InMemoryAuthorizationCodeRepository;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
 use ClaviaTest\Support\Fake\InMemoryLoginStateStore;
 use ClaviaTest\Support\Fake\InMemoryNonceRegistry;
+use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -50,6 +51,7 @@ final class AuthorizeTest extends TestCase
     private InMemoryAuthorizationCodeRepository $codes;
     private InMemoryLoginStateStore $loginStates;
     private InMemoryNonceRegistry $nonces;
+    private InMemoryResourceServerRepository $resourceServers;
     private Authorize $authorize;
     private UserId $userId;
 
@@ -62,12 +64,14 @@ final class AuthorizeTest extends TestCase
         $this->codes = new InMemoryAuthorizationCodeRepository();
         $this->loginStates = new InMemoryLoginStateStore($clock);
         $this->nonces = new InMemoryNonceRegistry($clock);
+        $this->resourceServers = new InMemoryResourceServerRepository();
         $this->userId = UserId::generate(new SeededRandomSource(2));
         $this->authorize = new Authorize(
             $this->clients,
             $this->codes,
             $this->loginStates,
             $this->nonces,
+            $this->resourceServers,
             new SecretGenerator($random),
             $random,
             $clock,
@@ -258,7 +262,7 @@ final class AuthorizeTest extends TestCase
 
     public function testAClientNotRegisteredForCodesIsRefused(): void
     {
-        $this->clients->save(Clients::public('no-code', responseTypes: []));
+        $this->clients->save(Clients::public('no-code', grantTypes: [], responseTypes: []));
 
         $outcome = $this->authorizeAsUser($this->valid(['client_id' => 'no-code']));
 
@@ -364,6 +368,7 @@ final class AuthorizeTest extends TestCase
             $this->codes,
             $this->loginStates,
             $raced,
+            $this->resourceServers,
             new SecretGenerator($random),
             $random,
             new FrozenClock(),

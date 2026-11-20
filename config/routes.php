@@ -13,6 +13,14 @@ use Clavia\Adapter\Primary\Http\Auth\LoginHandler;
 use Clavia\Adapter\Primary\Http\Auth\LoginPageHandler;
 use Clavia\Adapter\Primary\Http\Auth\LogoutHandler;
 use Clavia\Adapter\Primary\Http\Auth\ThemeHandler;
+use Clavia\Adapter\Primary\Http\Management\ClientHandler;
+use Clavia\Adapter\Primary\Http\Management\ClientsHandler;
+use Clavia\Adapter\Primary\Http\Management\ManagementApiMiddleware;
+use Clavia\Adapter\Primary\Http\Management\ResourceServerHandler;
+use Clavia\Adapter\Primary\Http\Management\ResourceServersHandler;
+use Clavia\Adapter\Primary\Http\Management\RotateClientSecretHandler;
+use Clavia\Adapter\Primary\Http\Management\UserHandler;
+use Clavia\Adapter\Primary\Http\Management\UsersHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\TokenHandler;
 use Clavia\Adapter\Primary\Http\Oidc\DiscoveryHandler;
@@ -48,4 +56,40 @@ return static function (Application $app): void {
     $app->post('/auth/login', LoginHandler::class, 'auth.login.submit');
     $app->post('/auth/logout', LogoutHandler::class, 'auth.logout');
     $app->post('/auth/theme', ThemeHandler::class, 'auth.theme');
+
+    // ── /api/v1/* — the Management API, a machine plane: a bearer token for this API on
+    // every route, through ManagementApiMiddleware, which also checks each request
+    // against docs/openapi/management-api.yaml. Never the session cookie. ──
+    $management = static fn (string $handler): array => [ManagementApiMiddleware::class, $handler];
+    $app->route('/api/v1/users', $management(UsersHandler::class), ['GET', 'POST'], 'api.users');
+    $app->route(
+        '/api/v1/users/{user_id}',
+        $management(UserHandler::class),
+        ['GET', 'PATCH', 'DELETE'],
+        'api.user',
+    );
+    $app->route('/api/v1/clients', $management(ClientsHandler::class), ['GET', 'POST'], 'api.clients');
+    $app->route(
+        '/api/v1/clients/{client_id}',
+        $management(ClientHandler::class),
+        ['GET', 'PATCH', 'DELETE'],
+        'api.client',
+    );
+    $app->post(
+        '/api/v1/clients/{client_id}/rotate-secret',
+        $management(RotateClientSecretHandler::class),
+        'api.client.rotate-secret',
+    );
+    $app->route(
+        '/api/v1/resource-servers',
+        $management(ResourceServersHandler::class),
+        ['GET', 'POST'],
+        'api.resource-servers',
+    );
+    $app->route(
+        '/api/v1/resource-servers/{resource_server_id}',
+        $management(ResourceServerHandler::class),
+        ['GET', 'PATCH', 'DELETE'],
+        'api.resource-server',
+    );
 };

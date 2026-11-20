@@ -18,7 +18,9 @@ use Clavia\Domain\ResourceServer\Permission;
 use Clavia\Domain\ResourceServer\ResourceServer;
 use Clavia\Domain\ResourceServer\ResourceServerId;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
+use Clavia\Domain\Shared\AlreadyExists;
 use Clavia\Domain\Shared\Audience;
+use Clavia\Domain\Shared\PageRequest;
 use Clavia\Domain\Shared\ScopeSet;
 use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\Test;
@@ -127,6 +129,63 @@ trait ResourceServerRepositoryContract
         );
 
         self::assertTrue($this->clientGrants()->find($client, $api->id)?->scopes->isEmpty());
+    }
+
+    #[Test]
+    public function anIdentifierAlreadyRegisteredIsRefusedAsSuch(): void
+    {
+        $this->resourceServers()->save($this->anApi('https://invoices.example/api/', []));
+
+        $this->expectException(AlreadyExists::class);
+
+        $this->resourceServers()->save(ResourceServer::register(
+            ResourceServerId::fromString('rs_zzzzzzzzzzzzzzzz'),
+            Audience::fromString('https://invoices.example/api/'),
+            'Duplicate',
+            [],
+            new DateTimeImmutable('2026-01-15T10:00:00Z'),
+        ));
+    }
+
+    #[Test]
+    public function aSystemApiIsReadBackAsOne(): void
+    {
+        $api = $this->anApi('https://management.example/api/v1/', ['read:users']);
+        $this->resourceServers()->save($api->asSystem('Management', $api->permissions));
+
+        self::assertTrue($this->resourceServers()->find($api->id)?->isSystem);
+        self::assertTrue($this->resourceServers()->page(PageRequest::of())->items[0]->isSystem);
+    }
+
+    #[Test]
+    public function apisArePagedAndSearchedByIdentifierAndName(): void
+    {
+        $this->resourceServers()->save($this->anApi('https://invoices.example/api/', ['a']));
+        $this->resourceServers()->save($this->anApi('https://reports.example/api/', ['b']));
+
+        $all = $this->resourceServers()->page(PageRequest::of());
+        self::assertSame(2, $all->total);
+        self::assertSame(1, $this->resourceServers()->page(PageRequest::of(search: 'REPORTS'))->total);
+        self::assertSame(2, $this->resourceServers()->page(PageRequest::of(search: 'invoices'))->total);
+        self::assertSame(['a'], $this->resourceServers()->page(
+            PageRequest::of(search: 'invoices.example'),
+        )->items[0]->permissionScopes()->toList());
+    }
+
+    #[Test]
+    public function aDeletedApiTakesItsGrantsWithIt(): void
+    {
+        $client = $this->aClient('m2m');
+        $api = $this->anApi('https://invoices.example/api/', ['a']);
+        $this->resourceServers()->save($api);
+        $this->clientGrants()->save(
+            ClientGrant::grant($client, $api, ScopeSet::fromString('a'), new DateTimeImmutable()),
+        );
+
+        $this->resourceServers()->delete($api->id);
+
+        self::assertNull($this->resourceServers()->find($api->id));
+        self::assertNull($this->clientGrants()->find($client, $api->id));
     }
 
     /**

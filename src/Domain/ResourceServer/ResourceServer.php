@@ -44,6 +44,7 @@ final readonly class ResourceServer
         public string $name,
         public array $permissions,
         public DateTimeImmutable $createdAt,
+        public bool $isSystem,
     ) {
     }
 
@@ -51,6 +52,10 @@ final readonly class ResourceServer
      * Register an API, or rebuild one from storage: the same rules apply to both.
      *
      * @param list<Permission> $permissions
+     * @param bool             $isSystem    An API this server itself depends on — the Management API.
+     *                                      Its permissions are the server's to define and it cannot be
+     *                                      deleted: either would revoke the credentials needed to undo
+     *                                      the mistake. Only provisioning on the machine sets it.
      *
      * @throws InvalidValue When the identifier is longer than 255 bytes, the name longer than
      *                      120 characters, or a permission is defined twice.
@@ -61,6 +66,7 @@ final readonly class ResourceServer
         string $name,
         array $permissions,
         DateTimeImmutable $createdAt,
+        bool $isSystem = false,
     ): self {
         if (strlen($identifier->value) > self::MAX_IDENTIFIER_LENGTH) {
             throw new InvalidValue('An API identifier is at most 255 bytes.');
@@ -81,7 +87,68 @@ final readonly class ResourceServer
         $sorted = array_values($byValue);
         usort($sorted, static fn (Permission $a, Permission $b): int => strcmp($a->value->value, $b->value->value));
 
-        return new self($id, $identifier, $name, $sorted, $createdAt);
+        return new self($id, $identifier, $name, $sorted, $createdAt, $isSystem);
+    }
+
+    /**
+     * The same API under another name. Allowed for a system API too: a name is a label.
+     *
+     * @throws InvalidValue When the name is longer than 120 characters.
+     */
+    public function renamed(string $name): self
+    {
+        return self::register(
+            $this->id,
+            $this->identifier,
+            $name,
+            $this->permissions,
+            $this->createdAt,
+            $this->isSystem,
+        );
+    }
+
+    /**
+     * The same API defining exactly `$permissions`.
+     *
+     * Refused for a system API: its permissions are demanded by name by the server's
+     * own routes, so removing one would leave a permission nobody can be granted —
+     * including whoever would need it to put it back.
+     *
+     * @param list<Permission> $permissions
+     *
+     * @throws SystemApiProtected
+     * @throws InvalidValue When a permission is defined twice.
+     */
+    public function withPermissions(array $permissions): self
+    {
+        if ($this->isSystem) {
+            throw SystemApiProtected::permissions($this);
+        }
+
+        return self::register($this->id, $this->identifier, $this->name, $permissions, $this->createdAt);
+    }
+
+    /**
+     * The same API, marked as one the server depends on, defining exactly `$permissions`.
+     * For provisioning on the machine only.
+     *
+     * @param list<Permission> $permissions
+     *
+     * @throws InvalidValue
+     */
+    public function asSystem(string $name, array $permissions): self
+    {
+        return self::register($this->id, $this->identifier, $name, $permissions, $this->createdAt, true);
+    }
+
+    /**
+     * @throws SystemApiProtected When the API is a system API.
+     */
+    public function assertDeletable(): void
+    {
+        if ($this->isSystem) {
+            throw SystemApiProtected::deletion($this);
+        }
     }
 
     /** Whether this API defines `$scope` as one of its permissions. */

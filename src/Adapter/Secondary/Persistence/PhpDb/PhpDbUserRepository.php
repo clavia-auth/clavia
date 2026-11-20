@@ -15,6 +15,10 @@ use Clavia\Domain\Identity\Profile;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
+use Clavia\Domain\Shared\AlreadyExists;
+use Clavia\Domain\Shared\Page;
+use Clavia\Domain\Shared\PageRequest;
+use Throwable;
 
 /**
  * Users in the `users` table.
@@ -52,6 +56,38 @@ final readonly class PhpDbUserRepository implements UserRepository
 
     #[\Override]
     public function save(User $user): void
+    {
+        try {
+            $this->write($user);
+        } catch (Throwable $failure) {
+            throw Constraint::isUniqueViolation($failure, 'uq_users_email')
+                ? new AlreadyExists(sprintf('Another account uses the address %s.', $user->email), 0, $failure)
+                : $failure;
+        }
+    }
+
+    #[\Override]
+    public function delete(UserId $id): void
+    {
+        $this->database->execute('DELETE FROM users WHERE id = :id', ['id' => $id->value]);
+    }
+
+    #[\Override]
+    public function page(PageRequest $request): Page
+    {
+        $search = Search::across($request, ['email']);
+        /** @var int|string $total */
+        $total = $this->database->fetchValue('SELECT count(*) FROM users ' . $search->where, $search->parameters);
+        $rows = $this->database->fetchAll(
+            'SELECT ' . self::COLUMNS . ' FROM users ' . $search->where
+            . ' ORDER BY created_at DESC, id LIMIT :limit OFFSET :offset',
+            $search->pageParameters($request),
+        );
+
+        return new Page(array_map($this->hydrate(...), $rows), max(0, (int) $total), $request);
+    }
+
+    private function write(User $user): void
     {
         $this->database->execute(
             <<<'SQL'

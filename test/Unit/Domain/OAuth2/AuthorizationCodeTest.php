@@ -132,6 +132,7 @@ final class AuthorizationCodeTest extends TestCase
             ScopeSet::fromString('openid'),
             CodeChallenge::fromString(str_repeat('a', 43)),
             null,
+            null,
             AuthenticationContext::unknown(),
             new DateTimeImmutable(self::ISSUED_AT),
             60,

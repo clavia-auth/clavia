@@ -41,4 +41,13 @@ final class InMemoryClientGrantRepository implements ClientGrantRepository
             $existing->createdAt,
         );
     }
+
+    /** Drop every grant on an API that was deleted. */
+    public function forgetApi(ResourceServerId $resourceServer): void
+    {
+        $this->grants = array_filter(
+            $this->grants,
+            static fn (ClientGrant $grant): bool => ! $grant->resourceServerId->equals($resourceServer),
+        );
+    }
 }

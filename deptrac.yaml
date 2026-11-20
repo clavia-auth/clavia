@@ -50,7 +50,7 @@ deptrac:
     - name: Vendor
       collectors:
         - type: classLike
-          value: ^(Psr|Mezzio|Laminas|Symfony|Monolog|FastRoute|PhpDb|Fig)\\.*
+          value: ^(Psr|Mezzio|Laminas|Symfony|Monolog|FastRoute|PhpDb|Fig|Phayne)\\.*
 
   ruleset:
     Domain: ~

@@ -14,17 +14,14 @@ namespace Clavia\Bootstrap\Container;
 use Clavia\Adapter\Primary\Http\Shared\BearerChallenger;
 use Clavia\Configuration\Settings;
 use Psr\Container\ContainerInterface;
-use Psr\Http\Message\ResponseFactoryInterface;
 
 final class BearerChallengerFactory
 {
     public function __invoke(ContainerInterface $container): BearerChallenger
     {
-        /** @var ResponseFactoryInterface $responses */
-        $responses = $container->get(ResponseFactoryInterface::class);
         /** @var Settings $settings */
         $settings = $container->get(Settings::class);
 
-        return new BearerChallenger($responses, $settings->issuer());
+        return new BearerChallenger($settings->issuer());
     }
 }
