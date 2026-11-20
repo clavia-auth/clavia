@@ -31,11 +31,8 @@ load_env_file() {
 }
 load_env_file "$REPO_ROOT/.env"
 
-if [[ -z "${CLAVIA_ROOT_DOMAIN:-}" ]]; then
-  warn "CLAVIA_ROOT_DOMAIN is not set (checked the environment and .env)."
-  warn "Copy .env.example to .env and set it, e.g. CLAVIA_ROOT_DOMAIN=acme.com"
-  exit 1
-fi
+# Precedence: first argument, then CLAVIA_ROOT_DOMAIN (environment or .env), then clavia.local.
+CLAVIA_ROOT_DOMAIN="${1:-${CLAVIA_ROOT_DOMAIN:-clavia.local}}"
 
 DOMAIN="$CLAVIA_ROOT_DOMAIN"
 # The two subdomains CLAUDE.md ("Domain configuration") makes non-negotiable,
