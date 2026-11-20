@@ -17,6 +17,7 @@ use Clavia\Domain\OAuth2\AccessToken;
 use Clavia\Domain\OAuth2\AccessTokenId;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\AuthorizationCodeId;
+use Clavia\Domain\OAuth2\RefreshTokenId;
 use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\ScopeSet;
@@ -38,10 +39,10 @@ final readonly class PhpDbAccessTokenRepository implements AccessTokenRepository
             <<<'SQL'
                 INSERT INTO oauth2_access_tokens (
                     id, token_hash, client_id, user_id, authorization_code_id, audience, token_type, scope,
-                    issued_at, expires_at, revoked_at
+                    issued_at, expires_at, revoked_at, refresh_family_id
                 ) VALUES (
                     :id, :token_hash, :client_id, :user_id, :authorization_code_id, :audience, :token_type, :scope,
-                    :issued_at, :expires_at, :revoked_at
+                    :issued_at, :expires_at, :revoked_at, :refresh_family_id
                 )
                 SQL,
             [
@@ -56,6 +57,7 @@ final readonly class PhpDbAccessTokenRepository implements AccessTokenRepository
                 'issued_at' => Timestamp::toDatabase($token->issuedAt),
                 'expires_at' => Timestamp::toDatabase($token->expiresAt),
                 'revoked_at' => Timestamp::toDatabaseOrNull($token->revokedAt()),
+                'refresh_family_id' => $token->refreshFamilyId?->value,
             ],
         );
     }
@@ -66,12 +68,12 @@ final readonly class PhpDbAccessTokenRepository implements AccessTokenRepository
         /**
          * @var array{id: string, token_hash: string, client_id: string, user_id: string|null,
          *            authorization_code_id: string|null, audience: string|null, scope: string, issued_at: string,
-         *            expires_at: string, revoked_at: string|null}|null $row
+         *            expires_at: string, revoked_at: string|null, refresh_family_id: string|null}|null $row
          */
         $row = $this->database->fetchOne(
             <<<'SQL'
                 SELECT id, token_hash, client_id, user_id, authorization_code_id, audience, scope,
-                       issued_at, expires_at, revoked_at
+                       issued_at, expires_at, revoked_at, refresh_family_id
                 FROM oauth2_access_tokens
                 WHERE token_hash = :token_hash
                 SQL,
@@ -95,6 +97,20 @@ final readonly class PhpDbAccessTokenRepository implements AccessTokenRepository
             Timestamp::fromDatabase($row['issued_at']),
             Timestamp::fromDatabase($row['expires_at']),
             Timestamp::fromDatabaseOrNull($row['revoked_at']),
+            $row['refresh_family_id'] === null ? null : RefreshTokenId::fromString($row['refresh_family_id']),
+        );
+    }
+
+    #[\Override]
+    public function revokeFamily(RefreshTokenId $family, DateTimeImmutable $now): int
+    {
+        return $this->database->execute(
+            <<<'SQL'
+                UPDATE oauth2_access_tokens
+                SET revoked_at = :now
+                WHERE refresh_family_id = :family_id AND revoked_at IS NULL
+                SQL,
+            ['now' => Timestamp::toDatabase($now), 'family_id' => $family->value],
         );
     }
 

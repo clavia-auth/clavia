@@ -24,8 +24,10 @@ final readonly class IssuedToken
      * @param non-empty-string $tokenType
      * @param int              $expiresIn   Lifetime of the access token, in seconds.
      * @param ScopeSet         $scope       What was actually granted.
-     * @param string|null      $idToken     The ID token, when the grant was an OpenID Connect
-     *                                      request (OIDC Core §3.1.3.3).
+     * @param string|null      $idToken      The ID token, when the grant was an OpenID Connect
+     *                                       request (OIDC Core §3.1.3.3).
+     * @param string|null      $refreshToken The refresh token, for a client registered for the
+     *                                       refresh token grant; a new one on every refresh.
      */
     public function __construct(
         #[\SensitiveParameter] public string $accessToken,
@@ -33,6 +35,7 @@ final readonly class IssuedToken
         public int $expiresIn,
         public ScopeSet $scope,
         #[\SensitiveParameter] public ?string $idToken = null,
+        #[\SensitiveParameter] public ?string $refreshToken = null,
     ) {
     }
 }

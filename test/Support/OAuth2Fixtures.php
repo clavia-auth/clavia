@@ -105,8 +105,28 @@ trait OAuth2Fixtures
         ));
     }
 
-    /** A confidential client, used to prove PKCE is required of everyone. */
-    protected function confidentialClient(): Client
+    /** The public client, registered for refresh tokens as well. */
+    protected function refreshingClient(): Client
+    {
+        return $this->register(Client::register(
+            ClientId::fromString(self::TEST_CLIENT_ID),
+            'Test public client',
+            ClientType::Public,
+            ClientAuthMethod::None,
+            null,
+            [Url::fromString(self::TEST_REDIRECT_URI)],
+            [GrantType::AuthorizationCode, GrantType::RefreshToken],
+            [ResponseType::Code],
+            $this->now(),
+        ));
+    }
+
+    /**
+     * A confidential client, used to prove PKCE is required of everyone.
+     *
+     * @param list<GrantType> $grantTypes
+     */
+    protected function confidentialClient(array $grantTypes = [GrantType::AuthorizationCode]): Client
     {
         /** @var PasswordHasher $hasher */
         $hasher = $this->container()->get(PasswordHasher::class);
@@ -118,7 +138,7 @@ trait OAuth2Fixtures
             ClientAuthMethod::ClientSecretPost,
             $hasher->hash(self::TEST_CLIENT_SECRET),
             [Url::fromString(self::TEST_REDIRECT_URI)],
-            [GrantType::AuthorizationCode],
+            $grantTypes,
             [ResponseType::Code],
             $this->now(),
         ));

@@ -1289,7 +1289,10 @@ components:
       enum: [none, client_secret_basic, client_secret_post]
     GrantType:
       type: string
-      enum: [authorization_code, client_credentials]
+      enum: [authorization_code, client_credentials, refresh_token]
+      description: |
+        `refresh_token` goes with `authorization_code`: a refresh token is issued when a code
+        is redeemed, and rotates on every use.
     ResponseType:
       type: string
       enum: [code]

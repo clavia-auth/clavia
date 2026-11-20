@@ -15,6 +15,7 @@ use Clavia\Domain\OAuth2\AccessToken;
 use Clavia\Domain\OAuth2\AccessTokenId;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\AuthorizationCode;
+use Clavia\Domain\OAuth2\RefreshTokenId;
 use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\ScopeSet;
@@ -116,6 +117,33 @@ trait AccessTokenRepositoryContract
 
         self::assertSame(0, $again);
         self::assertEquals($first, $this->tokens()->findByDigest(Digest::of('token-1'))?->revokedAt());
+    }
+
+    #[Test]
+    public function revokingARefreshFamilyRevokesTheTokensThatCameWithOrFromIt(): void
+    {
+        $code = $this->aStoredCode('code-1');
+        $family = RefreshTokenId::generate(new SeededRandomSource(41));
+        $now = new DateTimeImmutable('2026-01-15T10:05:00Z');
+        $this->tokens()->add(AccessToken::issueFromCode(
+            AccessTokenId::generate(new SeededRandomSource(42)),
+            Digest::of('with-the-family'),
+            $code,
+            ScopeSet::fromString('openid'),
+            new DateTimeImmutable('2026-01-15T10:00:10Z'),
+            3600,
+            $family,
+        ));
+        $this->tokens()->add($this->aToken('without-a-family', $code));
+
+        self::assertSame(
+            $family->value,
+            $this->tokens()->findByDigest(Digest::of('with-the-family'))?->refreshFamilyId?->value,
+        );
+        self::assertSame(1, $this->tokens()->revokeFamily($family, $now));
+        self::assertEquals($now, $this->tokens()->findByDigest(Digest::of('with-the-family'))?->revokedAt());
+        self::assertFalse($this->tokens()->findByDigest(Digest::of('without-a-family'))?->isRevoked());
+        self::assertSame(0, $this->tokens()->revokeFamily($family, $now));
     }
 
     #[Test]

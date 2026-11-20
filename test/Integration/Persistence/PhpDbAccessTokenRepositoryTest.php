@@ -14,6 +14,8 @@ namespace ClaviaTest\Integration\Persistence;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbAccessTokenRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbAuthorizationCodeRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbRefreshTokenRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbTransactionManager;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbUserRepository;
 use Clavia\Domain\Authentication\AuthenticationContext;
 use Clavia\Domain\Client\Client;
@@ -28,23 +30,69 @@ use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\AuthorizationCode;
 use Clavia\Domain\OAuth2\AuthorizationCodeId;
 use Clavia\Domain\OAuth2\CodeChallenge;
+use Clavia\Domain\OAuth2\RefreshToken;
+use Clavia\Domain\OAuth2\RefreshTokenId;
+use Clavia\Domain\OAuth2\RefreshTokenRepository;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\ScopeSet;
 use Clavia\Domain\Shared\Url;
 use ClaviaTest\Support\Contract\AccessTokenRepositoryContract;
+use ClaviaTest\Support\Contract\RefreshTokenRepositoryContract;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use ClaviaTest\Support\IntegrationTestCase;
 use ClaviaTest\Support\TestStorage;
 use DateTimeImmutable;
+use LogicException;
 
+/**
+ * The PostgreSQL access and refresh token repositories against their contracts.
+ */
 final class PhpDbAccessTokenRepositoryTest extends IntegrationTestCase
 {
     use AccessTokenRepositoryContract;
+    use RefreshTokenRepositoryContract;
 
     #[\Override]
     protected function tokens(): AccessTokenRepository
     {
         return new PhpDbAccessTokenRepository(TestStorage::database());
+    }
+
+    #[\Override]
+    protected function refreshTokens(): RefreshTokenRepository
+    {
+        return new PhpDbRefreshTokenRepository(TestStorage::database());
+    }
+
+    #[\Override]
+    protected function transactional(callable $work): mixed
+    {
+        return new PhpDbTransactionManager(TestStorage::database())->transactional($work);
+    }
+
+    public function testARefreshTokenCanOnlyBeLockedInsideATransaction(): void
+    {
+        $this->expectException(LogicException::class);
+
+        $this->refreshTokens()->lockForRefresh(Digest::of('anything'));
+    }
+
+    public function testARefreshTokenItselfIsNeverStored(): void
+    {
+        $this->refreshTokens()->add(RefreshToken::startFamily(
+            RefreshTokenId::generate(new SeededRandomSource(3)),
+            Digest::of('the-plain-refresh-token'),
+            $this->aStoredCode('code-1'),
+            ScopeSet::fromString('openid'),
+            new DateTimeImmutable('2026-01-15T10:00:00Z'),
+            60,
+            120,
+        ));
+
+        $row = TestStorage::database()->fetchOne('SELECT * FROM oauth2_refresh_tokens');
+
+        self::assertNotNull($row);
+        self::assertStringNotContainsString('the-plain-refresh-token', implode('|', array_map(strval(...), $row)));
     }
 
     #[\Override]

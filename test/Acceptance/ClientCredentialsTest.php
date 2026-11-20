@@ -295,7 +295,10 @@ final class ClientCredentialsTest extends AcceptanceTestCase
     {
         $document = self::json($this->get('/.well-known/openid-configuration'));
 
-        self::assertSame(['authorization_code', 'client_credentials'], $document['grant_types_supported']);
+        self::assertSame(
+            ['authorization_code', 'client_credentials', 'refresh_token'],
+            $document['grant_types_supported'],
+        );
     }
 
     // ── The audience (beyond the Python suite, which covers it in test_audience) ──

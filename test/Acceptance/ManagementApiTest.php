@@ -645,8 +645,14 @@ final class ManagementApiTest extends AcceptanceTestCase
                 'response_types' => ['code'],
                 'redirect_uris' => ['/callback'],
             ],
+            // A refresh token refreshes what the code flow issues: not without it.
+            [
+                'client_type' => 'public',
+                'grant_types' => ['refresh_token'],
+                'redirect_uris' => ['https://spa.test/callback'],
+            ],
             // Grants this server does not have yet are not in the contract.
-            ['client_type' => 'public', 'grant_types' => ['refresh_token']],
+            ['client_type' => 'public', 'grant_types' => ['urn:ietf:params:oauth:grant-type:device_code']],
         ];
 
         foreach ($cases as $body) {

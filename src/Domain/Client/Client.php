@@ -116,6 +116,14 @@ final readonly class Client
             );
         }
 
+        // A refresh token is only ever issued by redeeming a code: without the code flow,
+        // the grant would have nothing to refresh.
+        if (in_array(GrantType::RefreshToken, $grantTypes, true) && ! $redeemsCodes) {
+            throw new InvalidValue(
+                'The refresh token grant needs the "authorization_code" grant: it refreshes what that issues.',
+            );
+        }
+
         // RFC 6749 §4.4: the client credentials grant is for clients that can keep a secret.
         if (in_array(GrantType::ClientCredentials, $grantTypes, true) && $type !== ClientType::Confidential) {
             throw new InvalidValue('The client credentials grant is available to confidential clients only.');

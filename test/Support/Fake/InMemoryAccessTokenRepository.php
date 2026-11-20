@@ -14,6 +14,7 @@ namespace ClaviaTest\Support\Fake;
 use Clavia\Domain\OAuth2\AccessToken;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\AuthorizationCodeId;
+use Clavia\Domain\OAuth2\RefreshTokenId;
 use Clavia\Domain\Shared\Digest;
 use DateTimeImmutable;
 
@@ -40,30 +41,19 @@ final class InMemoryAccessTokenRepository implements AccessTokenRepository
     #[\Override]
     public function revokeIssuedFrom(AuthorizationCodeId $code, DateTimeImmutable $now): int
     {
-        $revoked = 0;
+        return $this->revokeWhere(
+            static fn (AccessToken $token): bool => $token->authorizationCodeId?->equals($code) === true,
+            $now,
+        );
+    }
 
-        foreach ($this->tokens as $key => $token) {
-            $fromThisCode = $token->authorizationCodeId !== null && $token->authorizationCodeId->equals($code);
-            if (! $fromThisCode || $token->isRevoked()) {
-                continue;
-            }
-
-            $this->tokens[$key] = AccessToken::reconstitute(
-                $token->id,
-                $token->digest,
-                $token->clientId,
-                $token->userId,
-                $token->authorizationCodeId,
-                $token->audience,
-                $token->scope,
-                $token->issuedAt,
-                $token->expiresAt,
-                $now,
-            );
-            $revoked++;
-        }
-
-        return $revoked;
+    #[\Override]
+    public function revokeFamily(RefreshTokenId $family, DateTimeImmutable $now): int
+    {
+        return $this->revokeWhere(
+            static fn (AccessToken $token): bool => $token->refreshFamilyId?->equals($family) === true,
+            $now,
+        );
     }
 
     /**
@@ -72,5 +62,21 @@ final class InMemoryAccessTokenRepository implements AccessTokenRepository
     public function all(): array
     {
         return array_values($this->tokens);
+    }
+
+    /**
+     * @param callable(AccessToken): bool $matches
+     */
+    private function revokeWhere(callable $matches, DateTimeImmutable $now): int
+    {
+        $revoked = 0;
+        foreach ($this->tokens as $key => $token) {
+            if ($matches($token) && ! $token->isRevoked()) {
+                $this->tokens[$key] = $token->revoked($now);
+                $revoked++;
+            }
+        }
+
+        return $revoked;
     }
 }

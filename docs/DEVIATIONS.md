@@ -61,7 +61,7 @@ knows what changes.
 | Order of the checks | Authentication, then FastAPI's validation and the scope dependency in declaration order | Credentials, token and audience (401), scope (403), then the request (400/415/422) | A caller without the scope learns nothing about what the operation would have accepted. |
 | `token_endpoint_auth_method` when omitted | One default for every client | `none` for a public client, `client_secret_basic` for a confidential one | The only coherent value for each type; RFC 6749 §2.3.1 requires every server to support Basic. |
 | The code flow on a registration | `authorization_code` and the `code` response type checked separately | They must come together, and either needs a redirect URI | Half of the code flow is a client no request can succeed for, refused where the mistake is made (also by `PATCH`). |
-| Grant types and fields not built yet | `refresh_token`, the device grant, `is_first_party`, `allowed_connections`… | Absent from the contract, so refused as unknown; they arrive with their steps | A field the server would ignore is a promise it does not keep. |
+| Grant types and fields not built yet | The device grant, `is_first_party`, `allowed_connections`… | Absent from the contract, so refused as unknown; they arrive with their steps | A field the server would ignore is a promise it does not keep. |
 | Management scopes | Included roles and connections | Users, clients, APIs and roles; the connection scopes arrive with Step 13 | A scope no route checks would be granted for nothing. |
 | `audience` in a user's flow | Checked at the authorization endpoint | Checked there, stored on the code, and checked again at redemption: a permission withdrawn meanwhile is not issued, and a code for an API deleted meanwhile is `invalid_grant` | Scope is narrowed at issuance and re-checked at redemption, not trusted from authorization time. |
 | `seed-dev` | Created the machine client and granted it the Management API | The same, with a fixed, printed secret (`dev-m2m-secret-for-local-development-only`) and the token request to run | A development deployment should reach `/api/v1/*` straight after seeding. |
@@ -108,6 +108,16 @@ knows what changes.
 | PKCE towards GitHub | Not sent | Sent to every provider | A provider that does not implement RFC 7636 ignores the parameters; one that does gets the protection. |
 | The `state` cookie | `clavia_social_state` | `clavia_external_state` | Named for what it is, whatever kind of provider. |
 | Where a matching address is looked for | The pools the application enables, and the provider's own accounts | Every account, until connections exist (Step 13) | There are no pools yet. |
+
+## Refresh tokens
+
+| Area | Python | PHP | Why |
+|---|---|---|---|
+| The ceiling of a refresh | The scope the previous access token carried — narrowed by roles | What was authorized, or what the client narrowed it to since; roles narrow each access token, not the chain | A role taken away and given back is honoured by the next refresh instead of needing a new sign-in. |
+| Roles taken away, at a refresh | `access_denied`, the token spent | `invalid_grant`, the token not spent | `access_denied` is not a token-endpoint error (RFC 6749 §5.2); only a refresh that succeeds spends the token. |
+| A deactivated account, at a refresh | Refused after the token was spent | Refused before | The same rule: `used` means refreshed. |
+| Revoking a family's access tokens | Through a `refresh_token_id` on each access token | A `refresh_family_id` on each access token | One statement revokes them, whatever became of the tokens in between. |
+| Concurrent refreshes of one token | A threaded acceptance test | Not raced in a test: PHP-FPM has no threads in a test. The row lock is the guarantee, and the contracts prove the lock is taken inside a transaction | The behaviour is the database's, not the code's. |
 
 ## Roles
 

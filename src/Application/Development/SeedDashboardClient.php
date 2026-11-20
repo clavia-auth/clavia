@@ -26,7 +26,7 @@ use LogicException;
 
 /**
  * Registers the management dashboard (`frontend/`) as what it is: an ordinary public
- * client using the code flow with PKCE. It holds nothing of its own; what a signed-in
+ * client using the code flow with PKCE, and refresh tokens. It holds nothing of its own; what a signed-in
  * operator may do is whatever they hold on the Management API.
  *
  * Idempotent by name. A rerun brings its URIs up to date — they follow the management
@@ -38,6 +38,9 @@ final readonly class SeedDashboardClient
 
     /** The prefix the dashboard is served under on `management.{domain}`: Vite's `base`, and Caddy's route. */
     public const string PATH = '/dashboard';
+
+    /** The code flow, and rotating refresh tokens so a session outlives one access token. */
+    private const array GRANT_TYPES = [GrantType::AuthorizationCode, GrantType::RefreshToken];
 
     public function __construct(
         private ClientRepository $clients,
@@ -72,7 +75,7 @@ final readonly class SeedDashboardClient
                 ClientAuthMethod::None,
                 null,
                 [$callback],
-                [GrantType::AuthorizationCode],
+                self::GRANT_TYPES,
                 [ResponseType::Code],
                 $this->clock->now(),
                 [$signedOut],
@@ -80,7 +83,7 @@ final readonly class SeedDashboardClient
             : $existing->reconfigure(
                 self::CLIENT_NAME,
                 [$callback],
-                [GrantType::AuthorizationCode],
+                self::GRANT_TYPES,
                 [ResponseType::Code],
                 ClientAuthMethod::None,
                 [$signedOut],

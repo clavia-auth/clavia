@@ -24,8 +24,10 @@ use DateTimeImmutable;
  * Opaque: a random string whose digest is looked up here, which is what lets every
  * surface that accepts a token honour revocation the instant it happens.
  * `authorizationCodeId` records which code minted it, so a replayed code can revoke
- * everything it produced (RFC 6749 §4.1.2). `audience` is the API the token is for —
- * its `aud` — when the client named one.
+ * everything it produced (RFC 6749 §4.1.2) — including what was later minted from the
+ * refresh tokens that code started. `audience` is the API the token is for — its
+ * `aud` — when the client named one. `refreshFamilyId` is the refresh token family it
+ * came with or from, so revoking the family takes it along.
  */
 final class AccessToken
 {
@@ -42,6 +44,7 @@ final class AccessToken
         public readonly DateTimeImmutable $issuedAt,
         public readonly DateTimeImmutable $expiresAt,
         private ?DateTimeImmutable $revokedAt,
+        public readonly ?RefreshTokenId $refreshFamilyId,
     ) {
     }
 
@@ -50,6 +53,7 @@ final class AccessToken
      * approved it.
      *
      * @param positive-int $lifetimeSeconds
+     * @param RefreshTokenId|null $refreshFamily The family of the refresh token issued with it, if any.
      */
     public static function issueFromCode(
         AccessTokenId $id,
@@ -58,6 +62,7 @@ final class AccessToken
         ScopeSet $scope,
         DateTimeImmutable $now,
         int $lifetimeSeconds,
+        ?RefreshTokenId $refreshFamily = null,
     ): self {
         return new self(
             $id,
@@ -70,6 +75,36 @@ final class AccessToken
             $now,
             $now->modify(sprintf('+%d seconds', $lifetimeSeconds)),
             null,
+            $refreshFamily,
+        );
+    }
+
+    /**
+     * Record a token minted by a refresh, issued with `$refreshToken`, the successor of
+     * the token just spent. It inherits the person, the API, the code and the family.
+     *
+     * @param positive-int $lifetimeSeconds
+     */
+    public static function issueFromRefresh(
+        AccessTokenId $id,
+        Digest $digest,
+        RefreshToken $refreshToken,
+        ScopeSet $scope,
+        DateTimeImmutable $now,
+        int $lifetimeSeconds,
+    ): self {
+        return new self(
+            $id,
+            $digest,
+            $refreshToken->clientId,
+            $refreshToken->userId,
+            $refreshToken->authorizationCodeId,
+            $refreshToken->audience,
+            $scope,
+            $now,
+            $now->modify(sprintf('+%d seconds', $lifetimeSeconds)),
+            null,
+            $refreshToken->familyId,
         );
     }
 
@@ -102,6 +137,7 @@ final class AccessToken
             $now,
             $now->modify(sprintf('+%d seconds', $lifetimeSeconds)),
             null,
+            null,
         );
     }
 
@@ -117,6 +153,7 @@ final class AccessToken
         DateTimeImmutable $issuedAt,
         DateTimeImmutable $expiresAt,
         ?DateTimeImmutable $revokedAt,
+        ?RefreshTokenId $refreshFamilyId = null,
     ): self {
         return new self(
             $id,
@@ -129,6 +166,25 @@ final class AccessToken
             $issuedAt,
             $expiresAt,
             $revokedAt,
+            $refreshFamilyId,
+        );
+    }
+
+    /** The same token, revoked at `$now` — or as it was, when already revoked. */
+    public function revoked(DateTimeImmutable $now): self
+    {
+        return self::reconstitute(
+            $this->id,
+            $this->digest,
+            $this->clientId,
+            $this->userId,
+            $this->authorizationCodeId,
+            $this->audience,
+            $this->scope,
+            $this->issuedAt,
+            $this->expiresAt,
+            $this->revokedAt ?? $now,
+            $this->refreshFamilyId,
         );
     }
 

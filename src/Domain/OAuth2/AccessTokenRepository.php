@@ -32,4 +32,13 @@ interface AccessTokenRepository
      * @return int How many tokens were revoked.
      */
     public function revokeIssuedFrom(AuthorizationCodeId $code, DateTimeImmutable $now): int;
+
+    /**
+     * Revoke every token that came with or from one refresh token family: revoking the
+     * family and leaving its access tokens running would leave a detected leak open for
+     * an access token's lifetime.
+     *
+     * @return int How many tokens were revoked.
+     */
+    public function revokeFamily(RefreshTokenId $family, DateTimeImmutable $now): int;
 }

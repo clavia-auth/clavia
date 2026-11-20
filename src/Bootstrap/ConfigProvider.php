@@ -130,6 +130,8 @@ use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
 use Clavia\Application\OAuth2\Token\AuthorizationCodeGrant;
 use Clavia\Application\OAuth2\Token\ClientCredentialsGrant;
 use Clavia\Application\OAuth2\Token\IssueToken;
+use Clavia\Application\OAuth2\Token\RefreshTokenGrant;
+use Clavia\Application\OAuth2\Token\UserScope;
 use Clavia\Application\Oidc\CompactJws;
 use Clavia\Application\Oidc\Discovery\ProviderMetadata;
 use Clavia\Application\Oidc\IdTokenIssuer;
@@ -162,6 +164,7 @@ use Clavia\Domain\Identity\ExternalIdentityRepository;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
+use Clavia\Domain\OAuth2\RefreshTokenRepository;
 use Clavia\Domain\Oidc\SigningAlgorithm;
 use Clavia\Domain\Rbac\RoleRepository;
 use Clavia\Domain\ResourceServer\ClientGrantRepository;
@@ -256,6 +259,8 @@ final class ConfigProvider
                     ClientAuthenticator::class => Container\ClientAuthenticatorFactory::class,
                     Authorize::class => Container\AuthorizeFactory::class,
                     AuthorizationCodeGrant::class => Container\AuthorizationCodeGrantFactory::class,
+                    RefreshTokenGrant::class => Container\RefreshTokenGrantFactory::class,
+                    UserScope::class => Container\UserScopeFactory::class,
                     ClientCredentialsGrant::class => Container\ClientCredentialsGrantFactory::class,
                     RegisterMachineClient::class => Container\RegisterMachineClientFactory::class,
                     IssueToken::class => Container\IssueTokenFactory::class,
@@ -342,6 +347,7 @@ final class ConfigProvider
                     ClientRepository::class => Container\ClientRepositoryFactory::class,
                     AuthorizationCodeRepository::class => Container\AuthorizationCodeRepositoryFactory::class,
                     AccessTokenRepository::class => Container\AccessTokenRepositoryFactory::class,
+                    RefreshTokenRepository::class => Container\RefreshTokenRepositoryFactory::class,
                     ResourceServerRepository::class => Container\ResourceServerRepositoryFactory::class,
                     ClientGrantRepository::class => Container\ClientGrantRepositoryFactory::class,
                     RoleRepository::class => Container\RoleRepositoryFactory::class,

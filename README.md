@@ -6,7 +6,7 @@ Auth0: OAuth2 flows, interactive login with MFA, and a Management API.
 This is the PHP 8.5 implementation. It is being ported feature by feature from the Python
 reference implementation; `CLAUDE.md` holds the migration plan and the current state.
 
-**Status: Step 10 — roles.** A person signs in with a password at `/auth/login`, or with
+**Status: Step 11 — refresh tokens.** A person signs in with a password at `/auth/login`, or with
 Google or GitHub once their credentials are configured (`CLAVIA_GOOGLE_CLIENT_ID` / `_SECRET`,
 `CLAVIA_GITHUB_CLIENT_ID` / `_SECRET`; register
 `https://auth.{domain}/auth/social/{provider}/callback` at the provider) — followed, once they
@@ -40,8 +40,13 @@ Administrator you@example.com`. `clavia seed-dev` does both for the development 
 The dashboard (`frontend/`, React) is registered by `clavia seed-dev` as a public client, which
 also writes its build configuration to `frontend/.env.local`. Run it with
 `cd frontend && npm install && npm run dev`; Caddy serves it at
-`https://management.{domain}/dashboard/`. It keeps no session yet: renewing its token needs
-refresh tokens (Step 11).
+`https://management.{domain}/dashboard/`.
+
+A client registered for the `refresh_token` grant (beside `authorization_code`) gets a
+refresh token with the code flow's tokens. Every refresh returns a new pair and spends the
+old refresh token; presenting a spent one revokes the whole chain and every access token it
+issued. A chain lives `CLAVIA_REFRESH_TOKEN_LIFETIME` without use (30 days by default) and
+`CLAVIA_REFRESH_TOKEN_ABSOLUTE_LIFETIME` at most (90 days).
 
 ## Architecture
 

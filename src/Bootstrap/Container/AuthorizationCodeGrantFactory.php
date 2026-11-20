@@ -12,17 +12,16 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\OAuth2\Token\AuthorizationCodeGrant;
+use Clavia\Application\OAuth2\Token\UserScope;
 use Clavia\Application\Oidc\IdTokenIssuer;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
-use Clavia\Domain\Rbac\RoleRepository;
-use Clavia\Domain\ResourceServer\ResourceServerRepository;
+use Clavia\Domain\OAuth2\RefreshTokenRepository;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\RandomSource;
-use Clavia\Domain\Shared\ScopeSet;
 use Clavia\Domain\Shared\SecretGenerator;
 use Psr\Container\ContainerInterface;
 
@@ -34,6 +33,8 @@ final class AuthorizationCodeGrantFactory
         $codes = $container->get(AuthorizationCodeRepository::class);
         /** @var AccessTokenRepository $tokens */
         $tokens = $container->get(AccessTokenRepository::class);
+        /** @var RefreshTokenRepository $refreshTokens */
+        $refreshTokens = $container->get(RefreshTokenRepository::class);
         /** @var UserRepository $users */
         $users = $container->get(UserRepository::class);
         /** @var TransactionManager $transactions */
@@ -46,29 +47,32 @@ final class AuthorizationCodeGrantFactory
         $clock = $container->get(Clock::class);
         /** @var IdTokenIssuer $idTokens */
         $idTokens = $container->get(IdTokenIssuer::class);
-        /** @var ResourceServerRepository $resourceServers */
-        $resourceServers = $container->get(ResourceServerRepository::class);
-        /** @var RoleRepository $roles */
-        $roles = $container->get(RoleRepository::class);
+        /** @var UserScope $userScope */
+        $userScope = $container->get(UserScope::class);
         /** @var Settings $settings */
         $settings = $container->get(Settings::class);
 
         $lifetime = $settings->accessTokenLifetime;
         assert($lifetime > 0);
+        $refreshLifetime = $settings->refreshTokenLifetime;
+        assert($refreshLifetime > 0);
+        $refreshAbsoluteLifetime = $settings->refreshTokenAbsoluteLifetime;
+        assert($refreshAbsoluteLifetime > 0);
 
         return new AuthorizationCodeGrant(
             $codes,
             $tokens,
+            $refreshTokens,
             $users,
             $transactions,
             $secrets,
             $random,
             $clock,
             $idTokens,
-            $resourceServers,
-            $roles,
-            ScopeSet::fromString(implode(' ', $settings->scopesSupported)),
+            $userScope,
             $lifetime,
+            $refreshLifetime,
+            $refreshAbsoluteLifetime,
         );
     }
 }

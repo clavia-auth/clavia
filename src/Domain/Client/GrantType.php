@@ -25,4 +25,10 @@ enum GrantType: string
      * has no subject.
      */
     case ClientCredentials = 'client_credentials';
+
+    /**
+     * RFC 6749 §6: a refresh token, issued alongside the code flow's tokens, exchanged for
+     * a new pair. Rotated on every use; a replay revokes the family.
+     */
+    case RefreshToken = 'refresh_token';
 }

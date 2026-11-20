@@ -29,12 +29,12 @@ and multi-tenancy.
 
 ## Current state
 
-**Steps 0 to 10 are done: the foundations, Authorization Code + PKCE, the login page with
+**Steps 0 to 11 are done: the foundations, Authorization Code + PKCE, the login page with
 browser sessions, OpenID Connect (ID tokens, discovery, JWKS, userinfo), Client
 Credentials for machine clients holding a grant on an API, the Management API with
 audiences in the user's flow, two-factor authentication (TOTP and recovery codes),
-signing in with Google or GitHub, RP-Initiated Logout and roles (RBAC); the dashboard is in
-`frontend/`.**
+signing in with Google or GitHub, RP-Initiated Logout, roles (RBAC) and rotating refresh
+tokens; the dashboard is in `frontend/`.**
 The application answers `GET /healthz`,
 `GET|POST /oauth2/authorize`, `POST /oauth2/token`, `GET /.well-known/openid-configuration`,
 `GET /.well-known/oauth-authorization-server`, `GET /oidc/jwks.json`, `GET|POST /oidc/userinfo`,
@@ -274,6 +274,19 @@ What exists:
     `Adapter\Primary\Cli\{CreateRoleCommand,AssignRoleCommand,ListRolesCommand}`
     (`roles:create|assign|list`). `seed-dev` gives the development user an `Administrator` role
     holding every management permission.
+- **Refresh tokens** (Step 11):
+  - `Domain\OAuth2\{RefreshToken,RefreshTokenId,Refresh,RefreshTokenRepository}`: a family
+    started at code redemption (`startFamily`), each successor `succeededBy` the token it
+    replaces, `examine()` before `spend()`; `GrantType::RefreshToken`, which a client may only
+    hold beside `authorization_code`. `AccessToken::$refreshFamilyId`, `issueFromRefresh()`,
+    `revoked()`; `AccessTokenRepository::revokeFamily()`.
+  - `Application\OAuth2\Token\RefreshTokenGrant`; `UserScope` — what a token issued on a
+    person's behalf may carry now, shared by both user grants (it took over
+    `AuthorizationCodeGrant`'s narrowing). `IssuedToken::$refreshToken`.
+  - `Adapter\Secondary\Persistence\PhpDb\PhpDbRefreshTokenRepository`. Migration
+    `0017_refresh_tokens` (and `oauth2_access_tokens.refresh_family_id`).
+  - `refresh_token` in the token response, discovery and the Management API's `GrantType`;
+    the dashboard is seeded with it.
 - **Error pages for browsers** (after Step 3): `Adapter\Primary\Http\Shared\ClientPreference`
   (`Accept` negotiation), `ErrorResponder` + `ErrorPage`, `PageRenderer` + `HtmlPage` (the
   layout, headers and CSP every server-rendered page shares). 404, 405, 500 and the
@@ -663,6 +676,25 @@ Conventions established in Step 10:
   account in the path.
 - **A collection small by nature is a JSON array** (`ManagementResponder::jsonList()`: an
   account's roles, its effective permissions); anything that grows is a page.
+
+Conventions established in Step 11:
+
+- **A refresh token is good for one refresh.** Every refresh spends it, under the row lock,
+  and issues a new pair; there is no reuse grace period. A spent token presented again is a
+  replay: the family and every access token it minted are revoked (RFC 6749 §10.4). A
+  replayed authorization code revokes the family it started, too.
+- **Only a refresh that succeeds spends the token.** A wider scope (`invalid_scope`), another
+  client, an expired or revoked token, a deactivated account, roles taken away
+  (`invalid_grant`) leave it as it was. Every bad token is the same `invalid_grant`.
+- **What a token may carry is decided at every issuance** by `UserScope`: the API's current
+  permissions, narrowed to the person's roles when it enforces them. A refresh token holds
+  the ceiling — what was authorized, or narrowed by the client since — not what the last
+  access token carried, so a role given back is honoured by the next refresh.
+- **Three lifetimes**: the access token's; the refresh token's idle limit
+  (`CLAVIA_REFRESH_TOKEN_LIFETIME`) from its own issuance; the family's deadline
+  (`CLAVIA_REFRESH_TOKEN_ABSOLUTE_LIFETIME`) fixed at sign-in. No token outlives the family.
+- **A refresh issues no ID token** (OIDC Core §12.2) and ignores `audience`: a family is for
+  one API.
 
 **Known defect in the database library, worked around.** At the pinned commit,
 `php-db/phpdb-pgsql` runs `SELECT LASTVAL()` after every statement to fetch a "last generated
@@ -1308,13 +1340,21 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
 - Python: `db/models/rbac.py`, `api/roles.py`. Tests: `test_rbac` (17) — ported as `RbacTest`
   (17 cases); `RoleTest`, `RolesTest`, `RoleCommandsTest`, `RoleRepositoryContract` against the
   fakes and PostgreSQL, and the resource-server, seeding and contract cases for the new field.
-- The dashboard now gets a token for the Management API; it keeps one once refresh tokens
-  land (Step 11).
+- The dashboard now gets a token for the Management API, and keeps one with refresh tokens
+  since Step 11.
 
-#### [ ] Step 11 — Refresh token rotation
-- `RefreshToken` + `family_id`, spend under lock, replay revokes the family and its access
-  tokens, idle + absolute lifetimes, scope narrowing checked before the spend.
-- Tests: `test_refresh_token` (15).
+#### [x] Step 11 — Refresh token rotation
+- `RefreshToken` + `family_id`, spent under lock, a replay revokes the family and its access
+  tokens (and a replayed code the family it started); idle + absolute lifetimes; every refusal
+  checked before the spend. `UserScope` decides, at code redemption and at every refresh, what
+  a person's token carries.
+- Migration `0017`; `refresh_token` in discovery, the token response and client registrations
+  (only beside `authorization_code`); the dashboard is seeded with it.
+- Tests: `test_refresh_token` (15) — ported as `RefreshTokenTest` (16 cases); unit tests for
+  `RefreshToken`, `RefreshTokenGrant` and the code grant's family; `RefreshTokenRepositoryContract`
+  and the access token contract's family revocation against the fakes and PostgreSQL. The
+  concurrent-refresh case is the row lock: the in-memory and PostgreSQL contracts lock inside a
+  transaction, and only one spend can see the token unspent.
 
 #### [ ] Step 12 — Application ownership and consent
 - `isFirstParty`, `tpc_` ids, `UserConsent`, the consent decision table (`prompt=consent`,

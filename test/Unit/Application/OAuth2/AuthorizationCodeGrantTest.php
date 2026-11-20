@@ -14,6 +14,7 @@ namespace ClaviaTest\Unit\Application\OAuth2;
 use Clavia\Application\OAuth2\RequestParameters;
 use Clavia\Application\OAuth2\Token\AuthorizationCodeGrant;
 use Clavia\Application\OAuth2\Token\IssuedToken;
+use Clavia\Application\OAuth2\Token\UserScope;
 use Clavia\Application\Oidc\CompactJws;
 use Clavia\Application\Oidc\IdTokenIssuer;
 use Clavia\Application\Port\NoActiveSigningKey;
@@ -38,6 +39,7 @@ use ClaviaTest\Support\Clients;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryAccessTokenRepository;
 use ClaviaTest\Support\Fake\InMemoryAuthorizationCodeRepository;
+use ClaviaTest\Support\Fake\InMemoryRefreshTokenRepository;
 use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
 use ClaviaTest\Support\Fake\InMemoryRoleRepository;
 use ClaviaTest\Support\Fake\InMemorySigningKeys;
@@ -59,6 +61,7 @@ final class AuthorizationCodeGrantTest extends TestCase
     private InMemoryUserRepository $users;
     private InMemorySigningKeys $keys;
     private InMemoryResourceServerRepository $resourceServers;
+    private InMemoryRefreshTokenRepository $refreshTokens;
     private AuthorizationCodeGrant $grant;
     private Client $client;
     private User $user;
@@ -75,19 +78,25 @@ final class AuthorizationCodeGrantTest extends TestCase
         $this->keys = new InMemorySigningKeys($this->clock);
         $this->resourceServers = new InMemoryResourceServerRepository();
         $this->keys->create(SigningAlgorithm::RS256, $this->clock->now());
+        $this->refreshTokens = new InMemoryRefreshTokenRepository($transactions);
         $this->grant = new AuthorizationCodeGrant(
             $this->codes,
             $this->tokens,
+            $this->refreshTokens,
             $this->users,
             $transactions,
             new SecretGenerator($random),
             $random,
             $this->clock,
             new IdTokenIssuer($this->keys, new CompactJws($this->keys), 'https://auth.clavia.test', 300),
-            $this->resourceServers,
-            new InMemoryRoleRepository($this->resourceServers, $this->users),
-            ScopeSet::fromString('openid profile email'),
+            new UserScope(
+                $this->resourceServers,
+                new InMemoryRoleRepository($this->resourceServers, $this->users),
+                ScopeSet::fromString('openid profile email'),
+            ),
             3600,
+            86_400,
+            172_800,
         );
 
         $this->client = Clients::public('spa');
@@ -204,6 +213,35 @@ final class AuthorizationCodeGrantTest extends TestCase
         $stored = $this->tokens->findByDigest(Digest::of($token->accessToken));
         self::assertEquals(new DateTimeImmutable('2026-01-15T10:00:05Z'), $stored?->revokedAt());
         self::assertCount(1, $this->tokens->all());
+    }
+
+    public function testAClientRegisteredForRefreshesGetsTheFirstTokenOfAFamily(): void
+    {
+        self::assertNull($this->exchange()->refreshToken, 'Refresh tokens are opt-in per client.');
+
+        $this->givenACodeFor($refreshing = $this->refreshingClient(), 'a-refreshing-code');
+        $issued = $this->exchange(['code' => 'a-refreshing-code'], $refreshing);
+
+        self::assertNotNull($issued->refreshToken);
+        $stored = $this->refreshTokens->findByDigest(Digest::of($issued->refreshToken));
+        self::assertNotNull($stored);
+        self::assertTrue($stored->familyId->equals($stored->id));
+        self::assertSame('openid profile', $stored->scope->toString());
+        self::assertEquals(new DateTimeImmutable('2026-01-16T10:00:00Z'), $stored->expiresAt);
+        self::assertEquals(new DateTimeImmutable('2026-01-17T10:00:00Z'), $stored->familyExpiresAt);
+        $access = $this->tokens->findByDigest(Digest::of($issued->accessToken));
+        self::assertTrue($access?->refreshFamilyId?->equals($stored->familyId));
+    }
+
+    public function testAReplayedCodeAlsoRevokesTheSessionItBought(): void
+    {
+        $this->givenACodeFor($refreshing = $this->refreshingClient(), 'a-refreshing-code');
+        $issued = $this->exchange(['code' => 'a-refreshing-code'], $refreshing);
+        self::assertNotNull($issued->refreshToken);
+
+        $this->refusal(['code' => 'a-refreshing-code'], $refreshing);
+
+        self::assertNotNull($this->refreshTokens->findByDigest(Digest::of($issued->refreshToken))?->revokedAt());
     }
 
     public function testAStrangerReplayingASpentCodeRevokesNothing(): void
@@ -339,6 +377,32 @@ final class AuthorizationCodeGrantTest extends TestCase
         self::assertNotSame($first->accessToken, $second->accessToken);
         self::assertTrue($second->scope->isEmpty());
         self::assertCount(2, $this->tokens->all());
+    }
+
+    private function refreshingClient(): Client
+    {
+        return Clients::public(
+            'refreshing',
+            grantTypes: [GrantType::AuthorizationCode, GrantType::RefreshToken],
+        );
+    }
+
+    private function givenACodeFor(Client $client, string $value): void
+    {
+        $this->codes->add(AuthorizationCode::issue(
+            AuthorizationCodeId::generate(new SeededRandomSource(crc32($value))),
+            Digest::of($value),
+            $client->id,
+            $this->user->id,
+            Clients::REDIRECT_URI,
+            ScopeSet::fromString('openid profile'),
+            CodeChallenge::forVerifier(CodeVerifier::fromString(self::VERIFIER)),
+            null,
+            null,
+            AuthenticationContext::unknown(),
+            $this->clock->now(),
+            60,
+        ));
     }
 
     /**

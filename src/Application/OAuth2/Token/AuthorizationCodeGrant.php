@@ -27,9 +27,10 @@ use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
 use Clavia\Domain\OAuth2\CodeVerifier;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use Clavia\Domain\OAuth2\Redemption;
+use Clavia\Domain\OAuth2\RefreshToken;
+use Clavia\Domain\OAuth2\RefreshTokenId;
+use Clavia\Domain\OAuth2\RefreshTokenRepository;
 use Clavia\Domain\Oidc\OidcScope;
-use Clavia\Domain\Rbac\RoleRepository;
-use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\InvalidValue;
@@ -39,14 +40,16 @@ use Clavia\Domain\Shared\SecretGenerator;
 
 /**
  * `grant_type=authorization_code` (RFC 6749 §4.1.3, with PKCE per RFC 7636 §4.5):
- * exchange a single-use code and its `code_verifier` for an access token.
+ * exchange a single-use code and its `code_verifier` for an access token — and, for a
+ * client registered for the refresh token grant, the first refresh token of a family.
  *
  * The whole exchange is one transaction on a locked row, and it commits whether it
  * succeeds or not:
  *
  * - Two concurrent redemptions of one code cannot both win. The second waits on the
- *   lock, then finds the code spent *and* the token the first one issued — and revokes
- *   it, as RFC 6749 §4.1.2 requires of a replay.
+ *   lock, then finds the code spent *and* what the first one issued — and revokes it, as
+ *   RFC 6749 §4.1.2 requires of a replay: the access tokens, and the refresh tokens
+ *   descended from the code, so a leaked code that already bought a session loses it.
  * - A code is spent before its redirect URI and verifier are examined, and stays spent
  *   when they are wrong: a failed attempt burns the code rather than leaving it for
  *   another guess. That is why refusals travel out of the transaction as values and are
@@ -59,22 +62,24 @@ use Clavia\Domain\Shared\SecretGenerator;
 final readonly class AuthorizationCodeGrant implements Grant
 {
     /**
-     * @param ScopeSet     $supportedScopes            The OIDC scopes, valid whatever API a code names.
      * @param positive-int $accessTokenLifetimeSeconds
+     * @param positive-int $refreshTokenLifetimeSeconds         The idle limit of a refresh token.
+     * @param positive-int $refreshTokenAbsoluteLifetimeSeconds The longest a family may live.
      */
     public function __construct(
         private AuthorizationCodeRepository $codes,
         private AccessTokenRepository $tokens,
+        private RefreshTokenRepository $refreshTokens,
         private UserRepository $users,
         private TransactionManager $transactions,
         private SecretGenerator $secrets,
         private RandomSource $random,
         private Clock $clock,
         private IdTokenIssuer $idTokens,
-        private ResourceServerRepository $resourceServers,
-        private RoleRepository $roles,
-        private ScopeSet $supportedScopes,
+        private UserScope $userScope,
         private int $accessTokenLifetimeSeconds,
+        private int $refreshTokenLifetimeSeconds,
+        private int $refreshTokenAbsoluteLifetimeSeconds,
     ) {
     }
 
@@ -127,6 +132,7 @@ final readonly class AuthorizationCodeGrant implements Grant
             // A code seen twice has leaked, and there is no telling which of the two
             // callers was legitimate: revoke what it already produced (RFC 6749 §4.1.2).
             $this->tokens->revokeIssuedFrom($code->id, $now);
+            $this->refreshTokens->revokeIssuedFrom($code->id, $now);
         }
         if ($redemption !== Redemption::Redeemed) {
             // Unknown, foreign, replayed and expired codes are one answer to the caller.
@@ -147,44 +153,12 @@ final readonly class AuthorizationCodeGrant implements Grant
             return OAuth2Error::invalidGrant("There is no active user for this 'code'.");
         }
 
-        $scope = $this->scopeNow($code, $user);
+        $scope = $this->userScope->now($code->scope, $user->id, $code->audience);
         if ($scope instanceof OAuth2Error) {
             return $scope;
         }
 
-        return $this->mint($code, $user, $scope);
-    }
-
-    /**
-     * The scope the token gets: the code's, re-checked against the API it names as that
-     * API is now, rather than trusted from when the code was issued. A permission the API
-     * dropped in between is not issued; an API removed in between issues nothing. On an
-     * API that enforces roles, its permissions are further cut to what the person's roles
-     * grant there now; holding nothing any more is `invalid_grant`.
-     */
-    private function scopeNow(AuthorizationCode $code, User $user): ScopeSet|OAuth2Error
-    {
-        if ($code->audience === null) {
-            return $code->scope;
-        }
-
-        $resourceServer = $this->resourceServers->findByIdentifier($code->audience);
-        if ($resourceServer === null) {
-            return OAuth2Error::invalidGrant("The API this 'code' was issued for is no longer registered.");
-        }
-
-        $apiScopes = $resourceServer->permissionScopes();
-        if ($resourceServer->enforcePolicies) {
-            $held = $this->roles->permissionsHeld($user->id, $resourceServer->id);
-            if ($held->isEmpty()) {
-                return OAuth2Error::invalidGrant(
-                    "The account no longer holds any permission on the API this 'code' was issued for.",
-                );
-            }
-            $apiScopes = $apiScopes->intersect($held);
-        }
-
-        return $code->scope->intersect($this->supportedScopes->union($apiScopes));
+        return $this->mint($code, $user, $scope, $client->mayUseGrant(GrantType::RefreshToken));
     }
 
     /**
@@ -216,16 +190,34 @@ final readonly class AuthorizationCodeGrant implements Grant
     }
 
     /**
-     * The access token, and — for an OpenID Connect request — the ID token beside it
-     * (OIDC Core §3.1.3.3). Both are written in the redemption's transaction: if the ID
-     * token cannot be signed, no access token survives without it, and the code is not
-     * spent.
+     * The access token; the first refresh token of a family when the client may refresh;
+     * and — for an OpenID Connect request — the ID token beside them (OIDC Core §3.1.3.3).
+     * All are written in the redemption's transaction: if the ID token cannot be signed,
+     * nothing survives without it, and the code is not spent.
      */
-    private function mint(AuthorizationCode $code, User $user, ScopeSet $scope): IssuedToken
+    private function mint(AuthorizationCode $code, User $user, ScopeSet $scope, bool $refreshable): IssuedToken
     {
         $now = $this->clock->now();
-        $value = $this->secrets->token();
 
+        $refreshValue = null;
+        $refreshToken = null;
+        if ($refreshable) {
+            $refreshValue = $this->secrets->token();
+            // The family's ceiling is what the person authorized, not what this token
+            // carries: a role given back later is honoured by the next refresh.
+            $refreshToken = RefreshToken::startFamily(
+                RefreshTokenId::generate($this->random),
+                Digest::of($refreshValue),
+                $code,
+                $code->scope,
+                $now,
+                $this->refreshTokenLifetimeSeconds,
+                $this->refreshTokenAbsoluteLifetimeSeconds,
+            );
+            $this->refreshTokens->add($refreshToken);
+        }
+
+        $value = $this->secrets->token();
         $token = AccessToken::issueFromCode(
             AccessTokenId::generate($this->random),
             Digest::of($value),
@@ -233,6 +225,7 @@ final readonly class AuthorizationCodeGrant implements Grant
             $scope,
             $now,
             $this->accessTokenLifetimeSeconds,
+            $refreshToken?->familyId,
         );
         $this->tokens->add($token);
 
@@ -240,6 +233,13 @@ final readonly class AuthorizationCodeGrant implements Grant
             ? $this->idTokens->issue($code, $user, $value, $now)
             : null;
 
-        return new IssuedToken($value, AccessToken::TOKEN_TYPE, $token->lifetimeFrom($now), $token->scope, $idToken);
+        return new IssuedToken(
+            $value,
+            AccessToken::TOKEN_TYPE,
+            $token->lifetimeFrom($now),
+            $token->scope,
+            $idToken,
+            $refreshValue,
+        );
     }
 }
