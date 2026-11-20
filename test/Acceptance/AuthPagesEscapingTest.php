@@ -14,11 +14,13 @@ namespace ClaviaTest\Acceptance;
 use Clavia\Adapter\Primary\Http\Auth\AuthPageResponder;
 use Clavia\Adapter\Primary\Http\Auth\LoginPages;
 use Clavia\Adapter\Primary\Http\Auth\MfaPages;
+use Clavia\Adapter\Primary\Http\Oidc\EndSessionHandler;
 use Clavia\Adapter\Primary\Http\Shared\ErrorPage;
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
 use Clavia\Application\Authentication\External\ExternalProviderOption;
 use Clavia\Application\Authentication\Mfa\MfaStatus;
 use Clavia\Application\Authentication\Mfa\TotpEnrollment;
+use Clavia\Application\Oidc\Logout\SignOutConfirmationNeeded;
 use ClaviaTest\Support\AcceptanceTestCase;
 use Laminas\Diactoros\ServerRequest;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -81,6 +83,14 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
             ),
         ];
         yield 'the recovery codes' => [MfaPages::recoveryCodes([self::HOSTILE, 'abcd-efgh-jkmn'])];
+        yield 'the sign-out confirmation: client name and carried fields' => [
+            EndSessionHandler::confirmation(new SignOutConfirmationNeeded(
+                self::HOSTILE,
+                self::HOSTILE,
+                'https://app.example/' . self::HOSTILE,
+                self::HOSTILE,
+            )),
+        ];
         yield 'an error page: message, advice and reference' => [
             new ErrorPage(self::HOSTILE, self::HOSTILE, self::HOSTILE, self::HOSTILE)->toHtmlPage(400),
         ];

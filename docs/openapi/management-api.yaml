@@ -941,7 +941,7 @@ components:
       type: object
       additionalProperties: false
       required: [client_id, name, client_type, token_endpoint_auth_method, redirect_uris, grant_types,
-        response_types, created_at]
+        response_types, post_logout_redirect_uris, created_at]
       properties:
         client_id:
           type: string
@@ -963,6 +963,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ResponseType'
+        post_logout_redirect_uris:
+          type: array
+          items:
+            type: string
         created_at:
           type: string
           format: date-time
@@ -972,7 +976,7 @@ components:
       type: object
       additionalProperties: false
       required: [client_id, name, client_type, token_endpoint_auth_method, redirect_uris, grant_types,
-        response_types, created_at, client_secret]
+        response_types, post_logout_redirect_uris, created_at, client_secret]
       properties:
         client_id:
           type: string
@@ -994,6 +998,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ResponseType'
+        post_logout_redirect_uris:
+          type: array
+          items:
+            type: string
         created_at:
           type: string
           format: date-time
@@ -1027,6 +1035,14 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ResponseType'
+        post_logout_redirect_uris:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/RedirectUri'
+          description: |
+            Where a sign-out the client starts at `/oidc/logout` may send the browser back
+            (OpenID Connect RP-Initiated Logout 1.0 §3.1). Matched exactly.
       description: |
         `client_type` defaults to `public`; `token_endpoint_auth_method` to `none` for a
         public client and `client_secret_basic` for a confidential one.
@@ -1054,6 +1070,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ResponseType'
+        post_logout_redirect_uris:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/RedirectUri'
 
     Permission:
       type: object

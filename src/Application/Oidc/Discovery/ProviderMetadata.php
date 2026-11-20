@@ -37,6 +37,7 @@ final readonly class ProviderMetadata
     public const string TOKEN_ENDPOINT = '/oauth2/token';
     public const string USERINFO_ENDPOINT = '/oidc/userinfo';
     public const string JWKS_URI = '/oidc/jwks.json';
+    public const string END_SESSION_ENDPOINT = '/oidc/logout';
 
     /** The claims an ID token or the userinfo endpoint can carry. */
     private const array CLAIMS = [
@@ -73,6 +74,8 @@ final readonly class ProviderMetadata
             'token_endpoint' => $this->issuer . self::TOKEN_ENDPOINT,
             'userinfo_endpoint' => $this->issuer . self::USERINFO_ENDPOINT,
             'jwks_uri' => $this->issuer . self::JWKS_URI,
+            // OpenID Connect RP-Initiated Logout 1.0 §2.1.
+            'end_session_endpoint' => $this->issuer . self::END_SESSION_ENDPOINT,
             'scopes_supported' => $this->scopes->toList(),
             'response_types_supported' => array_map(
                 static fn (ResponseType $type): string => $type->value,

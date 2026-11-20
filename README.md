@@ -6,7 +6,7 @@ Auth0: OAuth2 flows, interactive login with MFA, and a Management API.
 This is the PHP 8.5 implementation. It is being ported feature by feature from the Python
 reference implementation; `CLAUDE.md` holds the migration plan and the current state.
 
-**Status: Step 8 — social login.** A person signs in with a password at `/auth/login`, or with
+**Status: Step 9 — RP-Initiated Logout.** A person signs in with a password at `/auth/login`, or with
 Google or GitHub once their credentials are configured (`CLAVIA_GOOGLE_CLIENT_ID` / `_SECRET`,
 `CLAVIA_GITHUB_CLIENT_ID` / `_SECRET`; register
 `https://auth.{domain}/auth/social/{provider}/callback` at the provider) — followed, once they
@@ -23,7 +23,17 @@ they name in `audience`, within what their client grant on it allows. The Manage
 checked against it. It is registered with `clavia management-api:register`, and machine
 clients are granted access to it — or to any API — with `clavia clients:grant`. An operator
 resets the second factor of somebody who lost both their phone and their recovery codes with
-`DELETE /api/v1/users/{user_id}/mfa`.
+`DELETE /api/v1/users/{user_id}/mfa`. A client signs the person out with
+`/oidc/logout` (OpenID Connect RP-Initiated Logout 1.0, `GET` or `POST`): an `id_token_hint`
+the server signed for the signed-in person ends the session at once; without one the person is
+asked first. The browser is then sent to one of the client's registered
+`post_logout_redirect_uris`, with `state`, or to the login page.
+
+The dashboard (`frontend/`, React) is registered by `clavia seed-dev` as a public client, which
+also writes its build configuration to `frontend/.env.local`. Run it with
+`cd frontend && npm install && npm run dev`; Caddy serves it at
+`https://management.{domain}/dashboard/`. It cannot sign in yet: it needs role-based access to
+the Management API (Step 10) and refresh tokens (Step 11).
 
 ## Architecture
 

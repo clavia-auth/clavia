@@ -33,6 +33,7 @@ final readonly class Client
      * @param list<Url>             $redirectUris
      * @param list<GrantType>       $grantTypes
      * @param list<ResponseType>    $responseTypes
+     * @param list<Url>             $postLogoutRedirectUris
      */
     private function __construct(
         public ClientId $id,
@@ -44,6 +45,7 @@ final readonly class Client
         public array $grantTypes,
         public array $responseTypes,
         public DateTimeImmutable $createdAt,
+        public array $postLogoutRedirectUris,
     ) {
     }
 
@@ -55,6 +57,8 @@ final readonly class Client
      * @param list<Url>          $redirectUris  Where authorization responses may be sent, matched exactly.
      * @param list<GrantType>    $grantTypes    What it may ask of the token endpoint.
      * @param list<ResponseType> $responseTypes What it may ask of the authorization endpoint.
+     * @param list<Url>          $postLogoutRedirectUris Where a sign-out it starts may send the browser back
+     *                                                  (RP-Initiated Logout 1.0 §3.1), matched exactly.
      *
      * @throws InvalidValue When the registration contradicts itself.
      */
@@ -68,6 +72,7 @@ final readonly class Client
         array $grantTypes,
         array $responseTypes,
         DateTimeImmutable $createdAt,
+        array $postLogoutRedirectUris = [],
     ): self {
         $secretHash = $secretHash === '' ? null : $secretHash;
 
@@ -88,6 +93,12 @@ final readonly class Client
             // RFC 6749 §3.1.2: the redirection endpoint URI must not include a fragment.
             if ($redirectUri->hasFragment()) {
                 throw new InvalidValue('A redirect URI must not contain a fragment.');
+            }
+        }
+        foreach ($postLogoutRedirectUris as $postLogoutRedirectUri) {
+            // `state` is appended to it as a query parameter, which a fragment would swallow.
+            if ($postLogoutRedirectUri->hasFragment()) {
+                throw new InvalidValue('A post-logout redirect URI must not contain a fragment.');
             }
         }
 
@@ -120,6 +131,7 @@ final readonly class Client
             array_values(array_unique($grantTypes, SORT_REGULAR)),
             array_values(array_unique($responseTypes, SORT_REGULAR)),
             $createdAt,
+            $postLogoutRedirectUris,
         );
     }
 
@@ -134,6 +146,7 @@ final readonly class Client
      * @param list<Url>          $redirectUris
      * @param list<GrantType>    $grantTypes
      * @param list<ResponseType> $responseTypes
+     * @param list<Url>|null     $postLogoutRedirectUris Null keeps the registered ones.
      *
      * @throws InvalidValue
      */
@@ -143,6 +156,7 @@ final readonly class Client
         array $grantTypes,
         array $responseTypes,
         ClientAuthMethod $authMethod,
+        ?array $postLogoutRedirectUris = null,
     ): self {
         return self::register(
             $this->id,
@@ -154,6 +168,7 @@ final readonly class Client
             $grantTypes,
             $responseTypes,
             $this->createdAt,
+            $postLogoutRedirectUris ?? $this->postLogoutRedirectUris,
         );
     }
 
@@ -180,6 +195,7 @@ final readonly class Client
             $this->grantTypes,
             $this->responseTypes,
             $this->createdAt,
+            $this->postLogoutRedirectUris,
         );
     }
 
@@ -194,7 +210,18 @@ final readonly class Client
         return array_any($this->redirectUris, static fn (Url $registered): bool => $registered->value === $redirectUri);
     }
 
-    /** The redirect URI used when a request names none — only when exactly one is registered. */
+    /**
+     * Whether `$uri` is a post-logout redirect URI this client registered — by exact
+     * string match, like a redirect URI (RP-Initiated Logout 1.0 §3.1).
+     */
+    public function hasPostLogoutRedirectUri(string $uri): bool
+    {
+        return array_any(
+            $this->postLogoutRedirectUris,
+            static fn (Url $registered): bool => $registered->value === $uri,
+        );
+    }
+
     /**
      * The origins the registered redirect URIs point at, each once, in registration order.
      *
@@ -211,6 +238,7 @@ final readonly class Client
         return array_values(array_unique($origins));
     }
 
+    /** The redirect URI used when a request names none — only when exactly one is registered. */
     public function soleRedirectUri(): ?Url
     {
         return count($this->redirectUris) === 1 ? $this->redirectUris[0] : null;

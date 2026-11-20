@@ -110,6 +110,16 @@ knows what changes.
 | The `state` cookie | `clavia_social_state` | `clavia_external_state` | Named for what it is, whatever kind of provider. |
 | Where a matching address is looked for | The pools the application enables, and the provider's own accounts | Every account, until connections exist (Step 13) | There are no pools yet. |
 
+## RP-Initiated Logout
+
+| Area | Python | PHP | Why |
+|---|---|---|---|
+| `post_logout_redirect_uri` | Accepted when its origin is the origin of any client's redirect URI | Must be one of the `post_logout_redirect_uris` the identified client registered, matched exactly (new client field) | RP-Initiated Logout 1.0 §3.1. An origin rule lets any page on a client's site — or another client's — be the landing page. |
+| Which client asks | Not considered | The hint's audience, or `client_id`; both present and different counts as neither | §2: the OP must verify that `client_id` matches the ID token's. |
+| `state` | Ignored | Returned on the post-logout redirect | §3. |
+| A request without a valid hint, while signed in | Redirected, the session left in place, the cookie deleted anyway | A page asking whether to sign out; the session and its cookie stay until the person confirms | §2: the OP should ask. Deleting the cookie of a session left alive only signs the person out of this browser by accident. |
+| `POST /oidc/logout` | Not served | Served, as §2 requires | |
+
 ## Errors shown to browsers
 
 | Area | Python | PHP | Why |

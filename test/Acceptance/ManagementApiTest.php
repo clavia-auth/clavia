@@ -557,6 +557,35 @@ final class ManagementApiTest extends AcceptanceTestCase
         self::assertSame('none', self::document($created)['token_endpoint_auth_method']);
     }
 
+    public function testPostLogoutRedirectUrisAreRegisteredAndChangedLikeAnyField(): void
+    {
+        $this->adminToken();
+
+        $created = $this->api('POST', self::CLIENTS, [
+            'client_type' => 'public',
+            'grant_types' => ['authorization_code'],
+            'response_types' => ['code'],
+            'redirect_uris' => ['https://spa.test/callback'],
+            'post_logout_redirect_uris' => ['https://spa.test/signed-out'],
+        ]);
+        self::assertSame(201, $created->getStatusCode(), (string) $created->getBody());
+        self::assertSame(['https://spa.test/signed-out'], self::document($created)['post_logout_redirect_uris']);
+        $path = self::CLIENTS . '/' . (string) self::document($created)['client_id'];
+
+        $renamed = self::document($this->api('PATCH', $path, ['name' => 'Kept']));
+        self::assertSame(['https://spa.test/signed-out'], $renamed['post_logout_redirect_uris']);
+        $changed = self::document($this->api('PATCH', $path, ['post_logout_redirect_uris' => []]));
+        self::assertSame([], $changed['post_logout_redirect_uris']);
+        self::assertSame(
+            422,
+            $this->api('PATCH', $path, ['post_logout_redirect_uris' => ['https://spa.test/bye#x']])->getStatusCode(),
+        );
+        self::assertSame(
+            422,
+            $this->api('PATCH', $path, ['post_logout_redirect_uris' => ['/relative']])->getStatusCode(),
+        );
+    }
+
     public function testRotatingASecretInvalidatesTheOldOne(): void
     {
         $this->adminToken();

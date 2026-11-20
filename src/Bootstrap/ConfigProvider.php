@@ -49,6 +49,7 @@ use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\OAuth2Responder;
 use Clavia\Adapter\Primary\Http\OAuth2\TokenHandler;
 use Clavia\Adapter\Primary\Http\Oidc\DiscoveryHandler;
+use Clavia\Adapter\Primary\Http\Oidc\EndSessionHandler;
 use Clavia\Adapter\Primary\Http\Oidc\JwksHandler;
 use Clavia\Adapter\Primary\Http\Oidc\UserInfoHandler;
 use Clavia\Adapter\Primary\Http\Shared\BearerChallenger;
@@ -61,6 +62,7 @@ use Clavia\Adapter\Secondary\Crypto\BcryptPasswordHasher;
 use Clavia\Adapter\Secondary\IdentityProvider\ProviderHttp;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use Clavia\Adapter\Secondary\Redis\RedisConnection;
+use Clavia\Adapter\Secondary\Signing\Jose\JoseSignatureVerifier;
 use Clavia\Adapter\Secondary\System\SystemClock;
 use Clavia\Adapter\Secondary\System\SystemRandomSource;
 use Clavia\Application\Authentication\DevelopmentAutoLogin;
@@ -85,6 +87,7 @@ use Clavia\Application\Authentication\SignIn\SignInWithPassword;
 use Clavia\Application\Authentication\SignOut;
 use Clavia\Application\Clients\RegisterMachineClient;
 use Clavia\Application\Development\BuildAuthorizationUrl;
+use Clavia\Application\Development\SeedDashboardClient;
 use Clavia\Application\Development\SeedDevelopmentData;
 use Clavia\Application\Development\SeedManagementAccess;
 use Clavia\Application\Management\Caller\AuthenticateManagementCaller;
@@ -116,6 +119,7 @@ use Clavia\Application\Oidc\Keys\GenerateSigningKey;
 use Clavia\Application\Oidc\Keys\ListSigningKeys;
 use Clavia\Application\Oidc\Keys\PublishSigningKeys;
 use Clavia\Application\Oidc\Keys\RotateSigningKey;
+use Clavia\Application\Oidc\Logout\EndSession;
 use Clavia\Application\Oidc\UserInfo\ReadUserInfo;
 use Clavia\Application\Port\AttemptCounter;
 use Clavia\Application\Port\ExternalSignInStore;
@@ -127,6 +131,7 @@ use Clavia\Application\Port\PasswordHasher;
 use Clavia\Application\Port\SchemaMigrator;
 use Clavia\Application\Port\SecretCipher;
 use Clavia\Application\Port\SessionStore;
+use Clavia\Application\Port\SignatureVerifier;
 use Clavia\Application\Port\SigningKeyStore;
 use Clavia\Application\Port\TokenSigner;
 use Clavia\Application\Port\TransactionManager;
@@ -202,6 +207,7 @@ final class ConfigProvider
                     ResponseFactoryInterface::class => ResponseFactory::class,
                     StreamFactoryInterface::class => StreamFactory::class,
                     RequestFactoryInterface::class => RequestFactory::class,
+                    SignatureVerifier::class => JoseSignatureVerifier::class,
 
                     // Ports whose adapter needs nothing to be built
                     Clock::class => SystemClock::class,
@@ -224,6 +230,7 @@ final class ConfigProvider
                     // Use cases
                     GenerateEncryptionKey::class => Container\GenerateEncryptionKeyFactory::class,
                     DevelopmentAutoLogin::class => Container\DevelopmentAutoLoginFactory::class,
+                    SeedDashboardClient::class => Container\SeedDashboardClientFactory::class,
                     ClientAuthenticator::class => Container\ClientAuthenticatorFactory::class,
                     Authorize::class => Container\AuthorizeFactory::class,
                     AuthorizationCodeGrant::class => Container\AuthorizationCodeGrantFactory::class,
@@ -247,6 +254,8 @@ final class ConfigProvider
                     RotateSigningKey::class => Container\RotateSigningKeyFactory::class,
                     ListSigningKeys::class => Container\ListSigningKeysFactory::class,
                     ReadUserInfo::class => Container\ReadUserInfoFactory::class,
+                    EndSession::class => Container\EndSessionFactory::class,
+                    EndSessionHandler::class => Container\EndSessionHandlerFactory::class,
                     CompleteFirstFactor::class => Container\CompleteFirstFactorFactory::class,
                     ExternalIdentityRepository::class => Container\ExternalIdentityRepositoryFactory::class,
                     ExternalSignInStore::class => Container\ExternalSignInStoreFactory::class,

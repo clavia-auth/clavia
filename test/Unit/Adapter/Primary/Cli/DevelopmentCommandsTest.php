@@ -15,6 +15,7 @@ use Clavia\Adapter\Primary\Cli\AuthorizeUrlCommand;
 use Clavia\Adapter\Primary\Cli\SeedDevelopmentDataCommand;
 use Clavia\Application\Clients\RegisterMachineClient;
 use Clavia\Application\Development\BuildAuthorizationUrl;
+use Clavia\Application\Development\SeedDashboardClient;
 use Clavia\Application\Development\SeedDevelopmentData;
 use Clavia\Application\Development\SeedManagementAccess;
 use Clavia\Application\Management\Provisioning\GrantClientAccess;
@@ -66,8 +67,10 @@ final class DevelopmentCommandsTest extends TestCase
 
         $client = $this->clients->findByName(SeedDevelopmentData::CLIENT_NAME);
         $machine = $this->clients->findByName(SeedManagementAccess::CLIENT_NAME);
+        $dashboard = $this->clients->findByName(SeedDashboardClient::CLIENT_NAME);
         self::assertNotNull($client);
         self::assertNotNull($machine);
+        self::assertNotNull($dashboard);
         self::assertTrue($client->hasRedirectUri('http://localhost:3000/callback'));
         self::assertNotNull($this->users->findByEmail('dev@clavia.test'));
         self::assertSame(
@@ -76,6 +79,7 @@ final class DevelopmentCommandsTest extends TestCase
             . "Created signing key {$this->signingKeys->activeKey()->kid}\n"
             . "Registered the Management API as https://management.clavia.test/api/v1/\n"
             . "Created machine client {$machine->id->value}, granted every management scope\n"
+            . "Created dashboard client {$dashboard->id->value}\n"
             . "\n"
             . "Seeded. Sign in at https://auth.clavia.test/auth/login as dev@clavia.test / devpassword\n"
             . "Run `clavia authorize-url` to get a link that exercises the whole flow.\n"
@@ -119,6 +123,56 @@ final class DevelopmentCommandsTest extends TestCase
             '/Signing key [A-Za-z0-9_-]{43} is already active/',
             $tester->getDisplay(true),
         );
+    }
+
+    public function testTheDashboardIsAPublicCodeFlowClientWithItsBuildConfigurationWritten(): void
+    {
+        $directory = sys_get_temp_dir() . '/clavia-frontend-' . bin2hex(random_bytes(4));
+        mkdir($directory);
+        $envFile = $directory . '/.env.local';
+
+        try {
+            $tester = $this->seedCommand(dashboardEnvFile: $envFile);
+            self::assertSame(Command::SUCCESS, $tester->execute([]));
+
+            $dashboard = $this->clients->findByName(SeedDashboardClient::CLIENT_NAME);
+            self::assertNotNull($dashboard);
+            self::assertTrue($dashboard->isPublic());
+            self::assertTrue($dashboard->hasRedirectUri('https://management.clavia.test/dashboard/callback'));
+            self::assertTrue(
+                $dashboard->hasPostLogoutRedirectUri('https://management.clavia.test/dashboard/signed-out'),
+            );
+            self::assertSame(
+                "# Written by `clavia seed-dev`. The dashboard reads these at build time.\n"
+                . "VITE_CLAVIA_ISSUER=https://auth.clavia.test\n"
+                . "VITE_CLAVIA_CLIENT_ID={$dashboard->id->value}\n"
+                . "VITE_CLAVIA_AUDIENCE=https://management.clavia.test/api/v1/\n"
+                . "VITE_CLAVIA_MANAGEMENT_HOST=management.clavia.test\n",
+                file_get_contents($envFile),
+            );
+            self::assertStringContainsString(
+                "Wrote the dashboard's configuration to {$envFile}",
+                $tester->getDisplay(true),
+            );
+
+            // A rerun keeps the same client.
+            $this->seedCommand(dashboardEnvFile: $envFile)->execute([]);
+            self::assertSame(
+                $dashboard->id->value,
+                $this->clients->findByName(SeedDashboardClient::CLIENT_NAME)?->id->value,
+            );
+        } finally {
+            @unlink($envFile);
+            @rmdir($directory);
+        }
+    }
+
+    public function testWithoutAFrontendDirectoryNoConfigurationIsWritten(): void
+    {
+        $tester = $this->seedCommand(dashboardEnvFile: sys_get_temp_dir() . '/no-such-frontend-dir/.env.local');
+
+        self::assertSame(Command::SUCCESS, $tester->execute([]));
+        self::assertStringNotContainsString('Wrote the dashboard', $tester->getDisplay(true));
     }
 
     public function testSeedRefusesOutsideDevelopmentAndCreatesNothing(): void
@@ -216,7 +270,7 @@ final class DevelopmentCommandsTest extends TestCase
         self::assertStringContainsString('A client id is', $tester->getDisplay(true));
     }
 
-    private function seedCommand(bool $isDevelopment = true): CommandTester
+    private function seedCommand(bool $isDevelopment = true, ?string $dashboardEnvFile = null): CommandTester
     {
         $random = new SeededRandomSource(1);
 
@@ -234,8 +288,11 @@ final class DevelopmentCommandsTest extends TestCase
                 $isDevelopment,
             ),
             $this->seedManagementAccess($random, $isDevelopment),
+            new SeedDashboardClient($this->clients, new SecretGenerator($random), new FrozenClock(), $isDevelopment),
             'clavia.test',
             self::ISSUER,
+            'management.clavia.test',
+            $dashboardEnvFile,
         ));
     }
 

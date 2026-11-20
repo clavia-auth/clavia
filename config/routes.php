@@ -29,6 +29,7 @@ use Clavia\Adapter\Primary\Http\Management\UsersHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\TokenHandler;
 use Clavia\Adapter\Primary\Http\Oidc\DiscoveryHandler;
+use Clavia\Adapter\Primary\Http\Oidc\EndSessionHandler;
 use Clavia\Adapter\Primary\Http\Oidc\JwksHandler;
 use Clavia\Adapter\Primary\Http\Oidc\UserInfoHandler;
 use Clavia\Adapter\Primary\Http\Shared\HealthHandler;
@@ -54,6 +55,8 @@ return static function (Application $app): void {
     // token, on GET and POST (OIDC Core §5.3.1). ──
     $app->get('/oidc/jwks.json', JwksHandler::class, 'oidc.jwks');
     $app->route('/oidc/userinfo', UserInfoHandler::class, ['GET', 'POST'], 'oidc.userinfo');
+    // RP-Initiated Logout 1.0 §2: the end-session endpoint answers GET and POST.
+    $app->route('/oidc/logout', EndSessionHandler::class, ['GET', 'POST'], 'oidc.logout');
 
     // ── /auth/* — the interactive sign-in. The browser authenticates with its session
     // cookie; every state change is a POST, and logout has no GET on purpose. ──

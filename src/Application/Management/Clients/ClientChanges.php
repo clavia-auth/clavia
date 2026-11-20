@@ -21,6 +21,7 @@ final readonly class ClientChanges
      * @param list<string>|null $redirectUris
      * @param list<string>|null $grantTypes
      * @param list<string>|null $responseTypes
+     * @param list<string>|null $postLogoutRedirectUris
      */
     public function __construct(
         public ?string $name = null,
@@ -28,6 +29,7 @@ final readonly class ClientChanges
         public ?array $redirectUris = null,
         public ?array $grantTypes = null,
         public ?array $responseTypes = null,
+        public ?array $postLogoutRedirectUris = null,
     ) {
     }
 }

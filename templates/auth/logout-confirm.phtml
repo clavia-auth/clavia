@@ -1,0 +1,26 @@
+<?php
+/**
+ * The end-session confirmation: a request to sign out arrived without proof that the
+ * application asking acts for this person, so the person decides.
+ *
+ * Variables (set by Clavia\Adapter\Primary\Http\Oidc\EndSessionHandler):
+ * @var Laminas\View\Renderer\PhpRenderer $this
+ * @var string|null           $clientName The application that asked, when it is known.
+ * @var array<string, string> $fields     The checked request parameters, carried back.
+ */
+?>
+<?php $this->placeholder('subtitle')->captureStart() ?>
+<?php if ($clientName !== null): ?>
+      <p class="subtitle"><strong><?= $this->escapeHtml($clientName) ?></strong> asks to sign you out of this server.</p>
+<?php else: ?>
+      <p class="subtitle">You are about to sign out of this server.</p>
+<?php endif ?>
+<?php $this->placeholder('subtitle')->captureEnd() ?>
+    <form method="post" action="/oidc/logout">
+<?php foreach ($fields as $name => $value): ?>
+      <input type="hidden" name="<?= $this->escapeHtmlAttr($name) ?>" value="<?= $this->escapeHtmlAttr($value) ?>">
+<?php endforeach ?>
+      <input type="hidden" name="confirmed" value="yes">
+      <button type="submit">Sign out</button>
+    </form>
+    <p class="hint">If you did not mean to sign out, close this page: nothing has changed.</p>

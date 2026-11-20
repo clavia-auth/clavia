@@ -28,7 +28,7 @@ use Clavia\Domain\Shared\Url;
 final readonly class PhpDbClientRepository implements ClientRepository
 {
     private const string COLUMNS = 'client_id, client_secret_hash, name, client_type, redirect_uris, '
-        . 'grant_types, response_types, token_endpoint_auth_method, created_at';
+        . 'grant_types, response_types, token_endpoint_auth_method, created_at, post_logout_redirect_uris';
 
     public function __construct(private Database $database)
     {
@@ -108,10 +108,11 @@ final readonly class PhpDbClientRepository implements ClientRepository
             <<<'SQL'
                 INSERT INTO oauth2_clients (
                     client_id, client_secret_hash, name, client_type, redirect_uris, grant_types,
-                    response_types, token_endpoint_auth_method, created_at
+                    response_types, token_endpoint_auth_method, created_at, post_logout_redirect_uris
                 ) VALUES (
                     :client_id, :client_secret_hash, :name, :client_type, CAST(:redirect_uris AS jsonb),
-                    CAST(:grant_types AS jsonb), CAST(:response_types AS jsonb), :auth_method, :created_at
+                    CAST(:grant_types AS jsonb), CAST(:response_types AS jsonb), :auth_method, :created_at,
+                    CAST(:post_logout_redirect_uris AS jsonb)
                 )
                 ON CONFLICT (client_id) DO UPDATE SET
                     client_secret_hash = EXCLUDED.client_secret_hash,
@@ -119,7 +120,8 @@ final readonly class PhpDbClientRepository implements ClientRepository
                     redirect_uris = EXCLUDED.redirect_uris,
                     grant_types = EXCLUDED.grant_types,
                     response_types = EXCLUDED.response_types,
-                    token_endpoint_auth_method = EXCLUDED.token_endpoint_auth_method
+                    token_endpoint_auth_method = EXCLUDED.token_endpoint_auth_method,
+                    post_logout_redirect_uris = EXCLUDED.post_logout_redirect_uris
                 SQL,
             [
                 'client_id' => $client->id->value,
@@ -137,6 +139,9 @@ final readonly class PhpDbClientRepository implements ClientRepository
                 ),
                 'auth_method' => $client->authMethod->value,
                 'created_at' => Timestamp::toDatabase($client->createdAt),
+                'post_logout_redirect_uris' => Jsonb::encode(
+                    array_map(static fn (Url $uri): string => $uri->value, $client->postLogoutRedirectUris),
+                ),
             ],
         );
     }
@@ -149,7 +154,8 @@ final readonly class PhpDbClientRepository implements ClientRepository
         /**
          * @var array{client_id: string, client_secret_hash: string|null, name: string, client_type: string,
          *            redirect_uris: string, grant_types: string, response_types: string,
-         *            token_endpoint_auth_method: string, created_at: string} $row
+         *            token_endpoint_auth_method: string, created_at: string,
+         *            post_logout_redirect_uris: string} $row
          */
         return Client::register(
             ClientId::fromString($row['client_id']),
@@ -161,6 +167,7 @@ final readonly class PhpDbClientRepository implements ClientRepository
             array_map(GrantType::from(...), Jsonb::decodeStrings($row['grant_types'])),
             array_map(ResponseType::from(...), Jsonb::decodeStrings($row['response_types'])),
             Timestamp::fromDatabase($row['created_at']),
+            array_map(Url::fromString(...), Jsonb::decodeStrings($row['post_logout_redirect_uris'])),
         );
     }
 }

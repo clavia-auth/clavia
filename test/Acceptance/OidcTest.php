@@ -55,6 +55,7 @@ final class OidcTest extends AcceptanceTestCase
         self::assertSame(self::ISSUER . '/oauth2/token', $document['token_endpoint']);
         self::assertSame(self::ISSUER . '/oidc/userinfo', $document['userinfo_endpoint']);
         self::assertSame(self::ISSUER . '/oidc/jwks.json', $document['jwks_uri']);
+        self::assertSame(self::ISSUER . '/oidc/logout', $document['end_session_endpoint']);
         self::assertSame(['RS256'], $document['id_token_signing_alg_values_supported']);
         // PKCE is mandatory here, so `plain` is not advertised.
         self::assertSame(['S256'], $document['code_challenge_methods_supported']);
@@ -84,7 +85,6 @@ final class OidcTest extends AcceptanceTestCase
 
         // Nothing is advertised that does not exist yet.
         self::assertArrayNotHasKey('prompt_values_supported', $document);
-        self::assertArrayNotHasKey('end_session_endpoint', $document);
         self::assertArrayNotHasKey('introspection_endpoint', $document);
         self::assertNotContains('sid', $claims);
     }
@@ -116,7 +116,7 @@ final class OidcTest extends AcceptanceTestCase
                 $advertised[$field] = $url;
             }
         }
-        self::assertCount(4, $advertised);
+        self::assertCount(5, $advertised);
 
         foreach ($advertised as $field => $url) {
             self::assertStringStartsWith(self::ISSUER . '/', $url, $field);

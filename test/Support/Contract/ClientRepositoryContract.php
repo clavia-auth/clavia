@@ -50,6 +50,32 @@ trait ClientRepositoryContract
         self::assertSame([GrantType::AuthorizationCode], $client->grantTypes);
         self::assertSame([ResponseType::Code], $client->responseTypes);
         self::assertEquals(new DateTimeImmutable('2026-01-15T10:00:00Z'), $client->createdAt);
+        self::assertSame([], $client->postLogoutRedirectUris);
+    }
+
+    #[Test]
+    public function postLogoutRedirectUrisAreKeptAsRegistered(): void
+    {
+        $client = $this->aPublicClient('spa', 'My SPA')->reconfigure(
+            'My SPA',
+            [Url::fromString('https://app.example/cb')],
+            [GrantType::AuthorizationCode],
+            [ResponseType::Code],
+            ClientAuthMethod::None,
+            [Url::fromString('https://app.example/bye?lang=fr'), Url::fromString('https://app.example/out')],
+        );
+        $this->clients()->save($client);
+
+        $read = $this->clients()->find(ClientId::fromString('spa'));
+
+        self::assertNotNull($read);
+        self::assertSame(
+            ['https://app.example/bye?lang=fr', 'https://app.example/out'],
+            array_map(static fn (Url $uri): string => $uri->value, $read->postLogoutRedirectUris),
+        );
+        self::assertTrue($read->hasPostLogoutRedirectUri('https://app.example/out'));
+        self::assertFalse($read->hasPostLogoutRedirectUri('https://app.example/out/'));
+        self::assertFalse($read->hasPostLogoutRedirectUri('https://app.example/cb'));
     }
 
     #[Test]

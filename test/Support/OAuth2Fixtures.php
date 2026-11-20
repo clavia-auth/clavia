@@ -44,6 +44,7 @@ trait OAuth2Fixtures
     protected const string TEST_USER_PASSWORD = 'test-password';
     protected const string TEST_CLIENT_ID = 'test-public-client';
     protected const string TEST_REDIRECT_URI = 'https://client.test/callback';
+    protected const string TEST_POST_LOGOUT_REDIRECT_URI = 'https://client.test/signed-out';
     protected const string TEST_CONFIDENTIAL_CLIENT_ID = 'test-confidential-client';
     protected const string TEST_CLIENT_SECRET = 'test-client-secret';
 
@@ -100,6 +101,7 @@ trait OAuth2Fixtures
             [GrantType::AuthorizationCode],
             [ResponseType::Code],
             $this->now(),
+            [Url::fromString(self::TEST_POST_LOGOUT_REDIRECT_URI)],
         ));
     }
 

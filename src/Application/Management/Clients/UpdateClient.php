@@ -49,6 +49,9 @@ final readonly class UpdateClient
             $changes->authMethod === null
                 ? $client->authMethod
                 : RegistrationValues::authMethod($changes->authMethod),
+            $changes->postLogoutRedirectUris === null
+                ? null
+                : RegistrationValues::redirectUris($changes->postLogoutRedirectUris),
         );
         $this->clients->save($updated);
 

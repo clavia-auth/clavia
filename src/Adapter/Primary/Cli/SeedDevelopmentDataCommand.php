@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Cli;
 
+use Clavia\Application\Development\SeedDashboardClient;
 use Clavia\Application\Development\SeedDevelopmentData;
 use Clavia\Application\Development\SeedManagementAccess;
 use Clavia\Domain\Shared\InvalidValue;
@@ -22,23 +23,30 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
- * `clavia seed-dev` — seed a development user and a public PKCE client.
+ * `clavia seed-dev` — seed a development user, a public PKCE client, the Management API
+ * with a machine client, and the dashboard's client and build configuration.
  *
  * Development only, and safe to run again: it creates what is missing and reports what
  * was already there.
  */
-#[AsCommand(name: 'seed-dev', description: 'Seed a development user and a public PKCE client.')]
+#[AsCommand(name: 'seed-dev', description: 'Seed development users, clients and the dashboard.')]
 final class SeedDevelopmentDataCommand extends Command
 {
     /**
-     * @param string $rootDomain The deployment's domain, for the default email address.
-     * @param string $issuer     The issuer, for the sign-in URL printed at the end.
+     * @param string      $rootDomain       The deployment's domain, for the default email address.
+     * @param string      $issuer           The issuer, for the sign-in URL printed at the end.
+     * @param string      $managementHost   `management.{domain}`, where the dashboard is served.
+     * @param string|null $dashboardEnvFile Where the dashboard reads its build configuration
+     *                                      (`frontend/.env.local`); written only when its directory exists.
      */
     public function __construct(
         private readonly SeedDevelopmentData $seed,
         private readonly SeedManagementAccess $seedManagementAccess,
+        private readonly SeedDashboardClient $seedDashboard,
         private readonly string $rootDomain,
         private readonly string $issuer,
+        private readonly string $managementHost,
+        private readonly ?string $dashboardEnvFile,
     ) {
         parent::__construct();
     }
@@ -79,6 +87,7 @@ final class SeedDevelopmentDataCommand extends Command
         try {
             $seeded = ($this->seed)($email, $password, $redirectUri);
             $management = ($this->seedManagementAccess)();
+            $dashboard = ($this->seedDashboard)($this->managementHost);
         } catch (LogicException | InvalidValue $refusal) {
             $output->writeln('<error>' . $refusal->getMessage() . '</error>');
 
@@ -105,6 +114,14 @@ final class SeedDevelopmentDataCommand extends Command
             $management->clientCreated ? 'Created' : 'Kept',
             $management->clientId->value,
         ));
+        $output->writeln(sprintf(
+            '%s dashboard client %s',
+            $dashboard->created ? 'Created' : 'Kept',
+            $dashboard->clientId->value,
+        ));
+        if ($this->writeDashboardConfiguration($dashboard->clientId->value, $management->managementApi->value)) {
+            $output->writeln("Wrote the dashboard's configuration to {$this->dashboardEnvFile}");
+        }
         $output->writeln('');
         $output->writeln("Seeded. Sign in at {$this->issuer}/auth/login as {$email} / {$password}");
         $output->writeln('Run `clavia authorize-url` to get a link that exercises the whole flow.');
@@ -119,6 +136,28 @@ final class SeedDevelopmentDataCommand extends Command
         $output->writeln("    -d audience={$management->managementApi->value}", OutputInterface::OUTPUT_RAW);
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * Write what the dashboard is built with (Vite reads `VITE_*` from `.env.local`).
+     * Nothing in it is a secret: the dashboard is a public client.
+     */
+    private function writeDashboardConfiguration(string $clientId, string $audience): bool
+    {
+        if ($this->dashboardEnvFile === null || ! is_dir(dirname($this->dashboardEnvFile))) {
+            return false;
+        }
+
+        $written = file_put_contents($this->dashboardEnvFile, implode("\n", [
+            '# Written by `clavia seed-dev`. The dashboard reads these at build time.',
+            'VITE_CLAVIA_ISSUER=' . $this->issuer,
+            'VITE_CLAVIA_CLIENT_ID=' . $clientId,
+            'VITE_CLAVIA_AUDIENCE=' . $audience,
+            'VITE_CLAVIA_MANAGEMENT_HOST=' . $this->managementHost,
+            '',
+        ]));
+
+        return $written !== false;
     }
 
     private function option(InputInterface $input, string $name): ?string

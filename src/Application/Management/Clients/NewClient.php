@@ -22,6 +22,7 @@ final readonly class NewClient
      * @param list<string> $redirectUris
      * @param list<string> $grantTypes
      * @param list<string> $responseTypes
+     * @param list<string> $postLogoutRedirectUris
      */
     public function __construct(
         public string $name = '',
@@ -30,6 +31,7 @@ final readonly class NewClient
         public array $redirectUris = [],
         public array $grantTypes = [],
         public array $responseTypes = [],
+        public array $postLogoutRedirectUris = [],
     ) {
     }
 }

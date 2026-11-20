@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+/* Palette derived from the brand icon (assets/clavia-icon.svg), the same one the
+   login page uses: #52B788 green, #D4A843 gold, on white — with a dark scheme that
+   keeps the two hues on a deep green-black ground. Tokens resolve through
+   color-scheme so the OS preference decides. */
+@theme {
+  --color-brand: #52b788;
+  --color-brand-deep: #2d6a4f;
+  --color-gold: #d4a843;
+
+  --color-bg: light-dark(#f1f8f4, #0f1a15);
+  --color-card: light-dark(#ffffff, #162520);
+  --color-ink: light-dark(#12211a, #e8f1ec);
+  --color-muted: light-dark(#5a6b62, #96a89e);
+  --color-line: light-dark(#d2e3d9, #2a3d33);
+  --color-field: light-dark(#f7fbf8, #0f1a15);
+  --color-accent: light-dark(#2d6a4f, #52b788);
+  --color-accent-hover: light-dark(#245741, #6cc79b);
+  --color-on-accent: light-dark(#ffffff, #0f1a15);
+  --color-danger: light-dark(#b3261e, #f2b8b5);
+  --color-danger-bg: light-dark(#fbeeed, #3a1f1d);
+  --color-ok-bg: light-dark(#e6f4ec, #1b3327);
+  --color-ok-ink: light-dark(#2d6a4f, #52b788);
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* With no preference the scheme follows the system; the toggle stamps data-theme
+   on <html> (see src/theme.ts), which pins it. One palette, no duplicated dark
+   block — every token above is a light-dark() pair. */
+:root {
+  color-scheme: light dark;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-bg text-ink antialiased;
+  background-image: radial-gradient(60rem 30rem at 50% -10rem, rgba(82, 183, 136, 0.14), transparent 70%);
+}
+
+/* Small primitives used across pages, as utilities so they can be composed with
+   @apply and used directly in JSX. Kept few and plain: a dashboard for operators
+   wants legibility over flourish. */
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold transition-colors disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold;
+}
+@utility btn-primary {
+  @apply btn bg-accent text-on-accent hover:bg-accent-hover;
+}
+@utility btn-secondary {
+  @apply btn border border-line bg-card text-ink hover:border-accent;
+}
+@utility btn-danger {
+  @apply btn border border-danger/30 bg-danger-bg text-danger hover:border-danger;
+}
+@utility input {
+  @apply w-full rounded-lg border border-line bg-field px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-transparent focus:outline-2 focus:outline-gold;
+}
+@utility label {
+  @apply mb-1 block text-xs font-semibold text-ink;
+}
+@utility card {
+  @apply rounded-2xl border border-line bg-card shadow-[0_1px_2px_rgba(18,33,26,.04),0_12px_32px_-16px_rgba(18,33,26,.25)];
+}
+@utility badge {
+  @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold;
+}
+@utility badge-ok {
+  @apply badge bg-ok-bg text-ok-ink;
+}
+@utility badge-muted {
+  @apply badge border border-line bg-field text-muted;
+}
+@utility badge-gold {
+  @apply badge bg-gold/15 text-gold;
+}

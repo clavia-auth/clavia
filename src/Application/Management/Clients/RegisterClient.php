@@ -62,6 +62,7 @@ final readonly class RegisterClient
             RegistrationValues::grantTypes($new->grantTypes),
             RegistrationValues::responseTypes($new->responseTypes),
             $this->clock->now(),
+            RegistrationValues::redirectUris($new->postLogoutRedirectUris),
         );
         $this->clients->save($client);
 

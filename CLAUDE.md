@@ -29,14 +29,15 @@ and multi-tenancy.
 
 ## Current state
 
-**Steps 0 to 8 are done: the foundations, Authorization Code + PKCE, the login page with
+**Steps 0 to 9 are done: the foundations, Authorization Code + PKCE, the login page with
 browser sessions, OpenID Connect (ID tokens, discovery, JWKS, userinfo), Client
 Credentials for machine clients holding a grant on an API, the Management API with
-audiences in the user's flow, two-factor authentication (TOTP and recovery codes), and
-signing in with Google or GitHub.**
+audiences in the user's flow, two-factor authentication (TOTP and recovery codes),
+signing in with Google or GitHub, and RP-Initiated Logout; the dashboard is in `frontend/`.**
 The application answers `GET /healthz`,
 `GET|POST /oauth2/authorize`, `POST /oauth2/token`, `GET /.well-known/openid-configuration`,
 `GET /.well-known/oauth-authorization-server`, `GET /oidc/jwks.json`, `GET|POST /oidc/userinfo`,
+`GET|POST /oidc/logout`,
 `GET|POST /auth/login`, `GET|POST /auth/mfa`, `GET|POST /auth/mfa/enroll`,
 `POST /auth/mfa/enroll/confirm`, `POST /auth/mfa/disable`, `GET /auth/social/{provider}` and
 its `/callback`, `POST /auth/logout`,
@@ -238,6 +239,15 @@ What exists:
     the provider links on the login page.
   - `guzzlehttp/guzzle` is the PSR-18 client (`Bootstrap\Container\HttpClientFactory`); its
     namespace joins deptrac's `Vendor` layer.
+- **RP-Initiated Logout and the dashboard** (Step 9):
+  - `Domain\Client\Client::$postLogoutRedirectUris` and `hasPostLogoutRedirectUri()` (exact
+    match, no fragment).
+  - `Application\Oidc\Logout\{EndSession,EndSessionRequest,SignedOut,SignOutConfirmationNeeded}`;
+    port `SignatureVerifier`; `ProviderMetadata::END_SESSION_ENDPOINT`.
+    `Development\{SeedDashboardClient,SeededDashboard}`.
+  - `Adapter\Secondary\Signing\Jose\JoseSignatureVerifier`; `Adapter\Primary\Http\Oidc\EndSessionHandler`
+    and `templates/auth/logout-confirm.phtml`; `post_logout_redirect_uris` in the Management API.
+  - Migration `0015_post_logout_redirect_uris`. `frontend/` (the React dashboard, unchanged).
 - **Error pages for browsers** (after Step 3): `Adapter\Primary\Http\Shared\ClientPreference`
   (`Accept` negotiation), `ErrorResponder` + `ErrorPage`, `PageRenderer` + `HtmlPage` (the
   layout, headers and CSP every server-rendered page shares). 404, 405, 500 and the
@@ -583,6 +593,27 @@ Conventions established in Step 8:
   body), and the refusal is the login form as if reached directly. An unknown and an
   unconfigured provider are the same 404.
 
+Conventions established in Step 9:
+
+- **A session ends at an application's request only on proof.** `EndSession` ends it at once
+  when `id_token_hint` verifies against the keys this server publishes (retired ones
+  included), names this issuer, and its `sub` is the session's person; the hint's expiry is
+  not checked (RP-Initiated Logout 1.0 §2). Anything less shows a confirmation page whose
+  form posts back with `confirmed=yes` — a same-site POST, so the `SameSite=Lax` session cookie
+  is with it, while a forged cross-site one arrives without it. `confirmed` is read from a
+  POST only.
+- **Where the browser goes after sign-out is registered, per client, and matched exactly** —
+  `post_logout_redirect_uris`, kept apart from redirect URIs — with `state` appended. The
+  client is the hint's audience (`azp` when there are several) or `client_id`; the two must
+  agree, or neither counts. Anything unregistered is not followed: the browser lands on the
+  login page. `/auth/logout`'s own `next` keeps its origin rule for this server's pages.
+- **Verifying is not signing.** `SignatureVerifier` checks a compact JWS against public keys
+  only; the key is picked by `kid`, and the algorithm is the key's, never the header's.
+  `web-token/jwt-library` does that and nothing else — it still never signs.
+- **The dashboard is an ordinary public client**, registered by `seed-dev` with its callback
+  and its signed-out page under `management.{domain}/dashboard/`; `frontend/.env.local` is
+  written from the same values.
+
 **Known defect in the database library, worked around.** At the pinned commit,
 `php-db/phpdb-pgsql` runs `SELECT LASTVAL()` after every statement to fetch a "last generated
 value". In a session that has not used a sequence that query fails; the library swallows the
@@ -789,7 +820,7 @@ test/
 | `httpx` + `MockTransport` | Guzzle, injected as a PSR-18 `ClientInterface`; `FakeHttpClient` in tests | `OutboundUrlPolicy` (SSRF guard, Step 13) must pin the resolved address it validated. |
 | `cryptography` | `ext-openssl`: RSASSA-PKCS1-v1_5/SHA-256, AES-256-GCM with AAD | JWS assembled by hand, as in Python. |
 | `pwdlib[bcrypt]` | `password_hash(PASSWORD_BCRYPT)` behind `PasswordHasher` | |
-| `joserfc` | `web-token/jwt-library` — **verification and JWK handling only** | Never used to sign. |
+| `joserfc` | `web-token/jwt-library` — **verification and JWK handling only** (`JoseSignatureVerifier`) | Never used to sign. |
 | `qrcode` (SVG) | `bacon/bacon-qr-code` SVG writer | Server-side only. |
 | Typer CLI | `symfony/console` commands in `Adapter/Primary/Cli`, run by `bin/clavia` | Same command names: `clavia seed-dev`, `keys rotate`, … |
 | uvicorn `--forwarded-allow-ips` | `CLAVIA_TRUSTED_PROXIES`, applied when the request is built | Empty by default: over FastCGI the web server reports the scheme itself. |
@@ -1194,12 +1225,24 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
   nonce), the providers as connections a client enables (the identity's provider becomes a
   foreign key), the pools an address is looked for in, and unlinking identities.
 
-#### [ ] Step 9 — RP-Initiated Logout and the dashboard  ← first usable milestone
-- `GET /oidc/logout` (`id_token_hint` verified against the JWKS, `post_logout_redirect_uri`).
-- Copy `frontend/` unchanged; `seed-dev` registers it and writes `frontend/.env.local`; Caddy
-  serves it at `management.{domain}/dashboard/`.
-- Tests: `test_rp_logout` (6). Manual: sign in to the dashboard against the PHP server. Pages
-  whose API arrives later (roles, connections, consents, sessions) light up with their step.
+#### [x] Step 9 — RP-Initiated Logout and the dashboard  ← first usable milestone
+- `GET|POST /oidc/logout` (OpenID Connect RP-Initiated Logout 1.0): `id_token_hint` verified
+  against the published keys (`SignatureVerifier`, on `web-token/jwt-library`, now a runtime
+  dependency for verification only); `post_logout_redirect_uris` registered per client and
+  matched exactly, `state` returned; without proof, a confirmation page. `end_session_endpoint`
+  in discovery.
+- Clients gain `post_logout_redirect_uris` (domain, migration `0015`, the Management API
+  contract).
+- `frontend/` copied unchanged from the Python project; `seed-dev` registers the dashboard as a
+  public code-flow client (`SeedDashboardClient`) and writes `frontend/.env.local`; the
+  `Caddyfile` already serves it at `management.{domain}/dashboard/`.
+- Tests: `test_rp_logout` (6) — ported as `RpLogoutTest` (11 cases); `EndSessionTest`,
+  `JoseSignatureVerifierTest`, the client contract and Management API cases for the new field,
+  the confirmation page in `AuthPagesEscapingTest`.
+- **Not yet usable end to end:** the dashboard asks for Management API permissions in a user's
+  flow, which stays `access_denied` until roles exist (Step 10), and it renews tokens with a
+  refresh token (Step 11). It signs in once both land; pages whose API arrives later (roles,
+  connections, consents, sessions) light up with their step.
 
 ### Phase C — Everything built after the chain
 

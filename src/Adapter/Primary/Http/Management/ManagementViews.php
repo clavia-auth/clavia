@@ -97,6 +97,10 @@ final class ManagementViews
                 static fn (ResponseType $type): string => $type->value,
                 $client->responseTypes,
             ),
+            'post_logout_redirect_uris' => array_map(
+                static fn (Url $uri): string => $uri->value,
+                $client->postLogoutRedirectUris,
+            ),
             'created_at' => self::instant($client->createdAt),
         ];
     }
