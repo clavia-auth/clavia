@@ -12,28 +12,20 @@ declare(strict_types=1);
 namespace ClaviaTest\Unit\Adapter\Primary\Http\Management;
 
 use Clavia\Adapter\Primary\Http\Management\JsonObject;
-use Clavia\Adapter\Primary\Http\Management\Paging;
 use Clavia\Adapter\Primary\Http\Management\UserFields;
-use Clavia\Application\OAuth2\RequestParameters;
-use Clavia\Domain\Shared\InvalidValue;
 use LogicException;
 use PHPUnit\Framework\TestCase;
+use stdClass;
 
 /**
- * How handlers read what the middleware has already checked: bodies, profile changes,
- * paging parameters.
+ * How handlers read what the middleware has already checked: bodies and profile changes.
  */
 final class RequestReadingTest extends TestCase
 {
     public function testABodyIsReadWithTheTypesTheContractPromised(): void
     {
-        $body = JsonObject::of([
-            'name' => 'Ada',
-            'is_active' => false,
-            'redirect_uris' => ['https://a.test/cb'],
-            'permissions' => [['value' => 'a']],
-            'nickname' => null,
-        ]);
+        $body = self::body('{"name":"Ada","is_active":false,"redirect_uris":["https://a.test/cb"],'
+            . '"permissions":[{"value":"a"}],"nickname":null}');
 
         self::assertSame('Ada', $body->string('name'));
         self::assertFalse($body->bool('is_active'));
@@ -48,32 +40,22 @@ final class RequestReadingTest extends TestCase
     {
         $this->expectException(LogicException::class);
 
-        JsonObject::of(['name' => 5])->string('name');
+        self::body('{"name":5}')->string('name');
     }
 
     public function testAProfileFieldSentAsNullIsAChangeAndAnAbsentOneIsNot(): void
     {
-        $body = JsonObject::of(['name' => null, 'locale' => 'fr-FR', 'email' => 'x@y.test']);
+        $body = self::body('{"name":null,"locale":"fr-FR","email":"x@y.test"}');
 
         self::assertSame(['name' => null, 'locale' => 'fr-FR'], UserFields::profileChanges($body));
         self::assertSame(['locale' => 'fr-FR'], UserFields::profile($body));
     }
 
-    public function testPagingTakesTheContractsDefaults(): void
+    private static function body(string $json): JsonObject
     {
-        $request = Paging::fromQuery(RequestParameters::fromMap([]));
+        $decoded = json_decode($json, false, flags: JSON_THROW_ON_ERROR);
+        self::assertInstanceOf(stdClass::class, $decoded);
 
-        self::assertSame([1, 50, ''], [$request->page, $request->perPage, $request->search]);
-
-        $request = Paging::fromQuery(RequestParameters::fromMap(['page' => '3', 'per_page' => '10', 'q' => 'ada']));
-
-        self::assertSame([3, 10, 'ada'], [$request->page, $request->perPage, $request->search]);
-    }
-
-    public function testAPageNumberThatIsNotAnIntegerIsRefused(): void
-    {
-        $this->expectException(InvalidValue::class);
-
-        Paging::fromQuery(RequestParameters::fromMap(['page' => '1.5']));
+        return JsonObject::of($decoded);
     }
 }

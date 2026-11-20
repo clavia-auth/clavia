@@ -11,9 +11,9 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Management;
 
+use Clavia\Adapter\Primary\Http\OpenApi\Validation\RequestRejected;
 use Clavia\Adapter\Primary\Http\Shared\BearerChallenger;
 use Clavia\Adapter\Primary\Http\Shared\BearerCredentials;
-use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\Management\Caller\AuthenticateManagementCaller;
 use Clavia\Application\Management\Conflict;
 use Clavia\Application\Management\NotFound;
@@ -21,9 +21,7 @@ use Clavia\Domain\OAuth2\BearerTokenError;
 use Clavia\Domain\ResourceServer\SystemApiProtected;
 use Clavia\Domain\Shared\AlreadyExists;
 use Clavia\Domain\Shared\InvalidValue;
-use JsonException;
 use LogicException;
-use Phayne\OpenAPI\Validator\Message\Exception\ValidationFailed;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\MiddlewareInterface;
@@ -43,8 +41,9 @@ use stdClass;
  *     checked before any scope: a scope means nothing without one.
  *  3. **The scope** — the one the operation's `security` requirement names in the
  *     contract (`insufficient_scope`, 403).
- *  4. **The request** — no parameter twice and readable JSON (400), JSON at all (415),
- *     then everything the contract describes (422).
+ *  4. **The request** — readable (400: JSON syntax, a parameter sent twice), JSON at
+ *     all (415), then everything the contract describes (422), every violation listed
+ *     ({@see ContractViolation}).
  *
  * Authentication comes before validation on purpose: a caller without a token learns
  * nothing about what the API would have accepted.
@@ -82,36 +81,15 @@ final readonly class ManagementApiMiddleware implements MiddlewareInterface
             return $this->challenger->refuse($error);
         }
 
-        $query = RequestParameterReader::query($request);
-        $repeated = $query->repeated();
-        if ($repeated !== []) {
-            return $this->responder->problem(new Problem(
-                400,
-                'A query parameter was sent more than once.',
-                array_map(
-                    static fn (string $name): array => ['parameter' => $name, 'detail' => 'Sent more than once.'],
-                    $repeated,
-                ),
-            ));
+        try {
+            $validated = $this->contract->validateRequest($request);
+        } catch (RequestRejected $rejection) {
+            return $this->responder->problem(ContractViolation::problem($rejection));
         }
-
-        $body = JsonObject::empty();
-        if ($this->contract->takesBody($operation)) {
-            $read = $this->readBody($request);
-            if ($read instanceof Problem) {
-                return $this->responder->problem($read);
-            }
-            $body = $read;
-        }
+        $body = $validated->body instanceof stdClass ? JsonObject::of($validated->body) : JsonObject::empty();
 
         try {
-            $this->contract->validateRequest($operation, $request);
-        } catch (ValidationFailed $failure) {
-            return $this->responder->problem(ContractViolation::problem($failure));
-        }
-
-        try {
-            return $handler->handle(new ManagementRequest($caller, $body, $query)->attachTo($request));
+            return $handler->handle(new ManagementRequest($caller, $validated, $body)->attachTo($request));
         } catch (NotFound $refusal) {
             return $this->responder->problem(new Problem(404, $refusal->getMessage()));
         } catch (Conflict | AlreadyExists | SystemApiProtected $refusal) {
@@ -119,34 +97,5 @@ final readonly class ManagementApiMiddleware implements MiddlewareInterface
         } catch (InvalidValue $refusal) {
             return $this->responder->problem(new Problem(422, $refusal->getMessage()));
         }
-    }
-
-    /**
-     * The body as a JSON object, or the problem with it: not JSON (415), not readable
-     * (400), not an object (422 — the contract describes only objects).
-     */
-    private function readBody(ServerRequestInterface $request): JsonObject|Problem
-    {
-        $mediaType = strtolower(trim(explode(';', $request->getHeaderLine('Content-Type'))[0]));
-        if ($mediaType !== 'application/json') {
-            return new Problem(415, "The body must be 'application/json'.");
-        }
-
-        $raw = (string) $request->getBody();
-        try {
-            /** @var mixed $decoded */
-            $decoded = json_decode($raw, false, 64, JSON_THROW_ON_ERROR);
-            if (! $decoded instanceof stdClass) {
-                return new Problem(422, ContractViolation::DETAIL, [
-                    ['pointer' => '', 'detail' => 'The body must be a JSON object.'],
-                ]);
-            }
-            /** @var array<array-key, mixed> $members */
-            $members = json_decode($raw, true, 64, JSON_THROW_ON_ERROR);
-        } catch (JsonException) {
-            return new Problem(400, 'The body is not valid JSON.');
-        }
-
-        return JsonObject::of($members);
     }
 }

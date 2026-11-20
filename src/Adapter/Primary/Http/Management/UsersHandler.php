@@ -38,7 +38,7 @@ final readonly class UsersHandler implements RequestHandlerInterface
 
         return match ($request->getMethod()) {
             'GET' => $this->responder->json(ManagementViews::page(
-                $this->read->page(Paging::fromQuery($management->query)),
+                $this->read->page(Paging::fromRequest($management)),
                 ManagementViews::user(...),
             )),
             'POST' => $this->create($management->body),

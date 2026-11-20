@@ -32,8 +32,7 @@ final readonly class RotateClientSecretHandler implements RequestHandlerInterfac
     #[\Override]
     public function handle(ServerRequestInterface $request): ResponseInterface
     {
-        ManagementRequest::of($request);
-        $id = ClientId::fromString(ManagementRequest::pathParameter($request, 'client_id'));
+        $id = ClientId::fromString(ManagementRequest::of($request)->path('client_id'));
 
         return $this->responder->json(ManagementViews::clientWithSecret(($this->rotate)($id)));
     }

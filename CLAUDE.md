@@ -176,6 +176,8 @@ What exists:
     `Provisioning\{RegisterManagementApi,GrantClientAccess}` (shell only).
     `Development\SeedManagementAccess`. `Authorize` resolves `audience` and
     `AuthorizationCodeGrant` re-checks it at redemption.
+  - `Adapter\Primary\Http\OpenApi` — the OpenAPI 3.0 document model and validator (see
+    below the conventions).
   - `Adapter\Primary\Http\Management` — `ManagementContract` (the OpenAPI document:
     operation lookup, required permission, request and response validation),
     `ManagementApiMiddleware` (the front door of every `/api/v1/*` route), `ManagementRequest`,
@@ -450,15 +452,16 @@ Conventions established in Step 6:
   fails if the routes and the document disagree, and `ManagementContractTest` if the
   document's scopes are not exactly `ManagementPermission::cases()`.
 - **One order of checks**: credentials, the token (live, issued for this API — `aud` before
-  any scope — its subject still active), the scope, then the request: a parameter twice or
-  unreadable JSON (400), not JSON (415), anything the contract or the domain refuses (422).
+  any scope — its subject still active), the scope, then the request: a parameter twice,
+  unreadable JSON or bad percent-encoding (400), not JSON (415), anything the contract or the
+  domain refuses (422) — every violation listed, at most fifty.
   `NotFound` is 404; `Conflict`, `AlreadyExists` and `SystemApiProtected` are 409.
 - **Errors are RFC 9457 problem documents** (`type: about:blank`, `title`, `status`,
   `detail`, and `errors[]` with a `pointer` or a `parameter` for a contract violation).
   Bearer refusals stay RFC 6750 documents. An error never repeats the value at fault.
   Nothing the Management API answers is cacheable.
-- **Handlers state the success only.** They read a `ManagementRequest` (the caller and the
-  validated body and query), call one use case and render with `ManagementViews`; the
+- **Handlers state the success only.** They read a `ManagementRequest` (the caller, the
+  `ValidatedRequest` with its typed parameters, and the body as a `JsonObject`), call one use case and render with `ManagementViews`; the
   middleware turns the use cases' expected refusals into problems. A `JsonObject` value of
   the wrong type is a `LogicException`: the contract let something through it should not.
 - **Lists are `ReadX::page(PageRequest)`**, newest first (`created_at DESC, id`), the search a
@@ -486,17 +489,37 @@ that lookup; `DatabaseTest::testReadingInsideATransactionDoesNotDiscardItsWrites
 after it fail without the override. **Do not `composer update php-db/*` without running the
 Integration suite**, and report the defect upstream.
 
-**Known defects in the OpenAPI validator, worked around.** At the pinned
-`phayne-io/openapi-psr7-validator` (`dev-master`), `SpecFinder::findSecuritySpecs()` expects an
-array where `phayne-io/php-openapi` gives a `SecurityRequirements` object (so
-`SecurityValidator`, and with it `ServerRequestValidator`, throws a `TypeError` on any
-operation with `security`), and `SpecFinder::findResponseSpec()` calls a
-`ResponseAddress::responseCode()` method that does not exist (so `ResponseValidator` cannot
-run). `ManagementContract` therefore builds its own request chain without
-`SecurityValidator` — the middleware authenticates anyway — reads `security` itself, and
-checks responses with the library's `UnipartValidator`. Installing it downgraded
-`webmozart/assert` to 1.x and `symfony/yaml` to 7.4 (its constraints). Report both defects
-upstream; when they are fixed, `ManagementContract` can go back to `ValidatorBuilder`.
+**The OpenAPI validator is Clavia's own** (`Adapter\Primary\Http\OpenApi`, replacing
+`phayne-io/openapi-psr7-validator`, whose security and response validation did not work).
+OpenAPI 3.0.x only; it loads a document once and validates PSR-7 messages against it:
+
+- `Document` (`fromYamlFile|fromYaml|fromJson`) → `DocumentReader` checks the whole document
+  on load and builds `Operation`s (`Parameter`, `RequestBody`, `Responses`/`Response`,
+  `Header`, `Content`, `MediaType`, `SecurityRequirement`). `Node` carries each value with its
+  JSON pointer, so every `InvalidDocument` names its place (`#/paths/~1users/get/…`);
+  `References` follows local `$ref`s only, refusing siblings and loops.
+- `Schema\SchemaCompiler` → `Schema` (references through `SchemaSlot`, so recursive schemas
+  work); `Schema\SchemaValidator` collects every violation (`SchemaViolation`: pointer +
+  message), with `Direction` for `readOnly`/`writeOnly`, `Formats` for the formats it knows and
+  `JsonValue` for JSON equality. Instances are decoded with objects as `stdClass`, so `{}` and
+  `[]` differ.
+- `Routing\Router` + `PathTemplate`: exact, case-sensitive methods; literal segments before
+  templated ones; server base paths; unreserved percent-encodings normalised.
+- `Validation\RequestValidator` → `ValidatedRequest` (parameters coerced by
+  `ParameterDecoder`, the body parsed) or a `RequestRejected`: `MalformedRequest`,
+  `UnsupportedMediaType`, `RequestDoesNotMatch`, each with every `Violation` (location, name,
+  pointer, message); `OperationNotFound` otherwise. `Validation\ResponseValidator` throws
+  `ResponseDoesNotMatch`. The HTTP status of each rejection is the adapter's choice
+  (`Management\ContractViolation`).
+
+Its rules: **what it cannot enforce, it refuses at load** — unknown keywords (a misspelt
+`minLenght`), 3.1 forms, external references, non-JSON media types, parameter styles other
+than `form`/`simple`, object parameters, `content` parameters, server variables — rather than
+silently dropping a constraint; **every violation is reported**, never just the first;
+**no message repeats the value at fault**; **coercion is exact** (`"02"` is not an integer);
+**strict where the specification is loose** — a query parameter the operation does not
+describe, a body sent to an operation that takes none, and a single value sent twice are
+all refused.
 
 Running it: `cp .env.example .env`, `./setup-ssl.sh`, `make up install migrate seed`, then
 `https://auth.{domain}/healthz`. Tooling runs in the container: `make check`, `make config`,
@@ -654,7 +677,7 @@ test/
 |---|---|---|
 | Authlib `AuthorizationServer` + subclasses closing its gaps | Own protocol core in `Domain/OAuth2` | The "Authlib gaps" list becomes plain invariants. No per-request server object, no threadpool. |
 | FastAPI routers + `Depends` | Mezzio handlers + PSR-15 middleware per surface | Four pipelines (`/oauth2`, `/oidc`, `/auth`, `/api/v1`), each with its own authentication middleware. |
-| Pydantic, `extra="forbid"` | OpenAPI document + `phayne-io/openapi-psr7-validator` (`additionalProperties: false`) at the edge, then typed Commands | The Management API is contract-first: `docs/openapi/management-api.yaml` is the source of truth. Errors are RFC 9457 problem documents, not FastAPI's `{"detail": …}`. |
+| Pydantic, `extra="forbid"` | OpenAPI document + Clavia's own validator (`Adapter\Primary\Http\OpenApi`, `additionalProperties: false`) at the edge, then typed Commands | The Management API is contract-first: `docs/openapi/management-api.yaml` is the source of truth. Errors are RFC 9457 problem documents, not FastAPI's `{"detail": …}`. |
 | SQLAlchemy models + Alembic | Aggregates + phpdb-pgsql repositories + SQL migrations | Models are not table-shaped; mappers live in the adapter. |
 | `pydantic-settings` | A typed, validated `Settings` object built once in the composition root | Same `CLAVIA_*` names and the same validators (e.g. console mail refused outside development). |
 | Jinja2 | laminas-view PHP templates (layout, pages, partials) behind Mezzio's `TemplateRendererInterface` | No Twig. Escaping is explicit (`escapeHtml`/`escapeHtmlAttr`) and tested. Still **no JavaScript** on the auth origin. |

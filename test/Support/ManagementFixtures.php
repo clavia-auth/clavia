@@ -12,13 +12,13 @@ declare(strict_types=1);
 namespace ClaviaTest\Support;
 
 use Clavia\Adapter\Primary\Http\Management\ManagementContract;
+use Clavia\Adapter\Primary\Http\OpenApi\Validation\ResponseDoesNotMatch;
 use Clavia\Application\Management\ManagementPermission;
 use Clavia\Application\Management\Provisioning\RegisterManagementApi;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\ResourceServer\ResourceServer;
 use Laminas\Diactoros\ServerRequest;
-use Phayne\OpenAPI\Validator\Message\Exception\ValidationFailed;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -127,18 +127,8 @@ trait ManagementFixtures
 
         try {
             $contract->validateResponse($operation, $response);
-        } catch (ValidationFailed $failure) {
-            $reasons = [];
-            for ($cause = $failure; $cause !== null; $cause = $cause->getPrevious()) {
-                $reasons[] = $cause->getMessage();
-            }
-            self::fail(sprintf(
-                "%s %s answered what the contract does not describe:\n%s\n%s",
-                $method,
-                $target,
-                implode("\n", $reasons),
-                (string) $response->getBody(),
-            ));
+        } catch (ResponseDoesNotMatch $mismatch) {
+            self::fail($mismatch->getMessage() . "\n" . (string) $response->getBody());
         }
     }
 }

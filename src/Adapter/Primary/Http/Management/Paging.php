@@ -11,13 +11,14 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Management;
 
-use Clavia\Application\OAuth2\RequestParameters;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\PageRequest;
+use LogicException;
 
 /**
  * The `page`, `per_page` and `q` query parameters every list operation takes, as a
- * {@see PageRequest}. Absent ones take the contract's defaults.
+ * {@see PageRequest}. The contract has already typed and bounded them; absent ones take
+ * its defaults.
  */
 final class Paging
 {
@@ -28,26 +29,30 @@ final class Paging
     /**
      * @throws InvalidValue
      */
-    public static function fromQuery(RequestParameters $query): PageRequest
+    public static function fromRequest(ManagementRequest $request): PageRequest
     {
         return PageRequest::of(
-            self::integer($query, 'page', 1),
-            self::integer($query, 'per_page', 50),
-            $query->get('q') ?? '',
+            self::integer($request->query('page'), 'page', 1),
+            self::integer($request->query('per_page'), 'per_page', 50),
+            self::string($request->query('q')),
         );
     }
 
-    private static function integer(RequestParameters $query, string $name, int $default): int
+    private static function integer(mixed $value, string $name, int $default): int
     {
-        $value = $query->get($name);
-        if ($value === null) {
-            return $default;
-        }
+        return match (true) {
+            $value === null => $default,
+            is_int($value) => $value,
+            default => throw new LogicException(sprintf("The contract lets '%s' through as a non-integer.", $name)),
+        };
+    }
 
-        $integer = filter_var($value, FILTER_VALIDATE_INT);
-
-        return $integer === false
-            ? throw new InvalidValue(sprintf("'%s' must be an integer.", $name))
-            : $integer;
+    private static function string(mixed $value): string
+    {
+        return match (true) {
+            $value === null => '',
+            is_string($value) => $value,
+            default => throw new LogicException("The contract lets 'q' through as a non-string."),
+        };
     }
 }

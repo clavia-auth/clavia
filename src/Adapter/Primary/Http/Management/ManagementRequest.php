@@ -11,16 +11,17 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Management;
 
+use Clavia\Adapter\Primary\Http\OpenApi\ParameterLocation;
+use Clavia\Adapter\Primary\Http\OpenApi\Validation\ValidatedRequest;
 use Clavia\Application\Management\Caller\ManagementCaller;
-use Clavia\Application\OAuth2\RequestParameters;
 use LogicException;
 use Psr\Http\Message\ServerRequestInterface;
 
 /**
  * What {@see ManagementApiMiddleware} established about a request before passing it on:
- * who is calling, its body and its query, both already checked against the contract.
+ * who is calling, and the request as the contract validated and decoded it.
  *
- * A handler reads it with {@see self::of()} and never looks at the raw request for these.
+ * A handler reads it with {@see self::of()} and never looks at the raw request.
  */
 final readonly class ManagementRequest
 {
@@ -28,8 +29,8 @@ final readonly class ManagementRequest
 
     public function __construct(
         public ManagementCaller $caller,
+        public ValidatedRequest $validated,
         public JsonObject $body,
-        public RequestParameters $query,
     ) {
     }
 
@@ -52,17 +53,23 @@ final readonly class ManagementRequest
     }
 
     /**
-     * A route parameter (`{user_id}`), as FastRoute matched it.
+     * A path parameter (`{user_id}`), decoded.
      *
-     * @throws LogicException When the route has no such parameter.
+     * @throws LogicException When the operation has no such parameter.
      */
-    public static function pathParameter(ServerRequestInterface $request, string $name): string
+    public function path(string $name): string
     {
         /** @var mixed $value */
-        $value = $request->getAttribute($name);
+        $value = $this->validated->parameter(ParameterLocation::Path, $name);
 
         return is_string($value)
             ? $value
-            : throw new LogicException(sprintf("The route has no '%s' parameter.", $name));
+            : throw new LogicException(sprintf("The operation has no string path parameter '%s'.", $name));
+    }
+
+    /** A query parameter as its schema typed it; null when absent. */
+    public function query(string $name): mixed
+    {
+        return $this->validated->parameter(ParameterLocation::Query, $name);
     }
 }

@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Management;
 
 use LogicException;
+use stdClass;
 
 /**
  * A request body that has already been checked against the Management API's contract,
@@ -23,37 +24,31 @@ use LogicException;
  */
 final readonly class JsonObject
 {
-    /**
-     * @param array<array-key, mixed> $members A decoded JSON object. (PHP gives a member
-     *                                         named like an integer an integer key.)
-     */
-    private function __construct(private array $members)
+    private function __construct(private stdClass $members)
     {
     }
 
-    /**
-     * @param array<array-key, mixed> $members
-     */
-    public static function of(array $members): self
+    /** A decoded JSON object (`json_decode($json, false)`). */
+    public static function of(stdClass $members): self
     {
         return new self($members);
     }
 
     public static function empty(): self
     {
-        return new self([]);
+        return new self(new stdClass());
     }
 
     /** Whether the member is present, even as `null`. */
     public function has(string $name): bool
     {
-        return array_key_exists($name, $this->members);
+        return property_exists($this->members, $name);
     }
 
     public function string(string $name): ?string
     {
         /** @var mixed $value */
-        $value = $this->members[$name] ?? null;
+        $value = $this->value($name);
 
         return $value === null || is_string($value) ? $value : throw self::mistyped($name, 'a string');
     }
@@ -61,7 +56,7 @@ final readonly class JsonObject
     public function bool(string $name): ?bool
     {
         /** @var mixed $value */
-        $value = $this->members[$name] ?? null;
+        $value = $this->value($name);
 
         return $value === null || is_bool($value) ? $value : throw self::mistyped($name, 'a boolean');
     }
@@ -71,18 +66,14 @@ final readonly class JsonObject
      */
     public function strings(string $name): ?array
     {
-        /** @var mixed $value */
-        $value = $this->members[$name] ?? null;
-        if ($value === null) {
+        $items = $this->list($name);
+        if ($items === null) {
             return null;
-        }
-        if (! is_array($value) || ! array_is_list($value)) {
-            throw self::mistyped($name, 'an array');
         }
 
         $strings = [];
         /** @var mixed $item */
-        foreach ($value as $item) {
+        foreach ($items as $item) {
             $strings[] = is_string($item) ? $item : throw self::mistyped($name, 'an array of strings');
         }
 
@@ -94,22 +85,39 @@ final readonly class JsonObject
      */
     public function objects(string $name): ?array
     {
-        /** @var mixed $value */
-        $value = $this->members[$name] ?? null;
-        if ($value === null) {
+        $items = $this->list($name);
+        if ($items === null) {
             return null;
-        }
-        if (! is_array($value) || ! array_is_list($value)) {
-            throw self::mistyped($name, 'an array');
         }
 
         $objects = [];
         /** @var mixed $item */
-        foreach ($value as $item) {
-            $objects[] = is_array($item) ? self::of($item) : throw self::mistyped($name, 'an array of objects');
+        foreach ($items as $item) {
+            $objects[] = $item instanceof stdClass
+                ? new self($item)
+                : throw self::mistyped($name, 'an array of objects');
         }
 
         return $objects;
+    }
+
+    private function value(string $name): mixed
+    {
+        return $this->has($name) ? $this->members->{$name} : null;
+    }
+
+    /**
+     * @return list<mixed>|null
+     */
+    private function list(string $name): ?array
+    {
+        /** @var mixed $value */
+        $value = $this->value($name);
+        if ($value === null) {
+            return null;
+        }
+
+        return is_array($value) && array_is_list($value) ? $value : throw self::mistyped($name, 'an array');
     }
 
     private static function mistyped(string $name, string $expected): LogicException

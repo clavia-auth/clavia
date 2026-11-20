@@ -39,7 +39,7 @@ final readonly class UserHandler implements RequestHandlerInterface
     public function handle(ServerRequestInterface $request): ResponseInterface
     {
         $management = ManagementRequest::of($request);
-        $id = UserId::fromString(ManagementRequest::pathParameter($request, 'user_id'));
+        $id = UserId::fromString($management->path('user_id'));
 
         switch ($request->getMethod()) {
             case 'GET':

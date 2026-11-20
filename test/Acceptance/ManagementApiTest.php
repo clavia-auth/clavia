@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace ClaviaTest\Acceptance;
 
 use Clavia\Adapter\Primary\Http\Management\ManagementContract;
+use Clavia\Adapter\Primary\Http\OpenApi\Operation;
 use Clavia\Application\Management\ManagementPermission;
 use Clavia\Application\Management\Provisioning\GrantClientAccess;
 use Clavia\Domain\Client\ClientId;
@@ -30,7 +31,6 @@ use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
 use Mezzio\Router\RouteCollector;
-use Phayne\OpenAPI\Validator\Message\OperationAddress;
 
 /**
  * The Management API (`/api/v1/*`), end to end — ported from the Python suite's
@@ -212,13 +212,13 @@ final class ManagementApiTest extends AcceptanceTestCase
         // challenge: it is routed, and the middleware stands in front of it.
         $contract = $this->container()->get(ManagementContract::class);
         foreach ($contract->operations() as $operation) {
-            $path = strtr($operation->path, [
+            $path = strtr($operation->path->template, [
                 '{user_id}' => '6f1c8a52-1b1e-4c8e-9d38-0f2b3d7c9e10',
                 '{client_id}' => 'some-client',
                 '{resource_server_id}' => 'rs_aaaaaaaaaaaaaaaa',
             ]);
 
-            $response = $this->api(strtoupper($operation->method), $path, token: '');
+            $response = $this->api($operation->method, $path, token: '');
 
             self::assertSame(401, $response->getStatusCode(), (string) $operation);
         }
@@ -229,7 +229,7 @@ final class ManagementApiTest extends AcceptanceTestCase
         $contract = $this->container()->get(ManagementContract::class);
         $routes = $this->container()->get(RouteCollector::class)->getRoutes();
         $described = array_map(
-            static fn (OperationAddress $operation): string => strtoupper($operation->method) . ' ' . $operation->path,
+            static fn (Operation $operation): string => (string) $operation,
             $contract->operations(),
         );
 
@@ -257,7 +257,7 @@ final class ManagementApiTest extends AcceptanceTestCase
         self::assertSame(400, $response->getStatusCode());
         self::assertSame('application/problem+json', $response->getHeaderLine('Content-Type'));
         self::assertSame(
-            [['parameter' => 'page', 'detail' => 'Sent more than once.']],
+            [['parameter' => 'page', 'detail' => 'Is sent more than once.']],
             self::document($response)['errors'],
         );
     }
@@ -291,10 +291,7 @@ final class ManagementApiTest extends AcceptanceTestCase
         $response = $this->api('POST', self::CLIENTS, rawBody: '[]');
 
         self::assertSame(422, $response->getStatusCode());
-        self::assertSame(
-            [['pointer' => '', 'detail' => 'The body must be a JSON object.']],
-            self::document($response)['errors'],
-        );
+        self::assertSame([['pointer' => '', 'detail' => 'Must be an object.']], self::document($response)['errors']);
     }
 
     public function testAContractViolationSaysWhereWithoutRepeatingTheValue(): void
@@ -419,6 +416,48 @@ final class ManagementApiTest extends AcceptanceTestCase
             self::USERS,
             ['email' => 'x@clavia.dev', 'password' => 'a-good-password', 'role' => 'admin'],
         );
+
+        self::assertSame(422, $response->getStatusCode());
+        self::assertSame([['pointer' => '/role', 'detail' => 'Is not allowed.']], self::document($response)['errors']);
+    }
+
+    public function testEveryViolationIsReportedAtOnce(): void
+    {
+        $this->adminToken();
+
+        $response = $this->api('POST', self::USERS, ['password' => 'short', 'name' => 5, 'role' => 'admin']);
+
+        self::assertSame(422, $response->getStatusCode());
+        self::assertEqualsCanonicalizing(
+            ['/email', '/password', '/name', '/role'],
+            array_column((array) self::document($response)['errors'], 'pointer'),
+        );
+    }
+
+    public function testAQueryParameterTheOperationDoesNotTakeIsRefused(): void
+    {
+        $this->adminToken();
+
+        $response = $this->api('GET', self::USERS, query: ['sort' => 'email']);
+
+        self::assertSame(422, $response->getStatusCode());
+        self::assertSame(
+            [['parameter' => 'sort', 'detail' => 'Is not a parameter of this operation.']],
+            self::document($response)['errors'],
+        );
+    }
+
+    public function testABodySentToAnOperationThatTakesNoneIsRefused(): void
+    {
+        $this->adminToken();
+        $client = self::document($this->api('POST', self::CLIENTS, [
+            'client_type' => 'confidential',
+            'grant_types' => ['client_credentials'],
+        ]));
+
+        $path = self::CLIENTS . '/' . (string) $client['client_id'] . '/rotate-secret';
+
+        $response = $this->api('POST', $path, ['x' => 1]);
 
         self::assertSame(422, $response->getStatusCode());
     }

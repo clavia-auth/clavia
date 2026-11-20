@@ -38,7 +38,7 @@ final readonly class ResourceServerHandler implements RequestHandlerInterface
     public function handle(ServerRequestInterface $request): ResponseInterface
     {
         $management = ManagementRequest::of($request);
-        $id = ResourceServerId::fromString(ManagementRequest::pathParameter($request, 'resource_server_id'));
+        $id = ResourceServerId::fromString($management->path('resource_server_id'));
 
         switch ($request->getMethod()) {
             case 'GET':

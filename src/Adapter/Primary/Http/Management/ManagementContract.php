@@ -11,31 +11,17 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Management;
 
+use Clavia\Adapter\Primary\Http\OpenApi\Document;
+use Clavia\Adapter\Primary\Http\OpenApi\InvalidDocument;
+use Clavia\Adapter\Primary\Http\OpenApi\Operation;
+use Clavia\Adapter\Primary\Http\OpenApi\Validation\OperationNotFound;
+use Clavia\Adapter\Primary\Http\OpenApi\Validation\RequestRejected;
+use Clavia\Adapter\Primary\Http\OpenApi\Validation\RequestValidator;
+use Clavia\Adapter\Primary\Http\OpenApi\Validation\ResponseDoesNotMatch;
+use Clavia\Adapter\Primary\Http\OpenApi\Validation\ResponseValidator;
+use Clavia\Adapter\Primary\Http\OpenApi\Validation\ValidatedRequest;
 use Clavia\Application\Management\ManagementPermission;
 use LogicException;
-use Phayne\OpenAPI\Specification\OpenApi;
-use Phayne\OpenAPI\Validator\Message\Exception\ValidationFailed;
-use Phayne\OpenAPI\Validator\Message\OperationAddress;
-use Phayne\OpenAPI\Validator\Message\PathFinder;
-use Phayne\OpenAPI\Validator\Message\MessageValidator;
-use Phayne\OpenAPI\Specification\MediaType;
-use Phayne\OpenAPI\Specification\PathItem;
-use Phayne\OpenAPI\Specification\Response;
-use Phayne\OpenAPI\Specification\Responses;
-use Phayne\OpenAPI\Specification\SecurityRequirements;
-use Phayne\OpenAPI\Validator\Message\Exception\NoResponseCode;
-use Phayne\OpenAPI\Validator\Message\Exception\Validation\InvalidBody;
-use Phayne\OpenAPI\Validator\Message\Exception\Validation\InvalidHeaders;
-use Phayne\OpenAPI\Validator\Message\ResponseAddress;
-use Phayne\OpenAPI\Validator\Message\SpecFinder;
-use Phayne\OpenAPI\Validator\Message\ValidatorBuilder;
-use Phayne\OpenAPI\Validator\Message\Validators\BodyValidator\BodyValidator;
-use Phayne\OpenAPI\Validator\Message\Validators\BodyValidator\UnipartValidator;
-use Phayne\OpenAPI\Validator\Message\Validators\CookiesValidator\CookiesValidator;
-use Phayne\OpenAPI\Validator\Message\Validators\HeadersValidator;
-use Phayne\OpenAPI\Validator\Message\Validators\PathValidator;
-use Phayne\OpenAPI\Validator\Message\Validators\QueryArgumentsValidator;
-use Phayne\OpenAPI\Validator\Message\Validators\ValidatorChain;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
@@ -46,60 +32,32 @@ use Psr\Http\Message\ServerRequestInterface;
  *
  * The document is the single statement of what each operation needs: the scope named
  * in its `security` requirement is the one enforced, so a route cannot quietly demand
- * something else.
- *
- * Requests are checked against the operation {@see operationFor()} found — headers,
- * cookies, path, query and body — but not against `security`: the bearer token is
- * authenticated, its audience and its scope checked, by {@see ManagementApiMiddleware}
- * before validation runs, which is more than the library's presence check could say.
- *
- * Two parts of the library do not work at the pinned commit, and are not used: its
- * `SecurityValidator` (`SpecFinder::findSecuritySpecs()` expects an array where
- * php-openapi gives a `SecurityRequirements` object), and its `ResponseValidator`
- * (`SpecFinder::findResponseSpec()` calls a `ResponseAddress::responseCode()` method that
- * does not exist). Responses are checked here instead, with the library's own body
- * validator against the response the document describes for the status.
+ * something else. Validation itself is {@see RequestValidator} and
+ * {@see ResponseValidator}; this class adds what is particular to this API.
  */
 final readonly class ManagementContract
 {
     private const string SECURITY_SCHEME = 'managementToken';
 
-    private MessageValidator $requests;
+    private RequestValidator $requests;
 
-    private SpecFinder $finder;
-
-    public function __construct(private OpenApi $document)
+    public function __construct(private Document $document)
     {
-        $this->finder = new SpecFinder($document);
-        $this->requests = new ValidatorChain(
-            new HeadersValidator($this->finder),
-            new CookiesValidator($this->finder),
-            new BodyValidator($this->finder),
-            new QueryArgumentsValidator($this->finder),
-            new PathValidator($this->finder),
-        );
-    }
-
-    public static function fromFile(string $path): self
-    {
-        return new self(new ValidatorBuilder()->fromYamlFile($path)->serverRequestValidator()->schema());
+        $this->requests = new RequestValidator($document);
     }
 
     /**
-     * The operation `$request` is, when the document describes one: the most specific
-     * path wins, `/clients/{client_id}/rotate-secret` over `/clients/{client_id}`.
+     * @throws InvalidDocument
      */
-    public function operationFor(ServerRequestInterface $request): ?OperationAddress
+    public static function fromFile(string $path): self
     {
-        /** @var list<OperationAddress> $found */
-        $found = new PathFinder($this->document, (string) $request->getUri(), $request->getMethod())->search();
-        usort(
-            $found,
-            static fn (OperationAddress $a, OperationAddress $b): int
-                => $a->countPlaceholders() <=> $b->countPlaceholders(),
-        );
+        return new self(Document::fromYamlFile($path));
+    }
 
-        return $found[0] ?? null;
+    /** The operation `$request` is, when the document describes one. */
+    public function operationFor(ServerRequestInterface $request): ?Operation
+    {
+        return $this->document->match($request->getMethod(), $request->getUri()->getPath())?->operation;
     }
 
     /**
@@ -108,16 +66,11 @@ final readonly class ManagementContract
      * @throws LogicException When the document names none, or one that is not a Management API
      *                        permission: a contract no token could ever satisfy is a defect.
      */
-    public function requiredPermission(OperationAddress $operation): ManagementPermission
+    public function requiredPermission(Operation $operation): ManagementPermission
     {
-        // php-openapi documents `security` as an array; it is a SecurityRequirements object.
-        /** @var mixed $security */
-        $security = $this->finder->findOperationSpec($operation)->security;
-        /** @var list<array<string, list<string>>> $requirements */
-        $requirements = $security instanceof SecurityRequirements ? (array) $security->serializableData() : [];
         $scopes = [];
-        foreach ($requirements as $requirement) {
-            $scopes = [...$scopes, ...($requirement[self::SECURITY_SCHEME] ?? [])];
+        foreach ($operation->security as $requirement) {
+            $scopes = [...$scopes, ...($requirement->scopesFor(self::SECURITY_SCHEME) ?? [])];
         }
 
         if (count($scopes) !== 1) {
@@ -130,78 +83,29 @@ final readonly class ManagementContract
             );
     }
 
-    /** Whether the operation takes a request body: a JSON object, as its schema says. */
-    public function takesBody(OperationAddress $operation): bool
-    {
-        return $this->finder->findOperationSpec($operation)->requestBody !== null;
-    }
-
     /**
-     * Whether `$request` matches what the document describes for `$operation`: path and
-     * query parameters, headers, cookies and body. Not its credentials (see above).
-     *
-     * @throws ValidationFailed
+     * @throws OperationNotFound
+     * @throws RequestRejected
      */
-    public function validateRequest(OperationAddress $operation, ServerRequestInterface $request): void
+    public function validateRequest(ServerRequestInterface $request): ValidatedRequest
     {
-        $this->requests->validate($operation, $request);
+        return $this->requests->validate($request);
     }
 
     /**
-     * Whether `$response` is one the document describes for `$operation`: its status is
-     * listed, and its body — JSON, of the media type listed — matches the schema. A
-     * status described without content must come with an empty body.
-     *
-     * @throws ValidationFailed
+     * @throws ResponseDoesNotMatch
      */
-    public function validateResponse(OperationAddress $operation, ResponseInterface $response): void
+    public function validateResponse(Operation $operation, ResponseInterface $response): void
     {
-        $status = $response->getStatusCode();
-        $address = new ResponseAddress($operation->path, $operation->method, $status);
-        /** @var mixed $responses */
-        $responses = $this->finder->findOperationSpec($operation)->responses;
-        $described = $responses instanceof Responses ? $responses->response($status) : null;
-        if (! $described instanceof Response) {
-            throw NoResponseCode::fromPathAndMethodAndResponseCode($operation->path, $operation->method, $status);
-        }
-
-        /** @var array<string, MediaType> $content */
-        $content = $described->content;
-        if ($content === []) {
-            if ((string) $response->getBody() !== '') {
-                throw InvalidBody::fromAddr($address);
-            }
-
-            return;
-        }
-
-        $mediaType = strtolower(trim(explode(';', $response->getHeaderLine('Content-Type'))[0]));
-        if (! isset($content[$mediaType])) {
-            throw InvalidHeaders::fromAddr($address);
-        }
-
-        new UnipartValidator($content[$mediaType], $mediaType)->validate($address, $response);
+        ResponseValidator::validate($operation, $response);
     }
 
     /**
-     * Every operation the document describes.
-     *
-     * @return list<OperationAddress>
+     * @return list<Operation>
      */
     public function operations(): array
     {
-        $operations = [];
-        /** @var iterable<string, PathItem> $paths */
-        $paths = $this->document->paths;
-        foreach ($paths as $pattern => $path) {
-            /** @var array<string, mixed> $byMethod */
-            $byMethod = $path->operations();
-            foreach (array_keys($byMethod) as $method) {
-                $operations[] = new OperationAddress($pattern, $method);
-            }
-        }
-
-        return $operations;
+        return $this->document->operations();
     }
 
     /**
@@ -213,7 +117,7 @@ final readonly class ManagementContract
     public function requiredPermissions(): array
     {
         return array_values(array_unique(array_map(
-            fn (OperationAddress $operation): string => $this->requiredPermission($operation)->value,
+            fn (Operation $operation): string => $this->requiredPermission($operation)->value,
             $this->operations(),
         )));
     }

@@ -14,15 +14,16 @@ namespace ClaviaTest\Unit\Adapter\Primary\Http\Management;
 use Clavia\Adapter\Primary\Http\Management\ContractViolation;
 use Clavia\Adapter\Primary\Http\Management\ManagementContract;
 use Clavia\Adapter\Primary\Http\Management\Problem;
+use Clavia\Adapter\Primary\Http\OpenApi\Validation\RequestRejected;
+use Clavia\Adapter\Primary\Http\OpenApi\Validation\ResponseDoesNotMatch;
 use Clavia\Application\Management\ManagementPermission;
 use Clavia\Bootstrap\Container\ManagementContractFactory;
 use Laminas\Diactoros\Response;
 use Laminas\Diactoros\Response\JsonResponse;
 use Laminas\Diactoros\ServerRequest;
 use Laminas\Diactoros\StreamFactory;
-use Phayne\OpenAPI\Validator\Message\Exception\ValidationFailed;
-use Phayne\OpenAPI\Validator\Message\OperationAddress;
 use PHPUnit\Framework\TestCase;
+use stdClass;
 
 /**
  * `docs/openapi/management-api.yaml`, read as the contract it is.
@@ -46,77 +47,50 @@ final class ManagementContractTest extends TestCase
 
     public function testTheMostSpecificPathIsTheOperation(): void
     {
-        $operation = self::contract()->operationFor(
-            new ServerRequest(uri: 'https://management.clavia.test/api/v1/clients/abc/rotate-secret', method: 'POST'),
-        );
+        $operation = self::contract()->operationFor(self::request('POST', '/api/v1/clients/abc/rotate-secret'));
 
         self::assertNotNull($operation);
-        self::assertSame('/api/v1/clients/{client_id}/rotate-secret', $operation->path);
+        self::assertSame('POST /api/v1/clients/{client_id}/rotate-secret', (string) $operation);
         self::assertSame(ManagementPermission::UpdateClients, self::contract()->requiredPermission($operation));
     }
 
-    public function testAPathTheDocumentDoesNotDescribeIsNoOperation(): void
+    public function testAPathOrMethodTheDocumentDoesNotDescribeIsNoOperation(): void
     {
-        self::assertNull(self::contract()->operationFor(
-            new ServerRequest(uri: 'https://management.clavia.test/api/v1/roles', method: 'GET'),
-        ));
+        self::assertNull(self::contract()->operationFor(self::request('GET', '/api/v1/roles')));
+        self::assertNull(self::contract()->operationFor(self::request('PUT', '/api/v1/users')));
+        self::assertNull(self::contract()->operationFor(self::request('HEAD', '/api/v1/users')));
     }
 
     public function testOnlyCreationsAndUpdatesTakeABody(): void
     {
         foreach (self::contract()->operations() as $operation) {
             self::assertSame(
-                in_array($operation->method, ['post', 'patch'], true)
-                    && ! str_ends_with($operation->path, 'rotate-secret'),
-                self::contract()->takesBody($operation),
+                in_array($operation->method, ['POST', 'PATCH'], true)
+                    && ! str_ends_with($operation->path->template, 'rotate-secret'),
+                $operation->requestBody !== null,
                 (string) $operation,
             );
         }
     }
 
-    public function testARequestIsCheckedAgainstItsOperation(): void
+    public function testAValidRequestComesBackDecoded(): void
     {
-        $valid = self::jsonRequest('POST', '/api/v1/users', '{"email":"a@b.test","password":"long-enough"}');
-        self::contract()->validateRequest(new OperationAddress('/api/v1/users', 'post'), $valid);
-
-        $this->expectException(ValidationFailed::class);
-        self::contract()->validateRequest(
-            new OperationAddress('/api/v1/users', 'post'),
-            self::jsonRequest('POST', '/api/v1/users', '{"email":"a@b.test"}'),
+        $validated = self::contract()->validateRequest(
+            self::request('POST', '/api/v1/users', '{"email":"a@b.test","password":"long-enough"}'),
         );
-    }
 
-    public function testAResponseMustBeOneTheOperationDescribes(): void
-    {
-        $delete = new OperationAddress('/api/v1/users/{user_id}', 'delete');
-        self::contract()->validateResponse($delete, new Response(status: 204));
-
-        foreach (
-            [
-            // A status the operation does not list.
-            new Response(status: 200),
-            // A body where the status has none.
-            new JsonResponse(['deleted' => true], 204),
-            // The wrong media type for a problem.
-            new JsonResponse(['type' => 'about:blank', 'title' => 'Not Found', 'status' => 404, 'detail' => 'x'], 404),
-            ] as $response
-        ) {
-            try {
-                self::contract()->validateResponse($delete, $response);
-                self::fail('A response the contract does not describe passed.');
-            } catch (ValidationFailed) {
-                self::assertTrue(true);
-            }
-        }
+        self::assertTrue($validated->hasBody);
+        self::assertInstanceOf(stdClass::class, $validated->body);
+        self::assertSame('a@b.test', $validated->body->email);
     }
 
     public function testAViolationInTheBodyPointsAtItWithoutRepeatingTheValue(): void
     {
-        $problem = self::violation(self::jsonRequest(
+        $problem = self::problem(self::request(
             'POST',
             '/api/v1/resource-servers',
             '{"identifier":"https://x.test/","permissions":[{"value":"has space"}]}',
-        ), '/api/v1/resource-servers', 'post');
+        ));
 
         self::assertSame(422, $problem->status);
         self::assertSame('/permissions/0/value', $problem->errors[0]['pointer'] ?? null);
@@ -125,45 +99,85 @@ final class ManagementContractTest extends TestCase
 
     public function testAViolationInTheQueryNamesTheParameter(): void
     {
-        $request = new ServerRequest(uri: 'https://management.clavia.test/api/v1/users?page=0', method: 'GET')
-            ->withQueryParams(['page' => '0']);
+        $problem = self::problem(self::request('GET', '/api/v1/users?page=0'));
 
-        $problem = self::violation($request, '/api/v1/users', 'get');
-
-        self::assertSame('page', $problem->errors[0]['parameter'] ?? null);
-    }
-
-    public function testAnUnknownMemberIsReportedOnTheObjectHoldingIt(): void
-    {
-        $problem = self::violation(
-            self::jsonRequest('PATCH', '/api/v1/users/' . '6f1c8a52-1b1e-4c8e-9d38-0f2b3d7c9e10', '{"a/b~c":1}'),
-            '/api/v1/users/{user_id}',
-            'patch',
+        self::assertSame(422, $problem->status);
+        self::assertSame(
+            [['parameter' => 'page', 'detail' => 'Must be greater than or equal to 1.']],
+            $problem->errors,
         );
-
-        // An unknown member is reported on the object holding it, and named in the detail.
-        self::assertSame('', $problem->errors[0]['pointer'] ?? null);
-        self::assertStringContainsString('a/b~c', $problem->errors[0]['detail']);
     }
 
-    private static function violation(ServerRequest $request, string $path, string $method): Problem
+    public function testAnUnknownMemberIsReportedWhereItIs(): void
+    {
+        $problem = self::problem(self::request(
+            'PATCH',
+            '/api/v1/users/6f1c8a52-1b1e-4c8e-9d38-0f2b3d7c9e10',
+            '{"a/b~c":1}',
+        ));
+
+        self::assertSame([['pointer' => '/a~1b~0c', 'detail' => 'Is not allowed.']], $problem->errors);
+    }
+
+    public function testUnreadableRequestsAreBadRequestsAndOtherMediaTypesUnsupported(): void
+    {
+        self::assertSame(400, self::problem(self::request('POST', '/api/v1/users', '{"email":'))->status);
+        self::assertSame(400, self::problem(self::request('GET', '/api/v1/users?page=1&page=2'))->status);
+        self::assertSame(
+            415,
+            self::problem(self::request('POST', '/api/v1/users', 'email=a', 'application/x-www-form-urlencoded'))
+                ->status,
+        );
+    }
+
+    public function testAResponseMustBeOneTheOperationDescribes(): void
+    {
+        $delete = self::contract()->operationFor(
+            self::request('DELETE', '/api/v1/users/6f1c8a52-1b1e-4c8e-9d38-0f2b3d7c9e10'),
+        );
+        self::assertNotNull($delete);
+        self::contract()->validateResponse($delete, new Response(status: 204));
+
+        $responses = [
+            // A status the operation does not list.
+            new Response(status: 200),
+            // A body where the status has none.
+            new JsonResponse(['deleted' => true], 204),
+            // The wrong media type for a problem.
+            new JsonResponse(['type' => 'about:blank', 'title' => 'Not Found', 'status' => 404, 'detail' => 'x'], 404),
+        ];
+        foreach ($responses as $response) {
+            try {
+                self::contract()->validateResponse($delete, $response);
+                self::fail('A response the contract does not describe passed.');
+            } catch (ResponseDoesNotMatch $mismatch) {
+                self::assertNotSame([], $mismatch->violations);
+            }
+        }
+    }
+
+    private static function problem(ServerRequest $request): Problem
     {
         try {
-            self::contract()->validateRequest(new OperationAddress($path, $method), $request);
-        } catch (ValidationFailed $failure) {
-            return ContractViolation::problem($failure);
+            self::contract()->validateRequest($request);
+        } catch (RequestRejected $rejection) {
+            return ContractViolation::problem($rejection);
         }
 
         self::fail('The request was valid.');
     }
 
-    private static function jsonRequest(string $method, string $path, string $body): ServerRequest
-    {
+    private static function request(
+        string $method,
+        string $target,
+        ?string $body = null,
+        string $contentType = 'application/json',
+    ): ServerRequest {
         return new ServerRequest(
-            uri: 'https://management.clavia.test' . $path,
+            uri: 'https://management.clavia.test' . $target,
             method: $method,
-            body: new StreamFactory()->createStream($body),
-            headers: ['Content-Type' => 'application/json'],
+            body: new StreamFactory()->createStream($body ?? ''),
+            headers: $body === null ? [] : ['Content-Type' => $contentType],
         );
     }
 

@@ -39,7 +39,7 @@ final readonly class ClientHandler implements RequestHandlerInterface
     public function handle(ServerRequestInterface $request): ResponseInterface
     {
         $management = ManagementRequest::of($request);
-        $id = ClientId::fromString(ManagementRequest::pathParameter($request, 'client_id'));
+        $id = ClientId::fromString($management->path('client_id'));
 
         switch ($request->getMethod()) {
             case 'GET':
