@@ -30,15 +30,18 @@ final class AesGcmSecretCipherTest extends SecretCipherContract
         return new AesGcmSecretCipher(self::KEY, new SeededRandomSource());
     }
 
-    public function testItReadsWhatThePythonImplementationWrote(): void
+    /**
+     * A known-answer vector: AES-256-GCM under this key, nonce 0x64…0x6f and the context
+     * below. Stored secrets must stay readable, so a change to the primitive, the layout
+     * or the encoding fails here rather than in production.
+     */
+    public function testAKnownAnswerVectorDecrypts(): void
     {
-        // Produced by cryptography's AESGCM with this key, nonce 0x64…0x6f and the context
-        // below — the exact call clavia.security.encryption.encrypt() makes.
-        $fromPython = 'ZGVmZ2hpamtsbW5vK3SsFByKIr5WDS2bv0UInDa2Y3jyTIAGxqHALdtBJdy0Gd9U3e8yyx6NGSe49kdHisrrmpc=';
+        $vector = 'ZGVmZ2hpamtsbW5vK3SsFByKIr5WDS2bv0UInDa2Y3jyTIAGxqHALdtBJdy0Gd9U3e8yyx6NGSe49kdHisrrmpc=';
 
         self::assertSame(
             'correct horse battery staple — 🔑',
-            $this->cipher()->decrypt($fromPython, 'kid:2026-11-key'),
+            $this->cipher()->decrypt($vector, 'kid:2026-11-key'),
         );
     }
 

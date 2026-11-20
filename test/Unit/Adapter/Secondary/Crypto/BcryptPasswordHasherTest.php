@@ -35,13 +35,13 @@ final class BcryptPasswordHasherTest extends PasswordHasherContract
         self::assertStringStartsWith('$2y$12$', new BcryptPasswordHasher()->hash('a-secret'));
     }
 
-    public function testItVerifiesAHashWrittenByThePythonImplementation(): void
+    public function testItVerifiesTheBcryptReferenceVector(): void
     {
-        // The bcrypt reference vector for "U*U", with the $2b$ prefix Python's bcrypt writes.
-        $pythonHash = '$2b$05$CCCCCCCCCCCCCCCCCCCCC.E5YPO9kmyuRGyh0XouQYb4YMJKvyOeW';
+        // The OpenBSD reference vector for "U*U", with the $2b$ prefix.
+        $reference = '$2b$05$CCCCCCCCCCCCCCCCCCCCC.E5YPO9kmyuRGyh0XouQYb4YMJKvyOeW';
 
-        self::assertTrue($this->hasher()->verify('U*U', $pythonHash));
-        self::assertFalse($this->hasher()->verify('U*V', $pythonHash));
+        self::assertTrue($this->hasher()->verify('U*U', $reference));
+        self::assertFalse($this->hasher()->verify('U*V', $reference));
     }
 
     public function testAHashAtALowerCostNeedsARehash(): void

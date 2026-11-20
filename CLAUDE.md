@@ -289,8 +289,8 @@ Conventions established in Step 1:
   whatever a browser could present (session ids, handles, device codes), `forIdentifier()` is
   for user ids and `sid`s.
 - **Secrets that must be read back go through `SecretCipher`, with a row-specific context**
-  (`kid`, `user:42:totp`). The token format, `base64(nonce ‖ ciphertext ‖ tag)`, is the Python
-  implementation's; there is a test that decrypts a Python-made value.
+  (`kid`, `user:42:totp`). The token format is `base64(nonce ‖ ciphertext ‖ tag)`; a
+  known-answer test pins it, so stored secrets cannot silently become unreadable.
 - **bcrypt takes 72 bytes.** `PasswordHasher::hash()` throws `SecretNotHashable` beyond that
   (and on a NUL byte) instead of truncating; `verify()` returns false. Password and
   client-secret validation in later steps must turn that into a proper validation error.

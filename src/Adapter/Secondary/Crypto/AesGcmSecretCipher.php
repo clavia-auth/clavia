@@ -19,9 +19,10 @@ use Clavia\Domain\Shared\RandomSource;
 /**
  * AES-256-GCM with the key from `CLAVIA_SECRET_ENCRYPTION_KEY`.
  *
- * The stored token is `base64(nonce ‖ ciphertext ‖ tag)` — a 12-byte nonce, then the
- * ciphertext, then the 16-byte tag — which is byte-compatible with what the Python
- * implementation wrote.
+ * The stored token is `base64(nonce ‖ ciphertext ‖ tag)` — a fresh 12-byte nonce
+ * (NIST SP 800-38D §8.2.2, random construction), then the ciphertext, then the full
+ * 16-byte tag. `$context` is GCM's additional authenticated data: bound to the token,
+ * not stored in it.
  *
  * The key is checked when it is first needed, not when this object is built: a
  * deployment on a remote signing backend with no TOTP legitimately runs without one,

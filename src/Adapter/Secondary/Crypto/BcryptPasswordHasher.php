@@ -18,8 +18,8 @@ use ValueError;
 /**
  * bcrypt, through PHP's own `password_hash()`.
  *
- * Hashes written by the Python implementation (`$2b$`) verify here unchanged; new ones
- * carry PHP's `$2y$` prefix, which is the same algorithm.
+ * New hashes carry PHP's `$2y$` prefix; `$2b$` (OpenBSD's current prefix, the same
+ * algorithm) verifies too, as `password_verify()` accepts every correct bcrypt variant.
  *
  * bcrypt reads at most 72 bytes and stops at a NUL byte, and PHP truncates silently.
  * A hash that covers less than what was typed makes every longer password sharing that
