@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Ui\Http\Shared;
 
+use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
@@ -23,15 +24,13 @@ use Psr\Http\Server\RequestHandlerInterface;
  */
 final readonly class HealthHandler implements RequestHandlerInterface
 {
-    public function __construct(
-        private JsonResponder $json,
-        private string $version,
-    ) {
+    public function __construct(private string $version)
+    {
     }
 
     #[\Override]
     public function handle(ServerRequestInterface $request): ResponseInterface
     {
-        return $this->json->respond(200, ['status' => 'ok', 'version' => $this->version]);
+        return new JsonResponse(['status' => 'ok', 'version' => $this->version]);
     }
 }

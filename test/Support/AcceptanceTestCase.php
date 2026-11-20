@@ -11,8 +11,11 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Support;
 
+use Clavia\Application\Port\PasswordHasher;
 use Clavia\Configuration\Settings;
+use Clavia\Infrastructure\Crypto\BcryptPasswordHasher;
 use Laminas\Diactoros\ServerRequest;
+use Laminas\Diactoros\Stream;
 use Laminas\ServiceManager\ServiceManager;
 use Mezzio\Application;
 use PHPUnit\Framework\TestCase;
@@ -74,6 +77,9 @@ abstract class AcceptanceTestCase extends TestCase
         $container->setAllowOverride(true);
         $container->setService(Settings::class, Settings::fromEnvironment($environment + TestEnvironment::variables()));
         $container->setService(LoggerInterface::class, $this->logger);
+        // The real adapter at bcrypt's lowest cost: the suite is about behaviour, and
+        // the production cost would spend most of its time hashing fixtures.
+        $container->setService(PasswordHasher::class, new BcryptPasswordHasher(4));
 
         /** @var Application $application */
         $application = $container->get(Application::class);
@@ -106,20 +112,66 @@ abstract class AcceptanceTestCase extends TestCase
         string $path,
         array $headers = [],
         string $host = self::AUTH_HOST,
+        string $body = '',
     ): ResponseInterface {
+        $stream = new Stream('php://temp', 'wb+');
+        $stream->write($body);
+        $stream->rewind();
+
         $request = new ServerRequest(
             serverParams: ['REMOTE_ADDR' => '203.0.113.7'],
             uri: 'https://' . $host . $path,
             method: $method,
+            body: $stream,
             headers: $headers + ['Host' => $host],
         );
 
         return $this->application()->handle($request);
     }
 
-    protected function get(string $path, string $host = self::AUTH_HOST): ResponseInterface
+    /**
+     * @param array<string, string> $query
+     */
+    protected function get(string $path, array $query = [], string $host = self::AUTH_HOST): ResponseInterface
     {
-        return $this->request('GET', $path, host: $host);
+        $queryString = http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+
+        return $this->request('GET', $path . ($queryString === '' ? '' : '?' . $queryString), host: $host);
+    }
+
+    /**
+     * Post a form, as a browser or an OAuth client library would.
+     *
+     * @param array<string, string>                  $form
+     * @param array{0: string, 1: string}|null       $basicAuth Client id and secret for HTTP Basic.
+     * @param array<non-empty-string, string>        $headers
+     */
+    protected function post(
+        string $path,
+        array $form = [],
+        ?array $basicAuth = null,
+        array $headers = [],
+        string $host = self::AUTH_HOST,
+    ): ResponseInterface {
+        $headers += ['Content-Type' => 'application/x-www-form-urlencoded'];
+        if ($basicAuth !== null) {
+            $headers['Authorization'] = 'Basic ' . base64_encode($basicAuth[0] . ':' . $basicAuth[1]);
+        }
+
+        return $this->request('POST', $path, $headers, $host, http_build_query($form, '', '&', PHP_QUERY_RFC3986));
+    }
+
+    /**
+     * The query parameters of a redirect's `Location`.
+     *
+     * @return array<string, string>
+     */
+    protected static function locationQuery(ResponseInterface $response): array
+    {
+        parse_str((string) parse_url($response->getHeaderLine('Location'), PHP_URL_QUERY), $query);
+
+        /** @var array<string, string> $query */
+        return $query;
     }
 
     /**

@@ -11,7 +11,6 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
-use Clavia\Ui\Http\Shared\JsonResponder;
 use Clavia\Ui\Http\Shared\MethodNotAllowedMiddleware;
 use Psr\Container\ContainerInterface;
 
@@ -19,9 +18,6 @@ final class MethodNotAllowedMiddlewareFactory
 {
     public function __invoke(ContainerInterface $container): MethodNotAllowedMiddleware
     {
-        /** @var JsonResponder $json */
-        $json = $container->get(JsonResponder::class);
-
-        return new MethodNotAllowedMiddleware($json);
+        return new MethodNotAllowedMiddleware();
     }
 }

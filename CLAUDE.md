@@ -9,6 +9,19 @@ covering OAuth2 flows, interactive login/logout with MFA, and a Management API. 
 unchanged from the Python project: *"The code and architecture need to be perfectly coded and
 documented."* Spec conformance and public-API documentation are part of "done".
 
+**Engineering direction (overrides everything below it).** This project owes nothing to FastAPI or
+Python. Where a restriction, convention or choice below exists only because the Python server did
+it that way — a response shape, a JSON encoding flag, an error body, a token format, a library
+workaround, a test layout — it is **not binding**. Write standard, clean, robust, state-of-the-art
+PHP 8+: idiomatic PSR-based code, well-maintained libraries used as they are meant to be used
+(e.g. Diactoros `JsonResponse` rather than a hand-rolled equivalent), modern language features,
+strict types, and the platform's own defaults. Choose by what is correct, secure and maintainable
+in PHP, never by what the Python server emitted. Only the OAuth 2.1 / OIDC / RFC requirements and
+the security invariants are fixed. Whatever a section below says about Python parity, "frozen"
+contracts or `docs/DEVIATIONS.md` yields to this paragraph; where code still mirrors Python for no
+other reason, replace it when you touch it, and inject collaborators by interface where that
+helps (e.g. a response factory), not as concrete classes.
+
 **This repository is the PHP 8.5 port of Clavia.** The reference implementation is the Python
 project at `../Clavia Python/clavia` (FastAPI + Authlib + SQLAlchemy; ~10k lines of source, 21
 test files, 404 tests, 31 commits). It is feature-complete for everything below except audit logs
@@ -16,16 +29,19 @@ and multi-tenancy.
 
 ## Current state
 
-**Steps 0 and 1 are done: the toolchain, the local infrastructure, the shared kernel, the
-technical ports and the storage adapters exist; no feature does.** The application answers
-`GET /healthz` and nothing else, and there is no table yet. Update this section at the end of
-every step (what exists, where it lives, which conventions it established).
+**Steps 0 to 2 are done: the foundations, and the first feature — Authorization Code + PKCE,
+ending in an opaque access token.** The application answers `GET /healthz`,
+`GET|POST /oauth2/authorize` and `POST /oauth2/token`. Nobody can sign in yet: without
+`CLAVIA_DEV_AUTOLOGIN_EMAIL`, `/oauth2/authorize` parks the request and redirects to
+`/auth/login?state=…`, which Step 3 builds. Update this section at the end of every step (what
+exists, where it lives, which conventions it established).
 
 What exists:
 
 - **Skeleton**: `public/index.php` → `config/container.php` (laminas-servicemanager) →
   `config/pipeline.php` → `config/routes.php`. The pipeline is `ErrorHandler` → routing →
-  implicit `HEAD` → 405 → dispatch → 404.
+  405 → dispatch → 404. There is no implicit `HEAD` or `OPTIONS`: a route answers the methods
+  it lists and nothing else.
 - **Settings** (`src/Configuration`): `Settings` is a readonly class whose constructor
   parameters *are* the `CLAVIA_*` variables (`rootDomain` ⇄ `CLAVIA_ROOT_DOMAIN`);
   `Settings::fromEnvironment()` coerces, bounds-checks (`#[Range]`) and cross-checks them, with
@@ -48,10 +64,32 @@ What exists:
   `Persistence\PhpDb\Database` (the one door to PostgreSQL), `PostgresUrl`,
   `PhpDbTransactionManager`; `Persistence\Migrations\SqlFileMigrator`; `Redis\RedisConnection`
   and `Redis\Keys`.
-- **Console**: `clavia db:migrate`, `clavia db:status`, `clavia secrets:generate-key`.
+- **Console**: `clavia db:migrate`, `clavia db:status`, `clavia secrets:generate-key`,
+  `clavia seed-dev`, `clavia authorize-url`.
 - **Test kit** (`test/Support`): `Fake\*` (one in-memory double per port), `Contract\*`
-  (abstract suites run against both the double and the real adapter), `TestEnvironment`,
-  `TestStorage`, `IntegrationTestCase`, `AcceptanceTestCase`.
+  (traits run against both the double and the real adapter), `TestEnvironment`, `TestStorage`,
+  `IntegrationTestCase`, `AcceptanceTestCase` (`get`/`post`/`locationQuery`), `OAuth2Fixtures`
+  (users, clients, PKCE pairs and whole flows for acceptance tests), `Clients` (ready-made
+  registrations for unit tests).
+- **Authorization Code + PKCE** (Step 2):
+  - `Domain\Identity` — `User`, `UserId`, `UserRepository`. `Domain\Client` — `Client`
+    (`client_id` is the key; type, auth method and secret must agree), `ClientId`, the
+    `ClientType` / `ClientAuthMethod` / `GrantType` / `ResponseType` enums, `ClientRepository`.
+    `Domain\OAuth2` — `OAuth2Error` + `ErrorCode`, `CodeChallenge` / `CodeVerifier` (S256
+    only), `AuthorizationCode` (`redeem()` returns a `Redemption`), `AccessToken`, their ids
+    and repositories. `Domain\Authentication\LoginState`. `Domain\Shared\UuidId` is the base
+    of every UUID identifier.
+  - `Application\OAuth2\Authorize\Authorize` (returns `CodeIssued`, `RequestRefused` or
+    `LoginRequired`; throws `OAuth2Error` when it must not redirect),
+    `ClientAuthentication\ClientAuthenticator`, `Token\IssueToken` (dispatches to a `Grant`)
+    and `Token\AuthorizationCodeGrant`; `RequestParameters` (keeps repetitions);
+    `Authentication\DevelopmentAutoLogin`; `Development\SeedDevelopmentData` and
+    `BuildAuthorizationUrl`; the `LoginStateStore` port.
+  - `Infrastructure\Persistence\PhpDb\PhpDb{User,Client,AuthorizationCode,AccessToken}Repository`,
+    `Timestamp`; `Infrastructure\Redis\RedisLoginStateStore`.
+  - `Ui\Http\OAuth2\{AuthorizeHandler,TokenHandler,OAuth2Responder}`,
+    `Ui\Http\Shared\RequestParameterReader`, `Ui\Cli\{SeedDevelopmentData,AuthorizeUrl}Command`.
+  - Migrations `0001_users` … `0004_oauth2_access_tokens`.
 
 Conventions established in Step 0 that later steps keep:
 
@@ -68,10 +106,10 @@ Conventions established in Step 0 that later steps keep:
 - **A new console command** is a `symfony/console` command in `Ui\Cli`, a factory, and one line
   in `ConfigProvider::CONSOLE_COMMANDS`. `bin/clavia` refuses to run any command on an invalid
   configuration (exit 78) and prints `Settings::warnings()` to stderr.
-- **Responses go through `Ui\Http\Shared\JsonResponder`** (slashes and Unicode unescaped, as
-  the Python server emitted them). The generic answers mirror FastAPI's so clients see no
-  difference: `{"detail":"Not Found"}`, `{"detail":"Method Not Allowed"}` + `Allow`, and a bare
-  `Internal Server Error` in plain text.
+- **JSON responses use the standard tooling** (Diactoros `JsonResponse`, or a thin PSR-17-based
+  responder injected by interface) with encoding flags chosen for PHP and browsers, not for
+  byte-parity with FastAPI. Generic error bodies are ours to design (consistent, documented in
+  the OpenAPI document); an uncaught error stays a bare 500 that reveals nothing.
 - **An uncaught error never describes itself to the client, in any environment.** The cause is
   logged (monolog → stderr → the PHP-FPM/container log). Every PHP warning or notice is an error:
   the entry points set `error_reporting(E_ALL)` and the pipeline turns them into exceptions.
@@ -135,6 +173,62 @@ Conventions established in Step 1:
   database 1 before each test; `TestEnvironment` refuses a database whose name does not end in
   `_test` and Redis database 0.
 
+Conventions established in Step 2:
+
+- **A use case is an invokable class named for what it does** (`Authorize`, `IssueToken`),
+  taking one request object and returning a result object. Expected outcomes are return values
+  (`CodeIssued | RequestRefused | LoginRequired`); `OAuth2Error` is thrown only where the
+  protocol answers with an error document. `Ui` turns both into HTTP and decides nothing.
+- **The authorization endpoint settles the client and the redirect URI before anything else,
+  and throws if it cannot** — that error is shown, never redirected. Everything validated
+  afterwards is reported *to* the registered redirect URI with `state` and `iss`. Validation
+  comes before login: an invalid request never sends anyone to the sign-in page.
+- **Redirect URIs match as exact strings** (`Client::hasRedirectUri`). No normalisation, no
+  prefix, no wildcard — and the URI is appended to, never parsed and rebuilt.
+- **`HEAD` is not `GET`.** Mezzio's `ImplicitHeadMiddleware` is deliberately absent: it would
+  answer `HEAD /oauth2/authorize` by running the handler, which mints a code. FastAPI did not
+  answer `HEAD` either.
+- **Any repeated request parameter is refused** (RFC 6749 §3.1). Handlers read parameters
+  with `RequestParameterReader`, never `getQueryParams()` / `getParsedBody()`, which silently
+  keep the last value and rewrite names.
+- **A secret handed to a client is stored as its `Digest` and looked up by it**
+  (`code_hash`, `token_hash`). The aggregate never holds the plain value; the use case returns
+  it once.
+- **Exactly-once is a locked row.** `AuthorizationCodeRepository::lockForRedemption()`
+  (`SELECT … FOR UPDATE`, refuses to run outside a transaction) → `AuthorizationCode::redeem()`
+  → `save()`, all inside one `transactional()`. The code is spent *before* the redirect URI
+  and the verifier are checked, so a wrong guess burns it; a refusal that must survive is
+  returned from the transaction and thrown after commit — throwing inside would roll the
+  spend back. A replay revokes what the code minted; a code presented by another client
+  changes nothing.
+- **Client authentication uses exactly the method the client registered**
+  (`token_endpoint_auth_method`): the right secret through the wrong door fails, and a
+  confidential client presenting only its id fails. Every failure is the same `invalid_client`.
+- **A grant is a class implementing `Token\Grant`**, registered in `IssueTokenFactory`.
+  `IssueToken` owns what every grant shares: repetitions, `grant_type`, client authentication,
+  the client's permission to use the grant.
+- **A table holds only the columns the code reads.** `nonce`, `auth_time`, `sid`, `amr`,
+  `audience`, profile fields, `is_first_party`… are added by a migration in the step that
+  introduces them, not ahead of time. Lists are `jsonb`; instants are `timestamptz`, written
+  and read through `Timestamp` (UTC, microseconds).
+- **Entities returned by a repository are copies**: a change exists in storage only once it is
+  saved. The in-memory doubles clone on the way in and out to behave the same.
+- **Identifiers**: UUID v4 value objects extending `UuidId` (`UserId`, `AuthorizationCodeId`,
+  `AccessTokenId`), never equal across kinds. `ClientId` is 1–64 visible ASCII characters
+  without a colon (HTTP Basic could not carry one); generated ids are 32 alphanumerics.
+- **Development-only code checks for itself.** `DevelopmentAutoLogin` and
+  `SeedDevelopmentData` receive `isDevelopment` and throw outside it, on top of the settings
+  validation that already forbids the combination.
+- **OAuth2 responses go through `Ui\Http\OAuth2\OAuth2Responder`**, built on Diactoros
+  `JsonResponse` and a PSR-17 `ResponseFactoryInterface`. Token-endpoint errors are 400, or 401
+  with `WWW-Authenticate` for `invalid_client`; an authorization-endpoint error that cannot be
+  redirected is a plain 400 and never a challenge (a browser would prompt for a client secret).
+  Step 3 turns that last one into an HTML page.
+- **Acceptance tests state behaviour, not Python parity.** `AuthorizationCodeFlowTest` and
+  `PkceSecurityTest` cover every behaviour of the Python suites they came from, through
+  `OAuth2Fixtures`; where the RFC-correct answer differs from what Python gave, the test
+  asserts the RFC-correct one and `docs/DEVIATIONS.md` keeps the note.
+
 **Known defect in the database library, worked around.** At the pinned commit,
 `php-db/phpdb-pgsql` runs `SELECT LASTVAL()` after every statement to fetch a "last generated
 value". In a session that has not used a sequence that query fails; the library swallows the
@@ -144,9 +238,11 @@ that lookup; `DatabaseTest::testReadingInsideATransactionDoesNotDiscardItsWrites
 after it fail without the override. **Do not `composer update php-db/*` without running the
 Integration suite**, and report the defect upstream.
 
-Running it: `cp .env.example .env`, `./setup-ssl.sh`, `make up install migrate`, then
+Running it: `cp .env.example .env`, `./setup-ssl.sh`, `make up install migrate seed`, then
 `https://auth.{domain}/healthz`. Tooling runs in the container: `make check`, `make config`,
-`make migrate`, `make db-status`.
+`make migrate`, `make db-status`, `make seed`, `make authorize-url`. To walk the flow before
+Step 3 exists, set `CLAVIA_DEV_AUTOLOGIN_EMAIL=dev@{domain}` in `.env` and follow what
+`make authorize-url` prints.
 
 ## How the migration works
 
@@ -154,14 +250,12 @@ Running it: `cp .env.example .env`, `./setup-ssl.sh`, `make up install migrate`,
   Authlib subclasses, FastAPI dependencies and SQLAlchemy models do not map onto a hexagonal PHP
   codebase and must not be transliterated. Read the Python module, its tests and the matching
   paragraph of `../Clavia Python/clavia/CLAUDE.md`, then design the PHP feature from the domain out.
-- **The Python tests are the acceptance contract.** Each step names the `tests/test_*.py` files it
-  must port. Every Python test becomes a PHP acceptance test with the same name and intent; a step
-  is done when all of them pass. Extra unit tests for the domain come on top.
-- **The HTTP contract is frozen.** Same paths, methods, parameters, status codes, JSON shapes,
-  error codes, cookie names, id prefixes (`rol_`, `tpc_`, …) and `CLAVIA_*` setting names as the
-  Python server, so the React dashboard (`frontend/`) is copied over unmodified and any relying
-  party cannot tell the two servers apart. A deliberate deviation is recorded in
-  `docs/DEVIATIONS.md` with its reason.
+- **The Python tests are a checklist of behaviours, not a contract.** Port the *intent* of each
+  test; names, request/response shapes and error bodies follow the best PHP/RFC design. Extra
+  unit tests for the domain come on top.
+- **The HTTP contract is not frozen to Python.** Paths, JSON shapes and error bodies are designed
+  cleanly (OAuth2/OIDC endpoints stay RFC-exact). The React dashboard (`frontend/`) is adapted
+  to the PHP API where the two differ, rather than the API being bent to fit it.
 - **Port the final design, not the history.** The Python project changed its mind along the way
   (client scope column dropped, `client_id` became the primary key, `audience`/`sid`/`amr` added
   later). Each step creates its tables and models directly in their final shape.
@@ -579,18 +673,22 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
 
 ### Phase B — The original build order (Python steps 1–6)
 
-#### [ ] Step 2 — Authorization Code + PKCE
+#### [x] Step 2 — Authorization Code + PKCE
 - Domain: `Client` (final shape: `client_id` PK, auth method, grant types, redirect URIs, no
   scope column), `AuthorizationRequest` validation, `Pkce` (S256 only), `AuthorizationCode`,
   opaque `AccessToken`, `OAuth2Error` taxonomy (RFC 6749 §4.1.2.1/§5.2).
-- Application: `Authorize`, `ExchangeAuthorizationCode`, `AuthenticateClient`.
+- Application: `Authorize`, `IssueToken` + `AuthorizationCodeGrant`, `ClientAuthenticator`.
 - Ui: `GET /oauth2/authorize`, `POST /oauth2/token`; `state` echoed on every error redirect;
   RFC 9207 `iss`; `WWW-Authenticate` on 401; exact redirect-URI match; a replayed code revokes
   what it issued. Dev auto-login (`CLAVIA_DEV_AUTOLOGIN_EMAIL`) as a development-only adapter.
 - CLI: `seed-dev` (first version), `authorize-url`. First migrations: `users`, `oauth2_clients`,
   `oauth2_authorization_codes`, `oauth2_access_tokens`.
 - Python: `oauth2/{server,grants,requests,router}.py`, `db/models/{client,oauth2,user}.py`.
-- Tests: `test_authorization_code_flow` (9), `test_pkce_security` (16).
+- Tests: `test_authorization_code_flow` (9), `test_pkce_security` (16) — ported as
+  `AuthorizationCodeFlowTest` and `PkceSecurityTest`, plus unit, contract and integration tests.
+- Deviations are recorded in `docs/DEVIATIONS.md` ("OAuth2 endpoints"). Left for the
+  steps that own them: the login page behind `LoginRequired` (3), `nonce`/`openid` handling and
+  the ID token (4), consent (15), per-client scopes and audiences (5, 16).
 
 #### [ ] Step 3 — Login page and sessions
 - Domain: `Session` (idle + absolute lifetime, `sid`, `amr`, `connection`), `LoginState`,

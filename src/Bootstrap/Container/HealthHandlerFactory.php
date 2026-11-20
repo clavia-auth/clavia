@@ -13,16 +13,12 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Configuration\Version;
 use Clavia\Ui\Http\Shared\HealthHandler;
-use Clavia\Ui\Http\Shared\JsonResponder;
 use Psr\Container\ContainerInterface;
 
 final class HealthHandlerFactory
 {
     public function __invoke(ContainerInterface $container): HealthHandler
     {
-        /** @var JsonResponder $json */
-        $json = $container->get(JsonResponder::class);
-
-        return new HealthHandler($json, Version::CURRENT);
+        return new HealthHandler(Version::CURRENT);
     }
 }

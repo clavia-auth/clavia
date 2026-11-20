@@ -11,7 +11,6 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
-use Clavia\Ui\Http\Shared\JsonResponder;
 use Clavia\Ui\Http\Shared\NotFoundHandler;
 use Psr\Container\ContainerInterface;
 
@@ -19,9 +18,6 @@ final class NotFoundHandlerFactory
 {
     public function __invoke(ContainerInterface $container): NotFoundHandler
     {
-        /** @var JsonResponder $json */
-        $json = $container->get(JsonResponder::class);
-
-        return new NotFoundHandler($json);
+        return new NotFoundHandler();
     }
 }

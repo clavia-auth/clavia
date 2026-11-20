@@ -1,0 +1,99 @@
+<?php
+
+/**
+ * This file is part of Clavia, an open-source OAuth 2.1 / OpenID Connect authorization server.
+ *
+ * @license   BSD-3-Clause — see the LICENSE file distributed with this source code.
+ * @copyright Copyright (c) 2026 Phayne Limited. (https://phayne.io)
+ */
+
+declare(strict_types=1);
+
+namespace ClaviaTest\Integration\Persistence;
+
+use Clavia\Domain\Client\Client;
+use Clavia\Domain\Client\ClientAuthMethod;
+use Clavia\Domain\Client\ClientId;
+use Clavia\Domain\Client\ClientType;
+use Clavia\Domain\Client\GrantType;
+use Clavia\Domain\Client\ResponseType;
+use Clavia\Domain\Identity\User;
+use Clavia\Domain\Identity\UserId;
+use Clavia\Domain\OAuth2\AccessTokenRepository;
+use Clavia\Domain\OAuth2\AuthorizationCode;
+use Clavia\Domain\OAuth2\AuthorizationCodeId;
+use Clavia\Domain\OAuth2\CodeChallenge;
+use Clavia\Domain\Shared\Digest;
+use Clavia\Domain\Shared\ScopeSet;
+use Clavia\Domain\Shared\Url;
+use Clavia\Infrastructure\Persistence\PhpDb\PhpDbAccessTokenRepository;
+use Clavia\Infrastructure\Persistence\PhpDb\PhpDbAuthorizationCodeRepository;
+use Clavia\Infrastructure\Persistence\PhpDb\PhpDbClientRepository;
+use Clavia\Infrastructure\Persistence\PhpDb\PhpDbUserRepository;
+use ClaviaTest\Support\Contract\AccessTokenRepositoryContract;
+use ClaviaTest\Support\Fake\SeededRandomSource;
+use ClaviaTest\Support\IntegrationTestCase;
+use ClaviaTest\Support\TestStorage;
+use DateTimeImmutable;
+
+final class PhpDbAccessTokenRepositoryTest extends IntegrationTestCase
+{
+    use AccessTokenRepositoryContract;
+
+    #[\Override]
+    protected function tokens(): AccessTokenRepository
+    {
+        return new PhpDbAccessTokenRepository(TestStorage::database());
+    }
+
+    #[\Override]
+    protected function aStoredCode(string $value): AuthorizationCode
+    {
+        $database = TestStorage::database();
+        $clientId = ClientId::fromString('owner-client');
+        $userId = UserId::generate(new SeededRandomSource(7));
+        $at = new DateTimeImmutable('2026-01-15T10:00:00Z');
+
+        $clients = new PhpDbClientRepository($database);
+        if ($clients->find($clientId) === null) {
+            $clients->save(Client::register(
+                $clientId,
+                'Owner',
+                ClientType::Public,
+                ClientAuthMethod::None,
+                null,
+                [Url::fromString('https://app.example/cb')],
+                [GrantType::AuthorizationCode],
+                [ResponseType::Code],
+                $at,
+            ));
+            new PhpDbUserRepository($database)->save(User::register($userId, 'owner@example.com', null, $at));
+        }
+
+        $code = AuthorizationCode::issue(
+            AuthorizationCodeId::generate(new SeededRandomSource(crc32($value))),
+            Digest::of($value),
+            $clientId,
+            $userId,
+            'https://app.example/cb',
+            ScopeSet::fromString('openid'),
+            CodeChallenge::fromString(str_repeat('a', 43)),
+            $at,
+            60,
+        );
+        new PhpDbAuthorizationCodeRepository($database)->add($code);
+
+        return $code;
+    }
+
+    public function testTheTokenItselfIsNeverStored(): void
+    {
+        $this->tokens()->add($this->aToken('the-plain-token', $this->aStoredCode('code-1')));
+
+        $row = TestStorage::database()->fetchOne('SELECT * FROM oauth2_access_tokens');
+
+        self::assertNotNull($row);
+        self::assertSame('Bearer', $row['token_type']);
+        self::assertStringNotContainsString('the-plain-token', implode('|', array_map(strval(...), $row)));
+    }
+}

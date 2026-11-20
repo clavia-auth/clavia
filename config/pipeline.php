@@ -14,7 +14,6 @@ use Clavia\Ui\Http\Shared\NotFoundHandler;
 use Laminas\Stratigility\Middleware\ErrorHandler;
 use Mezzio\Application;
 use Mezzio\Router\Middleware\DispatchMiddleware;
-use Mezzio\Router\Middleware\ImplicitHeadMiddleware;
 use Mezzio\Router\Middleware\RouteMiddleware;
 
 /**
@@ -29,9 +28,6 @@ return static function (Application $app): void {
     $app->pipe(ErrorHandler::class);
 
     $app->pipe(RouteMiddleware::class);
-    // HEAD is answered wherever GET is, without a body (RFC 9110 §9.3.2). Nothing else
-    // is implied: there is no automatic OPTIONS.
-    $app->pipe(ImplicitHeadMiddleware::class);
     $app->pipe(MethodNotAllowedMiddleware::class);
     $app->pipe(DispatchMiddleware::class);
 

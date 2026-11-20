@@ -11,20 +11,20 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
-use Clavia\Ui\Http\Shared\JsonResponder;
-use Psr\Http\Message\ResponseFactoryInterface;
-use Psr\Http\Message\StreamFactoryInterface;
+use Clavia\Configuration\Settings;
+use Clavia\Ui\Http\OAuth2\OAuth2Responder;
 use Psr\Container\ContainerInterface;
+use Psr\Http\Message\ResponseFactoryInterface;
 
-final class JsonResponderFactory
+final class OAuth2ResponderFactory
 {
-    public function __invoke(ContainerInterface $container): JsonResponder
+    public function __invoke(ContainerInterface $container): OAuth2Responder
     {
         /** @var ResponseFactoryInterface $responses */
         $responses = $container->get(ResponseFactoryInterface::class);
-        /** @var StreamFactoryInterface $streams */
-        $streams = $container->get(StreamFactoryInterface::class);
+        /** @var Settings $settings */
+        $settings = $container->get(Settings::class);
 
-        return new JsonResponder($responses, $streams);
+        return new OAuth2Responder($responses, $settings->issuer());
     }
 }

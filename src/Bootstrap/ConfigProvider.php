@@ -11,6 +11,23 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap;
 
+use Clavia\Application\Authentication\DevelopmentAutoLogin;
+use Clavia\Application\Development\BuildAuthorizationUrl;
+use Clavia\Application\Development\SeedDevelopmentData;
+use Clavia\Application\OAuth2\Authorize\Authorize;
+use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
+use Clavia\Application\OAuth2\Token\AuthorizationCodeGrant;
+use Clavia\Application\OAuth2\Token\IssueToken;
+use Clavia\Application\Port\LoginStateStore;
+use Clavia\Domain\Client\ClientRepository;
+use Clavia\Domain\Identity\UserRepository;
+use Clavia\Domain\OAuth2\AccessTokenRepository;
+use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
+use Clavia\Ui\Cli\AuthorizeUrlCommand;
+use Clavia\Ui\Cli\SeedDevelopmentDataCommand;
+use Clavia\Ui\Http\OAuth2\AuthorizeHandler;
+use Clavia\Ui\Http\OAuth2\OAuth2Responder;
+use Clavia\Ui\Http\OAuth2\TokenHandler;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Application\Port\SchemaMigrator;
 use Clavia\Application\Port\SecretCipher;
@@ -31,7 +48,6 @@ use Clavia\Ui\Cli\MigrateDatabaseCommand;
 use Clavia\Ui\Cli\ShowConfigCommand;
 use Clavia\Ui\Http\Shared\ErrorResponseGenerator;
 use Clavia\Ui\Http\Shared\HealthHandler;
-use Clavia\Ui\Http\Shared\JsonResponder;
 use Clavia\Ui\Http\Shared\MethodNotAllowedMiddleware;
 use Clavia\Ui\Http\Shared\NotFoundHandler;
 use Laminas\Diactoros\ResponseFactory;
@@ -61,6 +77,8 @@ final class ConfigProvider
         'db:migrate' => MigrateDatabaseCommand::class,
         'db:status' => DatabaseStatusCommand::class,
         'secrets:generate-key' => GenerateEncryptionKeyCommand::class,
+        'seed-dev' => SeedDevelopmentDataCommand::class,
+        'authorize-url' => AuthorizeUrlCommand::class,
     ];
 
     /**
@@ -90,6 +108,13 @@ final class ConfigProvider
 
                     // Use cases
                     GenerateEncryptionKey::class => Container\GenerateEncryptionKeyFactory::class,
+                    DevelopmentAutoLogin::class => Container\DevelopmentAutoLoginFactory::class,
+                    ClientAuthenticator::class => Container\ClientAuthenticatorFactory::class,
+                    Authorize::class => Container\AuthorizeFactory::class,
+                    AuthorizationCodeGrant::class => Container\AuthorizationCodeGrantFactory::class,
+                    IssueToken::class => Container\IssueTokenFactory::class,
+                    SeedDevelopmentData::class => Container\SeedDevelopmentDataFactory::class,
+                    BuildAuthorizationUrl::class => Container\BuildAuthorizationUrlFactory::class,
 
                     // Driven adapters, each registered under the port it implements
                     Database::class => Container\DatabaseFactory::class,
@@ -97,13 +122,20 @@ final class ConfigProvider
                     SchemaMigrator::class => Container\SchemaMigratorFactory::class,
                     RedisConnection::class => Container\RedisConnectionFactory::class,
                     SecretCipher::class => Container\SecretCipherFactory::class,
+                    UserRepository::class => Container\UserRepositoryFactory::class,
+                    ClientRepository::class => Container\ClientRepositoryFactory::class,
+                    AuthorizationCodeRepository::class => Container\AuthorizationCodeRepositoryFactory::class,
+                    AccessTokenRepository::class => Container\AccessTokenRepositoryFactory::class,
+                    LoginStateStore::class => Container\LoginStateStoreFactory::class,
 
                     // Driving adapter: HTTP
-                    JsonResponder::class => Container\JsonResponderFactory::class,
                     HealthHandler::class => Container\HealthHandlerFactory::class,
                     NotFoundHandler::class => Container\NotFoundHandlerFactory::class,
                     MethodNotAllowedMiddleware::class => Container\MethodNotAllowedMiddlewareFactory::class,
                     MezzioErrorResponseGenerator::class => Container\ErrorResponseGeneratorFactory::class,
+                    OAuth2Responder::class => Container\OAuth2ResponderFactory::class,
+                    AuthorizeHandler::class => Container\AuthorizeHandlerFactory::class,
+                    TokenHandler::class => Container\TokenHandlerFactory::class,
 
                     // Driving adapter: CLI
                     ConsoleApplication::class => Container\ConsoleApplicationFactory::class,
@@ -111,6 +143,8 @@ final class ConfigProvider
                     MigrateDatabaseCommand::class => Container\MigrateDatabaseCommandFactory::class,
                     DatabaseStatusCommand::class => Container\DatabaseStatusCommandFactory::class,
                     GenerateEncryptionKeyCommand::class => Container\GenerateEncryptionKeyCommandFactory::class,
+                    SeedDevelopmentDataCommand::class => Container\SeedDevelopmentDataCommandFactory::class,
+                    AuthorizeUrlCommand::class => Container\AuthorizeUrlCommandFactory::class,
                 ],
             ],
         ];

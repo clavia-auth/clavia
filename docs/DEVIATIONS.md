@@ -1,8 +1,10 @@
-# Deviations from the Python reference
+# Differences from the Python reference
 
-The PHP server keeps the Python server's HTTP contract: same paths, methods, parameters,
-status codes, payloads, cookie names and `CLAVIA_*` settings. This file lists every place
-where it deliberately does not, and why. Anything not listed here that differs is a bug.
+This file records where the PHP server behaves differently from the Python reference, and
+why. Parity with the Python server is not a goal — the PHP implementation follows the RFCs
+and what is correct and idiomatic in PHP (see "Engineering direction" in `CLAUDE.md`). The
+list exists so that someone moving a deployment or a client from one server to the other
+knows what changes.
 
 ## Settings
 
@@ -25,6 +27,20 @@ where it deliberately does not, and why. Anything not listed here that differs i
 | Secrets longer than 72 bytes (passwords, client secrets) | Passed to bcrypt as they are (truncated or rejected depending on the bcrypt version installed) | Refused when hashing, never a match when verifying | bcrypt reads 72 bytes at most. A hash that silently covers less than what was typed makes every longer password sharing that prefix equivalent. |
 | Console command names | Typer groups, separated by a space: `clavia secrets generate-key`, `clavia keys rotate` | Namespaced with a colon: `clavia secrets:generate-key`, `clavia keys:rotate` | `symfony/console`'s notation. Not part of the HTTP contract. |
 | Schema migrations | Alembic revisions generated from the models (`alembic upgrade head`) | Plain SQL files in `migrations/`, applied by `clavia db:migrate`, listed by `clavia db:status`; forward-only | No ORM to generate from. The files are the schema's source of truth. |
+
+## OAuth2 endpoints
+
+| Area | Python | PHP | Why |
+|---|---|---|---|
+| Invalid authorization request, once the client and redirect URI are known (missing or `plain` PKCE, unknown scope, bad `response_type`…) | `400` with a JSON error document | `302` to the registered redirect URI with `error`, `error_description`, `state` and `iss` | RFC 6749 §4.1.2.1: once the redirect URI is established, the error belongs to the client. A JSON page in the user's browser tells the application nothing and strands the user. |
+| Order of validation at `/oauth2/authorize` | `response_type` first (Authlib), so an `unsupported_response_type` error could be redirected to a URI not yet checked | Client, then redirect URI, then everything else | Nothing may ever be sent to a redirect URI that was not matched against the registration. |
+| A request parameter sent more than once | One of the values was used, silently | Refused: `invalid_request` (not redirected when it is `client_id` or `redirect_uri`) | RFC 6749 §3.1 forbids repetition; two components picking different values is how parameter-pollution attacks work. |
+| `code_challenge` format | Any string | Exactly 43 characters of the base64url alphabet | That is what the S256 of anything looks like (RFC 7636 §4.2). A value that cannot be a SHA-256 is refused when the code is requested, not discovered when it is redeemed. |
+| Missing `grant_type` at `/oauth2/token` | `unsupported_grant_type` | `invalid_request` | RFC 6749 §5.2: a missing required parameter is `invalid_request`. An unknown value is still `unsupported_grant_type`. |
+| Token exchange | Code marked used and token written in separate steps | One transaction on the locked code row | Two concurrent redemptions of one code cannot both succeed, and the loser is treated as a replay: the winner's token is revoked (RFC 6749 §4.1.2). |
+| Client identifiers | Any string | 1–64 visible ASCII characters, no colon | A colon cannot be carried in HTTP Basic credentials (RFC 7617 §2). Generated identifiers were never affected. |
+| List columns of `oauth2_clients` (`redirect_uris`, `grant_types`, `response_types`) | `JSON` | `jsonb`, each constrained to be an array | Not visible over HTTP. `jsonb` can be indexed and compared. |
+| Columns not used yet (`nonce`, `auth_time`, `sid`, `amr`, `audience`, profile fields, `is_first_party`, per-connection email uniqueness…) | Present from the first revision that needed them | Added by the step that introduces the behaviour | Migrations are written as the port advances; `users.email` is unique on its own until connections arrive (Step 13). |
 
 ## Tooling (not user-visible)
 

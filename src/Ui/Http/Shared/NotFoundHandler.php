@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Ui\Http\Shared;
 
+use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
@@ -20,13 +21,9 @@ use Psr\Http\Server\RequestHandlerInterface;
  */
 final readonly class NotFoundHandler implements RequestHandlerInterface
 {
-    public function __construct(private JsonResponder $json)
-    {
-    }
-
     #[\Override]
     public function handle(ServerRequestInterface $request): ResponseInterface
     {
-        return $this->json->respond(404, ['detail' => 'Not Found']);
+        return new JsonResponse(['detail' => 'Not Found'], 404);
     }
 }

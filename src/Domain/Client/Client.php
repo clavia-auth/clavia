@@ -1,0 +1,154 @@
+<?php
+
+/**
+ * This file is part of Clavia, an open-source OAuth 2.1 / OpenID Connect authorization server.
+ *
+ * @license   BSD-3-Clause — see the LICENSE file distributed with this source code.
+ * @copyright Copyright (c) 2026 Phayne Limited. (https://phayne.io)
+ */
+
+declare(strict_types=1);
+
+namespace Clavia\Domain\Client;
+
+use Clavia\Domain\Shared\InvalidValue;
+use Clavia\Domain\Shared\Url;
+use DateTimeImmutable;
+
+/**
+ * A client application registered with this authorization server (RFC 6749 §2).
+ *
+ * A client holds no scope of its own. A scope means nothing without an API, so what
+ * may be requested is decided by the API named in `audience` and by what the user (or,
+ * for a machine, its client grant) holds there. A per-client scope list would be a
+ * third answer to the same question, one that names no API and can only drift from the
+ * two that do.
+ */
+final readonly class Client
+{
+    private const int MAX_NAME_LENGTH = 120;
+
+    /**
+     * @param non-empty-string|null $secretHash
+     * @param list<Url>             $redirectUris
+     * @param list<GrantType>       $grantTypes
+     * @param list<ResponseType>    $responseTypes
+     */
+    private function __construct(
+        public ClientId $id,
+        public string $name,
+        public ClientType $type,
+        public ClientAuthMethod $authMethod,
+        private ?string $secretHash,
+        public array $redirectUris,
+        public array $grantTypes,
+        public array $responseTypes,
+        public DateTimeImmutable $createdAt,
+    ) {
+    }
+
+    /**
+     * Register a client. The same rules apply when one is read back from storage, so a
+     * client that exists is always coherent.
+     *
+     * @param string|null        $secretHash    A hash from the password hasher, never the secret itself.
+     * @param list<Url>          $redirectUris  Where authorization responses may be sent, matched exactly.
+     * @param list<GrantType>    $grantTypes    What it may ask of the token endpoint.
+     * @param list<ResponseType> $responseTypes What it may ask of the authorization endpoint.
+     *
+     * @throws InvalidValue When the registration contradicts itself.
+     */
+    public static function register(
+        ClientId $id,
+        string $name,
+        ClientType $type,
+        ClientAuthMethod $authMethod,
+        #[\SensitiveParameter] ?string $secretHash,
+        array $redirectUris,
+        array $grantTypes,
+        array $responseTypes,
+        DateTimeImmutable $createdAt,
+    ): self {
+        $secretHash = $secretHash === '' ? null : $secretHash;
+
+        if (strlen($name) > self::MAX_NAME_LENGTH) {
+            throw new InvalidValue('A client name is at most 120 bytes.');
+        }
+
+        // RFC 6749 §2.1: the type is whether the client can keep a secret, so the type,
+        // the secret and the authentication method have to tell the same story.
+        if ($type === ClientType::Public && ($authMethod->usesASecret() || $secretHash !== null)) {
+            throw new InvalidValue('A public client has no secret and authenticates with "none".');
+        }
+        if ($type === ClientType::Confidential && (! $authMethod->usesASecret() || $secretHash === null)) {
+            throw new InvalidValue('A confidential client has a secret and authenticates with it.');
+        }
+
+        foreach ($redirectUris as $redirectUri) {
+            // RFC 6749 §3.1.2: the redirection endpoint URI must not include a fragment.
+            if ($redirectUri->hasFragment()) {
+                throw new InvalidValue('A redirect URI must not contain a fragment.');
+            }
+        }
+
+        // A code can only be delivered by redirect.
+        if (in_array(ResponseType::Code, $responseTypes, true) && $redirectUris === []) {
+            throw new InvalidValue('A client that may ask for a code needs at least one redirect URI.');
+        }
+
+        return new self(
+            $id,
+            $name,
+            $type,
+            $authMethod,
+            $secretHash,
+            $redirectUris,
+            array_values(array_unique($grantTypes, SORT_REGULAR)),
+            array_values(array_unique($responseTypes, SORT_REGULAR)),
+            $createdAt,
+        );
+    }
+
+    /**
+     * Whether `$redirectUri` is one this client registered — by exact string match.
+     *
+     * No prefix, wildcard, or normalisation matching: those are the classic route to an
+     * open redirect and, with it, authorization code exfiltration (OAuth 2.1 §2.3.1).
+     */
+    public function hasRedirectUri(string $redirectUri): bool
+    {
+        return array_any($this->redirectUris, static fn (Url $registered): bool => $registered->value === $redirectUri);
+    }
+
+    /** The redirect URI used when a request names none — only when exactly one is registered. */
+    public function soleRedirectUri(): ?Url
+    {
+        return count($this->redirectUris) === 1 ? $this->redirectUris[0] : null;
+    }
+
+    public function mayUseGrant(GrantType $grantType): bool
+    {
+        return in_array($grantType, $this->grantTypes, true);
+    }
+
+    public function mayUseResponseType(ResponseType $responseType): bool
+    {
+        return in_array($responseType, $this->responseTypes, true);
+    }
+
+    public function isPublic(): bool
+    {
+        return $this->type === ClientType::Public;
+    }
+
+    /**
+     * The stored hash of the client secret, for the hasher to verify against; null for
+     * a public client, which has none.
+     *
+     * @return non-empty-string|null
+     */
+    public function secretHash(): ?string
+    {
+        return $this->secretHash;
+    }
+}

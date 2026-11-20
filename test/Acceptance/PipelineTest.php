@@ -48,17 +48,9 @@ final class PipelineTest extends AcceptanceTestCase
         self::assertSame(['detail' => 'Method Not Allowed'], self::json($response));
     }
 
-    public function testHeadIsAnsweredWhereverGetIsWithoutABody(): void
+    public function testThereIsNoImplicitHeadOrOptions(): void
     {
-        $response = $this->request('HEAD', '/healthz');
-
-        self::assertSame(200, $response->getStatusCode());
-        self::assertSame('application/json', $response->getHeaderLine('Content-Type'));
-        self::assertSame('', (string) $response->getBody());
-    }
-
-    public function testThereIsNoImplicitOptions(): void
-    {
+        self::assertSame(405, $this->request('HEAD', '/healthz')->getStatusCode());
         self::assertSame(405, $this->request('OPTIONS', '/healthz')->getStatusCode());
     }
 

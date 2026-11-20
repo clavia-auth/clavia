@@ -9,6 +9,8 @@
 
 declare(strict_types=1);
 
+use Clavia\Ui\Http\OAuth2\AuthorizeHandler;
+use Clavia\Ui\Http\OAuth2\TokenHandler;
 use Clavia\Ui\Http\Shared\HealthHandler;
 use Mezzio\Application;
 
@@ -18,4 +20,8 @@ use Mezzio\Application;
  */
 return static function (Application $app): void {
     $app->get('/healthz', HealthHandler::class, 'ops.healthz');
+
+    // ── /oauth2/* — the authorization server. Callers authenticate as clients. ──
+    $app->route('/oauth2/authorize', AuthorizeHandler::class, ['GET', 'POST'], 'oauth2.authorize');
+    $app->post('/oauth2/token', TokenHandler::class, 'oauth2.token');
 };
