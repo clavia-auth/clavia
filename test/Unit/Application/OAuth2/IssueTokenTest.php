@@ -149,6 +149,21 @@ final class IssueTokenTest extends TestCase
         self::fail('A token was issued.');
     }
 
+    public function testItSaysWhichGrantsItAnswersAndHowClientsMayAuthenticateForThem(): void
+    {
+        $issueToken = new IssueToken(
+            $this->authenticator,
+            $this->aGrant([ClientAuthMethod::ClientSecretBasic, ClientAuthMethod::None]),
+        );
+
+        self::assertSame([GrantType::AuthorizationCode], $issueToken->supportedGrantTypes());
+        self::assertSame(
+            [ClientAuthMethod::ClientSecretBasic, ClientAuthMethod::None],
+            $issueToken->supportedAuthMethods(),
+        );
+        self::assertSame([], new IssueToken($this->authenticator)->supportedGrantTypes());
+    }
+
     /**
      * A grant that records who it issued for.
      *

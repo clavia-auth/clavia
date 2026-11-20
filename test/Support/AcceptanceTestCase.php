@@ -68,6 +68,10 @@ abstract class AcceptanceTestCase extends TestCase
         $this->errorReporting = error_reporting(E_ALL);
 
         TestStorage::reset();
+        // An authorization request asks for `openid` unless a test says otherwise, so the
+        // token endpoint needs a key to sign ID tokens with. A test about having none
+        // deletes it.
+        TestSigningKeys::install(TestStorage::database());
     }
 
     #[\Override]

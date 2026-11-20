@@ -31,6 +31,7 @@ final class User
         private ?string $passwordHash,
         private bool $emailVerified,
         private bool $active,
+        private Profile $profile,
         public readonly DateTimeImmutable $createdAt,
         private DateTimeImmutable $updatedAt,
     ) {
@@ -56,6 +57,7 @@ final class User
             $passwordHash === null || $passwordHash === '' ? null : $passwordHash,
             false,
             true,
+            Profile::empty(),
             $now,
             $now,
         );
@@ -72,6 +74,7 @@ final class User
         #[\SensitiveParameter] ?string $passwordHash,
         bool $emailVerified,
         bool $active,
+        Profile $profile,
         DateTimeImmutable $createdAt,
         DateTimeImmutable $updatedAt,
     ): self {
@@ -81,6 +84,7 @@ final class User
             $passwordHash === null || $passwordHash === '' ? null : $passwordHash,
             $emailVerified,
             $active,
+            $profile,
             $createdAt,
             $updatedAt,
         );
@@ -131,6 +135,25 @@ final class User
         return $this->emailVerified;
     }
 
+    /** What the person is called and how they present themselves: the `profile` scope's claims. */
+    public function profile(): Profile
+    {
+        return $this->profile;
+    }
+
+    /**
+     * Replace the profile as a whole. A change moves `updatedAt`, which relying parties
+     * read as the `updated_at` claim to know their copy is stale.
+     */
+    public function changeProfile(Profile $profile, DateTimeImmutable $now): void
+    {
+        if (! $profile->equals($this->profile)) {
+            $this->profile = $profile;
+            $this->updatedAt = $now;
+        }
+    }
+
+    /** When anything about the account last changed — the OIDC `updated_at` claim. */
     public function updatedAt(): DateTimeImmutable
     {
         return $this->updatedAt;

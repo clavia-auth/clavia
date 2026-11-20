@@ -30,4 +30,22 @@ final class RecordingLogger extends AbstractLogger
     {
         $this->records[] = ['level' => $level, 'message' => (string) $message, 'context' => $context];
     }
+
+    /**
+     * Whether some record mentions `$text`, in its message or in a string of its context
+     * (the error handler logs an exception's message there).
+     */
+    public function hasRecordContaining(string $text): bool
+    {
+        foreach ($this->records as $record) {
+            $strings = [$record['message'], ...array_filter($record['context'], is_string(...))];
+            foreach ($strings as $string) {
+                if (str_contains($string, $text)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
 }

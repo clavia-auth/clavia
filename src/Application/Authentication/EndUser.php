@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Authentication;
 
+use Clavia\Domain\Authentication\AuthenticationContext;
 use Clavia\Domain\Authentication\Session;
 use Clavia\Domain\Identity\UserId;
 
@@ -26,12 +27,19 @@ final readonly class EndUser
 {
     /**
      * @param Session|null $session The browser session that established who this is; null when
-     *                              something else did (the development auto-login). Later steps read
-     *                              when and how the person authenticated from it (`auth_time`, `amr`).
+     *                              something else did (the development auto-login).
      */
     public function __construct(
         public UserId $userId,
         public ?Session $session = null,
     ) {
+    }
+
+    /** When and how this person authenticated, for the ID token; unknown without a session. */
+    public function authentication(): AuthenticationContext
+    {
+        return $this->session === null
+            ? AuthenticationContext::unknown()
+            : AuthenticationContext::fromSession($this->session);
     }
 }

@@ -13,6 +13,7 @@ namespace Clavia\Application\OAuth2\Authorize;
 
 use Clavia\Application\OAuth2\RequestParameters;
 use Clavia\Application\Port\LoginStateStore;
+use Clavia\Application\Port\NonceRegistry;
 use Clavia\Domain\Authentication\LoginState;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientId;
@@ -23,6 +24,8 @@ use Clavia\Domain\OAuth2\AuthorizationCodeId;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
 use Clavia\Domain\OAuth2\CodeChallenge;
 use Clavia\Domain\OAuth2\OAuth2Error;
+use Clavia\Domain\Oidc\Nonce;
+use Clavia\Domain\Oidc\OidcScope;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\InvalidValue;
@@ -49,18 +52,23 @@ use Clavia\Domain\Shared\SecretGenerator;
 final readonly class Authorize
 {
     /**
-     * @param ScopeSet     $supportedScopes     What may be requested without naming an API: the OIDC scopes.
+     * @param ScopeSet     $supportedScopes      What may be requested without naming an API: the OIDC scopes.
      * @param positive-int $codeLifetimeSeconds
+     * @param positive-int $nonceLifetimeSeconds How long a used nonce is remembered: at least as long as a
+     *                                           code carrying it, then an ID token minted from that code,
+     *                                           remain valid.
      */
     public function __construct(
         private ClientRepository $clients,
         private AuthorizationCodeRepository $codes,
         private LoginStateStore $loginStates,
+        private NonceRegistry $nonces,
         private SecretGenerator $secrets,
         private RandomSource $random,
         private Clock $clock,
         private ScopeSet $supportedScopes,
         private int $codeLifetimeSeconds,
+        private int $nonceLifetimeSeconds,
     ) {
     }
 
@@ -81,6 +89,7 @@ final readonly class Authorize
         try {
             $scope = $this->validate($parameters, $client);
             $challenge = $this->challenge($parameters);
+            $nonce = $this->nonce($parameters, $client, $scope);
         } catch (OAuth2Error $refusal) {
             return new RequestRefused($redirectUri, $refusal, $state);
         }
@@ -92,6 +101,12 @@ final readonly class Authorize
             return new LoginRequired($handle);
         }
 
+        // Spent only now that a code is about to exist; atomic, so of two concurrent
+        // requests carrying it only one gets a code.
+        if ($nonce !== null && ! $this->nonces->claim($client->id, $nonce, $this->nonceLifetimeSeconds)) {
+            return new RequestRefused($redirectUri, self::nonceReplayed(), $state);
+        }
+
         $code = $this->secrets->token();
         $this->codes->add(AuthorizationCode::issue(
             AuthorizationCodeId::generate($this->random),
@@ -101,6 +116,8 @@ final readonly class Authorize
             $redirectUri,
             $scope,
             $challenge,
+            $nonce,
+            $request->endUser->authentication(),
             $this->clock->now(),
             $this->codeLifetimeSeconds,
         ));
@@ -203,6 +220,41 @@ final readonly class Authorize
         }
 
         return $scope;
+    }
+
+    /**
+     * The `nonce` of an OpenID Connect request (OIDC Core §3.1.2.1), refused when this
+     * client has used it before: a captured authorization URL must not be answered twice.
+     *
+     * Only an OpenID Connect request — one asking for `openid` — has a nonce. Anywhere
+     * else the parameter means nothing, and an unknown parameter is ignored (RFC 6749
+     * §3.1). Optional in the code flow, so its absence is not an error.
+     *
+     * @throws OAuth2Error
+     */
+    private function nonce(RequestParameters $parameters, Client $client, ScopeSet $scope): ?Nonce
+    {
+        $value = $parameters->get('nonce');
+        if ($value === null || ! $scope->contains(OidcScope::OPENID)) {
+            return null;
+        }
+
+        try {
+            $nonce = Nonce::fromString($value);
+        } catch (InvalidValue) {
+            throw OAuth2Error::invalidRequest("Invalid 'nonce'.");
+        }
+
+        if ($this->nonces->isUsed($client->id, $nonce)) {
+            throw self::nonceReplayed();
+        }
+
+        return $nonce;
+    }
+
+    private static function nonceReplayed(): OAuth2Error
+    {
+        return OAuth2Error::invalidRequest("The 'nonce' has already been used.");
     }
 
     /**

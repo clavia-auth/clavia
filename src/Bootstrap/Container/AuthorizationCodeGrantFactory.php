@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\OAuth2\Token\AuthorizationCodeGrant;
+use Clavia\Application\Oidc\IdTokenIssuer;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Identity\UserRepository;
@@ -40,12 +41,24 @@ final class AuthorizationCodeGrantFactory
         $random = $container->get(RandomSource::class);
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
+        /** @var IdTokenIssuer $idTokens */
+        $idTokens = $container->get(IdTokenIssuer::class);
         /** @var Settings $settings */
         $settings = $container->get(Settings::class);
 
         $lifetime = $settings->accessTokenLifetime;
         assert($lifetime > 0);
 
-        return new AuthorizationCodeGrant($codes, $tokens, $users, $transactions, $secrets, $random, $clock, $lifetime);
+        return new AuthorizationCodeGrant(
+            $codes,
+            $tokens,
+            $users,
+            $transactions,
+            $secrets,
+            $random,
+            $clock,
+            $idTokens,
+            $lifetime,
+        );
     }
 }

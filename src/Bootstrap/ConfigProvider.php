@@ -14,7 +14,10 @@ namespace Clavia\Bootstrap;
 use Clavia\Adapter\Primary\Cli\AuthorizeUrlCommand;
 use Clavia\Adapter\Primary\Cli\DatabaseStatusCommand;
 use Clavia\Adapter\Primary\Cli\GenerateEncryptionKeyCommand;
+use Clavia\Adapter\Primary\Cli\GenerateSigningKeyCommand;
+use Clavia\Adapter\Primary\Cli\ListSigningKeysCommand;
 use Clavia\Adapter\Primary\Cli\MigrateDatabaseCommand;
+use Clavia\Adapter\Primary\Cli\RotateSigningKeyCommand;
 use Clavia\Adapter\Primary\Cli\SeedDevelopmentDataCommand;
 use Clavia\Adapter\Primary\Cli\ShowConfigCommand;
 use Clavia\Adapter\Primary\Http\Auth\AuthCookies;
@@ -26,6 +29,10 @@ use Clavia\Adapter\Primary\Http\Auth\ThemeHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\OAuth2Responder;
 use Clavia\Adapter\Primary\Http\OAuth2\TokenHandler;
+use Clavia\Adapter\Primary\Http\Oidc\DiscoveryHandler;
+use Clavia\Adapter\Primary\Http\Oidc\JwksHandler;
+use Clavia\Adapter\Primary\Http\Oidc\UserInfoHandler;
+use Clavia\Adapter\Primary\Http\Shared\BearerChallenger;
 use Clavia\Adapter\Primary\Http\Shared\ErrorResponder;
 use Clavia\Adapter\Primary\Http\Shared\ErrorResponseGenerator;
 use Clavia\Adapter\Primary\Http\Shared\HealthHandler;
@@ -50,12 +57,23 @@ use Clavia\Application\OAuth2\Authorize\Authorize;
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
 use Clavia\Application\OAuth2\Token\AuthorizationCodeGrant;
 use Clavia\Application\OAuth2\Token\IssueToken;
+use Clavia\Application\Oidc\CompactJws;
+use Clavia\Application\Oidc\Discovery\ProviderMetadata;
+use Clavia\Application\Oidc\IdTokenIssuer;
+use Clavia\Application\Oidc\Keys\GenerateSigningKey;
+use Clavia\Application\Oidc\Keys\ListSigningKeys;
+use Clavia\Application\Oidc\Keys\PublishSigningKeys;
+use Clavia\Application\Oidc\Keys\RotateSigningKey;
+use Clavia\Application\Oidc\UserInfo\ReadUserInfo;
 use Clavia\Application\Port\AttemptCounter;
 use Clavia\Application\Port\LoginStateStore;
+use Clavia\Application\Port\NonceRegistry;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Application\Port\SchemaMigrator;
 use Clavia\Application\Port\SecretCipher;
 use Clavia\Application\Port\SessionStore;
+use Clavia\Application\Port\SigningKeyStore;
+use Clavia\Application\Port\TokenSigner;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Application\Secrets\GenerateEncryptionKey;
 use Clavia\Configuration\Settings;
@@ -63,6 +81,7 @@ use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
+use Clavia\Domain\Oidc\SigningAlgorithm;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\RandomSource;
 use Clavia\Domain\Shared\SecretGenerator;
@@ -97,6 +116,9 @@ final class ConfigProvider
         'secrets:generate-key' => GenerateEncryptionKeyCommand::class,
         'seed-dev' => SeedDevelopmentDataCommand::class,
         'authorize-url' => AuthorizeUrlCommand::class,
+        'keys:generate' => GenerateSigningKeyCommand::class,
+        'keys:rotate' => RotateSigningKeyCommand::class,
+        'keys:list' => ListSigningKeysCommand::class,
     ];
 
     /**
@@ -124,8 +146,9 @@ final class ConfigProvider
                     LoggerInterface::class => Container\LoggerFactory::class,
                     FilterServerRequestInterface::class => Container\ForwardedHeadersFilterFactory::class,
 
-                    // Domain services
+                    // Domain services and values
                     SecretGenerator::class => Container\SecretGeneratorFactory::class,
+                    SigningAlgorithm::class => Container\SigningAlgorithmFactory::class,
 
                     // Use cases
                     GenerateEncryptionKey::class => Container\GenerateEncryptionKeyFactory::class,
@@ -142,6 +165,14 @@ final class ConfigProvider
                     SignInWithPassword::class => Container\SignInWithPasswordFactory::class,
                     SignOut::class => Container\SignOutFactory::class,
                     DescribeLoginPage::class => Container\DescribeLoginPageFactory::class,
+                    CompactJws::class => Container\CompactJwsFactory::class,
+                    IdTokenIssuer::class => Container\IdTokenIssuerFactory::class,
+                    ProviderMetadata::class => Container\ProviderMetadataFactory::class,
+                    PublishSigningKeys::class => Container\PublishSigningKeysFactory::class,
+                    GenerateSigningKey::class => Container\GenerateSigningKeyFactory::class,
+                    RotateSigningKey::class => Container\RotateSigningKeyFactory::class,
+                    ListSigningKeys::class => Container\ListSigningKeysFactory::class,
+                    ReadUserInfo::class => Container\ReadUserInfoFactory::class,
 
                     // Secondary adapters, each registered under the port it implements
                     Database::class => Container\DatabaseFactory::class,
@@ -156,6 +187,9 @@ final class ConfigProvider
                     LoginStateStore::class => Container\LoginStateStoreFactory::class,
                     SessionStore::class => Container\SessionStoreFactory::class,
                     AttemptCounter::class => Container\AttemptCounterFactory::class,
+                    NonceRegistry::class => Container\NonceRegistryFactory::class,
+                    TokenSigner::class => Container\TokenSignerFactory::class,
+                    SigningKeyStore::class => Container\SigningKeyStoreFactory::class,
 
                     // Primary adapter: HTTP
                     HealthHandler::class => Container\HealthHandlerFactory::class,
@@ -173,6 +207,10 @@ final class ConfigProvider
                     LoginHandler::class => Container\LoginHandlerFactory::class,
                     LogoutHandler::class => Container\LogoutHandlerFactory::class,
                     ThemeHandler::class => Container\ThemeHandlerFactory::class,
+                    BearerChallenger::class => Container\BearerChallengerFactory::class,
+                    DiscoveryHandler::class => Container\DiscoveryHandlerFactory::class,
+                    JwksHandler::class => Container\JwksHandlerFactory::class,
+                    UserInfoHandler::class => Container\UserInfoHandlerFactory::class,
 
                     // Primary adapter: CLI
                     ConsoleApplication::class => Container\ConsoleApplicationFactory::class,
@@ -182,6 +220,9 @@ final class ConfigProvider
                     GenerateEncryptionKeyCommand::class => Container\GenerateEncryptionKeyCommandFactory::class,
                     SeedDevelopmentDataCommand::class => Container\SeedDevelopmentDataCommandFactory::class,
                     AuthorizeUrlCommand::class => Container\AuthorizeUrlCommandFactory::class,
+                    GenerateSigningKeyCommand::class => Container\GenerateSigningKeyCommandFactory::class,
+                    RotateSigningKeyCommand::class => Container\RotateSigningKeyCommandFactory::class,
+                    ListSigningKeysCommand::class => Container\ListSigningKeysCommandFactory::class,
                 ],
             ],
             // The server-rendered pages: `layout::page`, `auth::login`, `error::page`,

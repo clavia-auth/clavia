@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Application\Development;
 
 use Clavia\Application\Port\PasswordHasher;
+use Clavia\Application\Port\SigningKeyStore;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
@@ -23,6 +24,7 @@ use Clavia\Domain\Client\ResponseType;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
+use Clavia\Domain\Oidc\SigningAlgorithm;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\RandomSource;
@@ -52,6 +54,8 @@ final readonly class SeedDevelopmentData
         private ClientRepository $clients,
         private PasswordHasher $hasher,
         private TransactionManager $transactions,
+        private SigningKeyStore $signingKeys,
+        private SigningAlgorithm $signingAlgorithm,
         private SecretGenerator $secrets,
         private RandomSource $random,
         private Clock $clock,
@@ -119,6 +123,21 @@ final readonly class SeedDevelopmentData
             $this->clients->save($client);
         }
 
-        return new SeededDevelopmentData($email, $userCreated, $client->id, $clientCreated);
+        // A token endpoint without a key fails loudly by design; a development setup
+        // should not have to learn that the hard way.
+        $signingKey = $this->signingKeys->lockActive();
+        $signingKeyCreated = $signingKey === null;
+        if ($signingKey === null) {
+            $signingKey = $this->signingKeys->create($this->signingAlgorithm, $now);
+        }
+
+        return new SeededDevelopmentData(
+            $email,
+            $userCreated,
+            $client->id,
+            $clientCreated,
+            $signingKey->kid(),
+            $signingKeyCreated,
+        );
     }
 }

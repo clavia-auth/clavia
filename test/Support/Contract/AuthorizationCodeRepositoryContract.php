@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Support\Contract;
 
+use Clavia\Domain\Authentication\AuthenticationContext;
+use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\OAuth2\AuthorizationCode;
@@ -18,6 +20,7 @@ use Clavia\Domain\OAuth2\AuthorizationCodeId;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
 use Clavia\Domain\OAuth2\CodeChallenge;
 use Clavia\Domain\OAuth2\Redemption;
+use Clavia\Domain\Oidc\Nonce;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\ScopeSet;
 use ClaviaTest\Support\Fake\SeededRandomSource;
@@ -67,6 +70,37 @@ trait AuthorizationCodeRepositoryContract
         self::assertEquals(new DateTimeImmutable('2026-01-15T10:01:00Z'), $stored->expiresAt);
         self::assertEquals(new DateTimeImmutable('2026-01-15T10:00:00Z'), $stored->createdAt);
         self::assertNull($stored->usedAt());
+    }
+
+    #[Test]
+    public function whatTheIdTokenWillReportIsReadBackAsIssued(): void
+    {
+        $authenticatedAt = new DateTimeImmutable('2026-01-15T09:58:12.250000Z');
+        $this->codes()->add($this->aCode(
+            'oidc-code',
+            Nonce::fromString('n-0S6_WzA2Mj'),
+            AuthenticationContext::reconstitute($authenticatedAt, [AuthenticationMethod::Password]),
+        ));
+
+        $stored = $this->locked('oidc-code');
+
+        self::assertNotNull($stored);
+        self::assertSame('n-0S6_WzA2Mj', $stored->nonce?->value);
+        self::assertEquals($authenticatedAt, $stored->authentication->authenticatedAt);
+        self::assertSame(['pwd'], $stored->authentication->methodValues());
+    }
+
+    #[Test]
+    public function aCodeWithoutAnAuthenticationReportsNone(): void
+    {
+        $this->codes()->add($this->aCode('plain-code'));
+
+        $stored = $this->locked('plain-code');
+
+        self::assertNotNull($stored);
+        self::assertNull($stored->nonce);
+        self::assertNull($stored->authentication->authenticatedAt);
+        self::assertSame([], $stored->authentication->methods);
     }
 
     #[Test]
@@ -134,8 +168,11 @@ trait AuthorizationCodeRepositoryContract
         );
     }
 
-    private function aCode(string $value): AuthorizationCode
-    {
+    private function aCode(
+        string $value,
+        ?Nonce $nonce = null,
+        ?AuthenticationContext $authentication = null,
+    ): AuthorizationCode {
         [$clientId, $userId] = $this->anOwner();
 
         return AuthorizationCode::issue(
@@ -146,6 +183,8 @@ trait AuthorizationCodeRepositoryContract
             'https://app.example/cb?x=1',
             ScopeSet::fromString('openid profile'),
             CodeChallenge::fromString(str_repeat('a', 43)),
+            $nonce,
+            $authentication ?? AuthenticationContext::unknown(),
             new DateTimeImmutable('2026-01-15T10:00:00Z'),
             60,
         );

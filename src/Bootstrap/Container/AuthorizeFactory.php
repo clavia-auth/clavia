@@ -13,6 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\OAuth2\Authorize\Authorize;
 use Clavia\Application\Port\LoginStateStore;
+use Clavia\Application\Port\NonceRegistry;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
@@ -32,6 +33,8 @@ final class AuthorizeFactory
         $codes = $container->get(AuthorizationCodeRepository::class);
         /** @var LoginStateStore $loginStates */
         $loginStates = $container->get(LoginStateStore::class);
+        /** @var NonceRegistry $nonces */
+        $nonces = $container->get(NonceRegistry::class);
         /** @var SecretGenerator $secrets */
         $secrets = $container->get(SecretGenerator::class);
         /** @var RandomSource $random */
@@ -43,16 +46,22 @@ final class AuthorizeFactory
 
         $lifetime = $settings->authorizationCodeLifetime;
         assert($lifetime > 0);
+        // A used nonce is remembered until neither the code carrying it nor an ID token
+        // minted from that code can still be valid.
+        $nonceLifetime = $lifetime + $settings->idTokenLifetime;
+        assert($nonceLifetime > 0);
 
         return new Authorize(
             $clients,
             $codes,
             $loginStates,
+            $nonces,
             $secrets,
             $random,
             $clock,
             ScopeSet::fromString(implode(' ', $settings->scopesSupported)),
             $lifetime,
+            $nonceLifetime,
         );
     }
 }

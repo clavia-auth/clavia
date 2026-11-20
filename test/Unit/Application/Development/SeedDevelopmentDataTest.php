@@ -15,11 +15,13 @@ use Clavia\Application\Development\SeedDevelopmentData;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\ResponseType;
+use Clavia\Domain\Oidc\SigningAlgorithm;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\SecretGenerator;
 use ClaviaTest\Support\Fake\FakePasswordHasher;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
+use ClaviaTest\Support\Fake\InMemorySigningKeys;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
 use ClaviaTest\Support\Fake\SeededRandomSource;
@@ -31,10 +33,12 @@ final class SeedDevelopmentDataTest extends TestCase
     private InMemoryUserRepository $users;
     private InMemoryClientRepository $clients;
     private FakePasswordHasher $hasher;
+    private InMemorySigningKeys $signingKeys;
 
     #[\Override]
     protected function setUp(): void
     {
+        $this->signingKeys = new InMemorySigningKeys(new FrozenClock());
         $this->users = new InMemoryUserRepository();
         $this->clients = new InMemoryClientRepository();
         $this->hasher = new FakePasswordHasher();
@@ -105,6 +109,24 @@ final class SeedDevelopmentDataTest extends TestCase
         }
     }
 
+    public function testItCreatesASigningKeyWhenNoneIsActive(): void
+    {
+        $seeded = $this->seeder()('dev@clavia.test', 'devpassword', 'http://localhost:3000/callback');
+
+        self::assertTrue($seeded->signingKeyCreated);
+        self::assertSame($seeded->signingKeyId, $this->signingKeys->activeKey()->kid);
+    }
+
+    public function testARerunKeepsTheActiveSigningKey(): void
+    {
+        $first = $this->seeder()('dev@clavia.test', 'devpassword', 'http://localhost:3000/callback');
+        $second = $this->seeder()('dev@clavia.test', 'devpassword', 'http://localhost:3000/callback');
+
+        self::assertFalse($second->signingKeyCreated);
+        self::assertSame($first->signingKeyId, $second->signingKeyId);
+        self::assertCount(1, $this->signingKeys->all());
+    }
+
     public function testAnEmailThatIsNotAnAddressIsRefused(): void
     {
         $this->expectException(InvalidValue::class);
@@ -121,6 +143,8 @@ final class SeedDevelopmentDataTest extends TestCase
             $this->clients,
             $this->hasher,
             new InMemoryTransactionManager(),
+            $this->signingKeys,
+            SigningAlgorithm::RS256,
             new SecretGenerator($random),
             $random,
             new FrozenClock(),

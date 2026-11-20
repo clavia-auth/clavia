@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Support\Contract;
 
+use Clavia\Domain\Identity\Profile;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
@@ -44,6 +45,37 @@ trait UserRepositoryContract
         self::assertFalse($byId->isEmailVerified());
         self::assertEquals(new DateTimeImmutable('2026-01-15T10:00:00.123456Z'), $byId->createdAt);
         self::assertSame(0, $byId->createdAt->getOffset());
+    }
+
+    #[Test]
+    public function theProfileIsSavedAndReadBackWhole(): void
+    {
+        $user = $this->aUser('ada@example.com');
+        $this->users()->save($user);
+        self::assertTrue($this->users()->find($user->id)?->profile()->equals(Profile::empty()));
+
+        $user->changeProfile(
+            Profile::of('Ada Lovelace', 'Ada', 'Lovelace', 'ada', 'https://example.com/ada.png', 'en-GB'),
+            new DateTimeImmutable('2026-03-01T12:00:00Z'),
+        );
+        $this->users()->save($user);
+
+        $stored = $this->users()->find($user->id);
+        self::assertNotNull($stored);
+        self::assertSame('Ada Lovelace', $stored->profile()->name);
+        self::assertSame('Ada', $stored->profile()->givenName);
+        self::assertSame('Lovelace', $stored->profile()->familyName);
+        self::assertSame('ada', $stored->profile()->nickname);
+        self::assertSame('https://example.com/ada.png', $stored->profile()->picture?->value);
+        self::assertSame('en-GB', $stored->profile()->locale);
+        self::assertEquals(new DateTimeImmutable('2026-03-01T12:00:00Z'), $stored->updatedAt());
+
+        $stored->changeProfile(Profile::of(name: 'Ada King'), new DateTimeImmutable('2026-03-02T12:00:00Z'));
+        $this->users()->save($stored);
+
+        $cleared = $this->users()->find($user->id);
+        self::assertNotNull($cleared);
+        self::assertTrue($cleared->profile()->equals(Profile::of(name: 'Ada King')));
     }
 
     #[Test]

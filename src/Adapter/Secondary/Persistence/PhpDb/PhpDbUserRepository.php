@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Secondary\Persistence\PhpDb;
 
+use Clavia\Domain\Identity\Profile;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
@@ -20,7 +21,8 @@ use Clavia\Domain\Identity\UserRepository;
  */
 final readonly class PhpDbUserRepository implements UserRepository
 {
-    private const string COLUMNS = 'id, email, password_hash, email_verified, is_active, created_at, updated_at';
+    private const string COLUMNS = 'id, email, password_hash, email_verified, is_active, name, given_name, '
+        . 'family_name, nickname, picture, locale, created_at, updated_at';
 
     public function __construct(private Database $database)
     {
@@ -53,12 +55,23 @@ final readonly class PhpDbUserRepository implements UserRepository
     {
         $this->database->execute(
             <<<'SQL'
-                INSERT INTO users (id, email, password_hash, email_verified, is_active, created_at, updated_at)
-                VALUES (:id, :email, :password_hash, :email_verified, :is_active, :created_at, :updated_at)
+                INSERT INTO users (
+                    id, email, password_hash, email_verified, is_active, name, given_name, family_name,
+                    nickname, picture, locale, created_at, updated_at
+                ) VALUES (
+                    :id, :email, :password_hash, :email_verified, :is_active, :name, :given_name, :family_name,
+                    :nickname, :picture, :locale, :created_at, :updated_at
+                )
                 ON CONFLICT (id) DO UPDATE SET
                     password_hash = EXCLUDED.password_hash,
                     email_verified = EXCLUDED.email_verified,
                     is_active = EXCLUDED.is_active,
+                    name = EXCLUDED.name,
+                    given_name = EXCLUDED.given_name,
+                    family_name = EXCLUDED.family_name,
+                    nickname = EXCLUDED.nickname,
+                    picture = EXCLUDED.picture,
+                    locale = EXCLUDED.locale,
                     updated_at = EXCLUDED.updated_at
                 SQL,
             [
@@ -67,6 +80,12 @@ final readonly class PhpDbUserRepository implements UserRepository
                 'password_hash' => $user->passwordHash(),
                 'email_verified' => $user->isEmailVerified(),
                 'is_active' => $user->isActive(),
+                'name' => $user->profile()->name,
+                'given_name' => $user->profile()->givenName,
+                'family_name' => $user->profile()->familyName,
+                'nickname' => $user->profile()->nickname,
+                'picture' => $user->profile()->picture?->value,
+                'locale' => $user->profile()->locale,
                 'created_at' => Timestamp::toDatabase($user->createdAt),
                 'updated_at' => Timestamp::toDatabase($user->updatedAt()),
             ],
@@ -80,7 +99,9 @@ final readonly class PhpDbUserRepository implements UserRepository
     {
         /**
          * @var array{id: string, email: string, password_hash: string|null, email_verified: bool,
-         *            is_active: bool, created_at: string, updated_at: string} $row
+         *            is_active: bool, name: string|null, given_name: string|null, family_name: string|null,
+         *            nickname: string|null, picture: string|null, locale: string|null, created_at: string,
+         *            updated_at: string} $row
          */
         return User::reconstitute(
             UserId::fromString($row['id']),
@@ -88,6 +109,14 @@ final readonly class PhpDbUserRepository implements UserRepository
             $row['password_hash'],
             $row['email_verified'],
             $row['is_active'],
+            Profile::of(
+                $row['name'],
+                $row['given_name'],
+                $row['family_name'],
+                $row['nickname'],
+                $row['picture'],
+                $row['locale'],
+            ),
             Timestamp::fromDatabase($row['created_at']),
             Timestamp::fromDatabase($row['updated_at']),
         );

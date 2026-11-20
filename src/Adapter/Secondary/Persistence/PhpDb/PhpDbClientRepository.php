@@ -62,7 +62,7 @@ final readonly class PhpDbClientRepository implements ClientRepository
         // answer cannot differ from what Client::redirectOrigins() says for one client.
         foreach ($this->database->fetchAll('SELECT redirect_uris::text AS redirect_uris FROM oauth2_clients') as $row) {
             /** @var array{redirect_uris: string} $row */
-            foreach ($this->decode($row['redirect_uris']) as $uri) {
+            foreach (Jsonb::decodeStrings($row['redirect_uris']) as $uri) {
                 if (Url::fromString($uri)->origin() === $origin) {
                     return true;
                 }
@@ -97,13 +97,13 @@ final readonly class PhpDbClientRepository implements ClientRepository
                 'client_secret_hash' => $client->secretHash(),
                 'name' => $client->name,
                 'client_type' => $client->type->value,
-                'redirect_uris' => $this->encode(
+                'redirect_uris' => Jsonb::encode(
                     array_map(static fn (Url $uri): string => $uri->value, $client->redirectUris),
                 ),
-                'grant_types' => $this->encode(
+                'grant_types' => Jsonb::encode(
                     array_map(static fn (GrantType $grant): string => $grant->value, $client->grantTypes),
                 ),
-                'response_types' => $this->encode(
+                'response_types' => Jsonb::encode(
                     array_map(static fn (ResponseType $r): string => $r->value, $client->responseTypes),
                 ),
                 'auth_method' => $client->authMethod->value,
@@ -128,27 +128,10 @@ final readonly class PhpDbClientRepository implements ClientRepository
             ClientType::from($row['client_type']),
             ClientAuthMethod::from($row['token_endpoint_auth_method']),
             $row['client_secret_hash'],
-            array_map(Url::fromString(...), $this->decode($row['redirect_uris'])),
-            array_map(GrantType::from(...), $this->decode($row['grant_types'])),
-            array_map(ResponseType::from(...), $this->decode($row['response_types'])),
+            array_map(Url::fromString(...), Jsonb::decodeStrings($row['redirect_uris'])),
+            array_map(GrantType::from(...), Jsonb::decodeStrings($row['grant_types'])),
+            array_map(ResponseType::from(...), Jsonb::decodeStrings($row['response_types'])),
             Timestamp::fromDatabase($row['created_at']),
         );
-    }
-
-    /**
-     * @param list<string> $values
-     */
-    private function encode(array $values): string
-    {
-        return json_encode($values, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function decode(string $json): array
-    {
-        /** @var list<string> */
-        return json_decode($json, true, flags: JSON_THROW_ON_ERROR);
     }
 }

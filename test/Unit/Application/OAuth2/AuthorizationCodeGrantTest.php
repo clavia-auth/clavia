@@ -14,6 +14,10 @@ namespace ClaviaTest\Unit\Application\OAuth2;
 use Clavia\Application\OAuth2\RequestParameters;
 use Clavia\Application\OAuth2\Token\AuthorizationCodeGrant;
 use Clavia\Application\OAuth2\Token\IssuedToken;
+use Clavia\Application\Port\NoActiveSigningKey;
+use Clavia\Application\Oidc\CompactJws;
+use Clavia\Application\Oidc\IdTokenIssuer;
+use Clavia\Domain\Authentication\AuthenticationContext;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\GrantType;
@@ -25,6 +29,8 @@ use Clavia\Domain\OAuth2\CodeChallenge;
 use Clavia\Domain\OAuth2\CodeVerifier;
 use Clavia\Domain\OAuth2\ErrorCode;
 use Clavia\Domain\OAuth2\OAuth2Error;
+use Clavia\Domain\Oidc\SigningAlgorithm;
+use Clavia\Domain\Shared\Base64Url;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\ScopeSet;
 use Clavia\Domain\Shared\SecretGenerator;
@@ -32,6 +38,7 @@ use ClaviaTest\Support\Clients;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryAccessTokenRepository;
 use ClaviaTest\Support\Fake\InMemoryAuthorizationCodeRepository;
+use ClaviaTest\Support\Fake\InMemorySigningKeys;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
 use ClaviaTest\Support\Fake\SeededRandomSource;
@@ -48,6 +55,7 @@ final class AuthorizationCodeGrantTest extends TestCase
     private InMemoryAuthorizationCodeRepository $codes;
     private InMemoryAccessTokenRepository $tokens;
     private InMemoryUserRepository $users;
+    private InMemorySigningKeys $keys;
     private AuthorizationCodeGrant $grant;
     private Client $client;
     private User $user;
@@ -61,6 +69,8 @@ final class AuthorizationCodeGrantTest extends TestCase
         $this->codes = new InMemoryAuthorizationCodeRepository($transactions);
         $this->tokens = new InMemoryAccessTokenRepository();
         $this->users = new InMemoryUserRepository();
+        $this->keys = new InMemorySigningKeys($this->clock);
+        $this->keys->create(SigningAlgorithm::RS256, $this->clock->now());
         $this->grant = new AuthorizationCodeGrant(
             $this->codes,
             $this->tokens,
@@ -69,6 +79,7 @@ final class AuthorizationCodeGrantTest extends TestCase
             new SecretGenerator($random),
             $random,
             $this->clock,
+            new IdTokenIssuer($this->keys, new CompactJws($this->keys), 'https://auth.clavia.test', 300),
             3600,
         );
 
@@ -88,6 +99,8 @@ final class AuthorizationCodeGrantTest extends TestCase
             Clients::REDIRECT_URI,
             ScopeSet::fromString('openid profile'),
             CodeChallenge::forVerifier(CodeVerifier::fromString(self::VERIFIER)),
+            null,
+            AuthenticationContext::unknown(),
             $this->clock->now(),
             60,
         ));
@@ -250,6 +263,50 @@ final class AuthorizationCodeGrantTest extends TestCase
         self::assertSame([], $this->tokens->all());
     }
 
+    public function testAnOpenIdConnectCodeAlsoYieldsAnIdTokenBoundToTheAccessToken(): void
+    {
+        $issued = $this->exchange();
+
+        self::assertNotNull($issued->idToken);
+        /** @var array{at_hash: string, sub: string, aud: string} $claims */
+        $claims = json_decode(Base64Url::decode(explode('.', $issued->idToken)[1]), true);
+        self::assertSame(SigningAlgorithm::RS256->halfHash($issued->accessToken), $claims['at_hash']);
+        self::assertSame($this->user->id->value, $claims['sub']);
+        self::assertSame('spa', $claims['aud']);
+    }
+
+    public function testACodeWithoutOpenidYieldsNoIdToken(): void
+    {
+        $this->codes->add(AuthorizationCode::issue(
+            AuthorizationCodeId::generate(new SeededRandomSource(5)),
+            Digest::of('a-plain-oauth-code'),
+            $this->client->id,
+            $this->user->id,
+            Clients::REDIRECT_URI,
+            ScopeSet::fromString('profile'),
+            CodeChallenge::forVerifier(CodeVerifier::fromString(self::VERIFIER)),
+            null,
+            AuthenticationContext::unknown(),
+            $this->clock->now(),
+            60,
+        ));
+
+        self::assertNull($this->exchange(['code' => 'a-plain-oauth-code'])->idToken);
+    }
+
+    public function testAnIdTokenThatCannotBeSignedMeansNoTokenAtAll(): void
+    {
+        $active = $this->keys->lockActive();
+        self::assertNotNull($active);
+        $active->retire($this->clock->now(), 60);
+        $this->keys->save($active);
+
+        // Rolling the transaction back is the database's job; OidcTest shows that it happens.
+        $this->expectException(NoActiveSigningKey::class);
+
+        $this->exchange();
+    }
+
     public function testTwoCodesYieldTwoDifferentTokens(): void
     {
         $this->codes->add(AuthorizationCode::issue(
@@ -260,6 +317,8 @@ final class AuthorizationCodeGrantTest extends TestCase
             Clients::REDIRECT_URI,
             ScopeSet::empty(),
             CodeChallenge::forVerifier(CodeVerifier::fromString(self::VERIFIER)),
+            null,
+            AuthenticationContext::unknown(),
             $this->clock->now(),
             60,
         ));

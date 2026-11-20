@@ -19,9 +19,14 @@ use Clavia\Application\OAuth2\Authorize\CodeIssued;
 use Clavia\Application\OAuth2\Authorize\LoginRequired;
 use Clavia\Application\OAuth2\Authorize\RequestRefused;
 use Clavia\Application\OAuth2\RequestParameters;
+use Clavia\Application\Port\NonceRegistry;
+use Clavia\Domain\Authentication\AuthenticationMethod;
+use Clavia\Domain\Authentication\Session;
+use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\OAuth2\ErrorCode;
 use Clavia\Domain\OAuth2\OAuth2Error;
+use Clavia\Domain\Oidc\Nonce;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\ScopeSet;
 use Clavia\Domain\Shared\SecretGenerator;
@@ -30,6 +35,7 @@ use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryAuthorizationCodeRepository;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
 use ClaviaTest\Support\Fake\InMemoryLoginStateStore;
+use ClaviaTest\Support\Fake\InMemoryNonceRegistry;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -43,6 +49,7 @@ final class AuthorizeTest extends TestCase
     private InMemoryClientRepository $clients;
     private InMemoryAuthorizationCodeRepository $codes;
     private InMemoryLoginStateStore $loginStates;
+    private InMemoryNonceRegistry $nonces;
     private Authorize $authorize;
     private UserId $userId;
 
@@ -54,16 +61,19 @@ final class AuthorizeTest extends TestCase
         $this->clients = new InMemoryClientRepository();
         $this->codes = new InMemoryAuthorizationCodeRepository();
         $this->loginStates = new InMemoryLoginStateStore($clock);
+        $this->nonces = new InMemoryNonceRegistry($clock);
         $this->userId = UserId::generate(new SeededRandomSource(2));
         $this->authorize = new Authorize(
             $this->clients,
             $this->codes,
             $this->loginStates,
+            $this->nonces,
             new SecretGenerator($random),
             $random,
             $clock,
             ScopeSet::fromString('openid profile email'),
             60,
+            360,
         );
 
         $this->clients->save(Clients::public('spa'));
@@ -276,6 +286,130 @@ final class AuthorizeTest extends TestCase
 
         self::assertInstanceOf(RequestRefused::class, $outcome);
         self::assertNull($outcome->state);
+    }
+
+    // ── OpenID Connect: nonce and authentication ────────────────────────────────
+
+    public function testTheCodeRemembersTheNonceAndHowThePersonAuthenticated(): void
+    {
+        $session = Session::establish(
+            $this->userId,
+            [AuthenticationMethod::Password],
+            'the-sid',
+            new DateTimeImmutable('2026-01-15T09:00:00Z'),
+            86_400,
+        );
+
+        $outcome = ($this->authorize)(new AuthorizationRequest(
+            $this->valid(['nonce' => 'n-0S6_WzA2Mj']),
+            self::TARGET,
+            new EndUser($this->userId, $session),
+        ));
+
+        self::assertInstanceOf(CodeIssued::class, $outcome);
+        $stored = $this->codes->all()[0];
+        self::assertSame('n-0S6_WzA2Mj', $stored->nonce?->value);
+        self::assertEquals(new DateTimeImmutable('2026-01-15T09:00:00Z'), $stored->authentication->authenticatedAt);
+        self::assertSame(['pwd'], $stored->authentication->methodValues());
+    }
+
+    public function testWithoutASessionTheAuthenticationIsUnknown(): void
+    {
+        $this->authorizeAsUser($this->valid());
+
+        $stored = $this->codes->all()[0];
+        self::assertNull($stored->nonce);
+        self::assertNull($stored->authentication->authenticatedAt);
+        self::assertSame([], $stored->authentication->methods);
+    }
+
+    public function testANonceIsSpentWithTheCodeItCameWith(): void
+    {
+        $this->authorizeAsUser($this->valid(['nonce' => 'once']));
+
+        self::assertTrue($this->nonces->isUsed(ClientId::fromString('spa'), Nonce::fromString('once')));
+    }
+
+    public function testAReplayedNonceIsReportedToTheClientAndMintsNothing(): void
+    {
+        $this->authorizeAsUser($this->valid(['nonce' => 'once']));
+
+        $outcome = $this->authorizeAsUser($this->valid(['nonce' => 'once']));
+
+        self::assertInstanceOf(RequestRefused::class, $outcome);
+        self::assertSame(ErrorCode::InvalidRequest, $outcome->error->error);
+        self::assertSame('xyz', $outcome->state);
+        self::assertCount(1, $this->codes->all());
+    }
+
+    public function testANonceSpentInTheMeantimeStillMintsNothing(): void
+    {
+        // Validation saw it unused; a concurrent request spent it before this one got a code.
+        $raced = new class implements NonceRegistry {
+            #[\Override]
+            public function isUsed(ClientId $client, Nonce $nonce): bool
+            {
+                return false;
+            }
+
+            #[\Override]
+            public function claim(ClientId $client, Nonce $nonce, int $ttlSeconds): bool
+            {
+                return false;
+            }
+        };
+        $random = new SeededRandomSource(9);
+        $authorize = new Authorize(
+            $this->clients,
+            $this->codes,
+            $this->loginStates,
+            $raced,
+            new SecretGenerator($random),
+            $random,
+            new FrozenClock(),
+            ScopeSet::fromString('openid'),
+            60,
+            360,
+        );
+
+        $outcome = $authorize(new AuthorizationRequest(
+            $this->valid(['nonce' => 'once']),
+            self::TARGET,
+            new EndUser($this->userId),
+        ));
+
+        self::assertInstanceOf(RequestRefused::class, $outcome);
+        self::assertSame("The 'nonce' has already been used.", $outcome->error->description);
+        self::assertSame([], $this->codes->all());
+    }
+
+    public function testAReplayedNonceIsRefusedBeforeAnyoneIsAskedToSignIn(): void
+    {
+        $this->authorizeAsUser($this->valid(['nonce' => 'once']));
+
+        $outcome = ($this->authorize)(new AuthorizationRequest($this->valid(['nonce' => 'once']), self::TARGET, null));
+
+        self::assertInstanceOf(RequestRefused::class, $outcome);
+        self::assertSame(0, $this->loginStates->count());
+    }
+
+    public function testANonceOnlyMattersInAnOpenIdConnectRequest(): void
+    {
+        $first = $this->authorizeAsUser($this->valid(['scope' => 'profile', 'nonce' => 'once']));
+        $second = $this->authorizeAsUser($this->valid(['scope' => 'profile', 'nonce' => 'once']));
+
+        self::assertInstanceOf(CodeIssued::class, $first);
+        self::assertInstanceOf(CodeIssued::class, $second);
+        self::assertNull($this->codes->all()[0]->nonce);
+    }
+
+    public function testAMalformedNonceIsReportedToTheClient(): void
+    {
+        $outcome = $this->authorizeAsUser($this->valid(['nonce' => "two\nlines"]));
+
+        self::assertInstanceOf(RequestRefused::class, $outcome);
+        self::assertSame(ErrorCode::InvalidRequest, $outcome->error->error);
+        self::assertSame("Invalid 'nonce'.", $outcome->error->description);
     }
 
     // ── Nobody is signed in ─────────────────────────────────────────────────────

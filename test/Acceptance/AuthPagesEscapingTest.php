@@ -11,10 +11,10 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Acceptance;
 
-use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
 use Clavia\Adapter\Primary\Http\Auth\AuthPageResponder;
 use Clavia\Adapter\Primary\Http\Auth\LoginPages;
 use Clavia\Adapter\Primary\Http\Shared\ErrorPage;
+use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
 use ClaviaTest\Support\AcceptanceTestCase;
 use Laminas\Diactoros\ServerRequest;
 use PHPUnit\Framework\Attributes\DataProvider;

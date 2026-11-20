@@ -15,6 +15,9 @@ use Clavia\Adapter\Primary\Http\Auth\LogoutHandler;
 use Clavia\Adapter\Primary\Http\Auth\ThemeHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\TokenHandler;
+use Clavia\Adapter\Primary\Http\Oidc\DiscoveryHandler;
+use Clavia\Adapter\Primary\Http\Oidc\JwksHandler;
+use Clavia\Adapter\Primary\Http\Oidc\UserInfoHandler;
 use Clavia\Adapter\Primary\Http\Shared\HealthHandler;
 use Mezzio\Application;
 
@@ -28,6 +31,16 @@ return static function (Application $app): void {
     // ── /oauth2/* — the authorization server. Callers authenticate as clients. ──
     $app->route('/oauth2/authorize', AuthorizeHandler::class, ['GET', 'POST'], 'oauth2.authorize');
     $app->post('/oauth2/token', TokenHandler::class, 'oauth2.token');
+
+    // ── /.well-known/* — the provider's metadata, public and cacheable. One document at
+    // both locations: OpenID relying parties and RFC 8414 clients look in different places. ──
+    $app->get('/.well-known/openid-configuration', DiscoveryHandler::class, 'oidc.discovery');
+    $app->get('/.well-known/oauth-authorization-server', DiscoveryHandler::class, 'oauth2.metadata');
+
+    // ── /oidc/* — OpenID Connect. The JWKS is public; userinfo takes a bearer access
+    // token, on GET and POST (OIDC Core §5.3.1). ──
+    $app->get('/oidc/jwks.json', JwksHandler::class, 'oidc.jwks');
+    $app->route('/oidc/userinfo', UserInfoHandler::class, ['GET', 'POST'], 'oidc.userinfo');
 
     // ── /auth/* — the interactive sign-in. The browser authenticates with its session
     // cookie; every state change is a POST, and logout has no GET on purpose. ──

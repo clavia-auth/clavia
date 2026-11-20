@@ -88,6 +88,11 @@ final class SeedDevelopmentDataCommand extends Command
                 ? "Created public client {$seeded->clientId->value}"
                 : "Client {$seeded->clientId->value} already exists",
         );
+        $output->writeln(
+            $seeded->signingKeyCreated
+                ? "Created signing key {$seeded->signingKeyId}"
+                : "Signing key {$seeded->signingKeyId} is already active",
+        );
         $output->writeln('');
         $output->writeln("Seeded. Sign in at {$this->issuer}/auth/login as {$email} / {$password}");
         $output->writeln('Run `clavia authorize-url` to get a link that exercises the whole flow.');

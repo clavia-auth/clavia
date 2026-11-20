@@ -17,11 +17,13 @@ use Clavia\Application\Development\BuildAuthorizationUrl;
 use Clavia\Application\Development\SeedDevelopmentData;
 use Clavia\Domain\OAuth2\CodeChallenge;
 use Clavia\Domain\OAuth2\CodeVerifier;
+use Clavia\Domain\Oidc\SigningAlgorithm;
 use Clavia\Domain\Shared\ScopeSet;
 use Clavia\Domain\Shared\SecretGenerator;
 use ClaviaTest\Support\Fake\FakePasswordHasher;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
+use ClaviaTest\Support\Fake\InMemorySigningKeys;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
 use ClaviaTest\Support\Fake\SeededRandomSource;
@@ -36,10 +38,12 @@ final class DevelopmentCommandsTest extends TestCase
     private InMemoryUserRepository $users;
     private InMemoryClientRepository $clients;
     private FakePasswordHasher $hasher;
+    private InMemorySigningKeys $signingKeys;
 
     #[\Override]
     protected function setUp(): void
     {
+        $this->signingKeys = new InMemorySigningKeys(new FrozenClock());
         $this->users = new InMemoryUserRepository();
         $this->clients = new InMemoryClientRepository();
         $this->hasher = new FakePasswordHasher();
@@ -60,6 +64,7 @@ final class DevelopmentCommandsTest extends TestCase
         self::assertSame(
             "Created user dev@clavia.test\n"
             . "Created public client {$client->id->value}\n"
+            . "Created signing key {$this->signingKeys->activeKey()->kid}\n"
             . "\n"
             . "Seeded. Sign in at https://auth.clavia.test/auth/login as dev@clavia.test / devpassword\n"
             . "Run `clavia authorize-url` to get a link that exercises the whole flow.\n",
@@ -93,6 +98,10 @@ final class DevelopmentCommandsTest extends TestCase
         self::assertSame(Command::SUCCESS, $tester->execute([]));
         self::assertStringContainsString('User dev@clavia.test already exists', $tester->getDisplay(true));
         self::assertMatchesRegularExpression('/Client [A-Za-z0-9]{32} already exists/', $tester->getDisplay(true));
+        self::assertMatchesRegularExpression(
+            '/Signing key [A-Za-z0-9_-]{43} is already active/',
+            $tester->getDisplay(true),
+        );
     }
 
     public function testSeedRefusesOutsideDevelopmentAndCreatesNothing(): void
@@ -200,6 +209,8 @@ final class DevelopmentCommandsTest extends TestCase
                 $this->clients,
                 $this->hasher,
                 new InMemoryTransactionManager(),
+                $this->signingKeys,
+                SigningAlgorithm::RS256,
                 new SecretGenerator($random),
                 $random,
                 new FrozenClock(),

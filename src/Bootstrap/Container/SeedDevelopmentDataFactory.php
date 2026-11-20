@@ -13,10 +13,12 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Development\SeedDevelopmentData;
 use Clavia\Application\Port\PasswordHasher;
+use Clavia\Application\Port\SigningKeyStore;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Identity\UserRepository;
+use Clavia\Domain\Oidc\SigningAlgorithm;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\RandomSource;
 use Clavia\Domain\Shared\SecretGenerator;
@@ -34,6 +36,10 @@ final class SeedDevelopmentDataFactory
         $hasher = $container->get(PasswordHasher::class);
         /** @var TransactionManager $transactions */
         $transactions = $container->get(TransactionManager::class);
+        /** @var SigningKeyStore $signingKeys */
+        $signingKeys = $container->get(SigningKeyStore::class);
+        /** @var SigningAlgorithm $algorithm */
+        $algorithm = $container->get(SigningAlgorithm::class);
         /** @var SecretGenerator $secrets */
         $secrets = $container->get(SecretGenerator::class);
         /** @var RandomSource $random */
@@ -48,6 +54,8 @@ final class SeedDevelopmentDataFactory
             $clients,
             $hasher,
             $transactions,
+            $signingKeys,
+            $algorithm,
             $secrets,
             $random,
             $clock,

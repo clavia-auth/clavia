@@ -12,10 +12,12 @@ declare(strict_types=1);
 namespace Clavia\Application\OAuth2\Token;
 
 use Clavia\Application\OAuth2\RequestParameters;
+use Clavia\Application\Oidc\IdTokenIssuer;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\GrantType;
+use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AccessToken;
 use Clavia\Domain\OAuth2\AccessTokenId;
@@ -25,6 +27,7 @@ use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
 use Clavia\Domain\OAuth2\CodeVerifier;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use Clavia\Domain\OAuth2\Redemption;
+use Clavia\Domain\Oidc\OidcScope;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\InvalidValue;
@@ -45,6 +48,10 @@ use Clavia\Domain\Shared\SecretGenerator;
  *   when they are wrong: a failed attempt burns the code rather than leaving it for
  *   another guess. That is why refusals travel out of the transaction as values and are
  *   only thrown once it has committed.
+ * - What cannot be issued is not issued at all. A server fault — no key to sign the ID
+ *   token of an OpenID Connect request — throws inside the transaction and rolls all of
+ *   it back: no access token goes out without its ID token, and the code stays unspent
+ *   for a retry once the fault is fixed.
  */
 final readonly class AuthorizationCodeGrant implements Grant
 {
@@ -59,6 +66,7 @@ final readonly class AuthorizationCodeGrant implements Grant
         private SecretGenerator $secrets,
         private RandomSource $random,
         private Clock $clock,
+        private IdTokenIssuer $idTokens,
         private int $accessTokenLifetimeSeconds,
     ) {
     }
@@ -120,7 +128,19 @@ final readonly class AuthorizationCodeGrant implements Grant
 
         $this->codes->save($code);
 
-        return $this->refusal($code, $parameters) ?? $this->mint($code);
+        $refusal = $this->refusal($code, $parameters);
+        if ($refusal !== null) {
+            return $refusal;
+        }
+
+        // Re-checked now rather than trusted from when the code was issued: an account
+        // deactivated in between must not yield a token.
+        $user = $this->users->find($code->userId);
+        if ($user === null || ! $user->isActive()) {
+            return OAuth2Error::invalidGrant("There is no active user for this 'code'.");
+        }
+
+        return $this->mint($code, $user);
     }
 
     /**
@@ -148,17 +168,16 @@ final readonly class AuthorizationCodeGrant implements Grant
             return OAuth2Error::invalidGrant('Code challenge failed.');
         }
 
-        // Re-checked now rather than trusted from when the code was issued: an account
-        // deactivated in between must not yield a token.
-        $user = $this->users->find($code->userId);
-        if ($user === null || ! $user->isActive()) {
-            return OAuth2Error::invalidGrant("There is no active user for this 'code'.");
-        }
-
         return null;
     }
 
-    private function mint(AuthorizationCode $code): IssuedToken
+    /**
+     * The access token, and — for an OpenID Connect request — the ID token beside it
+     * (OIDC Core §3.1.3.3). Both are written in the redemption's transaction: if the ID
+     * token cannot be signed, no access token survives without it, and the code is not
+     * spent.
+     */
+    private function mint(AuthorizationCode $code, User $user): IssuedToken
     {
         $now = $this->clock->now();
         $value = $this->secrets->token();
@@ -173,6 +192,10 @@ final readonly class AuthorizationCodeGrant implements Grant
         );
         $this->tokens->add($token);
 
-        return new IssuedToken($value, AccessToken::TOKEN_TYPE, $token->lifetimeFrom($now), $token->scope);
+        $idToken = $code->scope->contains(OidcScope::OPENID)
+            ? $this->idTokens->issue($code, $user, $value, $now)
+            : null;
+
+        return new IssuedToken($value, AccessToken::TOKEN_TYPE, $token->lifetimeFrom($now), $token->scope, $idToken);
     }
 }

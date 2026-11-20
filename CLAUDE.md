@@ -29,11 +29,13 @@ and multi-tenancy.
 
 ## Current state
 
-**Steps 0 to 3 are done: the foundations, Authorization Code + PKCE ending in an opaque access
-token, and the login page with browser sessions.** The application answers `GET /healthz`,
-`GET|POST /oauth2/authorize`, `POST /oauth2/token`, `GET|POST /auth/login`, `POST /auth/logout`
-and `POST /auth/theme`: a person can sign in with a password and complete the flow in a
-browser. Update this section at the end of every step (what exists, where it lives, which
+**Steps 0 to 4 are done: the foundations, Authorization Code + PKCE, the login page with
+browser sessions, and OpenID Connect (ID tokens, discovery, JWKS, userinfo).** The application
+answers `GET /healthz`, `GET|POST /oauth2/authorize`, `POST /oauth2/token`,
+`GET /.well-known/openid-configuration`, `GET /.well-known/oauth-authorization-server`,
+`GET /oidc/jwks.json`, `GET|POST /oidc/userinfo`, `GET|POST /auth/login`, `POST /auth/logout`
+and `POST /auth/theme`: a person can sign in with a password, complete the flow in a browser,
+and the client gets an RS256 ID token it can verify against the published JWKS. Update this section at the end of every step (what exists, where it lives, which
 conventions it established).
 
 What exists:
@@ -65,13 +67,15 @@ What exists:
   `PhpDbTransactionManager`; `Persistence\Migrations\SqlFileMigrator`; `Redis\RedisConnection`
   and `Redis\Keys`.
 - **Console**: `clavia db:migrate`, `clavia db:status`, `clavia secrets:generate-key`,
-  `clavia seed-dev`, `clavia authorize-url`.
+  `clavia seed-dev`, `clavia authorize-url`, `clavia keys:generate|rotate|list`.
 - **Test kit** (`test/Support`): `Fake\*` (one in-memory double per port), `Contract\*`
   (traits run against both the double and the real adapter), `TestEnvironment`, `TestStorage`,
   `IntegrationTestCase`, `AcceptanceTestCase` (`get`/`post`/`locationQuery`, a cookie jar,
-  `freezeClock()`), `OAuth2Fixtures`, `LoginFixtures` (`submitLogin`, login-state handles)
-  (users, clients, PKCE pairs and whole flows for acceptance tests), `Clients` (ready-made
-  registrations for unit tests).
+  `freezeClock()`, an active signing key installed before every test), `OAuth2Fixtures`
+  (users, clients, PKCE pairs and whole flows), `LoginFixtures` (`submitLogin`, login-state
+  handles), `OidcFixtures` (`completeFlow`, `verifiedIdToken` — checked against the JWKS
+  fetched over HTTP), `TestSigningKeys` (RSA keys generated once per run), `Clients`
+  (ready-made registrations for unit tests).
 - **Authorization Code + PKCE** (Step 2):
   - `Domain\Identity` — `User`, `UserId`, `UserRepository`. `Domain\Client` — `Client`
     (`client_id` is the key; type, auth method and secret must agree), `ClientId`, the
@@ -109,6 +113,30 @@ What exists:
   - `templates/` — `layout/page.phtml`, `auth/login.phtml`, `error/page.phtml`,
     `partial/{alert,csrf,field}.phtml`, rendered by laminas-view through
     `mezzio/mezzio-laminasviewrenderer`.
+- **OpenID Connect** (Step 4):
+  - `Domain\Oidc` — `SigningKey` (active → retired, published until its grace ends),
+    `SigningKeyStatus`, `SigningAlgorithm` (RS256; its hash and `halfHash()` for `at_hash`),
+    `PublicJwk` (public members only, `kid` = RFC 7638 thumbprint), `Nonce`, `OidcScope`,
+    `IdentityClaims` (what a scope releases — shared by the ID token and userinfo),
+    `IdTokenClaims`. `Domain\Identity\Profile` (the `profile` claims) on `User`;
+    `Domain\Authentication\AuthenticationContext` (`auth_time`, `amr`) captured on the
+    `AuthorizationCode` with its `nonce`. `Domain\OAuth2\BearerTokenError` +
+    `BearerErrorCode` (RFC 6750 §3.1). `Domain\Shared\Base64Url`.
+  - `Application\Oidc` — `CompactJws` (the JWS assembled by hand), `IdTokenIssuer`,
+    `Discovery\ProviderMetadata`, `Keys\{GenerateSigningKey,RotateSigningKey,ListSigningKeys,PublishSigningKeys}`,
+    `UserInfo\ReadUserInfo`. Ports `TokenSigner` (+ `SigningKeyReference`,
+    `NoActiveSigningKey`, `SigningFailed`), `SigningKeyStore`, `NonceRegistry`.
+    `AuthorizationCodeGrant` mints the ID token in the redemption's transaction;
+    `Authorize` checks the nonce before login and spends it with the code;
+    `IssueToken::supportedGrantTypes()|supportedAuthMethods()` feed discovery.
+  - `Adapter\Secondary\Signing\Postgres\{PostgresTokenSigner,PostgresSigningKeyStore,SigningKeyRow}`;
+    `Redis\RedisNonceRegistry`; `Persistence\PhpDb\Jsonb`.
+  - `Adapter\Primary\Http\Oidc\{DiscoveryHandler,JwksHandler,UserInfoHandler}`,
+    `Http\Shared\{BearerCredentials,BearerChallenger}`; `Cli\{GenerateSigningKey,RotateSigningKey,ListSigningKeys}Command`.
+    `seed-dev` creates a signing key when none is active. `Bootstrap\SigningBackend` refuses
+    every backend but `postgres` by name.
+  - Migrations `0005_user_profiles`, `0006_authorization_code_authentication`,
+    `0007_oidc_signing_keys` (a partial unique index allows one active key).
 - **Error pages for browsers** (after Step 3): `Adapter\Primary\Http\Shared\ClientPreference`
   (`Accept` negotiation), `ErrorResponder` + `ErrorPage`, `PageRenderer` + `HtmlPage` (the
   layout, headers and CSP every server-rendered page shares). 404, 405, 500 and the
@@ -312,6 +340,38 @@ Conventions established in Step 3:
 - **An acceptance test that moves time calls `freezeClock()`** before its first request. The
   harness drops each test's container in `tearDown()`; PHPUnit keeps finished tests alive,
   and a container left on one holds a PostgreSQL connection.
+
+Conventions established in Step 4:
+
+- **Signing goes through `TokenSigner` and nothing else.** A caller asks for the active key's
+  reference (`kid`, `alg`), builds the header and claims, and has `CompactJws` sign the
+  signing input; no code outside a signing adapter ever sees a private key, and in the
+  `postgres` backend only `PostgresTokenSigner::sign()` opens one. A later token type (the
+  logout token of Step 17) is `CompactJws::sign()` with its own `typ`.
+- **The JWKS is rendered from stored public keys** (`PublicJwk`, which has no field a private
+  member could go in, and refuses a document carrying one). It is published with
+  `Cache-Control: public, max-age=PublishSigningKeys::CACHE_MAX_AGE`; discovery likewise with
+  `DiscoveryHandler::CACHE_MAX_AGE`. Both numbers are part of the rotation reasoning.
+- **Key lifecycle**: one active key (enforced by the database too), `keys:generate` only when
+  there is none, `keys:rotate` retires the active key with `RotateSigningKey::grace()` — twice
+  the longest token lifetime plus a day — and publishes both. Nothing ever creates a key on
+  first use; issuing without one is `NoActiveSigningKey`, a loud server error.
+- **What a scope releases is `IdentityClaims::of()`**, for the ID token and userinfo alike;
+  an unknown value is left out, never sent as null.
+- **An ID token reports only what this server witnessed.** `auth_time` and `amr` come from
+  the session that approved the code (`EndUser::authentication()`), captured on the code;
+  without a session (the development auto-login) both are omitted.
+- **A protected resource reads its token with `BearerCredentials`** (the `Authorization`
+  header only, one method per request) **and refuses with `BearerChallenger`** (no
+  credentials: a bare challenge; otherwise the RFC 6750 status, challenge and error document;
+  never cacheable). Use cases throw `BearerTokenError`. The Management API (Step 6) reuses both.
+- **Discovery names only what exists**, and states every field whose default differs from
+  the server. `ProviderMetadata` holds the endpoint paths; `OidcTest` fetches each one, and a
+  step that adds an endpoint or a grant adds it there (grants and client authentication
+  methods are read from `IssueToken`, so they cannot drift).
+- **An exchange that cannot be completed is not completed at all**: the ID token is signed
+  inside the redemption's transaction, so a signing failure rolls back the access token and
+  leaves the code unspent.
 
 **Known defect in the database library, worked around.** At the pinned commit,
 `php-db/phpdb-pgsql` runs `SELECT LASTVAL()` after every statement to fetch a "last generated
@@ -625,10 +685,12 @@ issuing a token goes through is **sign**, not **fetch the key**.
 ```php
 interface TokenSigner
 {
-    public function sign(string $kid, string $signingInput): string;   // raw signature bytes
+    public function activeKey(): SigningKeyReference;                        // kid + alg, for the header
 
-    /** @return array{keys: list<array<string, string>>} */
-    public function publicJwks(): array;
+    public function sign(SigningKeyReference $key, string $signingInput): string; // raw signature bytes
+
+    /** @return list<PublicJwk> */
+    public function publicKeys(): array;                                     // what the JWKS publishes
 }
 ```
 
@@ -645,7 +707,8 @@ Consequences worth knowing before touching the OIDC/signing code:
   `web-token/jwt-library` is for JWK handling and *verification* (tests, external ID tokens) only.
 - **There is no "load the private key" helper, ever, even temporarily.** Exactly one class reads
   a private key (or a reference to one): the signing adapter's own `sign`. For the postgres
-  backend that is the only code that ever decrypts one.
+  backend that is `PostgresTokenSigner::sign()`, the only code that ever decrypts one;
+  `PostgresSigningKeyStore` generates and seals keys and never reads them back.
 - **RS256 is spelled out as RSASSA-PKCS1-v1_5 over SHA-256** (`openssl_sign(…, OPENSSL_ALGO_SHA256)`)
   rather than delegated to a generic helper, because a remote backend has to name the same
   primitive precisely — AWS KMS's `RSASSA_PKCS1_V1_5_SHA_256`. Get it wrong and signatures verify
@@ -799,14 +862,23 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
   connection check (13), the user→sessions and session→clients indexes (17), the second
   factor between password and session (7).
 
-#### [ ] Step 4 — JWKS, ID token, discovery, userinfo
+#### [x] Step 4 — JWKS, ID token, discovery, userinfo
 - Domain: `IdTokenClaims` (incl. `at_hash`, `nonce`, `auth_time`, `amr`), shared
-  `identityClaims` for ID token and userinfo, `SigningKey` lifecycle (active/retired + grace).
-- Port: `TokenSigner` (`sign`, `publicJwks`). Adapter: postgres backend, compact JWS built by hand.
-- Primary adapters: both `/.well-known/*` documents, `/oidc/jwks.json`, `/oidc/userinfo`; nonce replay guard.
-- CLI: `keys:generate|rotate|list`.
+  `IdentityClaims` for ID token and userinfo, `SigningKey` lifecycle (active/retired + grace),
+  `PublicJwk` (RFC 7638 `kid`), `Nonce`, `Profile`, `AuthenticationContext`.
+- Ports: `TokenSigner` (`activeKey`, `sign`, `publicKeys`), `SigningKeyStore`, `NonceRegistry`.
+  Adapters: the postgres backend (RSA-2048, RS256, private key sealed with the `kid` as
+  associated data), Redis nonce registry; compact JWS built by hand (`CompactJws`).
+- Primary adapters: both `/.well-known/*` documents, `/oidc/jwks.json`, `/oidc/userinfo`
+  (GET and POST, RFC 6750 challenges); nonce replay guard at the authorization endpoint.
+- CLI: `keys:generate|rotate|list`; `seed-dev` creates a key when none is active.
 - Python: `oidc/{router,grant,claims,keys,nonce}.py`, `oidc/signing/{__init__,_core,postgres}.py`.
-- Tests: `test_oidc` (26), postgres part of `test_signing_backends`.
+- Tests: `test_oidc` (26) — ported as `OidcTest` (32 cases), the postgres part of
+  `test_signing_backends` as `PostgresSigningBackendTest` (with `SigningBackendContract`,
+  run against the in-memory double too), plus unit tests for every new class.
+- ID tokens are checked with `web-token/jwt-library` (a dev dependency, verification only)
+  against the JWKS as served. Left for the steps that own them: `sid` in the ID token (17),
+  `prompt`/`max_age` (18), remote signing backends (19).
 
 #### [ ] Step 5 — Client Credentials
 - Confidential only, no refresh token, refuses `openid`, subject-less tokens refused by userinfo.

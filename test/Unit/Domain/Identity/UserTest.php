@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Domain\Identity;
 
+use Clavia\Domain\Identity\Profile;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\InvalidValue;
@@ -77,7 +78,7 @@ final class UserTest extends TestCase
 
         $this->expectException(InvalidValue::class);
 
-        User::reconstitute($this->id(), 'not an address', null, false, true, $at, $at);
+        User::reconstitute($this->id(), 'not an address', null, false, true, Profile::empty(), $at, $at);
     }
 
     public function testDeactivatingAndReactivatingRecordsWhen(): void
@@ -103,6 +104,21 @@ final class UserTest extends TestCase
         $user->activate(new DateTimeImmutable('2026-02-01T00:00:00Z'));
 
         self::assertSame($created, $user->updatedAt());
+    }
+
+    public function testChangingTheProfileMovesUpdatedAtOnlyWhenSomethingChanged(): void
+    {
+        $user = User::register($this->id(), 'ada@example.com', null, new DateTimeImmutable('2026-01-01T00:00:00Z'));
+
+        $user->changeProfile(Profile::empty(), new DateTimeImmutable('2026-01-02T00:00:00Z'));
+        self::assertEquals(new DateTimeImmutable('2026-01-01T00:00:00Z'), $user->updatedAt());
+
+        $user->changeProfile(Profile::of(name: 'Ada'), new DateTimeImmutable('2026-01-03T00:00:00Z'));
+        self::assertSame('Ada', $user->profile()->name);
+        self::assertEquals(new DateTimeImmutable('2026-01-03T00:00:00Z'), $user->updatedAt());
+
+        $user->changeProfile(Profile::of(name: 'Ada'), new DateTimeImmutable('2026-01-04T00:00:00Z'));
+        self::assertEquals(new DateTimeImmutable('2026-01-03T00:00:00Z'), $user->updatedAt());
     }
 
     private function id(): UserId

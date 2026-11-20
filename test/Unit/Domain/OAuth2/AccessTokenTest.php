@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Domain\OAuth2;
 
+use Clavia\Domain\Authentication\AuthenticationContext;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\OAuth2\AccessToken;
@@ -101,6 +102,8 @@ final class AccessTokenTest extends TestCase
             'https://app.example/cb',
             ScopeSet::fromString('openid'),
             CodeChallenge::fromString(str_repeat('a', 43)),
+            null,
+            AuthenticationContext::unknown(),
             new DateTimeImmutable('2026-01-15T10:00:00Z'),
             60,
         );

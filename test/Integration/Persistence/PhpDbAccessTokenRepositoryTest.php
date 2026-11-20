@@ -15,6 +15,7 @@ use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbAccessTokenRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbAuthorizationCodeRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbUserRepository;
+use Clavia\Domain\Authentication\AuthenticationContext;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\ClientId;
@@ -78,6 +79,8 @@ final class PhpDbAccessTokenRepositoryTest extends IntegrationTestCase
             'https://app.example/cb',
             ScopeSet::fromString('openid'),
             CodeChallenge::fromString(str_repeat('a', 43)),
+            null,
+            AuthenticationContext::unknown(),
             $at,
             60,
         );

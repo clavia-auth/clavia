@@ -6,10 +6,12 @@ Auth0: OAuth2 flows, interactive login with MFA, and a Management API.
 This is the PHP 8.5 implementation. It is being ported feature by feature from the Python
 reference implementation; `CLAUDE.md` holds the migration plan and the current state.
 
-**Status: Step 3 — login page and sessions.** A person signs in with a password at
-`/auth/login` and completes the Authorization Code + PKCE flow in a browser; `/oauth2/token`
-issues opaque access tokens to public and confidential clients. ID tokens and discovery come
-next.
+**Status: Step 4 — OpenID Connect.** A person signs in with a password at `/auth/login` and
+completes the Authorization Code + PKCE flow in a browser; `/oauth2/token` issues an opaque
+access token and, for an OpenID Connect request, an RS256 ID token. The provider metadata is
+published at `/.well-known/openid-configuration` (and `/.well-known/oauth-authorization-server`),
+the signing keys at `/oidc/jwks.json`, and `/oidc/userinfo` answers bearer tokens. Signing keys
+are managed with `clavia keys:generate|rotate|list`. Client Credentials comes next.
 
 ## Architecture
 

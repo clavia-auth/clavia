@@ -24,12 +24,15 @@ final readonly class IssuedToken
      * @param non-empty-string $tokenType
      * @param int              $expiresIn   Lifetime of the access token, in seconds.
      * @param ScopeSet         $scope       What was actually granted.
+     * @param string|null      $idToken     The ID token, when the grant was an OpenID Connect
+     *                                      request (OIDC Core §3.1.3.3).
      */
     public function __construct(
         #[\SensitiveParameter] public string $accessToken,
         public string $tokenType,
         public int $expiresIn,
         public ScopeSet $scope,
+        #[\SensitiveParameter] public ?string $idToken = null,
     ) {
     }
 }

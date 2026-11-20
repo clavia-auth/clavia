@@ -18,11 +18,16 @@ use Clavia\Domain\Client\ClientId;
  */
 final readonly class SeededDevelopmentData
 {
+    /**
+     * @param non-empty-string $signingKeyId The `kid` of the active signing key.
+     */
     public function __construct(
         public string $userEmail,
         public bool $userCreated,
         public ClientId $clientId,
         public bool $clientCreated,
+        public string $signingKeyId,
+        public bool $signingKeyCreated,
     ) {
     }
 }

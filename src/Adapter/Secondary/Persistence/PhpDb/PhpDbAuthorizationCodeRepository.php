@@ -11,12 +11,15 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Secondary\Persistence\PhpDb;
 
+use Clavia\Domain\Authentication\AuthenticationContext;
+use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\OAuth2\AuthorizationCode;
 use Clavia\Domain\OAuth2\AuthorizationCodeId;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
 use Clavia\Domain\OAuth2\CodeChallenge;
+use Clavia\Domain\Oidc\Nonce;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\ScopeSet;
 use LogicException;
@@ -37,10 +40,11 @@ final readonly class PhpDbAuthorizationCodeRepository implements AuthorizationCo
             <<<'SQL'
                 INSERT INTO oauth2_authorization_codes (
                     id, code_hash, client_id, user_id, redirect_uri, scope, code_challenge,
-                    code_challenge_method, expires_at, used_at, created_at
+                    code_challenge_method, nonce, auth_time, amr, expires_at, used_at, created_at
                 ) VALUES (
                     :id, :code_hash, :client_id, :user_id, :redirect_uri, :scope, :code_challenge,
-                    :code_challenge_method, :expires_at, :used_at, :created_at
+                    :code_challenge_method, :nonce, :auth_time, CAST(:amr AS jsonb), :expires_at, :used_at,
+                    :created_at
                 )
                 SQL,
             [
@@ -52,6 +56,9 @@ final readonly class PhpDbAuthorizationCodeRepository implements AuthorizationCo
                 'scope' => $code->scope->toString(),
                 'code_challenge' => $code->challenge->value,
                 'code_challenge_method' => CodeChallenge::METHOD,
+                'nonce' => $code->nonce?->value,
+                'auth_time' => Timestamp::toDatabaseOrNull($code->authentication->authenticatedAt),
+                'amr' => Jsonb::encode($code->authentication->methodValues()),
                 'expires_at' => Timestamp::toDatabase($code->expiresAt),
                 'used_at' => Timestamp::toDatabaseOrNull($code->usedAt()),
                 'created_at' => Timestamp::toDatabase($code->createdAt),
@@ -70,13 +77,13 @@ final readonly class PhpDbAuthorizationCodeRepository implements AuthorizationCo
 
         /**
          * @var array{id: string, code_hash: string, client_id: string, user_id: string, redirect_uri: string,
-         *            scope: string, code_challenge: string, expires_at: string, used_at: string|null,
-         *            created_at: string}|null $row
+         *            scope: string, code_challenge: string, nonce: string|null, auth_time: string|null,
+         *            amr: string, expires_at: string, used_at: string|null, created_at: string}|null $row
          */
         $row = $this->database->fetchOne(
             <<<'SQL'
                 SELECT id, code_hash, client_id, user_id, redirect_uri, scope, code_challenge,
-                       expires_at, used_at, created_at
+                       nonce, auth_time, amr, expires_at, used_at, created_at
                 FROM oauth2_authorization_codes
                 WHERE code_hash = :code_hash
                 FOR UPDATE
@@ -96,6 +103,11 @@ final readonly class PhpDbAuthorizationCodeRepository implements AuthorizationCo
             $row['redirect_uri'],
             ScopeSet::fromString($row['scope']),
             CodeChallenge::fromString($row['code_challenge']),
+            $row['nonce'] === null ? null : Nonce::fromString($row['nonce']),
+            AuthenticationContext::reconstitute(
+                Timestamp::fromDatabaseOrNull($row['auth_time']),
+                array_map(AuthenticationMethod::from(...), Jsonb::decodeStrings($row['amr'])),
+            ),
             Timestamp::fromDatabase($row['expires_at']),
             Timestamp::fromDatabaseOrNull($row['used_at']),
             Timestamp::fromDatabase($row['created_at']),

@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Application\OAuth2\Token;
 
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
+use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\OAuth2\OAuth2Error;
 
@@ -69,5 +70,32 @@ final readonly class IssueToken
         }
 
         return $grant->issue($parameters, $client);
+    }
+
+    /**
+     * The grant types this endpoint answers — what discovery advertises.
+     *
+     * @return list<GrantType>
+     */
+    public function supportedGrantTypes(): array
+    {
+        return array_map(static fn (Grant $grant): GrantType => $grant->type(), array_values($this->grants));
+    }
+
+    /**
+     * Every client authentication method some grant accepts — what discovery advertises.
+     *
+     * @return list<ClientAuthMethod>
+     */
+    public function supportedAuthMethods(): array
+    {
+        $methods = [];
+        foreach ($this->grants as $grant) {
+            foreach ($grant->acceptedAuthMethods() as $method) {
+                $methods[$method->value] = $method;
+            }
+        }
+
+        return array_values($methods);
     }
 }

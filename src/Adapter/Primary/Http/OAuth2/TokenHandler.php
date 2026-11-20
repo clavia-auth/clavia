@@ -55,6 +55,9 @@ final readonly class TokenHandler implements RequestHandlerInterface
         if (! $token->scope->isEmpty()) {
             $payload['scope'] = $token->scope->toString();
         }
+        if ($token->idToken !== null) {
+            $payload['id_token'] = $token->idToken;
+        }
 
         return $this->responder->success($payload);
     }

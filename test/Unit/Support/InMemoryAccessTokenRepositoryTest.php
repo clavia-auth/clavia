@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Support;
 
+use Clavia\Domain\Authentication\AuthenticationContext;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
@@ -54,6 +55,8 @@ final class InMemoryAccessTokenRepositoryTest extends TestCase
             'https://app.example/cb',
             ScopeSet::fromString('openid'),
             CodeChallenge::fromString(str_repeat('a', 43)),
+            null,
+            AuthenticationContext::unknown(),
             new DateTimeImmutable('2026-01-15T10:00:00Z'),
             60,
         );
