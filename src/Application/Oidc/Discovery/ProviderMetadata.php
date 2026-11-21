@@ -46,7 +46,7 @@ final readonly class ProviderMetadata
 
     /** The claims an ID token or the userinfo endpoint can carry. */
     private const array CLAIMS = [
-        'iss', 'sub', 'aud', 'exp', 'iat', 'auth_time', 'nonce', 'amr', 'at_hash',
+        'iss', 'sub', 'aud', 'exp', 'iat', 'auth_time', 'nonce', 'amr', 'at_hash', 'sid',
         'name', 'given_name', 'family_name', 'nickname', 'picture', 'locale', 'updated_at',
         'email', 'email_verified',
     ];
@@ -120,6 +120,9 @@ final readonly class ProviderMetadata
             'code_challenge_methods_supported' => [CodeChallenge::METHOD],
             // RFC 9207 §3: every authorization response names its issuer.
             'authorization_response_iss_parameter_supported' => true,
+            // Back-Channel Logout 1.0 §2.1: logout tokens are sent, and always name the session.
+            'backchannel_logout_supported' => true,
+            'backchannel_logout_session_supported' => true,
         ];
     }
 

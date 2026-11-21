@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Authentication\Sessions;
+use Clavia\Application\Oidc\Logout\BackChannelLogout;
 use Clavia\Application\Oidc\Logout\EndSession;
 use Clavia\Application\Port\SignatureVerifier;
 use Clavia\Application\Port\TokenSigner;
@@ -25,6 +26,8 @@ final class EndSessionFactory
     {
         /** @var Sessions $sessions */
         $sessions = $container->get(Sessions::class);
+        /** @var BackChannelLogout $backChannel */
+        $backChannel = $container->get(BackChannelLogout::class);
         /** @var ClientRepository $clients */
         $clients = $container->get(ClientRepository::class);
         /** @var TokenSigner $keys */
@@ -34,6 +37,6 @@ final class EndSessionFactory
         /** @var Settings $settings */
         $settings = $container->get(Settings::class);
 
-        return new EndSession($sessions, $clients, $keys, $verifier, $settings->issuer());
+        return new EndSession($sessions, $backChannel, $clients, $keys, $verifier, $settings->issuer());
     }
 }

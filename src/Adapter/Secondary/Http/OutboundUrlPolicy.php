@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Secondary\Http;
 
+use Clavia\Application\Port\OutboundUrls;
 use Closure;
 
 /**
@@ -30,7 +31,7 @@ use Closure;
  * `CLAVIA_OUTBOUND_ALLOW_PRIVATE_ADDRESSES` (development only) waives the address check,
  * never the scheme.
  */
-final readonly class OutboundUrlPolicy
+final readonly class OutboundUrlPolicy implements OutboundUrls
 {
     /** @var Closure(string): list<string> */
     private Closure $resolve;
@@ -54,6 +55,18 @@ final readonly class OutboundUrlPolicy
     public function check(string $url, string $what): void
     {
         $this->addresses($url, $what);
+    }
+
+    #[\Override]
+    public function refusal(string $url, string $what): ?string
+    {
+        try {
+            $this->check($url, $what);
+        } catch (OutboundUrlRefused $refused) {
+            return $refused->getMessage();
+        }
+
+        return null;
     }
 
     /**

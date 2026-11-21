@@ -11,7 +11,9 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Application\Management;
 
+use Clavia\Adapter\Secondary\Http\OutboundUrlPolicy;
 use Clavia\Application\Management\Caller\ManagementCaller;
+use Clavia\Application\Management\Clients\BackChannelLogoutRegistration;
 use Clavia\Application\Management\Clients\ClientChanges;
 use Clavia\Application\Management\Clients\ClientConnections;
 use Clavia\Application\Management\Clients\ClientWithSecret;
@@ -135,7 +137,7 @@ final class ClientsTest extends TestCase
             grantTypes: ['authorization_code'],
             responseTypes: ['code'],
         ))->client;
-        $update = new UpdateClient($this->clients);
+        $update = new UpdateClient($this->clients, self::backChannel());
 
         self::assertSame('Renamed', $update($client->id, new ClientChanges(name: 'Renamed'))->name);
 
@@ -278,6 +280,63 @@ final class ClientsTest extends TestCase
             $this->secrets,
             new FrozenClock(),
             new ClientConnections($this->clients, $this->connections),
+            self::backChannel(),
         )($new);
+    }
+
+    public function testABackChannelLogoutUriIsRegisteredChangedAndCleared(): void
+    {
+        $client = $this->register(new NewClient(
+            redirectUris: ['https://spa.test/callback'],
+            grantTypes: ['authorization_code'],
+            responseTypes: ['code'],
+            backChannelLogoutUri: 'https://spa.test/logout',
+        ))->client;
+        self::assertSame('https://spa.test/logout', $client->backChannelLogout?->uri->value);
+        self::assertFalse($client->backChannelLogout?->sessionRequired);
+        $update = new UpdateClient($this->clients, self::backChannel());
+
+        $required = $update($client->id, new ClientChanges(backChannelLogoutSessionRequired: true));
+        self::assertSame('https://spa.test/logout', $required->backChannelLogout?->uri->value);
+        self::assertTrue($required->backChannelLogout?->sessionRequired);
+        $renamed = $update($client->id, new ClientChanges(name: 'Kept'));
+        self::assertNotNull($renamed->backChannelLogout, 'An update that does not name it leaves it.');
+
+        $cleared = $update($client->id, new ClientChanges(changesBackChannelLogoutUri: true));
+        self::assertNull($cleared->backChannelLogout);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function unusableBackChannelUris(): iterable
+    {
+        yield 'plaintext' => ['http://spa.test/logout'];
+        yield 'relative' => ['/logout'];
+        yield 'a fragment' => ['https://spa.test/logout#x'];
+        yield 'this host' => ['https://localhost/logout'];
+        yield 'a private network' => ['https://10.0.0.5/logout'];
+        yield 'cloud metadata' => ['https://169.254.169.254/latest/meta-data/'];
+    }
+
+    #[DataProvider('unusableBackChannelUris')]
+    public function testABackChannelLogoutUriThisServerMustNotPostToIsRefused(string $uri): void
+    {
+        $this->expectException(InvalidValue::class);
+
+        $this->register(new NewClient(
+            redirectUris: ['https://spa.test/callback'],
+            grantTypes: ['authorization_code'],
+            responseTypes: ['code'],
+            backChannelLogoutUri: $uri,
+        ));
+    }
+
+    private static function backChannel(): BackChannelLogoutRegistration
+    {
+        // Every name resolves to a public address: only literals and reserved names are refused.
+        return new BackChannelLogoutRegistration(
+            new OutboundUrlPolicy(false, static fn (): array => ['93.184.216.34']),
+        );
     }
 }

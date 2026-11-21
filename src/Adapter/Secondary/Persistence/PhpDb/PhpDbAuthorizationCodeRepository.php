@@ -41,11 +41,11 @@ final readonly class PhpDbAuthorizationCodeRepository implements AuthorizationCo
             <<<'SQL'
                 INSERT INTO oauth2_authorization_codes (
                     id, code_hash, client_id, user_id, redirect_uri, scope, code_challenge,
-                    code_challenge_method, audience, nonce, auth_time, amr, expires_at, used_at, created_at
+                    code_challenge_method, audience, nonce, auth_time, amr, sid, expires_at, used_at, created_at
                 ) VALUES (
                     :id, :code_hash, :client_id, :user_id, :redirect_uri, :scope, :code_challenge,
-                    :code_challenge_method, :audience, :nonce, :auth_time, CAST(:amr AS jsonb), :expires_at, :used_at,
-                    :created_at
+                    :code_challenge_method, :audience, :nonce, :auth_time, CAST(:amr AS jsonb), :sid, :expires_at,
+                    :used_at, :created_at
                 )
                 SQL,
             [
@@ -61,6 +61,7 @@ final readonly class PhpDbAuthorizationCodeRepository implements AuthorizationCo
                 'nonce' => $code->nonce?->value,
                 'auth_time' => Timestamp::toDatabaseOrNull($code->authentication->authenticatedAt),
                 'amr' => Jsonb::encode($code->authentication->methodValues()),
+                'sid' => $code->authentication->sid,
                 'expires_at' => Timestamp::toDatabase($code->expiresAt),
                 'used_at' => Timestamp::toDatabaseOrNull($code->usedAt()),
                 'created_at' => Timestamp::toDatabase($code->createdAt),
@@ -80,13 +81,13 @@ final readonly class PhpDbAuthorizationCodeRepository implements AuthorizationCo
         /**
          * @var array{id: string, code_hash: string, client_id: string, user_id: string, redirect_uri: string,
          *            scope: string, code_challenge: string, audience: string|null, nonce: string|null,
-         *            auth_time: string|null, amr: string, expires_at: string, used_at: string|null,
-         *            created_at: string}|null $row
+         *            auth_time: string|null, amr: string, sid: string|null, expires_at: string,
+         *            used_at: string|null, created_at: string}|null $row
          */
         $row = $this->database->fetchOne(
             <<<'SQL'
                 SELECT id, code_hash, client_id, user_id, redirect_uri, scope, code_challenge,
-                       audience, nonce, auth_time, amr, expires_at, used_at, created_at
+                       audience, nonce, auth_time, amr, sid, expires_at, used_at, created_at
                 FROM oauth2_authorization_codes
                 WHERE code_hash = :code_hash
                 FOR UPDATE
@@ -111,6 +112,7 @@ final readonly class PhpDbAuthorizationCodeRepository implements AuthorizationCo
             AuthenticationContext::reconstitute(
                 Timestamp::fromDatabaseOrNull($row['auth_time']),
                 array_map(AuthenticationMethod::from(...), Jsonb::decodeStrings($row['amr'])),
+                $row['sid'],
             ),
             Timestamp::fromDatabase($row['expires_at']),
             Timestamp::fromDatabaseOrNull($row['used_at']),

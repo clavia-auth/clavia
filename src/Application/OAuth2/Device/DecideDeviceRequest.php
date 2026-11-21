@@ -81,7 +81,8 @@ final readonly class DecideDeviceRequest
             $request->scope,
             $now,
         ));
-        $request->approve($endUser->userId, $endUser->authentication(), $now);
+        // The device holds no session here: nothing to tell it about when the browser signs out.
+        $request->approve($endUser->userId, $endUser->authentication()->withoutSession(), $now);
         $this->store->save($request);
 
         return new DeviceDecided(true);

@@ -17,7 +17,9 @@ use Clavia\Application\Management\Roles\DescribedPermission;
 use Clavia\Application\Management\Roles\DescribedRole;
 use Clavia\Application\Management\Roles\EffectivePermission;
 use Clavia\Application\Management\Users\DescribedConsent;
+use Clavia\Application\Management\Users\ManagedSession;
 use Clavia\Application\Management\Users\ManagedUser;
+use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\ResponseType;
@@ -116,6 +118,8 @@ final class ManagementViews
                 static fn (ConnectionName $connection): string => $connection->value,
                 $client->connections,
             ),
+            'backchannel_logout_uri' => $client->backChannelLogout?->uri->value,
+            'backchannel_logout_session_required' => $client->backChannelLogout->sessionRequired ?? false,
             'created_at' => self::instant($client->createdAt),
         ];
     }
@@ -203,6 +207,26 @@ final class ManagementViews
             'scopes' => $scopes,
             'granted_at' => self::instant($described->consent->grantedAt),
             'updated_at' => self::instant($described->consent->updatedAt),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public static function session(ManagedSession $managed): array
+    {
+        $session = $managed->session;
+
+        return [
+            'sid' => $session->sid,
+            'created_at' => self::instant($session->authenticatedAt),
+            'expires_at' => self::instant($session->expiresAt),
+            'amr' => array_map(static fn (AuthenticationMethod $method): string => $method->value, $session->methods),
+            'connection' => $session->connection->value,
+            'clients' => array_map(
+                static fn (Client $client): array => ['client_id' => $client->id->value, 'name' => $client->name],
+                $managed->clients,
+            ),
         ];
     }
 

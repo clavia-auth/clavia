@@ -11,13 +11,15 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Authentication;
 
+use Clavia\Application\Oidc\Logout\BackChannelLogout;
 use Clavia\Domain\Authentication\LocalPath;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\Url;
 
 /**
- * End the browser's session and decide where it goes next.
+ * End the browser's session — telling the applications that signed in through it — and
+ * decide where the browser goes next.
  *
  * Unlike the target after sign-in, this one may leave the server: every application
  * signing a person out lives on its own origin. So the trust anchor moves from "this
@@ -30,6 +32,7 @@ final readonly class SignOut
 {
     public function __construct(
         private Sessions $sessions,
+        private BackChannelLogout $backChannel,
         private ClientRepository $clients,
     ) {
     }
@@ -42,7 +45,7 @@ final readonly class SignOut
      */
     public function __invoke(#[\SensitiveParameter] ?string $sessionId, ?string $next): string
     {
-        $this->sessions->end($sessionId);
+        $this->backChannel->sessionsEnded($this->sessions->end($sessionId));
 
         return $this->isTrusted($next) ? (string) $next : LocalPath::DEFAULT;
     }

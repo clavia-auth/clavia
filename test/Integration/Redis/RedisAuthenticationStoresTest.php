@@ -17,6 +17,8 @@ use Clavia\Adapter\Secondary\Redis\RedisConnection;
 use Clavia\Adapter\Secondary\Redis\RedisSessionStore;
 use Clavia\Application\Port\AttemptCounter;
 use Clavia\Application\Port\SessionStore;
+use Clavia\Domain\Client\ClientId;
+use Clavia\Domain\Shared\Digest;
 use ClaviaTest\Support\Contract\AttemptCounterContract;
 use ClaviaTest\Support\Contract\SessionStoreContract;
 use ClaviaTest\Support\IntegrationTestCase;
@@ -51,6 +53,23 @@ final class RedisAuthenticationStoresTest extends IntegrationTestCase
         self::assertGreaterThan(595, $this->redis()->ttl($key));
     }
 
+    public function testTheApplicationsOfASessionLiveExactlyAsLongAsIt(): void
+    {
+        $session = $this->aSession();
+        $this->sessions()->save('session-1', $session, 600);
+        $this->sessions()->recordClient($session->userId, $session->sid, ClientId::fromString('spa'));
+        $clients = 'session-clients:' . Digest::of('session-1')->toString();
+        self::assertGreaterThan(595, $this->redis()->ttl($clients));
+
+        $this->redis()->expire($clients, 10);
+        $this->sessions()->extend('session-1', 600);
+        self::assertGreaterThan(595, $this->redis()->ttl($clients));
+
+        $this->sessions()->delete('session-1');
+        self::assertSame(0, $this->redis()->exists($clients));
+        self::assertSame(0, $this->redis()->hLen('user-sessions:' . $session->userId->value));
+    }
+
     public function testNeitherTheSessionIdentifierNorACountedSubjectAppearsInAKey(): void
     {
         $this->sessions()->save('the-plain-session-id', $this->aSession(), 600);
@@ -59,7 +78,8 @@ final class RedisAuthenticationStoresTest extends IntegrationTestCase
         $keys = $this->redis()->keys('*');
 
         self::assertIsArray($keys);
-        self::assertCount(2, $keys);
+        // The session, the account's index of sessions, the counter.
+        self::assertCount(3, $keys);
         self::assertStringNotContainsString('the-plain-session-id', implode('|', $keys));
         self::assertStringNotContainsString('jane', implode('|', $keys));
     }

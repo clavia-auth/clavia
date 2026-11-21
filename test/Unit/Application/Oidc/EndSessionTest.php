@@ -31,6 +31,7 @@ use Clavia\Domain\Oidc\SigningAlgorithm;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\SecretGenerator;
 use Clavia\Domain\Shared\Url;
+use ClaviaTest\Support\BackChannelLogouts;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
 use ClaviaTest\Support\Fake\InMemorySessionStore;
@@ -66,8 +67,10 @@ final class EndSessionTest extends TestCase
         $this->clients = new InMemoryClientRepository();
         $this->clients->save(self::client('spa', [self::SIGNED_OUT, 'https://app.example/bye?lang=fr']));
         $this->clients->save(self::client('other', []));
+        [$backChannel] = BackChannelLogouts::for($this->clients, $this->clock);
         $this->endSession = new EndSession(
             $this->sessions,
+            $backChannel,
             $this->clients,
             $this->keys,
             new JoseSignatureVerifier(),

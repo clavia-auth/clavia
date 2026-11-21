@@ -79,7 +79,7 @@ trait AuthorizationCodeRepositoryContract
         $this->codes()->add($this->aCode(
             'oidc-code',
             Nonce::fromString('n-0S6_WzA2Mj'),
-            AuthenticationContext::reconstitute($authenticatedAt, [AuthenticationMethod::Password]),
+            AuthenticationContext::reconstitute($authenticatedAt, [AuthenticationMethod::Password], 'session-sid'),
         ));
 
         $stored = $this->locked('oidc-code');
@@ -88,6 +88,7 @@ trait AuthorizationCodeRepositoryContract
         self::assertSame('n-0S6_WzA2Mj', $stored->nonce?->value);
         self::assertEquals($authenticatedAt, $stored->authentication->authenticatedAt);
         self::assertSame(['pwd'], $stored->authentication->methodValues());
+        self::assertSame('session-sid', $stored->authentication->sid);
     }
 
     #[Test]
@@ -101,6 +102,7 @@ trait AuthorizationCodeRepositoryContract
         self::assertNull($stored->nonce);
         self::assertNull($stored->authentication->authenticatedAt);
         self::assertSame([], $stored->authentication->methods);
+        self::assertNull($stored->authentication->sid);
     }
 
     #[Test]

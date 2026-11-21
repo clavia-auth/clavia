@@ -42,6 +42,7 @@ final readonly class EndSession
 {
     public function __construct(
         private Sessions $sessions,
+        private BackChannelLogout $backChannel,
         private ClientRepository $clients,
         private TokenSigner $keys,
         private SignatureVerifier $verifier,
@@ -65,7 +66,7 @@ final readonly class EndSession
         }
 
         if ($request->confirmed || $provenFor === $session->userId->value) {
-            $this->sessions->end($request->sessionId);
+            $this->backChannel->sessionsEnded($this->sessions->end($request->sessionId));
 
             return new SignedOut($this->location($destination, $request->state), true);
         }

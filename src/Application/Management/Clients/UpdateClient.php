@@ -23,8 +23,10 @@ use Clavia\Domain\Shared\InvalidValue;
  */
 final readonly class UpdateClient
 {
-    public function __construct(private ClientRepository $clients)
-    {
+    public function __construct(
+        private ClientRepository $clients,
+        private BackChannelLogoutRegistration $backChannel,
+    ) {
     }
 
     /**
@@ -53,6 +55,14 @@ final readonly class UpdateClient
                 ? null
                 : RegistrationValues::redirectUris($changes->postLogoutRedirectUris),
         );
+        if ($changes->changesBackChannelLogoutUri || $changes->backChannelLogoutSessionRequired !== null) {
+            $updated = $updated->withBackChannelLogout($this->backChannel->of(
+                $changes->changesBackChannelLogoutUri
+                    ? $changes->backChannelLogoutUri
+                    : $client->backChannelLogout?->uri->value,
+                $changes->backChannelLogoutSessionRequired ?? $client->backChannelLogout->sessionRequired ?? false,
+            ));
+        }
         $this->clients->save($updated);
 
         return $updated;

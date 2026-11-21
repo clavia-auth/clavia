@@ -113,6 +113,8 @@ final class ClaimsTest extends TestCase
                 'auth_time' => new DateTimeImmutable('2026-01-15T09:30:00Z')->getTimestamp(),
                 'nonce' => 'n-0S6_WzA2Mj',
                 'amr' => ['pwd'],
+                // The session that approved it, for a later logout token.
+                'sid' => 'sid-value',
                 'at_hash' => 'the-at-hash',
                 'email' => 'ada@example.com',
                 'email_verified' => false,

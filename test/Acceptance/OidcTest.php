@@ -88,14 +88,15 @@ final class OidcTest extends AcceptanceTestCase
         self::assertTrue($document['authorization_response_iss_parameter_supported']);
         $claims = $document['claims_supported'];
         self::assertIsArray($claims);
-        foreach (['sub', 'auth_time', 'nonce', 'amr', 'at_hash', 'email', 'email_verified', 'name'] as $claim) {
+        foreach (['sub', 'auth_time', 'nonce', 'amr', 'at_hash', 'sid', 'email', 'email_verified', 'name'] as $claim) {
             self::assertContains($claim, $claims);
         }
+        self::assertTrue($document['backchannel_logout_supported']);
+        self::assertTrue($document['backchannel_logout_session_supported']);
 
         // Nothing is advertised that does not exist yet.
         self::assertArrayNotHasKey('prompt_values_supported', $document);
-        self::assertArrayNotHasKey('backchannel_logout_supported', $document);
-        self::assertNotContains('sid', $claims);
+        self::assertArrayNotHasKey('frontchannel_logout_supported', $document);
     }
 
     public function testRfc8414MetadataIsTheSameDocument(): void

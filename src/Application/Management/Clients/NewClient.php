@@ -29,6 +29,7 @@ final readonly class NewClient
      *                                    Fixed for good.
      * @param list<string>|null $connections The connections its users may sign in through; null for every
      *                                       one there is, or none for a third-party application.
+     * @param string|null  $backChannelLogoutUri Where to tell it that a session it signed in through ended.
      */
     public function __construct(
         public string $name = '',
@@ -40,6 +41,8 @@ final readonly class NewClient
         public array $postLogoutRedirectUris = [],
         public bool $firstParty = true,
         public ?array $connections = null,
+        public ?string $backChannelLogoutUri = null,
+        public bool $backChannelLogoutSessionRequired = false,
     ) {
     }
 }

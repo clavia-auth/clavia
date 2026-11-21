@@ -286,6 +286,85 @@ paths:
         '422':
           $ref: '#/components/responses/Unprocessable'
 
+  /api/v1/users/{user_id}/sessions:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [users]
+      operationId: listUserSessions
+      summary: A user's browser sessions, with the applications that signed in through each.
+      description: |
+        Oldest first. Device approvals are not sessions and are not here.
+      security:
+        - managementToken: [read:users]
+      responses:
+        '200':
+          description: The user's sessions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    delete:
+      tags: [users]
+      operationId: endUserSessions
+      summary: Sign a user out everywhere.
+      description: |
+        Ends every browser session and, after the response, posts a logout token to each
+        application that signed in through one of them and registered a back-channel logout
+        URI. Tokens already issued are not revoked (`/oauth2/revoke` does that). Idempotent:
+        a user with no session is already signed out everywhere.
+      security:
+        - managementToken: [update:users]
+      responses:
+        '204':
+          description: Signed out everywhere.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/users/{user_id}/sessions/{sid}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+      - $ref: '#/components/parameters/Sid'
+    delete:
+      tags: [users]
+      operationId: endUserSession
+      summary: End one session, by its sid, and tell its applications.
+      security:
+        - managementToken: [update:users]
+      responses:
+        '204':
+          description: Ended.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
   /api/v1/users/{user_id}/identities:
     parameters:
       - $ref: '#/components/parameters/UserId'
@@ -1263,6 +1342,14 @@ components:
       schema:
         type: string
         format: uuid
+    Sid:
+      name: sid
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
     ClientId:
       name: client_id
       in: path
@@ -1659,7 +1746,8 @@ components:
       type: object
       additionalProperties: false
       required: [client_id, name, client_type, token_endpoint_auth_method, redirect_uris, grant_types,
-        response_types, post_logout_redirect_uris, is_first_party, connections, created_at]
+        response_types, post_logout_redirect_uris, is_first_party, connections, backchannel_logout_uri,
+        backchannel_logout_session_required, created_at]
       properties:
         client_id:
           type: string
@@ -1694,6 +1782,15 @@ components:
             third-party application: it uses the domain connections.
           items:
             $ref: '#/components/schemas/ConnectionName'
+        backchannel_logout_uri:
+          type: string
+          nullable: true
+          description: |
+            Where a logout token is posted when a session the client signed in through ends
+            (OpenID Connect Back-Channel Logout 1.0). Null: the client is not told.
+        backchannel_logout_session_required:
+          type: boolean
+          description: Whether the client needs the session named (`sid`). It always is.
         created_at:
           type: string
           format: date-time
@@ -1711,7 +1808,8 @@ components:
       type: object
       additionalProperties: false
       required: [client_id, name, client_type, token_endpoint_auth_method, redirect_uris, grant_types,
-        response_types, post_logout_redirect_uris, is_first_party, connections, created_at, client_secret]
+        response_types, post_logout_redirect_uris, is_first_party, connections, backchannel_logout_uri,
+        backchannel_logout_session_required, created_at, client_secret]
       properties:
         client_id:
           type: string
@@ -1746,6 +1844,15 @@ components:
             third-party application: it uses the domain connections.
           items:
             $ref: '#/components/schemas/ConnectionName'
+        backchannel_logout_uri:
+          type: string
+          nullable: true
+          description: |
+            Where a logout token is posted when a session the client signed in through ends
+            (OpenID Connect Back-Channel Logout 1.0). Null: the client is not told.
+        backchannel_logout_session_required:
+          type: boolean
+          description: Whether the client needs the session named (`sid`). It always is.
         created_at:
           type: string
           format: date-time
@@ -1802,6 +1909,16 @@ components:
             An unknown name is a 404. Changed afterwards with `PUT …/connections`.
           items:
             $ref: '#/components/schemas/ConnectionName'
+        backchannel_logout_uri:
+          type: string
+          nullable: true
+          maxLength: 2048
+          description: |
+            Where to post a logout token when a session the client signed in through ends
+            (OpenID Connect Back-Channel Logout 1.0 §2.2): an absolute https URL without a
+            fragment, and not at this server or its internal network (422). Null for none.
+        backchannel_logout_session_required:
+          type: boolean
       description: |
         `client_type` defaults to `public`; `token_endpoint_auth_method` to `none` for a
         public client and `client_secret_basic` for a confidential one.
@@ -1837,6 +1954,16 @@ components:
           maxItems: 20
           items:
             $ref: '#/components/schemas/RedirectUri'
+        backchannel_logout_uri:
+          type: string
+          nullable: true
+          maxLength: 2048
+          description: |
+            Where to post a logout token when a session the client signed in through ends
+            (OpenID Connect Back-Channel Logout 1.0 §2.2): an absolute https URL without a
+            fragment, and not at this server or its internal network (422). Null removes it.
+        backchannel_logout_session_required:
+          type: boolean
 
     Permission:
       type: object
@@ -2107,6 +2234,46 @@ components:
         linked_at:
           type: string
           format: date-time
+
+    UserSession:
+      type: object
+      additionalProperties: false
+      required: [sid, created_at, expires_at, amr, connection, clients]
+      description: |
+        One browser session at `auth.*`. The cookie is never shown: nothing outside the
+        browser holds it.
+      properties:
+        sid:
+          type: string
+          description: |
+            The session's identifier for relying parties — the `sid` of the ID tokens issued
+            through it — and the handle for ending it.
+        created_at:
+          type: string
+          format: date-time
+          description: When the person signed in.
+        expires_at:
+          type: string
+          format: date-time
+          description: The absolute ceiling; being idle may end it sooner.
+        amr:
+          type: array
+          items:
+            type: string
+        connection:
+          $ref: '#/components/schemas/ConnectionName'
+        clients:
+          type: array
+          description: The applications that signed in through it — the ones ending it tells.
+          items:
+            type: object
+            additionalProperties: false
+            required: [client_id, name]
+            properties:
+              client_id:
+                type: string
+              name:
+                type: string
 
     UserConsent:
       type: object

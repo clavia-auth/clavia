@@ -22,6 +22,8 @@ final readonly class ClientChanges
      * @param list<string>|null $grantTypes
      * @param list<string>|null $responseTypes
      * @param list<string>|null $postLogoutRedirectUris
+     * @param bool              $changesBackChannelLogoutUri Whether `$backChannelLogoutUri` is a change —
+     *                                                       null then clears it — or absent.
      */
     public function __construct(
         public ?string $name = null,
@@ -30,6 +32,9 @@ final readonly class ClientChanges
         public ?array $grantTypes = null,
         public ?array $responseTypes = null,
         public ?array $postLogoutRedirectUris = null,
+        public bool $changesBackChannelLogoutUri = false,
+        public ?string $backChannelLogoutUri = null,
+        public ?bool $backChannelLogoutSessionRequired = null,
     ) {
     }
 }

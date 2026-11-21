@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Application\OAuth2\Authorize;
 
 use Clavia\Application\Authentication\EndUser;
+use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\OAuth2\ReadRequestedAccess;
 use Clavia\Application\OAuth2\RequestParameters;
@@ -84,6 +85,7 @@ final readonly class Authorize
         private ConsentRepository $consents,
         private ConsentStateStore $consentStates,
         private ConnectionAccess $connections,
+        private Sessions $sessions,
         private SecretGenerator $secrets,
         private RandomSource $random,
         private Clock $clock,
@@ -185,6 +187,11 @@ final readonly class Authorize
             $this->clock->now(),
             $this->codeLifetimeSeconds,
         ));
+        // With a code in hand the application is about to hold a session of its own on the
+        // strength of this one; when this one ends, it is told (Back-Channel Logout 1.0).
+        if ($endUser->session !== null) {
+            $this->sessions->recordClient($endUser->session, $client->id);
+        }
 
         return new CodeIssued($redirectUri, $code, $state);
     }

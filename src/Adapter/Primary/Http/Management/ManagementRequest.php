@@ -67,6 +67,12 @@ final readonly class ManagementRequest
             : throw new LogicException(sprintf("The operation has no string path parameter '%s'.", $name));
     }
 
+    /** Whether the operation has the path parameter — the routes one handler serves differ in it. */
+    public function hasPath(string $name): bool
+    {
+        return is_string($this->validated->parameter(ParameterLocation::Path, $name));
+    }
+
     /** A query parameter as its schema typed it; null when absent. */
     public function query(string $name): mixed
     {

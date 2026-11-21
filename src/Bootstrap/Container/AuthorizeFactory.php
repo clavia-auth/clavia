@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\OAuth2\Authorize\Authorize;
 use Clavia\Application\OAuth2\ReadRequestedAccess;
@@ -65,6 +66,9 @@ final class AuthorizeFactory
         $nonceLifetime = $lifetime + $settings->idTokenLifetime;
         assert($nonceLifetime > 0);
 
+        /** @var Sessions $sessions */
+        $sessions = $container->get(Sessions::class);
+
         return new Authorize(
             $clients,
             $codes,
@@ -75,6 +79,7 @@ final class AuthorizeFactory
             $consents,
             $consentStates,
             $connections,
+            $sessions,
             $secrets,
             $random,
             $clock,

@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace ClaviaTest\Support;
 
 use Clavia\Adapter\Secondary\Crypto\BcryptPasswordHasher;
+use Clavia\Adapter\Secondary\System\AfterResponseTasks;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Shared\Clock;
@@ -167,6 +168,8 @@ abstract class AcceptanceTestCase extends TestCase
 
         $response = $this->application()->handle($request);
         $this->remember($response);
+        // As the entry point does once the response is out.
+        $this->container()->get(AfterResponseTasks::class)->run();
 
         return $response;
     }

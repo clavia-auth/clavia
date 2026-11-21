@@ -13,6 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Authentication\SignOut;
+use Clavia\Application\Oidc\Logout\BackChannelLogout;
 use Clavia\Domain\Client\ClientRepository;
 use Psr\Container\ContainerInterface;
 
@@ -22,9 +23,11 @@ final class SignOutFactory
     {
         /** @var Sessions $sessions */
         $sessions = $container->get(Sessions::class);
+        /** @var BackChannelLogout $backChannel */
+        $backChannel = $container->get(BackChannelLogout::class);
         /** @var ClientRepository $clients */
         $clients = $container->get(ClientRepository::class);
 
-        return new SignOut($sessions, $clients);
+        return new SignOut($sessions, $backChannel, $clients);
     }
 }

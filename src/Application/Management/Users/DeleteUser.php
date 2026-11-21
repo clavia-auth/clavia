@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Management\Users;
 
+use Clavia\Application\Authentication\SignOutEverywhere;
 use Clavia\Application\Management\Caller\ManagementCaller;
 use Clavia\Application\Management\Conflict;
 use Clavia\Application\Management\NotFound;
@@ -19,12 +20,15 @@ use Clavia\Domain\Identity\UserRepository;
 
 /**
  * `DELETE /api/v1/users/{user_id}`: the account, and with it every code and token
- * issued on its behalf. A browser session it holds resolves to nobody from then on.
+ * issued on its behalf, and its browser sessions — whose applications are told
+ * (Back-Channel Logout 1.0).
  */
 final readonly class DeleteUser
 {
-    public function __construct(private UserRepository $users)
-    {
+    public function __construct(
+        private UserRepository $users,
+        private SignOutEverywhere $signOut,
+    ) {
     }
 
     /**
@@ -39,6 +43,7 @@ final readonly class DeleteUser
             throw new Conflict('A token cannot delete the account it is acting as.');
         }
 
+        ($this->signOut)($user->id);
         $this->users->delete($user->id);
     }
 }

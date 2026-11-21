@@ -55,6 +55,7 @@ final readonly class Client
         public DateTimeImmutable $createdAt,
         public array $postLogoutRedirectUris,
         public array $connections,
+        public ?BackChannelLogout $backChannelLogout,
     ) {
     }
 
@@ -69,6 +70,8 @@ final readonly class Client
      * @param list<Url>          $postLogoutRedirectUris Where a sign-out it starts may send the browser back
      *                                                  (RP-Initiated Logout 1.0 §3.1), matched exactly.
      * @param list<ConnectionName> $connections         The connections its users may sign in through.
+     * @param BackChannelLogout|null $backChannelLogout Where to tell it that a session ended; null when
+     *                                                  it does not want to be told.
      *
      * @throws InvalidValue When the registration contradicts itself, or a third-party client would
      *                      list connections.
@@ -85,6 +88,7 @@ final readonly class Client
         DateTimeImmutable $createdAt,
         array $postLogoutRedirectUris = [],
         array $connections = [],
+        ?BackChannelLogout $backChannelLogout = null,
     ): self {
         $secretHash = $secretHash === '' ? null : $secretHash;
 
@@ -171,6 +175,7 @@ final readonly class Client
             $createdAt,
             $postLogoutRedirectUris,
             self::sorted($connections),
+            $backChannelLogout,
         );
     }
 
@@ -195,6 +200,7 @@ final readonly class Client
             $this->createdAt,
             $this->postLogoutRedirectUris,
             $connections,
+            $this->backChannelLogout,
         );
     }
 
@@ -242,6 +248,28 @@ final readonly class Client
             $this->createdAt,
             $postLogoutRedirectUris ?? $this->postLogoutRedirectUris,
             $this->connections,
+            $this->backChannelLogout,
+        );
+    }
+
+    /**
+     * The same client told — or no longer told — when a session it signed in through ends.
+     */
+    public function withBackChannelLogout(?BackChannelLogout $backChannelLogout): self
+    {
+        return self::register(
+            $this->id,
+            $this->name,
+            $this->type,
+            $this->authMethod,
+            $this->secretHash,
+            $this->redirectUris,
+            $this->grantTypes,
+            $this->responseTypes,
+            $this->createdAt,
+            $this->postLogoutRedirectUris,
+            $this->connections,
+            $backChannelLogout,
         );
     }
 
@@ -270,6 +298,7 @@ final readonly class Client
             $this->createdAt,
             $this->postLogoutRedirectUris,
             $this->connections,
+            $this->backChannelLogout,
         );
     }
 

@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Support\Contract;
 
+use Clavia\Domain\Client\BackChannelLogout;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\ClientId;
@@ -52,6 +53,23 @@ trait ClientRepositoryContract
         self::assertSame([ResponseType::Code], $client->responseTypes);
         self::assertEquals(new DateTimeImmutable('2026-01-15T10:00:00Z'), $client->createdAt);
         self::assertSame([], $client->postLogoutRedirectUris);
+        self::assertNull($client->backChannelLogout);
+    }
+
+    #[Test]
+    public function aBackChannelLogoutRegistrationIsKeptAndCleared(): void
+    {
+        $this->clients()->save($this->aPublicClient('spa', 'My SPA')->withBackChannelLogout(
+            new BackChannelLogout(Url::fromString('https://app.example/logout?x=1'), true),
+        ));
+
+        $read = $this->clients()->find(ClientId::fromString('spa'));
+        self::assertNotNull($read);
+        self::assertSame('https://app.example/logout?x=1', $read->backChannelLogout?->uri->value);
+        self::assertTrue($read->backChannelLogout?->sessionRequired);
+
+        $this->clients()->save($read->withBackChannelLogout(null));
+        self::assertNull($this->clients()->find(ClientId::fromString('spa'))?->backChannelLogout);
     }
 
     #[Test]

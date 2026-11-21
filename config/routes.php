@@ -40,6 +40,7 @@ use Clavia\Adapter\Primary\Http\Management\UserIdentitiesHandler;
 use Clavia\Adapter\Primary\Http\Management\UserMfaHandler;
 use Clavia\Adapter\Primary\Http\Management\UserPermissionsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserRolesHandler;
+use Clavia\Adapter\Primary\Http\Management\UserSessionsHandler;
 use Clavia\Adapter\Primary\Http\Management\UsersHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\DeviceAuthorizationHandler;
@@ -145,6 +146,17 @@ return static function (Application $app): void {
         '/api/v1/users/{user_id}/consents/{client_id}',
         $management(UserConsentsHandler::class),
         'api.user.consent',
+    );
+    $app->route(
+        '/api/v1/users/{user_id}/sessions',
+        $management(UserSessionsHandler::class),
+        ['GET', 'DELETE'],
+        'api.user.sessions',
+    );
+    $app->delete(
+        '/api/v1/users/{user_id}/sessions/{sid}',
+        $management(UserSessionsHandler::class),
+        'api.user.session',
     );
     $app->get(
         '/api/v1/users/{user_id}/identities',

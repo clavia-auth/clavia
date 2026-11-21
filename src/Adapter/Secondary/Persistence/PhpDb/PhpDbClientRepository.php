@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Secondary\Persistence\PhpDb;
 
 use Clavia\Application\Port\TransactionManager;
+use Clavia\Domain\Client\BackChannelLogout;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\ClientId;
@@ -32,7 +33,8 @@ use Clavia\Domain\Shared\Url;
 final readonly class PhpDbClientRepository implements ClientRepository
 {
     private const string COLUMNS = 'client_id, client_secret_hash, name, client_type, redirect_uris, '
-        . 'grant_types, response_types, token_endpoint_auth_method, created_at, post_logout_redirect_uris';
+        . 'grant_types, response_types, token_endpoint_auth_method, created_at, post_logout_redirect_uris, '
+        . 'backchannel_logout_uri, backchannel_logout_session_required';
 
     public function __construct(
         private Database $database,
@@ -122,11 +124,13 @@ final readonly class PhpDbClientRepository implements ClientRepository
             <<<'SQL'
                 INSERT INTO oauth2_clients (
                     client_id, client_secret_hash, name, client_type, redirect_uris, grant_types,
-                    response_types, token_endpoint_auth_method, created_at, post_logout_redirect_uris
+                    response_types, token_endpoint_auth_method, created_at, post_logout_redirect_uris,
+                    backchannel_logout_uri, backchannel_logout_session_required
                 ) VALUES (
                     :client_id, :client_secret_hash, :name, :client_type, CAST(:redirect_uris AS jsonb),
                     CAST(:grant_types AS jsonb), CAST(:response_types AS jsonb), :auth_method, :created_at,
-                    CAST(:post_logout_redirect_uris AS jsonb)
+                    CAST(:post_logout_redirect_uris AS jsonb), :backchannel_logout_uri,
+                    :backchannel_logout_session_required
                 )
                 ON CONFLICT (client_id) DO UPDATE SET
                     client_secret_hash = EXCLUDED.client_secret_hash,
@@ -135,7 +139,9 @@ final readonly class PhpDbClientRepository implements ClientRepository
                     grant_types = EXCLUDED.grant_types,
                     response_types = EXCLUDED.response_types,
                     token_endpoint_auth_method = EXCLUDED.token_endpoint_auth_method,
-                    post_logout_redirect_uris = EXCLUDED.post_logout_redirect_uris
+                    post_logout_redirect_uris = EXCLUDED.post_logout_redirect_uris,
+                    backchannel_logout_uri = EXCLUDED.backchannel_logout_uri,
+                    backchannel_logout_session_required = EXCLUDED.backchannel_logout_session_required
                 SQL,
             [
                 'client_id' => $client->id->value,
@@ -156,6 +162,8 @@ final readonly class PhpDbClientRepository implements ClientRepository
                 'post_logout_redirect_uris' => Jsonb::encode(
                     array_map(static fn (Url $uri): string => $uri->value, $client->postLogoutRedirectUris),
                 ),
+                'backchannel_logout_uri' => $client->backChannelLogout?->uri->value,
+                'backchannel_logout_session_required' => $client->backChannelLogout->sessionRequired ?? false,
             ],
         );
     }
@@ -211,7 +219,8 @@ final readonly class PhpDbClientRepository implements ClientRepository
          * @var array{client_id: string, client_secret_hash: string|null, name: string, client_type: string,
          *            redirect_uris: string, grant_types: string, response_types: string,
          *            token_endpoint_auth_method: string, created_at: string,
-         *            post_logout_redirect_uris: string} $row
+         *            post_logout_redirect_uris: string, backchannel_logout_uri: string|null,
+         *            backchannel_logout_session_required: bool} $row
          */
         return Client::register(
             ClientId::fromString($row['client_id']),
@@ -225,6 +234,10 @@ final readonly class PhpDbClientRepository implements ClientRepository
             Timestamp::fromDatabase($row['created_at']),
             array_map(Url::fromString(...), Jsonb::decodeStrings($row['post_logout_redirect_uris'])),
             $this->connectionsOf($row['client_id']),
+            $row['backchannel_logout_uri'] === null ? null : new BackChannelLogout(
+                Url::fromString($row['backchannel_logout_uri']),
+                $row['backchannel_logout_session_required'],
+            ),
         );
     }
 }

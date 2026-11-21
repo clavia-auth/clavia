@@ -29,14 +29,15 @@ and multi-tenancy.
 
 ## Current state
 
-**Steps 0 to 15 are done: the foundations, Authorization Code + PKCE, the login page with
+**Steps 0 to 17 are done: the foundations, Authorization Code + PKCE, the login page with
 browser sessions, OpenID Connect (ID tokens, discovery, JWKS, userinfo), Client
 Credentials for machine clients holding a grant on an API, the Management API with
 audiences in the user's flow, two-factor authentication (TOTP and recovery codes),
 signing in with Google or GitHub, RP-Initiated Logout, roles (RBAC), rotating refresh
 tokens, application ownership with the consent screen, and connections — pools of accounts,
 the social providers and operator-registered OpenID Connect providers, enabled per
-application — token introspection and revocation, and device authorization; the dashboard is in `frontend/`.**
+application — token introspection and revocation, device authorization, passwordless sign-in by email, and
+back-channel logout with session management; the dashboard is in `frontend/`.**
 The application answers `GET /healthz`,
 `GET|POST /oauth2/authorize`, `POST /oauth2/token`, `POST /oauth2/introspect`, `POST /oauth2/revoke`,
 `POST /oauth2/device/code`, `GET|POST /auth/device`,
@@ -319,6 +320,27 @@ What exists:
     clients and `allow_skipping_consent` on APIs in the Management API;
     `clients:create-m2m --third-party`. The dashboard shows ownership, the API switch and a
     user's authorized applications again.
+- **Back-channel logout and session management** (Step 17):
+  - `AuthenticationContext::$sid` (carried by the code; `withoutSession()` for a device
+    approval) and the `sid` claim; `Session::$clients`. `Domain\Client\BackChannelLogout` on
+    `Client` (`withBackChannelLogout()`); `Domain\Oidc\LogoutTokenClaims`. Migration
+    `0021_backchannel_logout`.
+  - `SessionStore::recordClient|ofUser|endOfUser`; `Redis\RedisSessionStore` keeps
+    `session-clients:<digest>` beside each session and `user-sessions:<user id>` (sid → digest).
+    `Sessions::recordClient|of|endEverywhere|endBySid`; `Authorize` records the client a code is
+    issued to.
+  - `Port\{DeferredTasks,BackChannelLogoutDelivery,OutboundUrls}`;
+    `Adapter\Secondary\System\AfterResponseTasks` (run by `public/index.php` after
+    `fastcgi_finish_request()`, and by `AcceptanceTestCase` after each request),
+    `Http\HttpBackChannelLogoutDelivery`; `OutboundUrlPolicy` implements `OutboundUrls`.
+    The container's first `aliases`.
+  - `Application\Oidc\Logout\BackChannelLogout` (one deferred delivery per application),
+    `Authentication\SignOutEverywhere`; `SignOut`, `EndSession`, `UpdateUser` (deactivation)
+    and `DeleteUser` notify. `Management\Users\{UserSessions,ManagedSession}`,
+    `Management\Clients\BackChannelLogoutRegistration`.
+  - `Management\UserSessionsHandler`; `backchannel_logout_uri` and
+    `backchannel_logout_session_required` on clients; `backchannel_logout_supported`,
+    `backchannel_logout_session_supported` and `sid` in discovery.
 - **Passwordless sign-in and mail** (Step 16):
   - `ConnectionStrategy::Passwordless` and the built-in `email` connection
     (`ConnectionName::email()`, `Connection::isPasswordless()`); `isExternal()` is social or
@@ -833,6 +855,17 @@ Conventions established in Step 12:
 - **A handle is the only thing a page's URL or form carries**, for consent as for sign-in; a
   handle that is unknown, spent, expired, someone else's or names something deleted is the
   same "expired" page. Showing the screen leaves it; deciding claims it (`GETDEL`).
+
+Conventions established in Step 17:
+
+- **A session ended is a session reported**, by whatever ends it — the logout endpoints, an
+  operator, deactivation, deletion — to each application that was issued a code through it
+  and registered a back-channel logout URI. A session that runs out, or is replaced when the
+  same browser signs in again, is not reported.
+- **Work for other servers runs after the response** (`DeferredTasks`), one task per
+  recipient, best effort, logged on failure, never retried.
+- **An operator-supplied URL this server sends to is checked twice**: at registration
+  (`OutboundUrls`, a 422), and at every send by the adapter that sends.
 
 Conventions established in Step 16:
 
@@ -1605,10 +1638,16 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
   `SignInMailTest`, `MailersTest`, `MailOutboxCommandTest`, `PasswordlessChallengeStoreContract`
   against the fake and Redis, `RedisMailOutboxTest`.
 
-#### [ ] Step 17 — Back-channel logout and session management
+#### [x] Step 17 — Back-channel logout and session management
 - Logout token (`typ: logout+jwt`), `sid` on codes and ID tokens, session→clients index,
   `DeferredTasks`, `/users/{id}/sessions`.
-- Python: `oidc/backchannel.py`. Tests: `test_backchannel_logout` (22).
+- Python: `oidc/backchannel.py`. Tests: `test_backchannel_logout` (22) — ported as
+  `BackChannelLogoutTest` (26 cases: the session cookie presented again, the `events` claim
+  an object, the failures logged; the discovery case lives in `OidcTest`);
+  `BackChannelLogoutTest` (unit: one deferred task per application, the token's claims),
+  `HttpBackChannelLogoutDeliveryTest`, `AfterResponseTasksTest`, the account and client cases
+  of `SessionStoreContract` against the fake and Redis, the back-channel cases of
+  `ClientsTest`, `ClientRepositoryContract` and `AuthorizeTest`.
 
 #### [ ] Step 18 — Authentication-request parameters and complete metadata
 - `prompt`, `max_age`, `request`/`request_uri` refusal; discovery states every non-default

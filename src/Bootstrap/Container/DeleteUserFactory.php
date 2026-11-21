@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Application\Authentication\SignOutEverywhere;
 use Clavia\Application\Management\Users\DeleteUser;
 use Clavia\Domain\Identity\UserRepository;
 use Psr\Container\ContainerInterface;
@@ -21,7 +22,9 @@ final class DeleteUserFactory
     {
         /** @var UserRepository $users */
         $users = $container->get(UserRepository::class);
+        /** @var SignOutEverywhere $signOut */
+        $signOut = $container->get(SignOutEverywhere::class);
 
-        return new DeleteUser($users);
+        return new DeleteUser($users, $signOut);
     }
 }

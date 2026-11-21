@@ -38,6 +38,7 @@ final readonly class RegisterClient
         private SecretGenerator $secrets,
         private Clock $clock,
         private ClientConnections $connections,
+        private BackChannelLogoutRegistration $backChannel,
     ) {
     }
 
@@ -75,6 +76,7 @@ final readonly class RegisterClient
                 $new->firstParty => $this->connections->every(),
                 default => [],
             },
+            $this->backChannel->of($new->backChannelLogoutUri, $new->backChannelLogoutSessionRequired),
         );
         $this->clients->save($client);
 

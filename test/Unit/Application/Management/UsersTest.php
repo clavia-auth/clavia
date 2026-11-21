@@ -12,6 +12,8 @@ declare(strict_types=1);
 namespace ClaviaTest\Unit\Application\Management;
 
 use Clavia\Application\Authentication\Mfa\DisableMfa;
+use Clavia\Application\Authentication\Sessions;
+use Clavia\Application\Authentication\SignOutEverywhere;
 use Clavia\Application\Management\Caller\ManagementCaller;
 use Clavia\Application\Management\Conflict;
 use Clavia\Application\Management\NotFound;
@@ -39,12 +41,16 @@ use Clavia\Domain\Shared\AlreadyExists;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\PageRequest;
 use Clavia\Domain\Shared\ScopeSet;
+use Clavia\Domain\Shared\SecretGenerator;
+use ClaviaTest\Support\BackChannelLogouts;
 use ClaviaTest\Support\Fake\FakePasswordHasher;
 use ClaviaTest\Support\Fake\FrozenClock;
+use ClaviaTest\Support\Fake\InMemoryClientRepository;
 use ClaviaTest\Support\Fake\InMemoryConnectionRepository;
 use ClaviaTest\Support\Fake\InMemoryExternalIdentityRepository;
 use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
 use ClaviaTest\Support\Fake\InMemoryRecoveryCodeRepository;
+use ClaviaTest\Support\Fake\InMemorySessionStore;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
 use ClaviaTest\Support\Fake\SeededRandomSource;
@@ -63,6 +69,8 @@ final class UsersTest extends TestCase
     private InMemoryRecoveryCodeRepository $recoveryCodes;
     private InMemoryConnectionRepository $connections;
     private InMemoryExternalIdentityRepository $identities;
+    private Sessions $sessions;
+    private SignOutEverywhere $signOut;
 
     #[\Override]
     protected function setUp(): void
@@ -75,6 +83,15 @@ final class UsersTest extends TestCase
         $this->recoveryCodes = new InMemoryRecoveryCodeRepository();
         $this->connections = new InMemoryConnectionRepository();
         $this->identities = new InMemoryExternalIdentityRepository();
+        $this->sessions = new Sessions(
+            new InMemorySessionStore($this->clock),
+            new SecretGenerator(new SeededRandomSource(4)),
+            $this->clock,
+            28800,
+            604800,
+        );
+        [$backChannel] = BackChannelLogouts::for(new InMemoryClientRepository(), $this->clock);
+        $this->signOut = new SignOutEverywhere($this->sessions, $backChannel);
     }
 
     public function testACreatedUserHasAHashedPasswordAndTheStandingAsked(): void
@@ -222,7 +239,7 @@ final class UsersTest extends TestCase
     public function testDeletingRemovesTheUserButNotTheOneTheCallerActsAs(): void
     {
         $user = $this->create(new NewUser('ada@example.com', 'a-good-password'));
-        $delete = new DeleteUser($this->users);
+        $delete = new DeleteUser($this->users, $this->signOut);
 
         try {
             $delete($user->id, new ManagementCaller(ClientId::fromString('dashboard'), $user->id, ScopeSet::empty()));
@@ -363,7 +380,7 @@ final class UsersTest extends TestCase
 
     private function update(): UpdateUser
     {
-        return new UpdateUser($this->users, $this->hasher, $this->clock, $this->factors);
+        return new UpdateUser($this->users, $this->hasher, $this->clock, $this->factors, $this->signOut);
     }
 
     private function enrol(User $user): void

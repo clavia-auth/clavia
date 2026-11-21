@@ -75,6 +75,10 @@ final readonly class IdTokenClaims
         if ($authentication->methods !== []) {
             $claims['amr'] = $authentication->methodValues();
         }
+        if ($authentication->sid !== null) {
+            // The session a later logout token names (Back-Channel Logout 1.0 §2.1).
+            $claims['sid'] = $authentication->sid;
+        }
         $claims['at_hash'] = $atHash;
 
         // The protocol claims above win over identity claims of the same name (`sub`).

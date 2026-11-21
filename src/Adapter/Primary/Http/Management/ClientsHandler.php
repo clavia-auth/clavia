@@ -59,6 +59,8 @@ final readonly class ClientsHandler implements RequestHandlerInterface
             $body->strings('post_logout_redirect_uris') ?? [],
             $body->bool('is_first_party') ?? true,
             $body->strings('connections'),
+            $body->string('backchannel_logout_uri'),
+            $body->bool('backchannel_logout_session_required') ?? false,
         ));
 
         return $this->responder->created(

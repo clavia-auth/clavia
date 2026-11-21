@@ -17,6 +17,7 @@ use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\SecretGenerator;
+use ClaviaTest\Support\BackChannelLogouts;
 use ClaviaTest\Support\Clients;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
@@ -43,7 +44,8 @@ final class SignOutTest extends TestCase
         );
         $clients = new InMemoryClientRepository();
         $clients->save(Clients::public('spa', ['https://app.example/cb', 'http://localhost:3000/callback']));
-        $this->signOut = new SignOut($this->sessions, $clients);
+        [$backChannel] = BackChannelLogouts::for($clients, $clock);
+        $this->signOut = new SignOut($this->sessions, $backChannel, $clients);
     }
 
     public function testTheSessionIsEnded(): void

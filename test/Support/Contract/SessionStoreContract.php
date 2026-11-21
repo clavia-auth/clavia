@@ -14,6 +14,7 @@ namespace ClaviaTest\Support\Contract;
 use Clavia\Application\Port\SessionStore;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\Session;
+use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
 use ClaviaTest\Support\Fake\SeededRandomSource;
@@ -93,6 +94,109 @@ trait SessionStoreContract
         $this->sessions()->save('session-1', $replacement, 600);
 
         self::assertSame('another-sid', $this->sessions()->find('session-1')?->sid);
+    }
+
+    #[Test]
+    public function theApplicationsThatSignedInAreKeptWithTheSession(): void
+    {
+        $session = $this->aSession();
+        $this->sessions()->save('session-1', $session, 600);
+        self::assertSame([], $this->sessions()->find('session-1')?->clients);
+
+        $this->sessions()->recordClient($session->userId, 'the-sid', ClientId::fromString('spa'));
+        $this->sessions()->recordClient($session->userId, 'the-sid', ClientId::fromString('admin'));
+        $this->sessions()->recordClient($session->userId, 'the-sid', ClientId::fromString('spa'));
+
+        self::assertSame(['admin', 'spa'], self::clientIds($this->sessions()->find('session-1')));
+        self::assertSame(['admin', 'spa'], self::clientIds($this->sessions()->ofUser($session->userId)[0] ?? null));
+    }
+
+    #[Test]
+    public function aClientIsRecordedOnlyOnTheAccountsOwnLiveSession(): void
+    {
+        $session = $this->aSession();
+        $this->sessions()->save('session-1', $session, 600);
+
+        $stranger = UserId::generate(new SeededRandomSource(5));
+        $this->sessions()->recordClient($stranger, 'the-sid', ClientId::fromString('x'));
+        $this->sessions()->recordClient($session->userId, 'another-sid', ClientId::fromString('x'));
+        $this->sessions()->recordClient($session->userId, '', ClientId::fromString('x'));
+        self::assertSame([], $this->sessions()->find('session-1')?->clients);
+
+        $this->sessions()->delete('session-1');
+        $this->sessions()->recordClient($session->userId, 'the-sid', ClientId::fromString('spa'));
+        $this->sessions()->save('session-1', $session, 600);
+        self::assertSame([], $this->sessions()->find('session-1')?->clients, 'A new session starts with none.');
+    }
+
+    #[Test]
+    public function anAccountsSessionsAreListedOldestFirstAndEndedTogetherOrBySid(): void
+    {
+        $userId = $this->aSession()->userId;
+        $this->sessions()->save('later', $this->sessionOf($userId, 'sid-later', '2026-01-15T12:00:00Z'), 600);
+        $this->sessions()->save('earlier', $this->sessionOf($userId, 'sid-earlier', '2026-01-15T09:00:00Z'), 600);
+        $this->sessions()->save('third', $this->sessionOf($userId, 'sid-third', '2026-01-15T13:00:00Z'), 600);
+        $stranger = UserId::generate(new SeededRandomSource(5));
+        $this->sessions()->save('stranger', $this->sessionOf($stranger, 's', null), 600);
+        $this->sessions()->delete('third');
+
+        self::assertSame(['sid-earlier', 'sid-later'], self::sids($this->sessions()->ofUser($userId)));
+
+        self::assertSame(['sid-later'], self::sids($this->sessions()->endOfUser($userId, 'sid-later')));
+        self::assertSame([], $this->sessions()->endOfUser($userId, 'sid-later'), 'Already ended.');
+        self::assertNull($this->sessions()->find('later'));
+        self::assertNotNull($this->sessions()->find('earlier'));
+
+        self::assertSame(['sid-earlier'], self::sids($this->sessions()->endOfUser($userId)));
+        self::assertNull($this->sessions()->find('earlier'));
+        self::assertSame([], $this->sessions()->ofUser($userId));
+        self::assertNotNull($this->sessions()->find('stranger'), 'Someone else\'s session is left alone.');
+    }
+
+    #[Test]
+    public function aReplacedSessionIsNoLongerItsFormerOwners(): void
+    {
+        $first = $this->aSession();
+        $this->sessions()->save('session-1', $first, 600);
+        $stranger = UserId::generate(new SeededRandomSource(5));
+        $this->sessions()->save('session-1', $this->sessionOf($stranger, 's', null), 600);
+
+        self::assertSame([], $this->sessions()->ofUser($first->userId));
+        self::assertSame([], $this->sessions()->endOfUser($first->userId));
+        self::assertNotNull($this->sessions()->find('session-1'));
+    }
+
+    /**
+     * @param non-empty-string $sid
+     */
+    private function sessionOf(UserId $userId, string $sid, ?string $at): Session
+    {
+        return Session::establish(
+            $userId,
+            [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
+            $sid,
+            new DateTimeImmutable($at ?? '2026-01-15T10:00:00Z'),
+            604800,
+        );
+    }
+
+    /**
+     * @param list<Session> $sessions
+     *
+     * @return list<string>
+     */
+    private static function sids(array $sessions): array
+    {
+        return array_map(static fn (Session $session): string => $session->sid, $sessions);
+    }
+
+    /** @return list<string>|null */
+    private static function clientIds(?Session $session): ?array
+    {
+        return $session === null
+            ? null
+            : array_map(static fn (ClientId $client): string => $client->value, $session->clients);
     }
 
     private function aSession(): Session

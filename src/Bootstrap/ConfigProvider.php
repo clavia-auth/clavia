@@ -63,6 +63,7 @@ use Clavia\Adapter\Primary\Http\Management\UserIdentitiesHandler;
 use Clavia\Adapter\Primary\Http\Management\UserMfaHandler;
 use Clavia\Adapter\Primary\Http\Management\UserPermissionsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserRolesHandler;
+use Clavia\Adapter\Primary\Http\Management\UserSessionsHandler;
 use Clavia\Adapter\Primary\Http\Management\UsersHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\DeviceAuthorizationHandler;
@@ -88,6 +89,7 @@ use Clavia\Adapter\Secondary\IdentityProvider\ProviderHttp;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use Clavia\Adapter\Secondary\Redis\RedisConnection;
 use Clavia\Adapter\Secondary\Signing\Jose\JoseSignatureVerifier;
+use Clavia\Adapter\Secondary\System\AfterResponseTasks;
 use Clavia\Adapter\Secondary\System\SystemClock;
 use Clavia\Adapter\Secondary\System\SystemRandomSource;
 use Clavia\Application\Authentication\DevelopmentAutoLogin;
@@ -117,6 +119,7 @@ use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Authentication\SignIn\CompleteFirstFactor;
 use Clavia\Application\Authentication\SignIn\SignInWithPassword;
 use Clavia\Application\Authentication\SignOut;
+use Clavia\Application\Authentication\SignOutEverywhere;
 use Clavia\Application\Clients\RegisterMachineClient;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\Development\BuildAuthorizationUrl;
@@ -124,6 +127,7 @@ use Clavia\Application\Development\SeedDashboardClient;
 use Clavia\Application\Development\SeedDevelopmentData;
 use Clavia\Application\Development\SeedManagementAccess;
 use Clavia\Application\Management\Caller\AuthenticateManagementCaller;
+use Clavia\Application\Management\Clients\BackChannelLogoutRegistration;
 use Clavia\Application\Management\Clients\ClientConnections;
 use Clavia\Application\Management\Clients\DeleteClient;
 use Clavia\Application\Management\Clients\ReadClients;
@@ -159,6 +163,7 @@ use Clavia\Application\Management\Users\ReadUsers;
 use Clavia\Application\Management\Users\ResetUserMfa;
 use Clavia\Application\Management\Users\UnlinkIdentity;
 use Clavia\Application\Management\Users\UpdateUser;
+use Clavia\Application\Management\Users\UserSessions;
 use Clavia\Application\Management\Users\WithdrawConsent;
 use Clavia\Application\OAuth2\Authorize\Authorize;
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
@@ -186,10 +191,13 @@ use Clavia\Application\Oidc\Keys\GenerateSigningKey;
 use Clavia\Application\Oidc\Keys\ListSigningKeys;
 use Clavia\Application\Oidc\Keys\PublishSigningKeys;
 use Clavia\Application\Oidc\Keys\RotateSigningKey;
+use Clavia\Application\Oidc\Logout\BackChannelLogout;
 use Clavia\Application\Oidc\Logout\EndSession;
 use Clavia\Application\Oidc\UserInfo\ReadUserInfo;
 use Clavia\Application\Port\AttemptCounter;
+use Clavia\Application\Port\BackChannelLogoutDelivery;
 use Clavia\Application\Port\ConsentStateStore;
+use Clavia\Application\Port\DeferredTasks;
 use Clavia\Application\Port\DeviceAuthorizationStore;
 use Clavia\Application\Port\ExternalSignInStore;
 use Clavia\Application\Port\IdentityProviders;
@@ -199,6 +207,7 @@ use Clavia\Application\Port\MailOutbox;
 use Clavia\Application\Port\MfaChallengeStore;
 use Clavia\Application\Port\NonceRegistry;
 use Clavia\Application\Port\OidcDiscovery;
+use Clavia\Application\Port\OutboundUrls;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Application\Port\PasswordlessChallengeStore;
 use Clavia\Application\Port\SchemaMigrator;
@@ -340,6 +349,12 @@ final class ConfigProvider
                     ResolveEndUser::class => Container\ResolveEndUserFactory::class,
                     SignInWithPassword::class => Container\SignInWithPasswordFactory::class,
                     SignOut::class => Container\SignOutFactory::class,
+                    SignOutEverywhere::class => Container\SignOutEverywhereFactory::class,
+                    BackChannelLogout::class => Container\BackChannelLogoutFactory::class,
+                    BackChannelLogoutDelivery::class => Container\BackChannelLogoutDeliveryFactory::class,
+                    AfterResponseTasks::class => Container\AfterResponseTasksFactory::class,
+                    UserSessions::class => Container\UserSessionsFactory::class,
+                    BackChannelLogoutRegistration::class => Container\BackChannelLogoutRegistrationFactory::class,
                     DescribeLoginPage::class => Container\DescribeLoginPageFactory::class,
                     CompactJws::class => Container\CompactJwsFactory::class,
                     IdTokenIssuer::class => Container\IdTokenIssuerFactory::class,
@@ -499,6 +514,7 @@ final class ConfigProvider
                     UserRolesHandler::class => Container\UserRolesHandlerFactory::class,
                     UserPermissionsHandler::class => Container\UserPermissionsHandlerFactory::class,
                     UserConsentsHandler::class => Container\UserConsentsHandlerFactory::class,
+                    UserSessionsHandler::class => Container\UserSessionsHandlerFactory::class,
                     UserIdentitiesHandler::class => Container\UserIdentitiesHandlerFactory::class,
                     ConnectionsHandler::class => Container\ConnectionsHandlerFactory::class,
                     ConnectionHandler::class => Container\ConnectionHandlerFactory::class,
@@ -522,6 +538,12 @@ final class ConfigProvider
                     AssignRoleCommand::class => Container\AssignRoleCommandFactory::class,
                     ListRolesCommand::class => Container\ListRolesCommandFactory::class,
                     MailOutboxCommand::class => Container\MailOutboxCommandFactory::class,
+                ],
+                // A port whose adapter is also asked for by its own name: one instance.
+                'aliases' => [
+                    // The entry point runs the tasks; the application only defers them.
+                    DeferredTasks::class => AfterResponseTasks::class,
+                    OutboundUrls::class => OutboundUrlPolicy::class,
                 ],
             ],
             // The server-rendered pages: `layout::page`, `auth::login`, `error::page`,

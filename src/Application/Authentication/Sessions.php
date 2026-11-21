@@ -14,13 +14,15 @@ namespace Clavia\Application\Authentication;
 use Clavia\Application\Port\SessionStore;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\Session;
+use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\SecretGenerator;
 
 /**
- * The one place a browser session is started, looked up and ended.
+ * The one place a browser session is started, looked up and ended — and told which
+ * applications signed in through it.
  *
  * Keeping all three here is what keeps the lifetimes, the rotation on sign-in and the
  * sliding of the idle window from drifting apart between the flows that use them
@@ -111,6 +113,49 @@ final readonly class Sessions
     }
 
     /**
+     * Note that `$client` was issued a code on the strength of `$session`: from now on it
+     * holds a session of its own that depends on this one, and is told when this one ends.
+     */
+    public function recordClient(Session $session, ClientId $client): void
+    {
+        $this->store->recordClient($session->userId, $session->sid, $client);
+    }
+
+    /**
+     * Every current session of an account, oldest first. Looking does not count as using:
+     * no idle window moves.
+     *
+     * @return list<Session>
+     */
+    public function of(UserId $userId): array
+    {
+        $now = $this->clock->now();
+
+        return array_values(array_filter(
+            $this->store->ofUser($userId),
+            static fn (Session $session): bool => ! $session->isExpiredAt($now),
+        ));
+    }
+
+    /**
+     * End every session of an account — "sign out everywhere" — and say which ended.
+     *
+     * @return list<Session>
+     */
+    public function endEverywhere(UserId $userId): array
+    {
+        return $this->current($this->store->endOfUser($userId));
+    }
+
+    /**
+     * End the session of an account that `$sid` names; null when it has none by that name.
+     */
+    public function endBySid(UserId $userId, string $sid): ?Session
+    {
+        return $sid === '' ? null : ($this->current($this->store->endOfUser($userId, $sid))[0] ?? null);
+    }
+
+    /**
      * End a session, returning what it was. Safe with an unknown or missing identifier.
      */
     public function end(#[\SensitiveParameter] ?string $sessionId): ?Session
@@ -122,6 +167,24 @@ final readonly class Sessions
         $session = $this->store->find($sessionId);
         $this->store->delete($sessionId);
 
-        return $session;
+        return $session === null ? null : ($this->current([$session])[0] ?? null);
+    }
+
+    /**
+     * The sessions among `$sessions` that were still current: one past its absolute
+     * ceiling had already ended, and ending it again is news to nobody.
+     *
+     * @param list<Session> $sessions
+     *
+     * @return list<Session>
+     */
+    private function current(array $sessions): array
+    {
+        $now = $this->clock->now();
+
+        return array_values(array_filter(
+            $sessions,
+            static fn (Session $session): bool => ! $session->isExpiredAt($now),
+        ));
     }
 }

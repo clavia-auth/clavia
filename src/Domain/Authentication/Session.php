@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Domain\Authentication;
 
+use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\InvalidValue;
@@ -27,7 +28,10 @@ use DateTimeImmutable;
  *
  * It records the connection the person signed in through — a pool, or an external
  * provider: an application that does not enable that connection does not accept the
- * session, and its person signs in again through one it does.
+ * session, and its person signs in again through one it does. And it knows the
+ * applications that signed in through it — each one that was issued an authorization
+ * code while it was current — which are the ones told when it ends (OIDC Back-Channel
+ * Logout 1.0).
  *
  * The identifier the browser holds is not part of this object: it is a secret, stored
  * only as a digest, and handed out once when the session is established.
@@ -39,6 +43,7 @@ final readonly class Session
      * @param non-empty-string           $sid     The OIDC session identifier (Back-Channel Logout
      *                                            1.0 §2.1): names the session to relying parties
      *                                            without giving them anything that opens it.
+     * @param list<ClientId>             $clients The applications that signed in through it, by id.
      */
     private function __construct(
         public UserId $userId,
@@ -47,6 +52,7 @@ final readonly class Session
         public array $methods,
         public string $sid,
         public ConnectionName $connection,
+        public array $clients,
     ) {
     }
 
@@ -77,6 +83,7 @@ final readonly class Session
 
     /**
      * @param list<AuthenticationMethod> $methods
+     * @param list<ClientId>             $clients
      *
      * @throws InvalidValue When the session would end before it began, names no method or has no sid.
      */
@@ -87,6 +94,7 @@ final readonly class Session
         array $methods,
         string $sid,
         ConnectionName $connection,
+        array $clients = [],
     ): self {
         if ($expiresAt <= $authenticatedAt) {
             throw new InvalidValue('A session must end after it begins.');
@@ -101,8 +109,13 @@ final readonly class Session
         }
 
         $methods = array_values(array_unique($methods, SORT_REGULAR));
+        $byId = [];
+        foreach ($clients as $client) {
+            $byId[$client->value] = $client;
+        }
+        ksort($byId, SORT_STRING);
 
-        return new self($userId, $authenticatedAt, $expiresAt, $methods, $sid, $connection);
+        return new self($userId, $authenticatedAt, $expiresAt, $methods, $sid, $connection, array_values($byId));
     }
 
     public function isExpiredAt(DateTimeImmutable $now): bool

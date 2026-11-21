@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Application\Management\Clients\BackChannelLogoutRegistration;
 use Clavia\Application\Management\Clients\UpdateClient;
 use Clavia\Domain\Client\ClientRepository;
 use Psr\Container\ContainerInterface;
@@ -21,7 +22,9 @@ final class UpdateClientFactory
     {
         /** @var ClientRepository $clients */
         $clients = $container->get(ClientRepository::class);
+        /** @var BackChannelLogoutRegistration $backChannel */
+        $backChannel = $container->get(BackChannelLogoutRegistration::class);
 
-        return new UpdateClient($clients);
+        return new UpdateClient($clients, $backChannel);
     }
 }

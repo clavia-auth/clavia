@@ -192,6 +192,17 @@ knows what changes.
 | Saving an API | Permission rows updated in place | The same, now required: rows are reconciled, never replaced | A role holds a permission by a foreign key onto its row; replacing the rows would take every role's grant of them along. |
 | `roles create` / `roles assign` / `roles list` | Typer subcommands | `roles:create` (`--audience`, `--scope`, `--description`), `roles:assign`, `roles:list` | The CLI's `group:verb` convention. |
 
+## Back-channel logout
+
+| Area | Python | PHP | Why |
+|---|---|---|---|
+| `aud` of a logout token | A one-element array | A string, like the ID token's | One audience; the specification allows either, and the two tokens agree. |
+| The applications a session signed in to | A set keyed by `sid`, living the absolute lifetime | A set beside the session, living exactly as long as it: every change to the session's TTL is made to both | An idle session that ends takes its list with it. |
+| Recording a client on the session | `SADD` then `EXPIRE`, from the code's `sid` | One script: added only while the session exists | A session that ended in between does not grow a list again. |
+| Deliveries | One background task sending to every application in turn | One deferred task per application | A signing failure for one does not cost the others theirs. |
+| A device approved on another screen | — | Its ID token carries no `sid`, and the device is not recorded on the session | The device holds no session here; telling it the browser signed out would end something unrelated. |
+| Deferred work | Starlette `BackgroundTask` | `DeferredTasks`: run after `fastcgi_finish_request()`, in the same worker | No queue needed; a queue adapter can replace it. |
+
 ## RP-Initiated Logout
 
 | Area | Python | PHP | Why |

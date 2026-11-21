@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Management\Users;
 
+use Clavia\Application\Authentication\SignOutEverywhere;
 use Clavia\Application\Management\NotFound;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
@@ -35,6 +36,7 @@ final readonly class UpdateUser
         private PasswordHasher $hasher,
         private Clock $clock,
         private MfaFactorRepository $factors,
+        private SignOutEverywhere $signOut,
     ) {
     }
 
@@ -57,6 +59,7 @@ final readonly class UpdateUser
         if ($changes->password !== null) {
             $user->changePassword($this->hasher->hash(PasswordPolicy::accept($changes->password)), $now);
         }
+        $deactivated = $changes->isActive === false && $user->isActive();
         if ($changes->isActive === true) {
             $user->activate($now);
         } elseif ($changes->isActive === false) {
@@ -67,6 +70,10 @@ final readonly class UpdateUser
         }
 
         $this->users->save($user);
+        // A deactivated account is signed out everywhere, and its applications told so.
+        if ($deactivated) {
+            ($this->signOut)($user->id);
+        }
 
         return new ManagedUser($user, $this->factors->find($id)?->isConfirmed() ?? false);
     }

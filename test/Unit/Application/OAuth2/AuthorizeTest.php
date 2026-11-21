@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace ClaviaTest\Unit\Application\OAuth2;
 
 use Clavia\Application\Authentication\EndUser;
+use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\OAuth2\Authorize\AuthorizationOutcome;
 use Clavia\Application\OAuth2\Authorize\AuthorizationRequest;
@@ -51,6 +52,7 @@ use ClaviaTest\Support\Fake\InMemoryLoginStateStore;
 use ClaviaTest\Support\Fake\InMemoryNonceRegistry;
 use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
 use ClaviaTest\Support\Fake\InMemoryRoleRepository;
+use ClaviaTest\Support\Fake\InMemorySessionStore;
 use ClaviaTest\Support\Fake\RecordingMailer;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use DateTimeImmutable;
@@ -73,6 +75,7 @@ final class AuthorizeTest extends TestCase
     private InMemoryConnectionRepository $connections;
     private Authorize $authorize;
     private UserId $userId;
+    private Sessions $sessions;
 
     #[\Override]
     protected function setUp(): void
@@ -89,6 +92,13 @@ final class AuthorizeTest extends TestCase
         $this->consentStates = new InMemoryConsentStateStore($clock);
         $this->connections = new InMemoryConnectionRepository($this->clients);
         $this->userId = UserId::generate(new SeededRandomSource(2));
+        $this->sessions = new Sessions(
+            new InMemorySessionStore($clock),
+            new SecretGenerator(new SeededRandomSource(3)),
+            $clock,
+            28800,
+            604800,
+        );
         $this->authorize = new Authorize(
             $this->clients,
             $this->codes,
@@ -99,6 +109,7 @@ final class AuthorizeTest extends TestCase
             $this->consents,
             $this->consentStates,
             new ConnectionAccess($this->connections, new FakeIdentityProviders(), new RecordingMailer(false)),
+            $this->sessions,
             new SecretGenerator($random),
             $random,
             $clock,
@@ -400,6 +411,7 @@ final class AuthorizeTest extends TestCase
             $this->consents,
             $this->consentStates,
             new ConnectionAccess($this->connections, new FakeIdentityProviders(), new RecordingMailer(false)),
+            $this->sessions,
             new SecretGenerator($random),
             $random,
             new FrozenClock(),
@@ -645,6 +657,33 @@ final class AuthorizeTest extends TestCase
         ));
 
         self::assertInstanceOf(CodeIssued::class, $outcome);
+    }
+
+    public function testACodeIssuedThroughASessionCarriesItsSidAndTheSessionKnowsTheApplication(): void
+    {
+        $sessionId = $this->sessions->establish(
+            $this->userId,
+            [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
+            null,
+        );
+        $session = $this->sessions->resolve($sessionId);
+        self::assertNotNull($session);
+
+        $outcome = ($this->authorize)(
+            new AuthorizationRequest($this->valid(), self::ENDPOINT, new EndUser($this->userId, $session)),
+        );
+
+        self::assertInstanceOf(CodeIssued::class, $outcome);
+        self::assertSame($session->sid, $this->codes->all()[0]->authentication->sid);
+        $clients = $this->sessions->resolve($sessionId)->clients ?? [];
+        self::assertSame(['spa'], array_map(static fn (ClientId $id): string => $id->value, $clients));
+    }
+
+    public function testACodeWithoutASessionNamesNone(): void
+    {
+        self::assertInstanceOf(CodeIssued::class, $this->authorizeAsUser($this->valid()));
+        self::assertNull($this->codes->all()[0]->authentication->sid);
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────────

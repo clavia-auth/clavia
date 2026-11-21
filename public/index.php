@@ -9,6 +9,7 @@
 
 declare(strict_types=1);
 
+use Clavia\Adapter\Secondary\System\AfterResponseTasks;
 use Mezzio\Application;
 use Psr\Container\ContainerInterface;
 
@@ -35,4 +36,13 @@ require 'vendor/autoload.php';
     (require 'config/routes.php')($app);
 
     $app->run();
+
+    // The response is out; let PHP-FPM hand it to the browser before doing what the
+    // request deferred — telling other servers about it — so nobody waits on them.
+    if (function_exists('fastcgi_finish_request')) {
+        fastcgi_finish_request();
+    }
+    /** @var AfterResponseTasks $deferred */
+    $deferred = $container->get(AfterResponseTasks::class);
+    $deferred->run();
 })();
