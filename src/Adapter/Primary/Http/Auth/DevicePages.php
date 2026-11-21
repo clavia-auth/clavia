@@ -23,6 +23,8 @@ final class DevicePages
 
     public const string INVALID_CODE = 'That code is not valid or has expired. Check the device and try again.';
 
+    public const string TOO_MANY_CODES = 'Too many codes were not valid. Wait a few minutes before trying again.';
+
     public const string NO_PERMISSION = 'You do not have permission to use this API, so the device was refused.';
 
     private function __construct()

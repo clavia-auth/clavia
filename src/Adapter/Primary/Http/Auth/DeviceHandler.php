@@ -19,6 +19,7 @@ use Clavia\Application\Authentication\ResolveEndUser;
 use Clavia\Application\OAuth2\Device\DecideDeviceRequest;
 use Clavia\Application\OAuth2\Device\DescribeDeviceRequest;
 use Clavia\Application\OAuth2\Device\DeviceSignInRequired;
+use Clavia\Application\OAuth2\Device\UserCodeThrottle;
 use Clavia\Domain\Authentication\LocalPath;
 use Clavia\Domain\Client\ClientId;
 use Psr\Http\Message\ResponseInterface;
@@ -44,6 +45,7 @@ final readonly class DeviceHandler implements RequestHandlerInterface
         private DecideDeviceRequest $decide,
         private AuthPageResponder $responder,
         private AuthCookies $cookies,
+        private UserCodeThrottle $throttle,
     ) {
     }
 
@@ -65,6 +67,9 @@ final readonly class DeviceHandler implements RequestHandlerInterface
         if ($typed === '') {
             return $this->responder->page($request, DevicePages::entry());
         }
+        if ($this->throttle->isThrottled($endUser->userId, ClientAddress::of($request))) {
+            return $this->responder->page($request, DevicePages::entry($typed, DevicePages::TOO_MANY_CODES, 429));
+        }
 
         $decision = $isPost ? $form->get('decision') : null;
         if ($decision !== 'allow' && $decision !== 'deny') {
@@ -73,7 +78,7 @@ final readonly class DeviceHandler implements RequestHandlerInterface
 
         $outcome = ($this->decide)($typed, $endUser, $decision === 'allow');
         if ($outcome === null) {
-            return $this->invalid($request, $typed);
+            return $this->invalid($request, $typed, $endUser);
         }
         if ($outcome instanceof DeviceSignInRequired) {
             return $this->signInFirst(DevicePages::address($outcome->userCode), $outcome->clientId);
@@ -87,12 +92,15 @@ final readonly class DeviceHandler implements RequestHandlerInterface
         $review = ($this->describe)($typed, $endUser);
 
         return $review === null
-            ? $this->invalid($request, $typed)
+            ? $this->invalid($request, $typed, $endUser)
             : $this->responder->page($request, DevicePages::review($review));
     }
 
-    private function invalid(ServerRequestInterface $request, string $typed): ResponseInterface
+    /** A code that stands for nothing: said so, and counted against whoever typed it. */
+    private function invalid(ServerRequestInterface $request, string $typed, EndUser $endUser): ResponseInterface
     {
+        $this->throttle->recordMiss($endUser->userId, ClientAddress::of($request));
+
         return $this->responder->page($request, DevicePages::entry($typed, DevicePages::INVALID_CODE, 400));
     }
 

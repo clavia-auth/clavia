@@ -35,6 +35,7 @@ final readonly class ClientChanges
         public bool $changesBackChannelLogoutUri = false,
         public ?string $backChannelLogoutUri = null,
         public ?bool $backChannelLogoutSessionRequired = null,
+        public ?bool $requirePkce = null,
     ) {
     }
 }

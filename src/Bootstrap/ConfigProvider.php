@@ -175,6 +175,7 @@ use Clavia\Application\OAuth2\Device\DecideDeviceRequest;
 use Clavia\Application\OAuth2\Device\DescribeDeviceRequest;
 use Clavia\Application\OAuth2\Device\PendingDeviceRequests;
 use Clavia\Application\OAuth2\Device\RequestDeviceAuthorization;
+use Clavia\Application\OAuth2\Device\UserCodeThrottle;
 use Clavia\Application\OAuth2\ReadRequestedAccess;
 use Clavia\Application\OAuth2\Token\AuthorizationCodeGrant;
 use Clavia\Application\OAuth2\Token\ClientCredentialsGrant;
@@ -347,6 +348,7 @@ final class ConfigProvider
                     BuildAuthorizationUrl::class => Container\BuildAuthorizationUrlFactory::class,
                     Sessions::class => Container\SessionsFactory::class,
                     LoginThrottle::class => Container\LoginThrottleFactory::class,
+                    UserCodeThrottle::class => Container\UserCodeThrottleFactory::class,
                     ResolveEndUser::class => Container\ResolveEndUserFactory::class,
                     SignInWithPassword::class => Container\SignInWithPasswordFactory::class,
                     SignOut::class => Container\SignOutFactory::class,

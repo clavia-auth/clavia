@@ -115,8 +115,8 @@ final readonly class Authorize
         try {
             self::refuseRequestObjects($parameters);
             [$scope, $target] = $this->validate($parameters, $client);
-            $challenge = $this->challenge($parameters);
             $nonce = $this->nonce($parameters, $client, $scope);
+            $challenge = self::challenge($parameters, $client, $nonce);
             $prompt = Prompt::fromParameter($parameters->get('prompt'));
             $maxAge = MaxAge::fromParameter($parameters->get('max_age'));
         } catch (OAuth2Error $refusal) {
@@ -396,13 +396,24 @@ final readonly class Authorize
      * the only method. A missing method is not defaulted: RFC 7636's default is
      * `plain`, the downgrade PKCE exists to prevent.
      *
+     * The one exception is OAuth 2.1 §7.5.1's: a confidential client the operator relieved
+     * of PKCE may omit it from an OpenID Connect request that carries a `nonce`, which
+     * then binds the code to the client's own request instead — the ID token repeats it.
+     * A challenge it does send is checked like any other.
+     *
      * @throws OAuth2Error
      */
-    private function challenge(RequestParameters $parameters): CodeChallenge
+    private static function challenge(RequestParameters $parameters, Client $client, ?Nonce $nonce): ?CodeChallenge
     {
         $challenge = $parameters->get('code_challenge');
+        if ($challenge === null && ! $client->requiresPkce && $nonce !== null) {
+            return null;
+        }
         if ($challenge === null) {
-            throw OAuth2Error::invalidRequest("Missing 'code_challenge' parameter: PKCE is required.");
+            throw OAuth2Error::invalidRequest($client->requiresPkce
+                ? "Missing 'code_challenge' parameter: PKCE is required."
+                : "Missing 'code_challenge' parameter: PKCE is required unless an OpenID Connect request carries "
+                    . "a 'nonce'.");
         }
 
         $method = $parameters->get('code_challenge_method');

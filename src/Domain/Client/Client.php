@@ -30,6 +30,10 @@ use DateTimeImmutable;
  *
  * A first-party application lists the connections its users may sign in through. A
  * third-party one lists none: it gets the domain connections, and those only.
+ *
+ * Every client proves its codes with PKCE unless relieved of it ({@see $requiresPkce}),
+ * and only a confidential one can be: OAuth 2.1 §7.5.1 allows a client that holds a
+ * secret to rely on the OpenID Connect `nonce` instead.
  */
 final readonly class Client
 {
@@ -56,6 +60,7 @@ final readonly class Client
         public array $postLogoutRedirectUris,
         public array $connections,
         public ?BackChannelLogout $backChannelLogout,
+        public bool $requiresPkce,
     ) {
     }
 
@@ -72,6 +77,8 @@ final readonly class Client
      * @param list<ConnectionName> $connections         The connections its users may sign in through.
      * @param BackChannelLogout|null $backChannelLogout Where to tell it that a session ended; null when
      *                                                  it does not want to be told.
+     * @param bool               $requiresPkce  False lets an OpenID Connect request carrying a `nonce`
+     *                                          go without PKCE; only for a confidential client.
      *
      * @throws InvalidValue When the registration contradicts itself, or a third-party client would
      *                      list connections.
@@ -89,6 +96,7 @@ final readonly class Client
         array $postLogoutRedirectUris = [],
         array $connections = [],
         ?BackChannelLogout $backChannelLogout = null,
+        bool $requiresPkce = true,
     ): self {
         $secretHash = $secretHash === '' ? null : $secretHash;
 
@@ -158,6 +166,12 @@ final readonly class Client
             throw new InvalidValue('The device code grant is available to first-party applications only.');
         }
 
+        // OAuth 2.1 §7.5.1: the exception is for a client that authenticates — a public
+        // client's codes would be anybody's.
+        if (! $requiresPkce && $type !== ClientType::Confidential) {
+            throw new InvalidValue('Only a confidential client can do without PKCE.');
+        }
+
         // RFC 6749 §4.4: the client credentials grant is for clients that can keep a secret.
         if (in_array(GrantType::ClientCredentials, $grantTypes, true) && $type !== ClientType::Confidential) {
             throw new InvalidValue('The client credentials grant is available to confidential clients only.');
@@ -176,6 +190,7 @@ final readonly class Client
             $postLogoutRedirectUris,
             self::sorted($connections),
             $backChannelLogout,
+            $requiresPkce,
         );
     }
 
@@ -201,6 +216,7 @@ final readonly class Client
             $this->postLogoutRedirectUris,
             $connections,
             $this->backChannelLogout,
+            $this->requiresPkce,
         );
     }
 
@@ -249,6 +265,7 @@ final readonly class Client
             $postLogoutRedirectUris ?? $this->postLogoutRedirectUris,
             $this->connections,
             $this->backChannelLogout,
+            $this->requiresPkce,
         );
     }
 
@@ -270,6 +287,31 @@ final readonly class Client
             $this->postLogoutRedirectUris,
             $this->connections,
             $backChannelLogout,
+            $this->requiresPkce,
+        );
+    }
+
+    /**
+     * The same client, required to use PKCE or relieved of it.
+     *
+     * @throws InvalidValue When a public client would be relieved of it.
+     */
+    public function withPkceRequired(bool $required): self
+    {
+        return self::register(
+            $this->id,
+            $this->name,
+            $this->type,
+            $this->authMethod,
+            $this->secretHash,
+            $this->redirectUris,
+            $this->grantTypes,
+            $this->responseTypes,
+            $this->createdAt,
+            $this->postLogoutRedirectUris,
+            $this->connections,
+            $this->backChannelLogout,
+            $required,
         );
     }
 
@@ -299,6 +341,7 @@ final readonly class Client
             $this->postLogoutRedirectUris,
             $this->connections,
             $this->backChannelLogout,
+            $this->requiresPkce,
         );
     }
 

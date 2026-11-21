@@ -11,12 +11,14 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Integration\Persistence;
 
+use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbAccessTokenRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbAuthorizationCodeRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbRefreshTokenRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbTransactionManager;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbUserRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PostgresUrl;
 use Clavia\Domain\Authentication\AuthenticationContext;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
@@ -30,6 +32,7 @@ use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\AuthorizationCode;
 use Clavia\Domain\OAuth2\AuthorizationCodeId;
 use Clavia\Domain\OAuth2\CodeChallenge;
+use Clavia\Domain\OAuth2\Refresh;
 use Clavia\Domain\OAuth2\RefreshToken;
 use Clavia\Domain\OAuth2\RefreshTokenId;
 use Clavia\Domain\OAuth2\RefreshTokenRepository;
@@ -40,9 +43,12 @@ use ClaviaTest\Support\Contract\AccessTokenRepositoryContract;
 use ClaviaTest\Support\Contract\RefreshTokenRepositoryContract;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use ClaviaTest\Support\IntegrationTestCase;
+use ClaviaTest\Support\TestEnvironment;
 use ClaviaTest\Support\TestStorage;
 use DateTimeImmutable;
 use LogicException;
+use PDOException;
+use Throwable;
 
 /**
  * The PostgreSQL access and refresh token repositories against their contracts.
@@ -75,6 +81,54 @@ final class PhpDbAccessTokenRepositoryTest extends IntegrationTestCase
         $this->expectException(LogicException::class);
 
         $this->refreshTokens()->lockForRefresh(Digest::of('anything'));
+    }
+
+    public function testTwoRefreshesOfOneTokenAtOnceLetExactlyOneWin(): void
+    {
+        // Two servers refreshing the same token at the same moment: each in its own
+        // session, as two PHP-FPM workers would be.
+        $code = $this->aStoredCode('code-1');
+        $digest = Digest::of('raced-token');
+        $this->refreshTokens()->add(RefreshToken::startFamily(
+            RefreshTokenId::generate(new SeededRandomSource(5)),
+            $digest,
+            $code,
+            ScopeSet::fromString('openid'),
+            new DateTimeImmutable('2026-01-15T10:00:00Z'),
+            3600,
+            7200,
+        ));
+        $now = new DateTimeImmutable('2026-01-15T10:30:00Z');
+        $first = TestStorage::database();
+        $second = new Database(PostgresUrl::parse(TestEnvironment::databaseUrl()));
+        $secondTokens = new PhpDbRefreshTokenRepository($second);
+
+        // The first locks the token and spends it, not yet committed…
+        $first->beginTransaction();
+        $winner = $this->refreshTokens()->lockForRefresh($digest);
+        self::assertNotNull($winner);
+        self::assertSame(Refresh::Usable, $winner->examine($code->clientId, $now));
+        $winner->spend($now);
+        $this->refreshTokens()->save($winner);
+
+        // …so the second can neither read it as usable nor spend it: it waits on the lock.
+        $second->beginTransaction();
+        $second->execute("SET LOCAL lock_timeout = '200ms'");
+        try {
+            $secondTokens->lockForRefresh($digest);
+            self::fail('A second session read a token another one was refreshing.');
+        } catch (Throwable $waiting) {
+            self::assertSame('55P03', self::sqlState($waiting), 'expected lock_not_available');
+        }
+        $second->rollBack();
+
+        $first->commit();
+
+        // Once the first commits, the second finds the token spent: a replay, never a second chain.
+        $second->beginTransaction();
+        $loser = $secondTokens->lockForRefresh($digest);
+        $second->rollBack();
+        self::assertSame(Refresh::Replayed, $loser?->examine($code->clientId, $now));
     }
 
     public function testARefreshTokenItselfIsNeverStored(): void
@@ -147,5 +201,16 @@ final class PhpDbAccessTokenRepositoryTest extends IntegrationTestCase
         self::assertNotNull($row);
         self::assertSame('Bearer', $row['token_type']);
         self::assertStringNotContainsString('the-plain-token', implode('|', array_map(strval(...), $row)));
+    }
+
+    private static function sqlState(Throwable $failure): ?string
+    {
+        for ($cause = $failure; $cause !== null; $cause = $cause->getPrevious()) {
+            if ($cause instanceof PDOException) {
+                return (string) $cause->getCode();
+            }
+        }
+
+        return null;
     }
 }

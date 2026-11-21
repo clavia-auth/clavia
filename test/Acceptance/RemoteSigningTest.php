@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Acceptance;
 
+use Clavia\Adapter\Secondary\Signing\Postgres\PostgresTokenSigner;
 use Clavia\Adapter\Secondary\Signing\Remote\RemoteTokenSigner;
 use Clavia\Application\Development\SeedDevelopmentData;
 use Clavia\Application\Port\SigningKeyStore;
@@ -35,6 +36,11 @@ final class RemoteSigningTest extends AcceptanceTestCase
     use OidcFixtures;
 
     private const string CUSTOM = LocalSigningKey::class;
+
+    public function testThePostgresBackendIsTheDefault(): void
+    {
+        self::assertInstanceOf(PostgresTokenSigner::class, $this->container()->get(TokenSigner::class));
+    }
 
     /**
      * @return iterable<string, array{string, string}>

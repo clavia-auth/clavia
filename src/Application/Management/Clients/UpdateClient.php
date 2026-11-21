@@ -63,6 +63,9 @@ final readonly class UpdateClient
                 $changes->backChannelLogoutSessionRequired ?? $client->backChannelLogout->sessionRequired ?? false,
             ));
         }
+        if ($changes->requirePkce !== null) {
+            $updated = $updated->withPkceRequired($changes->requirePkce);
+        }
         $this->clients->save($updated);
 
         return $updated;

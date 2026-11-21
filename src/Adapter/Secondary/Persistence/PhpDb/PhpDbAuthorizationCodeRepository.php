@@ -55,8 +55,8 @@ final readonly class PhpDbAuthorizationCodeRepository implements AuthorizationCo
                 'user_id' => $code->userId->value,
                 'redirect_uri' => $code->redirectUri,
                 'scope' => $code->scope->toString(),
-                'code_challenge' => $code->challenge->value,
-                'code_challenge_method' => CodeChallenge::METHOD,
+                'code_challenge' => $code->challenge?->value,
+                'code_challenge_method' => $code->challenge === null ? null : CodeChallenge::METHOD,
                 'audience' => $code->audience?->value,
                 'nonce' => $code->nonce?->value,
                 'auth_time' => Timestamp::toDatabaseOrNull($code->authentication->authenticatedAt),
@@ -80,7 +80,7 @@ final readonly class PhpDbAuthorizationCodeRepository implements AuthorizationCo
 
         /**
          * @var array{id: string, code_hash: string, client_id: string, user_id: string, redirect_uri: string,
-         *            scope: string, code_challenge: string, audience: string|null, nonce: string|null,
+         *            scope: string, code_challenge: string|null, audience: string|null, nonce: string|null,
          *            auth_time: string|null, amr: string, sid: string|null, expires_at: string,
          *            used_at: string|null, created_at: string}|null $row
          */
@@ -106,7 +106,7 @@ final readonly class PhpDbAuthorizationCodeRepository implements AuthorizationCo
             UserId::fromString($row['user_id']),
             $row['redirect_uri'],
             ScopeSet::fromString($row['scope']),
-            CodeChallenge::fromString($row['code_challenge']),
+            $row['code_challenge'] === null ? null : CodeChallenge::fromString($row['code_challenge']),
             $row['audience'] === null ? null : Audience::fromString($row['audience']),
             $row['nonce'] === null ? null : Nonce::fromString($row['nonce']),
             AuthenticationContext::reconstitute(

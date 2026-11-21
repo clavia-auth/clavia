@@ -659,6 +659,8 @@ final class ManagementApiTest extends AcceptanceTestCase
             ],
             // Grants this server does not have are not in the contract.
             ['client_type' => 'public', 'grant_types' => ['implicit']],
+            // A public client's codes are anybody's without PKCE (OAuth 2.1 §7.5.1).
+            ['client_type' => 'public', 'require_pkce' => false],
         ];
 
         foreach ($cases as $body) {
@@ -668,6 +670,31 @@ final class ManagementApiTest extends AcceptanceTestCase
                 json_encode($body, JSON_THROW_ON_ERROR),
             );
         }
+    }
+
+    public function testAConfidentialClientCanBeRelievedOfPkceAndHeldToItAgain(): void
+    {
+        $this->adminToken();
+
+        $created = self::document($this->api('POST', self::CLIENTS, [
+            'name' => 'Portal',
+            'client_type' => 'confidential',
+            'grant_types' => ['authorization_code'],
+            'response_types' => ['code'],
+            'redirect_uris' => ['https://portal.test/callback'],
+            'require_pkce' => false,
+        ]));
+        self::assertFalse($created['require_pkce']);
+        $clientId = $created['client_id'];
+        self::assertIsString($clientId);
+        $path = self::CLIENTS . '/' . $clientId;
+
+        self::assertTrue(self::document($this->api('PATCH', $path, ['require_pkce' => true]))['require_pkce']);
+        self::assertTrue(self::document($this->api('GET', $path))['require_pkce'], 'Stored, not just answered.');
+        // Every other client requires it, without being asked.
+        self::assertTrue(self::document($this->api('GET', self::CLIENTS . '/' . $this->publicClient()->id->value))[
+            'require_pkce'
+        ]);
     }
 
     public function testPatchRechecksTheMergedRegistration(): void

@@ -6,7 +6,7 @@ Auth0: OAuth2 flows, interactive login with MFA, and a Management API.
 This is the PHP 8.5 implementation. It is being ported feature by feature from the Python
 reference implementation; `CLAUDE.md` holds the migration plan and the current state.
 
-**Status: Step 19 — remote signing backends.** A person signs in with a password at `/auth/login`, with
+**Status: Step 20 — parity gate.** A person signs in with a password at `/auth/login`, with
 a code or a link sent by email, or with Google or GitHub once their credentials are configured (`CLAVIA_GOOGLE_CLIENT_ID` / `_SECRET`,
 `CLAVIA_GITHUB_CLIENT_ID` / `_SECRET`; register
 `https://auth.{domain}/auth/social/{provider}/callback` at the provider) — followed, once they
@@ -97,6 +97,13 @@ To rotate, create a new key there, make it the reference, and list the old one i
 identity, or an application named by `CLAVIA_AZURE_TENANT_ID`, `CLAVIA_AZURE_CLIENT_ID` and a
 `CLAVIA_AZURE_CLIENT_SECRET` or `CLAVIA_AZURE_FEDERATED_TOKEN_FILE`. Any other value is the class
 name of your own `RemoteSigningKey` — an HSM, Vault Transit — built from the key reference.
+
+Clavia passes the OpenID Foundation's Config OP plan and, but for one test OAuth 2.1 forbids
+passing, its Basic OP plan — results and how to run them in
+[`conformance/README.md`](conformance/README.md). The suite sends no PKCE, so its clients are
+registered with `"require_pkce": false`: a confidential client so registered may omit PKCE from
+an OpenID Connect request that carries a `nonce` (OAuth 2.1 §7.5.1). Every other client, and
+every public one, always uses PKCE.
 
 A client registered for the `refresh_token` grant (beside `authorization_code`) gets a
 refresh token with the code flow's tokens. Every refresh returns a new pair and spends the

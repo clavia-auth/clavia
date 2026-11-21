@@ -29,7 +29,7 @@ and multi-tenancy.
 
 ## Current state
 
-**Steps 0 to 19 are done: the foundations, Authorization Code + PKCE, the login page with
+**Steps 0 to 20 are done: the foundations, Authorization Code + PKCE, the login page with
 browser sessions, OpenID Connect (ID tokens, discovery, JWKS, userinfo), Client
 Credentials for machine clients holding a grant on an API, the Management API with
 audiences in the user's flow, two-factor authentication (TOTP and recovery codes),
@@ -1207,7 +1207,11 @@ route group** in `config/routes.php`, never piped globally.
 
 ### Protocol invariants
 
-- PKCE is mandatory with `S256`; `plain` does not exist.
+- PKCE is mandatory with `S256`; `plain` does not exist. The one exception is per client and
+  off by default: a confidential client registered with `require_pkce: false` may omit PKCE from
+  an OpenID Connect request carrying a `nonce` (OAuth 2.1 §7.5.1); the code is then bound by the
+  nonce, and a `code_verifier` presented for it is `invalid_grant`. A public client can never be
+  relieved of PKCE (domain rule and database check).
 - Authorization codes are single-use, short-lived, bound to `client_id`, `redirect_uri`, and
   `code_challenge`. Redirect URIs are pre-registered and matched exactly.
 - Refresh token rotation issues a new token on every use; replay of a consumed token revokes the
@@ -1699,11 +1703,22 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
 
 ### Phase D — Parity and cut-over
 
-#### [ ] Step 20 — Parity gate
+#### [x] Step 20 — Parity gate
 - Parity matrix: every Python test mapped to its PHP counterpart (404/404).
 - Run the OpenID Foundation conformance suite (Basic OP, Config OP) against both servers.
 - Black-box diff: the same scripted flows against Python and PHP, responses compared.
 - README, deployment docs, `docs/DEVIATIONS.md` reviewed; security review of every adapter.
+- Done: `docs/PARITY.md` maps all 404 Python tests (two gaps filled on the way:
+  `PhpDbAccessTokenRepositoryTest::testTwoRefreshesOfOneTokenAtOnceLetExactlyOneWin`, two real
+  sessions racing for one refresh token; `RemoteSigningTest::testThePostgresBackendIsTheDefault`).
+  Conformance against PHP only, and no black-box diff (decided 2026-11-21: Python compatibility
+  is not a goal, and `DEVIATIONS.md` already lists every difference): Config OP passes; Basic OP
+  passes but for `oidcc-ensure-request-without-nonce-succeeds-for-code-flow`, which OAuth 2.1
+  forbids passing — `conformance/README.md` (results, warnings, how to run, `provision.py`).
+  For the suite, `require_pkce` per client (migration `0022_optional_pkce`;
+  `Client::$requiresPkce`/`withPkceRequired()`, `AuthorizationCode::$challenge` nullable, a
+  verifier for a code without a challenge is `invalid_grant`). `docs/SECURITY-REVIEW.md`; its
+  finding fixed: `Application\OAuth2\Device\UserCodeThrottle` (RFC 8628 §5.1).
 
 #### [ ] Step 21 — Cut-over
 - Publish the repository; archive the Python project as reference.

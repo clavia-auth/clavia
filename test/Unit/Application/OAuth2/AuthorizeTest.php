@@ -144,7 +144,7 @@ final class AuthorizeTest extends TestCase
         self::assertTrue($stored->userId->equals($this->userId));
         self::assertSame(Clients::REDIRECT_URI, $stored->redirectUri);
         self::assertSame('openid email', $stored->scope->toString());
-        self::assertSame(self::CHALLENGE, $stored->challenge->value);
+        self::assertSame(self::CHALLENGE, $stored->challenge?->value);
         self::assertEquals(new DateTimeImmutable('2026-01-15T10:01:00Z'), $stored->expiresAt);
         self::assertNull($stored->usedAt());
     }
@@ -617,6 +617,28 @@ final class AuthorizeTest extends TestCase
         self::assertInstanceOf(RequestRefused::class, $byReference);
         self::assertSame(ErrorCode::RequestUriNotSupported, $byReference->error->error);
         self::assertSame([], $this->codes->all());
+    }
+
+    public function testAConfidentialClientRelievedOfPkceIsBoundByItsNonceInstead(): void
+    {
+        $this->clients->save(Clients::confidential('backend', 'hash')->withPkceRequired(false));
+        $withoutPkce = ['client_id' => 'backend', 'code_challenge' => null, 'code_challenge_method' => null];
+
+        $outcome = $this->authorizeAsUser($this->valid($withoutPkce + ['nonce' => 'n-0S6_WzA2Mj']));
+
+        self::assertInstanceOf(CodeIssued::class, $outcome);
+        $stored = $this->codes->all()[0];
+        self::assertNull($stored->challenge);
+        self::assertSame('n-0S6_WzA2Mj', $stored->nonce?->value);
+
+        // Without the nonce, or for a client that requires PKCE, the exemption is not there.
+        $withoutNonce = $this->authorizeAsUser($this->valid($withoutPkce));
+        $this->clients->save(Clients::confidential('backend', 'hash'));
+        $required = $this->authorizeAsUser($this->valid($withoutPkce + ['nonce' => 'n-another-one']));
+        foreach ([$withoutNonce, $required] as $refused) {
+            self::assertInstanceOf(RequestRefused::class, $refused);
+            self::assertSame(ErrorCode::InvalidRequest, $refused->error->error);
+        }
     }
 
     public function testPromptNoneWithAnotherValueIsRefused(): void

@@ -61,6 +61,7 @@ final readonly class ClientsHandler implements RequestHandlerInterface
             $body->strings('connections'),
             $body->string('backchannel_logout_uri'),
             $body->bool('backchannel_logout_session_required') ?? false,
+            $body->bool('require_pkce') ?? true,
         ));
 
         return $this->responder->created(

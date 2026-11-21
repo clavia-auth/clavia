@@ -184,6 +184,25 @@ final class ClientTest extends TestCase
         $client->reconfigure('App', [], $client->grantTypes, $client->responseTypes, $client->authMethod);
     }
 
+    public function testOnlyAConfidentialClientCanBeRelievedOfPkce(): void
+    {
+        $confidential = $this->register(
+            type: ClientType::Confidential,
+            authMethod: ClientAuthMethod::ClientSecretBasic,
+            secretHash: 'hash',
+        );
+
+        self::assertTrue($confidential->requiresPkce, 'Required unless an operator says otherwise.');
+        $relieved = $confidential->withPkceRequired(false);
+        self::assertFalse($relieved->requiresPkce);
+        self::assertFalse($relieved->withSecretHash('new-hash')->requiresPkce, 'Kept through other changes.');
+        self::assertTrue($relieved->withPkceRequired(true)->requiresPkce);
+
+        $this->expectException(InvalidValue::class);
+        $this->expectExceptionMessage('Only a confidential client can do without PKCE.');
+        $this->register()->withPkceRequired(false);
+    }
+
     public function testOnlyAConfidentialClientHasASecretToRotate(): void
     {
         $confidential = $this->register(

@@ -46,6 +46,7 @@ knows what changes.
 | Client identifiers | Any string | 1–64 visible ASCII characters, no colon | A colon cannot be carried in HTTP Basic credentials (RFC 7617 §2). Generated identifiers were never affected. |
 | List columns of `oauth2_clients` (`redirect_uris`, `grant_types`, `response_types`) | `JSON` | `jsonb`, each constrained to be an array | Not visible over HTTP. `jsonb` can be indexed and compared. |
 | Columns not used yet (`sid`, `is_first_party`, `is_system`, `enforce_policies`, per-connection email uniqueness…) | Present from the first revision that needed them | Added by the step that introduces the behaviour (`nonce`, `auth_time`, `amr` and the profile fields arrived with Step 4; `audience` on access tokens, the APIs and the client grants with Step 5) | Migrations are written as the port advances; `users.email` is unique on its own until connections arrive (Step 13). |
+| PKCE for a confidential OpenID Connect client | Always required | Required unless the client is registered with `require_pkce: false`; then an `openid` request carrying a `nonce` may omit it (OAuth 2.1 §7.5.1). A verifier presented for a code issued without a challenge is `invalid_grant` (§4.1.3). Public clients can never be relieved of it | The OpenID Foundation's conformance suite sends no PKCE in its OIDC tests; the nonce then binds the code to the client's request. Off by default, per client. |
 
 ## Client Credentials
 
@@ -169,6 +170,7 @@ knows what changes.
 | A request to `/oauth2/device/code` with a repeated parameter | One value used | `invalid_request` | RFC 6749 §3.1, as at every endpoint. |
 | A refresh token for a device | `refresh_token` registered beside the device grant | The same, and `refresh_token` is refused without the code or the device grant | A refresh token is only ever issued with a person's tokens. |
 | What the scope and audience may be | Checked by a copy of the authorization endpoint's rules | Checked by the same code as the authorization endpoint (`ReadRequestedAccess`) | The two cannot drift apart. |
+| Typing user codes | Unlimited | Misses counted per signed-in person and per address (`CLAVIA_LOGIN_MAX_ATTEMPTS` per `CLAVIA_LOGIN_ATTEMPT_WINDOW`); then `429` before any code is looked up | RFC 8628 §5.1: user code entry SHOULD be rate-limited — a typable code is only safe while nobody can try them all. |
 
 ## Passwordless sign-in
 

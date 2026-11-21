@@ -30,6 +30,8 @@ final readonly class NewClient
      * @param list<string>|null $connections The connections its users may sign in through; null for every
      *                                       one there is, or none for a third-party application.
      * @param string|null  $backChannelLogoutUri Where to tell it that a session it signed in through ended.
+     * @param bool         $requirePkce   False lets a confidential client's OpenID Connect requests carrying a
+     *                                    `nonce` go without PKCE (OAuth 2.1 §7.5.1).
      */
     public function __construct(
         public string $name = '',
@@ -43,6 +45,7 @@ final readonly class NewClient
         public ?array $connections = null,
         public ?string $backChannelLogoutUri = null,
         public bool $backChannelLogoutSessionRequired = false,
+        public bool $requirePkce = true,
     ) {
     }
 }

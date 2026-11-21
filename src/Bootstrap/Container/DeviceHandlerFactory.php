@@ -18,6 +18,7 @@ use Clavia\Application\Authentication\RequireSignIn;
 use Clavia\Application\Authentication\ResolveEndUser;
 use Clavia\Application\OAuth2\Device\DecideDeviceRequest;
 use Clavia\Application\OAuth2\Device\DescribeDeviceRequest;
+use Clavia\Application\OAuth2\Device\UserCodeThrottle;
 use Psr\Container\ContainerInterface;
 
 final class DeviceHandlerFactory
@@ -37,6 +38,9 @@ final class DeviceHandlerFactory
         /** @var AuthCookies $cookies */
         $cookies = $container->get(AuthCookies::class);
 
-        return new DeviceHandler($resolveEndUser, $requireSignIn, $describe, $decide, $responder, $cookies);
+        /** @var UserCodeThrottle $throttle */
+        $throttle = $container->get(UserCodeThrottle::class);
+
+        return new DeviceHandler($resolveEndUser, $requireSignIn, $describe, $decide, $responder, $cookies, $throttle);
     }
 }

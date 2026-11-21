@@ -172,6 +172,13 @@ final readonly class AuthorizationCodeGrant implements Grant
         }
 
         $verifier = $parameters->get('code_verifier');
+        if ($code->challenge === null) {
+            // OAuth 2.1 §4.1.3: a verifier for a code issued without a challenge is refused —
+            // accepting it would let a downgrade pass for PKCE. The nonce binds this one.
+            return $verifier === null
+                ? null
+                : OAuth2Error::invalidGrant("The 'code' was issued without PKCE: a 'code_verifier' cannot match it.");
+        }
         if ($verifier === null) {
             return OAuth2Error::invalidRequest("Missing 'code_verifier' parameter.");
         }

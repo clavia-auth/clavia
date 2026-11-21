@@ -19,6 +19,7 @@ use Clavia\Domain\OAuth2\AuthorizationCodeId;
 use Clavia\Domain\OAuth2\CodeChallenge;
 use Clavia\Domain\OAuth2\Redemption;
 use Clavia\Domain\Shared\Digest;
+use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\ScopeSet;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use DateTimeImmutable;
@@ -119,6 +120,27 @@ final class AuthorizationCodeTest extends TestCase
         $outcome = $code->redeem(ClientId::fromString('spa'), new DateTimeImmutable('2026-01-15T12:00:00Z'));
 
         self::assertSame(Redemption::Replayed, $outcome);
+    }
+
+    public function testACodeIsBoundByAChallengeOrANonceAndNeverByNeither(): void
+    {
+        $this->expectException(InvalidValue::class);
+        $this->expectExceptionMessage('bound to its client by a nonce instead');
+
+        AuthorizationCode::issue(
+            AuthorizationCodeId::generate(new SeededRandomSource(1)),
+            Digest::of('the-code'),
+            ClientId::fromString('backend'),
+            UserId::generate(new SeededRandomSource(2)),
+            'https://app.example/cb',
+            ScopeSet::fromString('openid'),
+            null,
+            null,
+            null,
+            AuthenticationContext::unknown(),
+            new DateTimeImmutable(self::ISSUED_AT),
+            60,
+        );
     }
 
     private function issue(): AuthorizationCode

@@ -108,6 +108,15 @@ trait ClientRepositoryContract
         self::assertSame(ClientType::Confidential, $client->type);
         self::assertSame(ClientAuthMethod::ClientSecretBasic, $client->authMethod);
         self::assertSame('$2y$04$hash', $client->secretHash());
+        self::assertTrue($client->requiresPkce);
+    }
+
+    #[Test]
+    public function aConfidentialClientRelievedOfPkceStaysRelieved(): void
+    {
+        $this->clients()->save($this->aConfidentialClient('backend')->withPkceRequired(false));
+
+        self::assertFalse($this->clients()->find(ClientId::fromString('backend'))?->requiresPkce);
     }
 
     #[Test]

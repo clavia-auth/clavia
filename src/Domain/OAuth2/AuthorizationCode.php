@@ -17,12 +17,14 @@ use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Oidc\Nonce;
 use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\Digest;
+use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\ScopeSet;
 use DateTimeImmutable;
 
 /**
  * A single-use authorization code, bound to a client, a user, a redirect URI and a
- * PKCE challenge (RFC 6749 §4.1.2, RFC 7636).
+ * PKCE challenge (RFC 6749 §4.1.2, RFC 7636) — or, for a confidential client relieved of
+ * PKCE, to the OpenID Connect `nonce` its ID token will carry (OAuth 2.1 §7.5.1).
  *
  * The code itself exists only in the redirect that hands it to the client; what is kept
  * is its digest. The record is never deleted on redemption: `usedAt` is what lets a
@@ -38,7 +40,7 @@ final class AuthorizationCode
         public readonly UserId $userId,
         public readonly string $redirectUri,
         public readonly ScopeSet $scope,
-        public readonly CodeChallenge $challenge,
+        public readonly ?CodeChallenge $challenge,
         public readonly ?Audience $audience,
         public readonly ?Nonce $nonce,
         public readonly AuthenticationContext $authentication,
@@ -56,8 +58,11 @@ final class AuthorizationCode
      * @param string       $redirectUri     The `redirect_uri` the response is being sent to, exactly as
      *                                      validated; the token request must present the same one.
      * @param Audience|null $audience       The API the request named; its permissions bounded the scope.
+     * @param CodeChallenge|null $challenge Null only for a client relieved of PKCE, and then with a nonce.
      * @param Nonce|null   $nonce           The `nonce` of an OpenID Connect request, for the ID token.
      * @param positive-int $lifetimeSeconds OAuth 2.1 recommends one minute at most.
+     *
+     * @throws InvalidValue When the code would be bound by neither a challenge nor a nonce.
      */
     public static function issue(
         AuthorizationCodeId $id,
@@ -66,13 +71,17 @@ final class AuthorizationCode
         UserId $userId,
         string $redirectUri,
         ScopeSet $scope,
-        CodeChallenge $challenge,
+        ?CodeChallenge $challenge,
         ?Audience $audience,
         ?Nonce $nonce,
         AuthenticationContext $authentication,
         DateTimeImmutable $now,
         int $lifetimeSeconds,
     ): self {
+        if ($challenge === null && $nonce === null) {
+            throw new InvalidValue('A code without a PKCE challenge is bound to its client by a nonce instead.');
+        }
+
         return new self(
             $id,
             $digest,
@@ -98,7 +107,7 @@ final class AuthorizationCode
         UserId $userId,
         string $redirectUri,
         ScopeSet $scope,
-        CodeChallenge $challenge,
+        ?CodeChallenge $challenge,
         ?Audience $audience,
         ?Nonce $nonce,
         AuthenticationContext $authentication,

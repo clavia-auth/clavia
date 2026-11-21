@@ -77,6 +77,7 @@ final readonly class RegisterClient
                 default => [],
             },
             $this->backChannel->of($new->backChannelLogoutUri, $new->backChannelLogoutSessionRequired),
+            $new->requirePkce,
         );
         $this->clients->save($client);
 

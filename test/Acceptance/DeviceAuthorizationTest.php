@@ -241,6 +241,24 @@ final class DeviceAuthorizationTest extends AcceptanceTestCase
         }
     }
 
+    public function testGuessingCodesIsCutShortAndTheRightOneThenWaits(): void
+    {
+        // RFC 8628 §5.1: user code entry is rate-limited, as wrong passwords are.
+        $this->boot(['CLAVIA_DEV_AUTOLOGIN_EMAIL' => self::TEST_USER_EMAIL, 'CLAVIA_LOGIN_MAX_ATTEMPTS' => '3']);
+        $this->user();
+        $this->deviceClient();
+        $codes = $this->codes();
+
+        foreach (['BCDF-GHJK', 'BCDF-GHJL', 'BCDF-GHJM'] as $guess) {
+            self::assertSame(400, $this->get('/auth/device', ['user_code' => $guess])->getStatusCode());
+        }
+        $page = $this->get('/auth/device', ['user_code' => $codes['user_code']]);
+
+        self::assertSame(429, $page->getStatusCode());
+        self::assertStringContainsString('Too many codes were not valid', (string) $page->getBody());
+        self::assertStringNotContainsString('Living-room TV', (string) $page->getBody(), 'Nothing is looked up.');
+    }
+
     public function testThePageShowsWhoIsAskingAndForWhat(): void
     {
         $this->loggedIn();

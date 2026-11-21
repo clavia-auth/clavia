@@ -120,6 +120,7 @@ final class ManagementViews
             ),
             'backchannel_logout_uri' => $client->backChannelLogout?->uri->value,
             'backchannel_logout_session_required' => $client->backChannelLogout->sessionRequired ?? false,
+            'require_pkce' => $client->requiresPkce,
             'created_at' => self::instant($client->createdAt),
         ];
     }

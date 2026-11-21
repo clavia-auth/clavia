@@ -58,6 +58,73 @@ final class PkceSecurityTest extends AcceptanceTestCase
         $this->assertRejected($response, 'invalid_request');
     }
 
+    // ------------------------------------------------------------------
+    // OAuth 2.1 §7.5.1: a confidential client relieved of PKCE, bound by its nonce
+    // ------------------------------------------------------------------
+
+    public function testAConfidentialClientRelievedOfPkceSignsInWithANonceAlone(): void
+    {
+        $this->loggedIn();
+        $this->register($this->confidentialClient()->withPkceRequired(false));
+
+        $code = $this->extractCode($this->get('/oauth2/authorize', $this->authorizeParams(null, [
+            'client_id' => self::TEST_CONFIDENTIAL_CLIENT_ID,
+            'nonce' => 'n-0S6_WzA2Mj',
+        ])));
+        $response = $this->post('/oauth2/token', $this->confidentialTokenRequest($code));
+
+        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertArrayHasKey('id_token', self::json($response));
+    }
+
+    public function testWithoutANonceTheExemptionDoesNotApply(): void
+    {
+        $this->loggedIn();
+        $this->register($this->confidentialClient()->withPkceRequired(false));
+
+        $response = $this->get(
+            '/oauth2/authorize',
+            $this->authorizeParams(null, ['client_id' => self::TEST_CONFIDENTIAL_CLIENT_ID]),
+        );
+
+        $this->assertRejected($response, 'invalid_request');
+        self::assertStringContainsString("unless an OpenID Connect request carries a 'nonce'", self::locationQuery(
+            $response,
+        )['error_description'] ?? '');
+    }
+
+    public function testAVerifierForACodeIssuedWithoutPkceIsRefused(): void
+    {
+        // OAuth 2.1 §4.1.3: accepting one would let a downgrade pass for PKCE.
+        $this->loggedIn();
+        $this->register($this->confidentialClient()->withPkceRequired(false));
+        $code = $this->extractCode($this->get('/oauth2/authorize', $this->authorizeParams(null, [
+            'client_id' => self::TEST_CONFIDENTIAL_CLIENT_ID,
+            'nonce' => 'n-0S6_WzA2Mj',
+        ])));
+
+        $response = $this->post('/oauth2/token', $this->confidentialTokenRequest($code, str_repeat('v', 43)));
+
+        self::assertSame(400, $response->getStatusCode());
+        self::assertSame('invalid_grant', self::json($response)['error'] ?? null);
+    }
+
+    public function testAChallengeARelievedClientSendsIsCheckedLikeAnyOther(): void
+    {
+        $this->loggedIn();
+        $this->register($this->confidentialClient()->withPkceRequired(false));
+        [, $challenge] = $this->makePkcePair();
+        $code = $this->extractCode($this->get('/oauth2/authorize', $this->authorizeParams($challenge, [
+            'client_id' => self::TEST_CONFIDENTIAL_CLIENT_ID,
+            'nonce' => 'n-0S6_WzA2Mj',
+        ])));
+
+        $response = $this->post('/oauth2/token', $this->confidentialTokenRequest($code));
+
+        self::assertSame(400, $response->getStatusCode());
+        self::assertSame('invalid_request', self::json($response)['error'] ?? null, 'The verifier is missing.');
+    }
+
     /** `plain` offers no protection against a stolen challenge and must be refused. */
     public function testPlainChallengeMethodIsRejected(): void
     {
@@ -354,5 +421,18 @@ final class PkceSecurityTest extends AcceptanceTestCase
         TestStorage::database()->execute(
             "UPDATE oauth2_authorization_codes SET expires_at = now() - interval '1 second'",
         );
+    }
+
+    /**
+     * The confidential client's token request, authenticated with its secret.
+     *
+     * @return array<string, string>
+     */
+    private function confidentialTokenRequest(string $code, ?string $verifier = null): array
+    {
+        return $this->tokenRequest($code, $verifier, [
+            'client_id' => self::TEST_CONFIDENTIAL_CLIENT_ID,
+            'client_secret' => self::TEST_CLIENT_SECRET,
+        ]);
     }
 }

@@ -34,7 +34,7 @@ final readonly class PhpDbClientRepository implements ClientRepository
 {
     private const string COLUMNS = 'client_id, client_secret_hash, name, client_type, redirect_uris, '
         . 'grant_types, response_types, token_endpoint_auth_method, created_at, post_logout_redirect_uris, '
-        . 'backchannel_logout_uri, backchannel_logout_session_required';
+        . 'backchannel_logout_uri, backchannel_logout_session_required, require_pkce';
 
     public function __construct(
         private Database $database,
@@ -125,12 +125,12 @@ final readonly class PhpDbClientRepository implements ClientRepository
                 INSERT INTO oauth2_clients (
                     client_id, client_secret_hash, name, client_type, redirect_uris, grant_types,
                     response_types, token_endpoint_auth_method, created_at, post_logout_redirect_uris,
-                    backchannel_logout_uri, backchannel_logout_session_required
+                    backchannel_logout_uri, backchannel_logout_session_required, require_pkce
                 ) VALUES (
                     :client_id, :client_secret_hash, :name, :client_type, CAST(:redirect_uris AS jsonb),
                     CAST(:grant_types AS jsonb), CAST(:response_types AS jsonb), :auth_method, :created_at,
                     CAST(:post_logout_redirect_uris AS jsonb), :backchannel_logout_uri,
-                    :backchannel_logout_session_required
+                    :backchannel_logout_session_required, :require_pkce
                 )
                 ON CONFLICT (client_id) DO UPDATE SET
                     client_secret_hash = EXCLUDED.client_secret_hash,
@@ -141,7 +141,8 @@ final readonly class PhpDbClientRepository implements ClientRepository
                     token_endpoint_auth_method = EXCLUDED.token_endpoint_auth_method,
                     post_logout_redirect_uris = EXCLUDED.post_logout_redirect_uris,
                     backchannel_logout_uri = EXCLUDED.backchannel_logout_uri,
-                    backchannel_logout_session_required = EXCLUDED.backchannel_logout_session_required
+                    backchannel_logout_session_required = EXCLUDED.backchannel_logout_session_required,
+                    require_pkce = EXCLUDED.require_pkce
                 SQL,
             [
                 'client_id' => $client->id->value,
@@ -164,6 +165,7 @@ final readonly class PhpDbClientRepository implements ClientRepository
                 ),
                 'backchannel_logout_uri' => $client->backChannelLogout?->uri->value,
                 'backchannel_logout_session_required' => $client->backChannelLogout->sessionRequired ?? false,
+                'require_pkce' => $client->requiresPkce,
             ],
         );
     }
@@ -220,7 +222,7 @@ final readonly class PhpDbClientRepository implements ClientRepository
          *            redirect_uris: string, grant_types: string, response_types: string,
          *            token_endpoint_auth_method: string, created_at: string,
          *            post_logout_redirect_uris: string, backchannel_logout_uri: string|null,
-         *            backchannel_logout_session_required: bool} $row
+         *            backchannel_logout_session_required: bool, require_pkce: bool} $row
          */
         return Client::register(
             ClientId::fromString($row['client_id']),
@@ -238,6 +240,7 @@ final readonly class PhpDbClientRepository implements ClientRepository
                 Url::fromString($row['backchannel_logout_uri']),
                 $row['backchannel_logout_session_required'],
             ),
+            $row['require_pkce'],
         );
     }
 }

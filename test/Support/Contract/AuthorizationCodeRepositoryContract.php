@@ -66,7 +66,7 @@ trait AuthorizationCodeRepositoryContract
         self::assertTrue($stored->userId->equals($code->userId));
         self::assertSame('https://app.example/cb?x=1', $stored->redirectUri);
         self::assertSame('openid profile', $stored->scope->toString());
-        self::assertSame($code->challenge->value, $stored->challenge->value);
+        self::assertSame($code->challenge?->value, $stored->challenge?->value);
         self::assertEquals(new DateTimeImmutable('2026-01-15T10:01:00Z'), $stored->expiresAt);
         self::assertEquals(new DateTimeImmutable('2026-01-15T10:00:00Z'), $stored->createdAt);
         self::assertNull($stored->usedAt());
@@ -103,6 +103,18 @@ trait AuthorizationCodeRepositoryContract
         self::assertNull($stored->authentication->authenticatedAt);
         self::assertSame([], $stored->authentication->methods);
         self::assertNull($stored->authentication->sid);
+    }
+
+    #[Test]
+    public function aCodeIssuedWithoutPkceIsReadBackBoundByItsNonce(): void
+    {
+        $this->codes()->add($this->aCode('nonce-code', Nonce::fromString('n-0S6_WzA2Mj'), challenged: false));
+
+        $stored = $this->locked('nonce-code');
+
+        self::assertNotNull($stored);
+        self::assertNull($stored->challenge);
+        self::assertSame('n-0S6_WzA2Mj', $stored->nonce?->value);
     }
 
     #[Test]
@@ -174,6 +186,7 @@ trait AuthorizationCodeRepositoryContract
         string $value,
         ?Nonce $nonce = null,
         ?AuthenticationContext $authentication = null,
+        bool $challenged = true,
     ): AuthorizationCode {
         [$clientId, $userId] = $this->anOwner();
 
@@ -184,7 +197,7 @@ trait AuthorizationCodeRepositoryContract
             $userId,
             'https://app.example/cb?x=1',
             ScopeSet::fromString('openid profile'),
-            CodeChallenge::fromString(str_repeat('a', 43)),
+            $challenged ? CodeChallenge::fromString(str_repeat('a', 43)) : null,
             null,
             $nonce,
             $authentication ?? AuthenticationContext::unknown(),

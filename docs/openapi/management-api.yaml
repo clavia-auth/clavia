@@ -1747,7 +1747,7 @@ components:
       additionalProperties: false
       required: [client_id, name, client_type, token_endpoint_auth_method, redirect_uris, grant_types,
         response_types, post_logout_redirect_uris, is_first_party, connections, backchannel_logout_uri,
-        backchannel_logout_session_required, created_at]
+        backchannel_logout_session_required, require_pkce, created_at]
       properties:
         client_id:
           type: string
@@ -1791,6 +1791,12 @@ components:
         backchannel_logout_session_required:
           type: boolean
           description: Whether the client needs the session named (`sid`). It always is.
+        require_pkce:
+          type: boolean
+          description: |
+            Whether every authorization request must carry PKCE. False only for a
+            confidential client, whose OpenID Connect requests carrying a `nonce` may then
+            omit it (OAuth 2.1 §7.5.1).
         created_at:
           type: string
           format: date-time
@@ -1809,7 +1815,7 @@ components:
       additionalProperties: false
       required: [client_id, name, client_type, token_endpoint_auth_method, redirect_uris, grant_types,
         response_types, post_logout_redirect_uris, is_first_party, connections, backchannel_logout_uri,
-        backchannel_logout_session_required, created_at, client_secret]
+        backchannel_logout_session_required, require_pkce, created_at, client_secret]
       properties:
         client_id:
           type: string
@@ -1853,6 +1859,12 @@ components:
         backchannel_logout_session_required:
           type: boolean
           description: Whether the client needs the session named (`sid`). It always is.
+        require_pkce:
+          type: boolean
+          description: |
+            Whether every authorization request must carry PKCE. False only for a
+            confidential client, whose OpenID Connect requests carrying a `nonce` may then
+            omit it (OAuth 2.1 §7.5.1).
         created_at:
           type: string
           format: date-time
@@ -1919,6 +1931,12 @@ components:
             fragment, and not at this server or its internal network (422). Null for none.
         backchannel_logout_session_required:
           type: boolean
+        require_pkce:
+          type: boolean
+          description: |
+            False relieves a confidential client of PKCE for OpenID Connect requests that
+            carry a `nonce` (OAuth 2.1 §7.5.1); a public client is refused (422). Defaults
+            to true.
       description: |
         `client_type` defaults to `public`; `token_endpoint_auth_method` to `none` for a
         public client and `client_secret_basic` for a confidential one.
@@ -1964,6 +1982,11 @@ components:
             fragment, and not at this server or its internal network (422). Null removes it.
         backchannel_logout_session_required:
           type: boolean
+        require_pkce:
+          type: boolean
+          description: |
+            False relieves a confidential client of PKCE for OpenID Connect requests that
+            carry a `nonce` (OAuth 2.1 §7.5.1); a public client is refused (422).
 
     Permission:
       type: object
