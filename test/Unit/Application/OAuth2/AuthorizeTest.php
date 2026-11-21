@@ -20,6 +20,7 @@ use Clavia\Application\OAuth2\Authorize\CodeIssued;
 use Clavia\Application\OAuth2\Authorize\ConsentRequired;
 use Clavia\Application\OAuth2\Authorize\LoginRequired;
 use Clavia\Application\OAuth2\Authorize\RequestRefused;
+use Clavia\Application\OAuth2\ReadRequestedAccess;
 use Clavia\Application\OAuth2\RequestParameters;
 use Clavia\Application\Port\NonceRegistry;
 use Clavia\Domain\Authentication\AuthenticationMethod;
@@ -92,7 +93,7 @@ final class AuthorizeTest extends TestCase
             $this->codes,
             $this->loginStates,
             $this->nonces,
-            $this->resourceServers,
+            new ReadRequestedAccess($this->resourceServers, ScopeSet::fromString('openid profile email')),
             $this->roles,
             $this->consents,
             $this->consentStates,
@@ -100,7 +101,6 @@ final class AuthorizeTest extends TestCase
             new SecretGenerator($random),
             $random,
             $clock,
-            ScopeSet::fromString('openid profile email'),
             60,
             360,
         );
@@ -394,7 +394,7 @@ final class AuthorizeTest extends TestCase
             $this->codes,
             $this->loginStates,
             $raced,
-            $this->resourceServers,
+            new ReadRequestedAccess($this->resourceServers, ScopeSet::fromString('openid')),
             $this->roles,
             $this->consents,
             $this->consentStates,
@@ -402,7 +402,6 @@ final class AuthorizeTest extends TestCase
             new SecretGenerator($random),
             $random,
             new FrozenClock(),
-            ScopeSet::fromString('openid'),
             60,
             360,
         );

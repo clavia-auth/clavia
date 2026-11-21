@@ -31,3 +31,6 @@ frontend/*.tsbuildinfo
 
 # Files Claude hands back that could not be written in place
 /Claude outputs/
+
+# Output of `composer check` captured for review; never part of the repository.
+/check-output.txt

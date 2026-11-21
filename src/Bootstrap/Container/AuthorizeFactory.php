@@ -13,6 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\OAuth2\Authorize\Authorize;
+use Clavia\Application\OAuth2\ReadRequestedAccess;
 use Clavia\Application\Port\ConsentStateStore;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Application\Port\NonceRegistry;
@@ -21,10 +22,8 @@ use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Consent\ConsentRepository;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
 use Clavia\Domain\Rbac\RoleRepository;
-use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\RandomSource;
-use Clavia\Domain\Shared\ScopeSet;
 use Clavia\Domain\Shared\SecretGenerator;
 use Psr\Container\ContainerInterface;
 
@@ -40,8 +39,8 @@ final class AuthorizeFactory
         $loginStates = $container->get(LoginStateStore::class);
         /** @var NonceRegistry $nonces */
         $nonces = $container->get(NonceRegistry::class);
-        /** @var ResourceServerRepository $resourceServers */
-        $resourceServers = $container->get(ResourceServerRepository::class);
+        /** @var ReadRequestedAccess $requestedAccess */
+        $requestedAccess = $container->get(ReadRequestedAccess::class);
         /** @var RoleRepository $roles */
         $roles = $container->get(RoleRepository::class);
         /** @var ConsentRepository $consents */
@@ -71,7 +70,7 @@ final class AuthorizeFactory
             $codes,
             $loginStates,
             $nonces,
-            $resourceServers,
+            $requestedAccess,
             $roles,
             $consents,
             $consentStates,
@@ -79,7 +78,6 @@ final class AuthorizeFactory
             $secrets,
             $random,
             $clock,
-            ScopeSet::fromString(implode(' ', $settings->scopesSupported)),
             $lifetime,
             $nonceLifetime,
         );

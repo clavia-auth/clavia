@@ -20,14 +20,14 @@ import {
 
 const schema = z.object({
   name: z.string().min(1, "Give the application a name.").max(120),
-  kind: z.enum(["spa", "web", "m2m"]),
+  kind: z.enum(["spa", "web", "device", "m2m"]),
   ownership: z.enum(["first", "third"]),
   redirect_uris: z.string(),
 });
 type Form = z.infer<typeof schema>;
 
 /**
- * Three shapes cover what people actually register. Each maps to a coherent
+ * Four shapes cover what people actually register. Each maps to a coherent
  * registration the server will accept; the raw fields stay editable afterwards.
  */
 const KINDS = {
@@ -46,6 +46,14 @@ const KINDS = {
     token_endpoint_auth_method: "client_secret_basic",
     grant_types: ["authorization_code", "refresh_token"],
     response_types: ["code"],
+  },
+  device: {
+    label: "Device or command-line tool",
+    hint: "Public client with no browser of its own: a person approves it at /auth/device on another screen. Device code grant with rotating refresh tokens.",
+    client_type: "public",
+    token_endpoint_auth_method: "none",
+    grant_types: ["urn:ietf:params:oauth:grant-type:device_code", "refresh_token"],
+    response_types: [],
   },
   m2m: {
     label: "Machine to machine",
@@ -140,7 +148,7 @@ function CreateClientDialog({ open, onClose }: { open: boolean; onClose: () => v
       token_endpoint_auth_method: preset.token_endpoint_auth_method,
       grant_types: [...preset.grant_types],
       response_types: [...preset.response_types],
-      redirect_uris: values.redirect_uris.split(/\s+/).filter(Boolean),
+      redirect_uris: preset.response_types.length > 0 ? values.redirect_uris.split(/\s+/).filter(Boolean) : [],
       is_first_party: values.ownership === "first",
     });
     if (result.client_secret) {
@@ -207,7 +215,7 @@ function CreateClientDialog({ open, onClose }: { open: boolean; onClose: () => v
               <option value="third">Third-party — run by a partner or external developer</option>
             </select>
           </Field>
-          {form.watch("kind") !== "m2m" && (
+          {(form.watch("kind") === "spa" || form.watch("kind") === "web") && (
             <Field label="Redirect URIs" hint="One per line. Matched exactly at the authorization endpoint." error={form.formState.errors.redirect_uris?.message}>
               <textarea className="input font-mono text-xs" rows={3} placeholder="https://app.example.com/callback" {...form.register("redirect_uris")} />
             </Field>

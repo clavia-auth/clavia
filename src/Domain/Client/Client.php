@@ -135,12 +135,23 @@ final readonly class Client
             );
         }
 
-        // A refresh token is only ever issued by redeeming a code: without the code flow,
-        // the grant would have nothing to refresh.
-        if (in_array(GrantType::RefreshToken, $grantTypes, true) && ! $redeemsCodes) {
+        // A refresh token is only ever issued with a person's tokens — from a code or a
+        // device — so without one of those grants it would have nothing to refresh.
+        if (
+            in_array(GrantType::RefreshToken, $grantTypes, true)
+            && ! array_any($grantTypes, static fn (GrantType $grant): bool => $grant->actsForAPerson())
+        ) {
             throw new InvalidValue(
-                'The refresh token grant needs the "authorization_code" grant: it refreshes what that issues.',
+                'The refresh token grant needs the "authorization_code" or the device code grant: it '
+                . 'refreshes what those issue.',
             );
+        }
+
+        // A device code is approved by whoever types its user code, so a stranger's device
+        // asking for access is a phishing kit waiting to happen: the grant is the operator's
+        // applications' only.
+        if (in_array(GrantType::DeviceCode, $grantTypes, true) && $id->ownership() === Ownership::ThirdParty) {
+            throw new InvalidValue('The device code grant is available to first-party applications only.');
         }
 
         // RFC 6749 §4.4: the client credentials grant is for clients that can keep a secret.

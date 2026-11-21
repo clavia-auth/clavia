@@ -86,6 +86,21 @@ final class OAuth2Error extends DomainException
         return new self(ErrorCode::ConsentRequired, $description);
     }
 
+    public static function authorizationPending(string $description): self
+    {
+        return new self(ErrorCode::AuthorizationPending, $description);
+    }
+
+    public static function slowDown(string $description): self
+    {
+        return new self(ErrorCode::SlowDown, $description);
+    }
+
+    public static function expiredToken(string $description): self
+    {
+        return new self(ErrorCode::ExpiredToken, $description);
+    }
+
     public static function unsupportedTokenType(string $description): self
     {
         return new self(ErrorCode::UnsupportedTokenType, $description);

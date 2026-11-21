@@ -120,6 +120,51 @@ final class ClientTest extends TestCase
         $this->register(grantTypes: [GrantType::ClientCredentials], responseTypes: []);
     }
 
+    public function testADeviceNeedsNoRedirectUriAndMayBeRefreshed(): void
+    {
+        $device = $this->register(
+            redirectUris: [],
+            grantTypes: [GrantType::DeviceCode, GrantType::RefreshToken],
+            responseTypes: [],
+        );
+
+        self::assertTrue($device->mayUseGrant(GrantType::DeviceCode));
+        self::assertTrue($device->mayUseGrant(GrantType::RefreshToken));
+    }
+
+    public function testARefreshTokenNeedsAGrantThatActsForAPerson(): void
+    {
+        $this->expectException(InvalidValue::class);
+
+        $this->register(
+            type: ClientType::Confidential,
+            authMethod: ClientAuthMethod::ClientSecretBasic,
+            secretHash: '$hash$',
+            redirectUris: [],
+            grantTypes: [GrantType::ClientCredentials, GrantType::RefreshToken],
+            responseTypes: [],
+        );
+    }
+
+    public function testOnlyAFirstPartyApplicationMayUseTheDeviceGrant(): void
+    {
+        $this->expectExceptionObject(
+            new InvalidValue('The device code grant is available to first-party applications only.'),
+        );
+
+        Client::register(
+            ClientId::fromString('tpc_aaaaaaaaaaaaaaaaaaaaaa'),
+            'Partner TV',
+            ClientType::Public,
+            ClientAuthMethod::None,
+            null,
+            [],
+            [GrantType::DeviceCode],
+            [],
+            new DateTimeImmutable('2026-01-15T10:00:00Z'),
+        );
+    }
+
     public function testReconfiguringChecksTheResultAsANewRegistrationWouldBe(): void
     {
         $client = $this->register();

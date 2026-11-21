@@ -1,0 +1,70 @@
+<?php
+/**
+ * The device page (RFC 8628 §3.3): the code typed, the question put, the answer given.
+ *
+ * Every word of the question comes from the server — the application's registered name,
+ * the API's definitions — never from the device that asked. Two submit buttons on one
+ * form: the decision is the value of the one pressed, with no script.
+ *
+ * Variables (set by Clavia\Adapter\Primary\Http\Auth\DevicePages):
+ * @var Laminas\View\Renderer\PhpRenderer $this
+ * @var string $csrfToken
+ * @var 'entry'|'review'|'done' $stage
+ * @var string $userCode   entry and review
+ * @var string $clientName review
+ * @var string $email      review
+ * @var list<Clavia\Application\OAuth2\Consent\ScopeLine> $oidcScopes review
+ * @var Clavia\Application\OAuth2\Consent\ConsentedApi|null $api review
+ * @var bool $approved     done
+ */
+?>
+<?php $this->placeholder('subtitle')->captureStart() ?>
+<?php if ($stage === 'entry'): ?>
+      <p class="subtitle">Enter the code shown on the device.</p>
+<?php elseif ($stage === 'review'): ?>
+      <p class="subtitle"><strong><?= $this->escapeHtml($clientName) ?></strong> wants to access your account, <span class="who"><?= $this->escapeHtml($email) ?></span>.</p>
+<?php elseif ($approved): ?>
+      <p class="subtitle">You can go back to the device now.</p>
+<?php else: ?>
+      <p class="subtitle">The device was not given access. You can close this page.</p>
+<?php endif ?>
+<?php $this->placeholder('subtitle')->captureEnd() ?>
+<?php if ($stage === 'entry'): ?>
+    <form method="post" action="/auth/device" autocomplete="off" novalidate>
+<?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => '']) ?>
+      <label for="user_code">Code</label>
+      <input id="user_code" name="user_code" type="text" class="code-input" required autofocus value="<?= $this->escapeHtmlAttr($userCode) ?>" placeholder="XXXX-XXXX" spellcheck="false" autocapitalize="characters" autocomplete="off">
+
+      <button type="submit">Continue</button>
+    </form>
+<?php elseif ($stage === 'review'): ?>
+    <p class="hint">Code <code class="scope-value"><?= $this->escapeHtml($userCode) ?></code>. It is asking to:</p>
+<?php if ($oidcScopes !== []): ?>
+    <ul class="scopes">
+<?php foreach ($oidcScopes as $scope): ?>
+      <li>
+        <span class="scope-description"><?= $this->escapeHtml($scope->description) ?></span>
+        <code class="scope-value"><?= $this->escapeHtml($scope->value) ?></code>
+      </li>
+<?php endforeach ?>
+    </ul>
+<?php endif ?>
+<?php if ($api !== null && $api->permissions !== []): ?>
+    <p class="hint">On <strong><?= $this->escapeHtml($api->name) ?></strong>, acting as you:</p>
+    <ul class="scopes">
+<?php foreach ($api->permissions as $permission): ?>
+      <li>
+        <span class="scope-description"><?= $this->escapeHtml($permission->description) ?></span>
+        <code class="scope-value"><?= $this->escapeHtml($permission->value) ?></code>
+      </li>
+<?php endforeach ?>
+    </ul>
+<?php endif ?>
+    <form method="post" action="/auth/device" class="decision">
+<?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => '']) ?>
+      <input type="hidden" name="user_code" value="<?= $this->escapeHtmlAttr($userCode) ?>">
+      <button type="submit" name="decision" value="allow" autofocus>Allow</button>
+      <button type="submit" name="decision" value="deny" class="secondary">Don't allow</button>
+    </form>
+    <p class="hint">Only allow a device you are setting up yourself: anyone who has this code could be asking.</p>
+<?php endif ?>

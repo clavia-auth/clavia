@@ -13,6 +13,7 @@ namespace Clavia\Application\OAuth2\Authorize;
 
 use Clavia\Application\Authentication\EndUser;
 use Clavia\Application\Connection\ConnectionAccess;
+use Clavia\Application\OAuth2\ReadRequestedAccess;
 use Clavia\Application\OAuth2\RequestParameters;
 use Clavia\Application\Port\ConsentStateStore;
 use Clavia\Application\Port\LoginStateStore;
@@ -35,8 +36,6 @@ use Clavia\Domain\Oidc\Nonce;
 use Clavia\Domain\Oidc\OidcScope;
 use Clavia\Domain\Rbac\RoleRepository;
 use Clavia\Domain\ResourceServer\ResourceServer;
-use Clavia\Domain\ResourceServer\ResourceServerRepository;
-use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\InvalidValue;
@@ -70,7 +69,6 @@ use Clavia\Domain\Shared\SecretGenerator;
 final readonly class Authorize
 {
     /**
-     * @param ScopeSet     $supportedScopes      What may be requested without naming an API: the OIDC scopes.
      * @param positive-int $codeLifetimeSeconds
      * @param positive-int $nonceLifetimeSeconds How long a used nonce is remembered: at least as long as a
      *                                           code carrying it, then an ID token minted from that code,
@@ -81,7 +79,7 @@ final readonly class Authorize
         private AuthorizationCodeRepository $codes,
         private LoginStateStore $loginStates,
         private NonceRegistry $nonces,
-        private ResourceServerRepository $resourceServers,
+        private ReadRequestedAccess $requestedAccess,
         private RoleRepository $roles,
         private ConsentRepository $consents,
         private ConsentStateStore $consentStates,
@@ -89,7 +87,6 @@ final readonly class Authorize
         private SecretGenerator $secrets,
         private RandomSource $random,
         private Clock $clock,
-        private ScopeSet $supportedScopes,
         private int $codeLifetimeSeconds,
         private int $nonceLifetimeSeconds,
     ) {
@@ -304,62 +301,9 @@ final readonly class Authorize
             );
         }
 
-        $target = $this->target($parameters);
-        if ($target !== null && $target->isSystem && ! $client->isFirstParty()) {
-            // The server's own API — its users, its applications, its roles — is for the
-            // operator's applications only: an outsider's application gets no token for it
-            // on anybody's behalf, whatever the person would agree to.
-            throw OAuth2Error::accessDenied('Third-party applications cannot access this API.');
-        }
+        $access = ($this->requestedAccess)($parameters, $client);
 
-        try {
-            $scope = ScopeSet::fromString($parameters->get('scope') ?? '');
-        } catch (InvalidValue) {
-            throw OAuth2Error::invalidScope('The requested scope is malformed.');
-        }
-
-        // An unknown scope fails outright rather than being dropped. RFC 6749 §3.3 allows
-        // either; failing surfaces a client's misconfiguration instead of silently issuing
-        // a token weaker than the one it asked for. What is known: the OIDC scopes, and the
-        // permissions of the API named in `audience`.
-        $known = $target === null ? $this->supportedScopes : $this->supportedScopes->union($target->permissionScopes());
-        $unknown = $scope->without($known);
-        if (! $unknown->isEmpty()) {
-            throw OAuth2Error::invalidScope(sprintf(
-                '%s does not define: %s.',
-                $target === null ? 'This server' : sprintf("The API '%s'", $target->identifier->value),
-                $unknown->toString(),
-            ));
-        }
-
-        return [$scope, $target];
-    }
-
-    /**
-     * The API named in `audience`, whose permissions may then be asked for; null when the
-     * request names none and asks for the OIDC scopes alone.
-     *
-     * `audience` rather than RFC 8707's `resource`: single-valued, as the hosted providers
-     * spell it, and the value the token's `aud` becomes. An unknown one is RFC 8707's
-     * `invalid_target` nonetheless — the same failure, and a registered code for it.
-     *
-     * @throws OAuth2Error
-     */
-    private function target(RequestParameters $parameters): ?ResourceServer
-    {
-        $value = $parameters->get('audience');
-        if ($value === null) {
-            return null;
-        }
-
-        try {
-            $audience = Audience::fromString($value);
-        } catch (InvalidValue) {
-            throw OAuth2Error::invalidRequest("Invalid 'audience'.");
-        }
-
-        return $this->resourceServers->findByIdentifier($audience)
-            ?? throw OAuth2Error::invalidTarget('No API is registered with this audience.');
+        return [$access->scope, $access->target];
     }
 
     /**

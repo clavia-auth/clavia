@@ -31,4 +31,16 @@ enum GrantType: string
      * a new pair. Rotated on every use; a replay revokes the family.
      */
     case RefreshToken = 'refresh_token';
+
+    /**
+     * RFC 8628: a device with no browser asks for a code, a person approves it on another
+     * screen, and the device polls for its tokens.
+     */
+    case DeviceCode = 'urn:ietf:params:oauth:grant-type:device_code';
+
+    /** Whether this grant issues tokens on a person's behalf, which a refresh token can renew. */
+    public function actsForAPerson(): bool
+    {
+        return $this === self::AuthorizationCode || $this === self::DeviceCode;
+    }
 }

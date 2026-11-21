@@ -46,7 +46,12 @@ export type ClientType = "public" | "confidential";
 export type AuthMethod = "none" | "client_secret_basic" | "client_secret_post";
 
 /** `refresh_token` only beside `authorization_code`: a refresh token is issued when a code is redeemed. */
-export type GrantType = "authorization_code" | "client_credentials" | "refresh_token";
+export type GrantType =
+  | "authorization_code"
+  | "client_credentials"
+  | "refresh_token"
+  /** RFC 8628: a device without a browser, approved by a person on another screen. First-party only. */
+  | "urn:ietf:params:oauth:grant-type:device_code";
 
 export type ResponseType = "code";
 

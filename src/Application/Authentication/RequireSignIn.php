@@ -14,6 +14,7 @@ namespace Clavia\Application\Authentication;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Domain\Authentication\LocalPath;
 use Clavia\Domain\Authentication\LoginState;
+use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Shared\SecretGenerator;
 
 /**
@@ -29,12 +30,15 @@ final readonly class RequireSignIn
     }
 
     /**
+     * @param ClientId|null $for The application the sign-in is for, when there is one: the login
+     *                           page then offers the connections it enables.
+     *
      * @return non-empty-string The handle the login page takes as `state`.
      */
-    public function __invoke(LocalPath $returnTo): string
+    public function __invoke(LocalPath $returnTo, ?ClientId $for = null): string
     {
         $handle = $this->secrets->token();
-        $this->loginStates->put($handle, new LoginState($returnTo->value));
+        $this->loginStates->put($handle, new LoginState($returnTo->value, $for));
 
         return $handle;
     }

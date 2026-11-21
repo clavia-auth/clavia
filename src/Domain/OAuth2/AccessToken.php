@@ -85,6 +85,38 @@ final class AccessToken
      *
      * @param positive-int $lifetimeSeconds
      */
+    /**
+     * A token issued on a person's behalf by a grant other than the code flow — the device
+     * grant: no authorization code to trace it to.
+     *
+     * @param RefreshTokenId|null $refreshFamily The family issued alongside, if any.
+     */
+    public static function issueForUser(
+        AccessTokenId $id,
+        Digest $digest,
+        ClientId $clientId,
+        UserId $userId,
+        ?Audience $audience,
+        ScopeSet $scope,
+        DateTimeImmutable $now,
+        int $lifetimeSeconds,
+        ?RefreshTokenId $refreshFamily = null,
+    ): self {
+        return new self(
+            $id,
+            $digest,
+            $clientId,
+            $userId,
+            null,
+            $audience,
+            $scope,
+            $now,
+            $now->modify(sprintf('+%d seconds', $lifetimeSeconds)),
+            null,
+            $refreshFamily,
+        );
+    }
+
     public static function issueFromRefresh(
         AccessTokenId $id,
         Digest $digest,

@@ -14,6 +14,7 @@ namespace Clavia\Bootstrap\Container;
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
 use Clavia\Application\OAuth2\Token\AuthorizationCodeGrant;
 use Clavia\Application\OAuth2\Token\ClientCredentialsGrant;
+use Clavia\Application\OAuth2\Token\DeviceCodeGrant;
 use Clavia\Application\OAuth2\Token\IssueToken;
 use Clavia\Application\OAuth2\Token\RefreshTokenGrant;
 use Psr\Container\ContainerInterface;
@@ -30,8 +31,10 @@ final class IssueTokenFactory
         $clientCredentials = $container->get(ClientCredentialsGrant::class);
         /** @var RefreshTokenGrant $refreshToken */
         $refreshToken = $container->get(RefreshTokenGrant::class);
+        /** @var DeviceCodeGrant $deviceCode */
+        $deviceCode = $container->get(DeviceCodeGrant::class);
 
         // Every grant the token endpoint offers. A grant not listed here does not exist.
-        return new IssueToken($authenticator, $authorizationCode, $clientCredentials, $refreshToken);
+        return new IssueToken($authenticator, $authorizationCode, $clientCredentials, $refreshToken, $deviceCode);
     }
 }

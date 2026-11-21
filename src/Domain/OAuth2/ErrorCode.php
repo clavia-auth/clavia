@@ -65,6 +65,15 @@ enum ErrorCode: string
      */
     case ConsentRequired = 'consent_required';
 
+    /** RFC 8628 §3.5: the person has not decided yet; the device polls again. */
+    case AuthorizationPending = 'authorization_pending';
+
+    /** RFC 8628 §3.5: polled too often; the interval grows by five seconds. */
+    case SlowDown = 'slow_down';
+
+    /** RFC 8628 §3.5: the device code ran out; the device starts again. */
+    case ExpiredToken = 'expired_token';
+
     /** RFC 7009 §2.2.1: a `token_type_hint` naming a kind of token the server does not keep. */
     case UnsupportedTokenType = 'unsupported_token_type';
 }

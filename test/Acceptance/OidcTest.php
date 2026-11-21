@@ -62,7 +62,12 @@ final class OidcTest extends AcceptanceTestCase
         self::assertSame(['S256'], $document['code_challenge_methods_supported']);
         // Only the grants that exist: clients trust this document.
         self::assertSame(
-            ['authorization_code', 'client_credentials', 'refresh_token'],
+            [
+                'authorization_code',
+                'client_credentials',
+                'refresh_token',
+                'urn:ietf:params:oauth:grant-type:device_code',
+            ],
             $document['grant_types_supported'],
         );
         self::assertSame(['code'], $document['response_types_supported']);
@@ -89,7 +94,7 @@ final class OidcTest extends AcceptanceTestCase
 
         // Nothing is advertised that does not exist yet.
         self::assertArrayNotHasKey('prompt_values_supported', $document);
-        self::assertArrayNotHasKey('device_authorization_endpoint', $document);
+        self::assertArrayNotHasKey('backchannel_logout_supported', $document);
         self::assertNotContains('sid', $claims);
     }
 
@@ -120,7 +125,7 @@ final class OidcTest extends AcceptanceTestCase
                 $advertised[$field] = $url;
             }
         }
-        self::assertCount(7, $advertised);
+        self::assertCount(8, $advertised);
 
         foreach ($advertised as $field => $url) {
             self::assertStringStartsWith(self::ISSUER . '/', $url, $field);

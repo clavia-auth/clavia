@@ -351,7 +351,12 @@ final class RefreshTokenTest extends AcceptanceTestCase
         $document = self::json($this->get('/.well-known/openid-configuration'));
 
         self::assertSame(
-            ['authorization_code', 'client_credentials', 'refresh_token'],
+            [
+                'authorization_code',
+                'client_credentials',
+                'refresh_token',
+                'urn:ietf:params:oauth:grant-type:device_code',
+            ],
             $document['grant_types_supported'],
         );
     }

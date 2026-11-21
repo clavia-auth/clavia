@@ -651,8 +651,14 @@ final class ManagementApiTest extends AcceptanceTestCase
                 'grant_types' => ['refresh_token'],
                 'redirect_uris' => ['https://spa.test/callback'],
             ],
-            // Grants this server does not have yet are not in the contract.
-            ['client_type' => 'public', 'grant_types' => ['urn:ietf:params:oauth:grant-type:device_code']],
+            // A device is approved by whoever types its code: never a stranger's device.
+            [
+                'client_type' => 'public',
+                'grant_types' => ['urn:ietf:params:oauth:grant-type:device_code'],
+                'is_first_party' => false,
+            ],
+            // Grants this server does not have are not in the contract.
+            ['client_type' => 'public', 'grant_types' => ['implicit']],
         ];
 
         foreach ($cases as $body) {

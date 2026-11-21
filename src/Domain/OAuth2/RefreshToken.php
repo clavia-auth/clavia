@@ -75,17 +75,47 @@ final class RefreshToken
         int $idleLifetimeSeconds,
         int $absoluteLifetimeSeconds,
     ): self {
+        return self::startFamilyFor(
+            $id,
+            $digest,
+            $code->clientId,
+            $code->userId,
+            $code->id,
+            $code->audience,
+            $scope,
+            $now,
+            $idleLifetimeSeconds,
+            $absoluteLifetimeSeconds,
+        );
+    }
+
+    /**
+     * The first refresh token of a family started by any grant acting for a person: the
+     * code flow, or a device approved on another screen (no code to trace it to).
+     */
+    public static function startFamilyFor(
+        RefreshTokenId $id,
+        Digest $digest,
+        ClientId $clientId,
+        UserId $userId,
+        ?AuthorizationCodeId $authorizationCodeId,
+        ?Audience $audience,
+        ScopeSet $scope,
+        DateTimeImmutable $now,
+        int $idleLifetimeSeconds,
+        int $absoluteLifetimeSeconds,
+    ): self {
         $familyExpiresAt = self::after($now, $absoluteLifetimeSeconds);
 
         return new self(
             $id,
             $digest,
             $id,
-            $code->clientId,
-            $code->userId,
-            $code->id,
+            $clientId,
+            $userId,
+            $authorizationCodeId,
             $scope,
-            $code->audience,
+            $audience,
             $now,
             min(self::after($now, $idleLifetimeSeconds), $familyExpiresAt),
             $familyExpiresAt,
@@ -94,13 +124,6 @@ final class RefreshToken
         );
     }
 
-    /**
-     * The token that replaces this one: same family, same person, same API, same code,
-     * the family's deadline unchanged.
-     *
-     * @param ScopeSet     $scope               The new ceiling — this token's, or less.
-     * @param positive-int $idleLifetimeSeconds
-     */
     public function succeededBy(
         RefreshTokenId $id,
         Digest $digest,

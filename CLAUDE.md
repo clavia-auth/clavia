@@ -29,16 +29,17 @@ and multi-tenancy.
 
 ## Current state
 
-**Steps 0 to 14 are done: the foundations, Authorization Code + PKCE, the login page with
+**Steps 0 to 15 are done: the foundations, Authorization Code + PKCE, the login page with
 browser sessions, OpenID Connect (ID tokens, discovery, JWKS, userinfo), Client
 Credentials for machine clients holding a grant on an API, the Management API with
 audiences in the user's flow, two-factor authentication (TOTP and recovery codes),
 signing in with Google or GitHub, RP-Initiated Logout, roles (RBAC), rotating refresh
 tokens, application ownership with the consent screen, and connections — pools of accounts,
 the social providers and operator-registered OpenID Connect providers, enabled per
-application — and token introspection and revocation; the dashboard is in `frontend/`.**
+application — token introspection and revocation, and device authorization; the dashboard is in `frontend/`.**
 The application answers `GET /healthz`,
 `GET|POST /oauth2/authorize`, `POST /oauth2/token`, `POST /oauth2/introspect`, `POST /oauth2/revoke`,
+`POST /oauth2/device/code`, `GET|POST /auth/device`,
 `GET /.well-known/openid-configuration`,
 `GET /.well-known/oauth-authorization-server`, `GET /oidc/jwks.json`, `GET|POST /oidc/userinfo`,
 `GET|POST /oidc/logout`,
@@ -318,6 +319,23 @@ What exists:
     clients and `allow_skipping_consent` on APIs in the Management API;
     `clients:create-m2m --third-party`. The dashboard shows ownership, the API switch and a
     user's authorized applications again.
+- **Device authorization** (Step 15):
+  - `Domain\OAuth2\{DeviceAuthorization,DevicePoll,DeviceDecision,UserCode}`;
+    `GrantType::DeviceCode` (`actsForAPerson()`: a refresh token needs the code or the device
+    grant; the device grant is refused to third parties); `ErrorCode::AuthorizationPending|
+    SlowDown|ExpiredToken`. `AccessToken::issueForUser()`, `RefreshToken::startFamilyFor()`,
+    `IdTokenIssuer::issueFor()` — issuance without an authorization code.
+  - `Port\DeviceAuthorizationStore` (`open` refuses a user code already live, `consume` wins
+    once); `Redis\RedisDeviceAuthorizationStore`.
+  - `Application\OAuth2\ReadRequestedAccess` + `RequestedAccess`: `scope` and `audience`,
+    shared by `Authorize` and `Device\RequestDeviceAuthorization`. `Token\DeviceCodeGrant`.
+    `Device\{PendingDeviceRequests,DescribeDeviceRequest,DecideDeviceRequest}` with
+    `DeviceReview`, `DeviceDecided`, `DeviceSignInRequired`. `Consent\ScopeDescriptions`, the
+    words the consent screen and the device page share. `RequireSignIn` takes the client the
+    sign-in is for.
+  - `Adapter\Primary\Http\OAuth2\DeviceAuthorizationHandler`,
+    `Auth\{DeviceHandler,DevicePages}`, `templates/auth/device.phtml`;
+    `device_authorization_endpoint` in discovery. The dashboard registers device clients.
 - **Introspection and revocation** (Step 14):
   - `Application\OAuth2\TokenManagement\{IntrospectToken,TokenIntrospection,RevokeToken,
     IssuedTokens,PresentedToken,TokenTypeHint}`; `ErrorCode::UnsupportedTokenType`;
@@ -790,6 +808,18 @@ Conventions established in Step 12:
 - **A handle is the only thing a page's URL or form carries**, for consent as for sign-in; a
   handle that is unknown, spent, expired, someone else's or names something deleted is the
   same "expired" page. Showing the screen leaves it; deciding claims it (`GETDEL`).
+
+Conventions established in Step 15:
+
+- **A device request is checked like an authorization request**, by the same code, and the
+  person's decision like an authorization: the session counts only through a connection
+  the application enables, and on an API enforcing roles somebody holding nothing there is
+  refused. An approval is a consent on record.
+- **A device code is a secret, and redeemed once**: kept only as a digest, consumed before
+  any token exists. The user code is what a person types, and stands for one live request.
+- **Polling follows RFC 8628 §3.5**: `slow_down` adds five seconds for good; only a pending
+  request is held to the interval; past its life a request says `expired_token` for a minute,
+  then nothing.
 
 Conventions established in Step 14:
 
@@ -1513,10 +1543,14 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
   (18 cases, with a deactivated account's token); `PresentedTokenTest` (the request and the
   hint), the single revocation case of `AccessTokenRepositoryContract`.
 
-#### [ ] Step 15 — Device authorization
+#### [x] Step 15 — Device authorization
 - RFC 8628: `/oauth2/device/code`, the device grant, polling (`slow_down`, `expired_token`),
   `/auth/device` review page. Python: `oauth2/device.py`, `auth/device.py`.
-- Tests: `test_device_authorization` (22).
+- Tests: `test_device_authorization` (22) — ported as `DeviceAuthorizationTest` (26 cases:
+  another device client, the refresh token, the CSRF check, a code decided twice);
+  `DeviceAuthorizationRulesTest` (the user code, polling, deciding),
+  `DeviceAuthorizationStoreContract` against the fake and Redis, the device cases of
+  `ClientTest`.
 
 #### [ ] Step 16 — Passwordless and mail
 - `Mailer` port (console/outbox, SMTP, none); code and link challenges; send limits; the built-in

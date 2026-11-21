@@ -10,6 +10,7 @@
 declare(strict_types=1);
 
 use Clavia\Adapter\Primary\Http\Auth\ConsentHandler;
+use Clavia\Adapter\Primary\Http\Auth\DeviceHandler;
 use Clavia\Adapter\Primary\Http\Auth\ExternalSignInCallbackHandler;
 use Clavia\Adapter\Primary\Http\Auth\ExternalSignInHandler;
 use Clavia\Adapter\Primary\Http\Auth\LoginHandler;
@@ -38,6 +39,7 @@ use Clavia\Adapter\Primary\Http\Management\UserPermissionsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserRolesHandler;
 use Clavia\Adapter\Primary\Http\Management\UsersHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
+use Clavia\Adapter\Primary\Http\OAuth2\DeviceAuthorizationHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\IntrospectionHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\RevocationHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\TokenHandler;
@@ -60,6 +62,7 @@ return static function (Application $app): void {
     $app->post('/oauth2/token', TokenHandler::class, 'oauth2.token');
     $app->post('/oauth2/introspect', IntrospectionHandler::class, 'oauth2.introspect');
     $app->post('/oauth2/revoke', RevocationHandler::class, 'oauth2.revoke');
+    $app->post('/oauth2/device/code', DeviceAuthorizationHandler::class, 'oauth2.device');
 
     // ── /.well-known/* — the provider's metadata, public and cacheable. One document at
     // both locations: OpenID relying parties and RFC 8414 clients look in different places. ──
@@ -86,6 +89,7 @@ return static function (Application $app): void {
     $app->post('/auth/mfa/disable', MfaSettingsHandler::class, 'auth.mfa.disable');
     // Whether an application may act as the signed-in person: the question, and the answer.
     $app->route('/auth/consent', ConsentHandler::class, ['GET', 'POST'], 'auth.consent');
+    $app->route('/auth/device', DeviceHandler::class, ['GET', 'POST'], 'auth.device');
     // Signing in through an external provider: out, then back. Both are navigations (GET);
     // the callback's path is the redirect URI registered at the provider.
     $app->get('/auth/social/{provider:[a-z][a-z0-9-]*}', ExternalSignInHandler::class, 'auth.social');

@@ -14,15 +14,19 @@ namespace Clavia\Application\Oidc;
 use Clavia\Application\Port\NoActiveSigningKey;
 use Clavia\Application\Port\SigningFailed;
 use Clavia\Application\Port\TokenSigner;
+use Clavia\Domain\Authentication\AuthenticationContext;
+use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\OAuth2\AuthorizationCode;
 use Clavia\Domain\Oidc\IdTokenClaims;
+use Clavia\Domain\Oidc\Nonce;
+use Clavia\Domain\Shared\ScopeSet;
 use DateTimeImmutable;
 
 /**
- * Mints the ID token of an authorization code exchange (OIDC Core §3.1.3.3).
+ * Mints the ID token issued with a person's tokens (OIDC Core §3.1.3.3).
  *
- * Everything it reports comes from the code — the audience, the nonce, when and how the
+ * Everything it reports comes from the grant — the audience, the nonce, when and how the
  * person authenticated — and from the account as it is now; `at_hash` ties it to the
  * access token issued in the same response, so the two cannot be paired with others.
  */
@@ -41,6 +45,8 @@ final readonly class IdTokenIssuer
     }
 
     /**
+     * The ID token of an authorization code exchange.
+     *
      * @param string $accessToken The access token issued alongside, exactly as the client receives it.
      *
      * @throws NoActiveSigningKey
@@ -52,15 +58,44 @@ final readonly class IdTokenIssuer
         #[\SensitiveParameter] string $accessToken,
         DateTimeImmutable $now,
     ): string {
+        return $this->issueFor(
+            $code->clientId,
+            $code->scope,
+            $code->nonce,
+            $code->authentication,
+            $user,
+            $accessToken,
+            $now,
+        );
+    }
+
+    /**
+     * An ID token for any grant acting for a person — a device approved on another screen
+     * has no code, and no nonce (RFC 8628 has none to carry).
+     *
+     * @param string $accessToken The access token issued alongside, exactly as the client receives it.
+     *
+     * @throws NoActiveSigningKey
+     * @throws SigningFailed
+     */
+    public function issueFor(
+        ClientId $clientId,
+        ScopeSet $scope,
+        ?Nonce $nonce,
+        AuthenticationContext $authentication,
+        User $user,
+        #[\SensitiveParameter] string $accessToken,
+        DateTimeImmutable $now,
+    ): string {
         $key = $this->signer->activeKey();
 
         $claims = IdTokenClaims::issue(
             $this->issuer,
             $user,
-            $code->clientId,
-            $code->scope,
-            $code->nonce,
-            $code->authentication,
+            $clientId,
+            $scope,
+            $nonce,
+            $authentication,
             // Hashed with the hash of the algorithm that signs the token (OIDC Core §3.1.3.6).
             $key->algorithm->halfHash($accessToken),
             $now,

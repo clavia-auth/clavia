@@ -15,7 +15,12 @@ import { useConnections } from "../api/connections";
 import type { AuthMethod, Client, GrantType } from "../api/types";
 import { BackLink, ErrorNote, Field, KeyValue, PageHeader, SecretReveal, formatDate } from "../components/ui";
 
-const GRANTS = ["authorization_code", "refresh_token", "client_credentials"] as const satisfies readonly GrantType[];
+const GRANTS = [
+  "authorization_code",
+  "refresh_token",
+  "client_credentials",
+  "urn:ietf:params:oauth:grant-type:device_code",
+] as const satisfies readonly GrantType[];
 const AUTH_METHODS = ["none", "client_secret_basic", "client_secret_post"] as const satisfies readonly AuthMethod[];
 
 const lines = (text: string): string[] => text.split(/\s+/).filter(Boolean);
@@ -133,7 +138,7 @@ function ClientDetail({ client }: { client: Client }) {
             />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Grant types" hint="refresh_token only beside authorization_code.">
+            <Field label="Grant types" hint="refresh_token only beside authorization_code or the device code grant.">
               <div className="space-y-1 pt-1 text-sm">
                 {GRANTS.map((grant) => (
                   <label key={grant} className="flex items-center gap-2">

@@ -39,6 +39,7 @@ final readonly class ProviderMetadata
     public const string TOKEN_ENDPOINT = '/oauth2/token';
     public const string INTROSPECTION_ENDPOINT = '/oauth2/introspect';
     public const string REVOCATION_ENDPOINT = '/oauth2/revoke';
+    public const string DEVICE_AUTHORIZATION_ENDPOINT = '/oauth2/device/code';
     public const string USERINFO_ENDPOINT = '/oidc/userinfo';
     public const string JWKS_URI = '/oidc/jwks.json';
     public const string END_SESSION_ENDPOINT = '/oidc/logout';
@@ -107,6 +108,8 @@ final readonly class ProviderMetadata
             'introspection_endpoint_auth_methods_supported' => self::methods(IntrospectToken::AUTH_METHODS),
             'revocation_endpoint' => $this->issuer . self::REVOCATION_ENDPOINT,
             'revocation_endpoint_auth_methods_supported' => self::methods(RevokeToken::AUTH_METHODS),
+            // RFC 8628 §4.
+            'device_authorization_endpoint' => $this->issuer . self::DEVICE_AUTHORIZATION_ENDPOINT,
             'claim_types_supported' => ['normal'],
             'claims_supported' => self::CLAIMS,
             'claims_parameter_supported' => false,

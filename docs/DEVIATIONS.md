@@ -152,6 +152,16 @@ knows what changes.
 | Existing applications when connections came in | Every first-party application enables every connection | The same (migration `0019`); a third-party one lists none | Nothing that worked stops working. |
 | Development seeds | — | The development client and the dashboard enable the default pool only | The dashboard is for operators, who sign in with a password; a provider that is not configured is not offered anyway. |
 
+## Device authorization
+
+| Area | Python | PHP | Why |
+|---|---|---|---|
+| Where a request waits | The device code in the clear, as the value of the user code's Redis key | The request under the user code's key; the device code's digest pointing at it. The device code is never stored | Every other code a client presents is kept as a digest. |
+| Redeeming an approved code | Tokens issued, then the request deleted | The request deleted first — atomically, by one poll only — then the tokens issued | Two polls racing an approval could both have been issued tokens. |
+| A request to `/oauth2/device/code` with a repeated parameter | One value used | `invalid_request` | RFC 6749 §3.1, as at every endpoint. |
+| A refresh token for a device | `refresh_token` registered beside the device grant | The same, and `refresh_token` is refused without the code or the device grant | A refresh token is only ever issued with a person's tokens. |
+| What the scope and audience may be | Checked by a copy of the authorization endpoint's rules | Checked by the same code as the authorization endpoint (`ReadRequestedAccess`) | The two cannot drift apart. |
+
 ## Roles
 
 | Area | Python | PHP | Why |
