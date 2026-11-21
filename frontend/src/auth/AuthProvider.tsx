@@ -98,28 +98,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     const idToken = session?.idToken;
-    const refreshToken = session?.refreshToken;
     // Leave without starting a new sign-in: this page is about to be abandoned,
     // and a guarded route reacting to the dropped session would otherwise send the
     // browser back to the authorization server instead of to the logout.
     suppressLogin();
     expire();
-    // Give the refresh token back first (RFC 7009): revoking it revokes the whole
-    // family, access token included, so a copy of either is worthless from here on.
-    // `keepalive` lets the request outlive the navigation below; it is best effort —
-    // sign-out must not be blocked on it, and the token expires on its own anyway.
-    if (refreshToken) {
-      void fetch(endpoints.revoke, {
-        method: "POST",
-        keepalive: true,
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          client_id: config.clientId,
-          token: refreshToken,
-          token_type_hint: "refresh_token",
-        }),
-      }).catch(() => undefined);
-    }
+    // The refresh token is not handed back: token revocation (RFC 7009) arrives with
+    // Step 14. Dropped from this tab, nothing here can present it again, and it runs
+    // out on its own.
+    //
     // RP-Initiated Logout: a top-level navigation, because that is the only request
     // the auth origin's SameSite=Lax session cookie travels with. The ID token
     // proves this browser is entitled to end that session.

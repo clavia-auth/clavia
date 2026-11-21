@@ -4,7 +4,6 @@ import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
 import { z } from "zod";
 
-import { useConnections } from "../api/connections";
 import { useCreateUser, useUsers } from "../api/users";
 import {
   Dialog,
@@ -20,8 +19,7 @@ import {
 const createSchema = z.object({
   email: z.email("Enter a valid email address."),
   password: z.string().min(8, "At least 8 characters."),
-  name: z.string().max(200).optional(),
-  connection: z.string().min(1, "Pick the pool the account belongs to."),
+  name: z.string().max(255),
 });
 type CreateForm = z.infer<typeof createSchema>;
 
@@ -61,7 +59,6 @@ export function UsersPage() {
             <thead className="text-left text-xs uppercase tracking-wide text-muted">
               <tr>
                 <th className="px-4 py-2 font-medium">Email</th>
-                <th className="px-4 py-2 font-medium">Connection</th>
                 <th className="px-4 py-2 font-medium">Status</th>
                 <th className="px-4 py-2 font-medium">Sign-in</th>
                 <th className="px-4 py-2 font-medium">Created</th>
@@ -76,17 +73,11 @@ export function UsersPage() {
                     </Link>
                     {user.name && <div className="text-xs text-muted">{user.name}</div>}
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs text-muted">{user.connection}</td>
                   <td className="px-4 py-3">
                     {user.is_active ? <span className="badge-ok">Active</span> : <span className="badge-muted">Disabled</span>}
                   </td>
                   <td className="px-4 py-3 space-x-1">
                     {user.has_password && <span className="badge-muted">Password</span>}
-                    {user.linked_providers.map((p) => (
-                      <span key={p} className="badge-muted capitalize">
-                        {p}
-                      </span>
-                    ))}
                     {user.mfa_enrolled && <span className="badge-gold">MFA</span>}
                   </td>
                   <td className="px-4 py-3 text-muted">{formatDate(user.created_at)}</td>
@@ -107,15 +98,14 @@ export function UsersPage() {
 function CreateUserDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate();
   const create = useCreateUser();
-  const connections = useConnections();
-  const pools = connections.data?.filter((c) => c.strategy === "database") ?? [];
   const form = useForm<CreateForm>({
     resolver: zodResolver(createSchema),
-    defaultValues: { connection: "password" },
+    defaultValues: { email: "", password: "", name: "" },
   });
 
-  const submit = form.handleSubmit(async (values) => {
-    const user = await create.mutateAsync({ ...values, name: values.name || null });
+  const submit = form.handleSubmit(async ({ name, ...values }) => {
+    // An empty name is no name: the API takes a missing field, not a blank one.
+    const user = await create.mutateAsync(name ? { ...values, name } : values);
     form.reset();
     onClose();
     navigate(`/users/${user.id}`);
@@ -126,19 +116,6 @@ function CreateUserDialog({ open, onClose }: { open: boolean; onClose: () => voi
       <form onSubmit={submit} className="space-y-4">
         <Field label="Email" error={form.formState.errors.email?.message}>
           <input className="input" type="email" autoComplete="off" {...form.register("email")} />
-        </Field>
-        <Field
-          label="Connection"
-          hint="The pool the account belongs to. Cannot be changed later; the same email may exist in another pool as a different account."
-          error={form.formState.errors.connection?.message}
-        >
-          <select className="input" {...form.register("connection")}>
-            {pools.map((pool) => (
-              <option key={pool.name} value={pool.name}>
-                {pool.display_name} ({pool.name})
-              </option>
-            ))}
-          </select>
         </Field>
         <Field label="Password" hint="At least 8 characters. The user can change it later." error={form.formState.errors.password?.message}>
           <input className="input" type="password" autoComplete="new-password" {...form.register("password")} />

@@ -12,6 +12,7 @@ import { basePath } from "../auth/config";
 import { beginLogin } from "../auth/login";
 import { refreshSession } from "../auth/refresh";
 import { clearSession, isExpired, readSession, type StoredSession } from "../auth/session";
+import type { Problem } from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -23,22 +24,24 @@ export class ApiError extends Error {
   }
 }
 
-interface ErrorBody {
-  error?: string;
-  error_description?: string;
-  detail?: string | { msg: string; loc?: (string | number)[] }[];
-}
+/**
+ * What a refusal looks like: problem details (RFC 9457) from the API itself, or an
+ * OAuth2 error object (RFC 6750 §3) when the bearer token is what was refused.
+ */
+type ErrorBody = Partial<Problem> & { error?: string; error_description?: string };
 
 function describe(status: number, body: ErrorBody | null): string {
   if (!body) return `The API answered ${status}.`;
-  if (typeof body.detail === "string") return body.detail;
-  if (Array.isArray(body.detail)) {
-    // FastAPI validation errors: name the field so the form can show it.
-    return body.detail
-      .map((entry) => `${entry.loc?.slice(1).join(".") ?? "body"}: ${entry.msg}`)
+  if (body.errors && body.errors.length > 0) {
+    // Name the field — `/email`, not a sentence about "the request" — so the form can be fixed.
+    return body.errors
+      .map((entry) => {
+        const where = entry.pointer?.replace(/^\//, "").replaceAll("/", ".") || entry.parameter;
+        return where ? `${where}: ${entry.detail}` : entry.detail;
+      })
       .join("; ");
   }
-  return body.error_description ?? body.error ?? `The API answered ${status}.`;
+  return body.detail ?? body.error_description ?? body.error ?? `The API answered ${status}.`;
 }
 
 function signInAgain(message: string): never {
@@ -83,7 +86,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     : null;
   if (!response.ok) {
     const error = body as ErrorBody | null;
-    throw new ApiError(response.status, describe(response.status, error), error?.error);
+    throw new ApiError(response.status, describe(response.status, error), error?.error ?? error?.type);
   }
   return body as T;
 }

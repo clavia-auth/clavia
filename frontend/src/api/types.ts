@@ -1,4 +1,8 @@
-/** Shapes of the Management API's responses — see `clavia.api.schemas`. */
+/**
+ * Shapes of the Management API's responses — the schemas of
+ * `docs/openapi/management-api.yaml`, which the server checks every response against.
+ * A field appears here once the server sends it, never before.
+ */
 
 export interface Page<T> {
   items: T[];
@@ -7,17 +11,24 @@ export interface Page<T> {
   per_page: number;
 }
 
+/** An error the Management API answers with (RFC 9457 problem details). */
+export interface Problem {
+  type: string;
+  title: string;
+  status: number;
+  detail: string;
+  /** What was wrong with the request, one entry per field or parameter. */
+  errors?: { pointer?: string; parameter?: string; detail: string }[];
+}
+
 export interface User {
   id: string;
   email: string;
   email_verified: boolean;
   is_active: boolean;
   has_password: boolean;
+  /** A confirmed authenticator app: signing in asks for a second factor. */
   mfa_enrolled: boolean;
-  linked_providers: string[];
-  /** The pool the account belongs to, or the external connection that created it. */
-  connection: string;
-  identities: Identity[];
   name: string | null;
   given_name: string | null;
   family_name: string | null;
@@ -30,74 +41,24 @@ export interface User {
 
 export type ClientType = "public" | "confidential";
 
+export type AuthMethod = "none" | "client_secret_basic" | "client_secret_post";
+
+/** `refresh_token` only beside `authorization_code`: a refresh token is issued when a code is redeemed. */
+export type GrantType = "authorization_code" | "client_credentials" | "refresh_token";
+
+export type ResponseType = "code";
+
 export interface Client {
   client_id: string;
   name: string;
   client_type: ClientType;
+  token_endpoint_auth_method: AuthMethod;
   redirect_uris: string[];
-  grant_types: string[];
-  response_types: string[];
-  token_endpoint_auth_method: string;
-  /** OIDC Back-Channel Logout: where a logout token is POSTed when a session ends. Null: never told. */
-  backchannel_logout_uri: string | null;
-  backchannel_logout_session_required: boolean;
-  /** Who owns it: the operator (first-party) or somebody else. Fixed at creation. */
-  is_first_party: boolean;
-  /** Connection names this application may sign users in through (first-party only). */
-  connections: string[];
+  grant_types: GrantType[];
+  response_types: ResponseType[];
+  /** Where a sign-out the application starts at `/oidc/logout` may send the browser back. */
+  post_logout_redirect_uris: string[];
   created_at: string;
-}
-
-export type ConnectionStrategy = "database" | "social" | "oidc" | "passwordless";
-
-/** A way to sign in, and the switches on it. */
-export interface Connection {
-  name: string;
-  display_name: string;
-  strategy: ConnectionStrategy;
-  is_enabled: boolean;
-  /** Open to every application, third-party ones included. */
-  is_domain_connection: boolean;
-  /** The deployment has what it needs (a social provider's credentials, an OIDC provider's settings). */
-  configured: boolean;
-  /** Enabled and configured: what the login page actually offers. */
-  usable: boolean;
-  /** OIDC connections only; the secret is never returned. */
-  oidc_issuer: string | null;
-  oidc_client_id: string | null;
-  oidc_scopes: string | null;
-  created_at: string;
-}
-
-/** One external account linked to a user. */
-export interface Identity {
-  provider: string;
-  subject: string;
-  email: string | null;
-  created_at: string;
-}
-
-/** What a user allowed one application to do on one API, acting as them. */
-export interface UserConsent {
-  client_id: string;
-  client_name: string;
-  is_first_party: boolean;
-  audience: string | null;
-  scopes: string[];
-  granted_at: string;
-  updated_at: string;
-}
-
-/** One browser session at auth.{domain}, named by its OIDC `sid`. */
-export interface UserSession {
-  sid: string;
-  created_at: string;
-  /** The absolute ceiling; idle expiry may end it sooner. */
-  expires_at: string;
-  amr: string[];
-  connection: string;
-  /** Applications that signed in through it — told by back-channel logout when it ends. */
-  clients: { client_id: string; name: string }[];
 }
 
 /** The create and rotate-secret responses — the only time `client_secret` appears. */
@@ -118,8 +79,6 @@ export interface ResourceServer {
   is_system: boolean;
   /** RBAC: narrow a user's token to what their roles grant on this API. */
   enforce_policies: boolean;
-  /** First-party applications skip the consent screen for this API's permissions. */
-  allow_skipping_consent: boolean;
   created_at: string;
 }
 

@@ -20,8 +20,7 @@ import {
 
 const schema = z.object({
   name: z.string().min(1, "Give the application a name.").max(120),
-  kind: z.enum(["spa", "web", "m2m", "device"]),
-  ownership: z.enum(["first", "third"]),
+  kind: z.enum(["spa", "web", "m2m"]),
   redirect_uris: z.string(),
 });
 type Form = z.infer<typeof schema>;
@@ -49,18 +48,10 @@ const KINDS = {
   },
   m2m: {
     label: "Machine to machine",
-    hint: "Confidential client, client credentials grant, no redirect. Grant it an API from the shell afterwards.",
+    hint: "Confidential client, client credentials grant, no redirect. Grant it an API from the shell afterwards: clavia clients:grant.",
     client_type: "confidential",
     token_endpoint_auth_method: "client_secret_basic",
     grant_types: ["client_credentials"],
-    response_types: [],
-  },
-  device: {
-    label: "Device or command-line tool",
-    hint: "Public client with no browser of its own: it shows a code the user types at auth.{domain}/auth/device. Device authorization grant with rotating refresh tokens. First-party only.",
-    client_type: "public",
-    token_endpoint_auth_method: "none",
-    grant_types: ["urn:ietf:params:oauth:grant-type:device_code", "refresh_token"],
     response_types: [],
   },
 } as const;
@@ -112,7 +103,6 @@ export function ClientsPage() {
                     <span className={client.client_type === "confidential" ? "badge-ok" : "badge-muted"}>
                       {client.client_type}
                     </span>
-                    {!client.is_first_party && <span className="badge-gold ml-2">Third-party</span>}
                   </td>
                   <td className="px-4 py-3 text-muted">{client.grant_types.join(", ") || "—"}</td>
                   <td className="px-4 py-3 text-muted">{formatDate(client.created_at)}</td>
@@ -136,7 +126,7 @@ function CreateClientDialog({ open, onClose }: { open: boolean; onClose: () => v
   const [created, setCreated] = useState<ClientCreated | null>(null);
   const form = useForm<Form>({
     resolver: zodResolver(schema),
-    defaultValues: { kind: "spa", ownership: "first", redirect_uris: "", name: "" },
+    defaultValues: { kind: "spa", redirect_uris: "", name: "" },
   });
   const kind = KINDS[form.watch("kind")];
 
@@ -149,7 +139,6 @@ function CreateClientDialog({ open, onClose }: { open: boolean; onClose: () => v
       grant_types: [...preset.grant_types],
       response_types: [...preset.response_types],
       redirect_uris: values.redirect_uris.split(/\s+/).filter(Boolean),
-      is_first_party: values.ownership === "first",
     });
     if (result.client_secret) {
       setCreated(result); // show the secret once, before leaving the dialog
@@ -202,20 +191,7 @@ function CreateClientDialog({ open, onClose }: { open: boolean; onClose: () => v
               ))}
             </select>
           </Field>
-          <Field
-            label="Ownership"
-            hint={
-              form.watch("ownership") === "first"
-                ? "Yours: users are not asked for consent unless an API insists. Cannot be changed later."
-                : "Somebody else's: every scope goes through the consent screen, the id is prefixed tpc_, and it can never reach the Management API. Cannot be changed later."
-            }
-          >
-            <select className="input" {...form.register("ownership")}>
-              <option value="first">First-party — run by this organisation</option>
-              <option value="third">Third-party — run by a partner or external developer</option>
-            </select>
-          </Field>
-          {form.watch("kind") !== "m2m" && form.watch("kind") !== "device" && (
+          {form.watch("kind") !== "m2m" && (
             <Field label="Redirect URIs" hint="One per line. Matched exactly at the authorization endpoint." error={form.formState.errors.redirect_uris?.message}>
               <textarea className="input font-mono text-xs" rows={3} placeholder="https://app.example.com/callback" {...form.register("redirect_uris")} />
             </Field>

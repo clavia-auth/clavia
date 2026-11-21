@@ -250,8 +250,12 @@ What exists:
     `Development\{SeedDashboardClient,SeededDashboard}`.
   - `Adapter\Secondary\Signing\Jose\JoseSignatureVerifier`; `Adapter\Primary\Http\Oidc\EndSessionHandler`
     and `templates/auth/logout-confirm.phtml`; `post_logout_redirect_uris` in the Management API.
-  - Migration `0015_post_logout_redirect_uris`. `frontend/` (the React dashboard; unchanged
-    until Step 10 moved taking a role away to one request per account).
+  - Migration `0015_post_logout_redirect_uris`. `frontend/` (the React dashboard).
+- **The dashboard follows the contract** (after Step 11): `frontend/src/api/types.ts` holds
+  the shapes `docs/openapi/management-api.yaml` defines and nothing else; the pages, fields
+  and calls for what does not exist yet (connections, consents, sessions, linked identities,
+  third-party clients, back-channel logout, the device grant, revocation at sign-out) were
+  removed, and come back with their step. Errors are read as problem details (RFC 9457).
 - **Roles** (Step 10):
   - `Domain\Rbac\{Role,RoleId,GrantedPermission,RoleRepository}`: a role grants permissions
     named `(API id, value)`, possibly across APIs; the repository also holds the assignments

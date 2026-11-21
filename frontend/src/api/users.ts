@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, query } from "./client";
-import type { Page, Role, User, UserConsent, UserPermission, UserSession } from "./types";
+import type { Page, Role, User, UserPermission } from "./types";
 
 export interface UserListParams {
   page?: number;
@@ -12,10 +12,14 @@ export interface UserListParams {
 export interface UserCreate {
   email: string;
   password: string;
-  name?: string | null;
+  email_verified?: boolean;
   is_active?: boolean;
-  /** The pool (database connection) the account is created in. */
-  connection?: string;
+  name?: string;
+  given_name?: string;
+  family_name?: string;
+  nickname?: string;
+  picture?: string;
+  locale?: string;
 }
 
 export type UserUpdate = Partial<{
@@ -103,58 +107,6 @@ export function useResetUserMfa(id: string) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: () => api<void>(`/users/${id}/mfa`, { method: "DELETE" }),
-    onSuccess: () => client.invalidateQueries({ queryKey: keys.all }),
-  });
-}
-
-export function useUserConsents(id: string) {
-  return useQuery({
-    queryKey: [...keys.one(id), "consents"],
-    queryFn: () => api<UserConsent[]>(`/users/${id}/consents`),
-  });
-}
-
-export function useRevokeUserConsent(id: string) {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (clientId: string) =>
-      api<void>(`/users/${id}/consents/${encodeURIComponent(clientId)}`, { method: "DELETE" }),
-    onSuccess: () => client.invalidateQueries({ queryKey: [...keys.one(id), "consents"] }),
-  });
-}
-
-export function useUserSessions(id: string) {
-  return useQuery({
-    queryKey: [...keys.one(id), "sessions"],
-    queryFn: () => api<UserSession[]>(`/users/${id}/sessions`),
-  });
-}
-
-/** End one browser session, by its `sid`; its applications are told by back-channel logout. */
-export function useEndUserSession(id: string) {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (sid: string) =>
-      api<void>(`/users/${id}/sessions/${encodeURIComponent(sid)}`, { method: "DELETE" }),
-    onSuccess: () => client.invalidateQueries({ queryKey: [...keys.one(id), "sessions"] }),
-  });
-}
-
-/** Sign the user out everywhere. */
-export function useEndUserSessions(id: string) {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: () => api<void>(`/users/${id}/sessions`, { method: "DELETE" }),
-    onSuccess: () => client.invalidateQueries({ queryKey: [...keys.one(id), "sessions"] }),
-  });
-}
-
-/** Detach an external account from the user. */
-export function useUnlinkIdentity(id: string) {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (provider: string) =>
-      api<void>(`/users/${id}/identities/${encodeURIComponent(provider)}`, { method: "DELETE" }),
     onSuccess: () => client.invalidateQueries({ queryKey: keys.all }),
   });
 }

@@ -54,7 +54,7 @@ function ResourceServerDetail({ api }: { api: ResourceServer }) {
               className="btn-danger"
               disabled={remove.isPending}
               onClick={async () => {
-                if (confirm(`Delete ${api.name || api.identifier}? Every client grant on it goes with it, and tokens naming it stop being accepted.`)) {
+                if (confirm(`Delete ${api.name || api.identifier}? Every client grant on it goes with it, and every role stops granting its permissions.`)) {
                   await remove.mutateAsync(api.id);
                   navigate("/apis");
                 }
@@ -128,25 +128,6 @@ function ResourceServerDetail({ api }: { api: ResourceServer }) {
             </label>
           </section>
 
-          <section className="card p-6">
-            <h2 className="mb-1 text-sm font-semibold">Consent</h2>
-            <label className="mt-3 flex items-start gap-3 text-sm">
-              <input
-                type="checkbox"
-                className="mt-0.5 accent-accent"
-                checked={api.allow_skipping_consent}
-                disabled={update.isPending}
-                onChange={(event) => void update.mutateAsync({ allow_skipping_consent: event.target.checked })}
-              />
-              <span>
-                <span className="font-medium">Allow first-party applications to skip consent</span>
-                <span className="block text-xs text-muted">
-                  When on, your own applications are not shown the consent screen for this API's permissions — signing in is the consent.
-                  Third-party applications always ask, whatever this says.
-                </span>
-              </span>
-            </label>
-          </section>
         </aside>
       </div>
     </>

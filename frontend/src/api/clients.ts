@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, query } from "./client";
-import type { Client, ClientCreated, ClientType, Page } from "./types";
+import type { AuthMethod, Client, ClientCreated, ClientType, GrantType, Page, ResponseType } from "./types";
 
 export interface ClientListParams {
   page?: number;
@@ -12,21 +12,15 @@ export interface ClientListParams {
 export interface ClientCreate {
   name: string;
   client_type: ClientType;
-  token_endpoint_auth_method: string;
+  token_endpoint_auth_method: AuthMethod;
   redirect_uris: string[];
-  grant_types: string[];
-  response_types: string[];
-  /** OIDC Back-Channel Logout URI (https); null or omitted means the application is not told. */
-  backchannel_logout_uri?: string | null;
-  backchannel_logout_session_required?: boolean;
-  is_first_party?: boolean;
-  /** Connection names; omitted means every connection (first-party only). */
-  connections?: string[];
+  grant_types: GrantType[];
+  response_types: ResponseType[];
+  post_logout_redirect_uris?: string[];
 }
 
-export type ClientUpdate = Partial<
-  Omit<ClientCreate, "client_type" | "is_first_party" | "connections">
->;
+/** The type is identity, not configuration: it is fixed at registration. */
+export type ClientUpdate = Partial<Omit<ClientCreate, "client_type">>;
 
 const keys = {
   all: ["clients"] as const,
@@ -63,19 +57,6 @@ export function useUpdateClient(id: string) {
       client.setQueryData(keys.one(id), updated);
       void client.invalidateQueries({ queryKey: keys.all });
     },
-  });
-}
-
-/** Replace the connections an application may sign users in through. */
-export function useSetClientConnections(id: string) {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (connections: string[]) =>
-      api<string[]>(`/clients/${id}/connections`, {
-        method: "PUT",
-        body: JSON.stringify({ connections }),
-      }),
-    onSuccess: () => client.invalidateQueries({ queryKey: keys.all }),
   });
 }
 

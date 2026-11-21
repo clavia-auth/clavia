@@ -5,7 +5,6 @@ import { Layout } from "./components/Layout";
 import { CallbackPage } from "./pages/Callback";
 import { ClientDetailPage } from "./pages/ClientDetail";
 import { ClientsPage } from "./pages/Clients";
-import { ConnectionsPage } from "./pages/Connections";
 import { ResourceServerDetailPage } from "./pages/ResourceServerDetail";
 import { ResourceServersPage } from "./pages/ResourceServers";
 import { RoleDetailPage } from "./pages/RoleDetail";
@@ -37,7 +36,6 @@ export function App() {
         <Route path="/apis/:resourceServerId" element={<ResourceServerDetailPage />} />
         <Route path="/roles" element={<RolesPage />} />
         <Route path="/roles/:roleId" element={<RoleDetailPage />} />
-        <Route path="/connections" element={<ConnectionsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/users" replace />} />
     </Routes>
