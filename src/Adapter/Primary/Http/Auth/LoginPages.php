@@ -27,6 +27,14 @@ final class LoginPages
 
     public const string PASSWORD_UNAVAILABLE = 'Password sign-in is not available for this application.';
 
+    public const string INVALID_EMAIL = 'Enter the email address to sign in with.';
+
+    public const string EMAIL_UNAVAILABLE = 'Email sign-in is not available for this application.';
+
+    public const string TOO_MANY_EMAILS = 'Too many sign-in emails were sent. Try again in an hour.';
+
+    public const string MAIL_UNAVAILABLE = 'Email sign-in is not available right now. Try again later.';
+
     private function __construct()
     {
     }
@@ -35,8 +43,8 @@ final class LoginPages
      * The sign-in form.
      *
      * @param list<string> $formOrigins
-     * @param SignInMethods $methods    The password form when it is offered, the external connections
-     *                                  as links below it.
+     * @param SignInMethods $methods    The password form and the email form when they are offered, the
+     *                                  external connections as links below them.
      */
     public static function form(
         ?string $loginState,
@@ -56,6 +64,7 @@ final class LoginPages
                 'email' => $email ?? '',
                 'signedInAs' => null,
                 'password' => $methods->password,
+                'emailSignIn' => $methods->email,
                 'providers' => array_map(
                     static fn (ExternalProviderOption $provider): array => [
                         'label' => $provider->label,
@@ -89,6 +98,7 @@ final class LoginPages
                 'email' => '',
                 'signedInAs' => $email,
                 'password' => false,
+                'emailSignIn' => false,
                 'providers' => [],
             ],
         );

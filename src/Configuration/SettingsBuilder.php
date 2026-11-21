@@ -314,14 +314,14 @@ final class SettingsBuilder
     }
 
     /**
-     * Refuse an unusable signing configuration and every development-only weakening
+     * Refuse an unusable signing or mail configuration and every development-only weakening
      * in a real environment.
      *
-     * A server that boots and then cannot sign is worse than one that refuses to boot.
-     * `devAutologinEmail` bypasses authentication entirely; a session cookie without
-     * `Secure` travels over plaintext; the console mail backend writes sign-in codes to
-     * the log; private outbound addresses disable the SSRF guard. All are hard
-     * failures rather than warnings.
+     * A server that boots and then cannot sign — or send the mail it promises — is worse than
+     * one that refuses to boot. `devAutologinEmail` bypasses authentication entirely; a
+     * session cookie without `Secure` travels over plaintext; the console mail backend writes
+     * sign-in codes to the log; private outbound addresses disable the SSRF guard. All are
+     * hard failures rather than warnings.
      *
      * @throws InvalidSettings
      */
@@ -334,6 +334,10 @@ final class SettingsBuilder
                 "CLAVIA_SIGNING_BACKEND=%s requires CLAVIA_SIGNING_KEY_REF naming the provider's key.",
                 $this->quote($settings->signingBackend),
             ));
+        }
+
+        if ($settings->emailBackend === EmailBackend::Smtp && ($settings->smtpHost ?? '') === '') {
+            throw new InvalidSettings('CLAVIA_EMAIL_BACKEND=smtp requires CLAVIA_SMTP_HOST naming the mail server.');
         }
 
         if ($settings->isDevelopment()) {

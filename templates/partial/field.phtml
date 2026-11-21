@@ -4,12 +4,14 @@
  *
  * @var Laminas\View\Renderer\PhpRenderer $this
  * @var string $name
+ * @var string $id           Optional: the element's id, when two fields on one page share a name.
  * @var string $label
  * @var string $type
  * @var string $autocomplete
  * @var string $value
  * @var bool   $autofocus
  */
+$fieldId = isset($id) && is_string($id) && $id !== '' ? $id : $name;
 ?>
-      <label for="<?= $this->escapeHtmlAttr($name) ?>"><?= $this->escapeHtml($label) ?></label>
-      <input id="<?= $this->escapeHtmlAttr($name) ?>" name="<?= $this->escapeHtmlAttr($name) ?>" type="<?= $this->escapeHtmlAttr($type) ?>" required autocomplete="<?= $this->escapeHtmlAttr($autocomplete) ?>" spellcheck="false"<?php if ($value !== ''): ?> value="<?= $this->escapeHtmlAttr($value) ?>"<?php endif ?><?php if ($autofocus): ?> autofocus<?php endif ?>>
+      <label for="<?= $this->escapeHtmlAttr($fieldId) ?>"><?= $this->escapeHtml($label) ?></label>
+      <input id="<?= $this->escapeHtmlAttr($fieldId) ?>" name="<?= $this->escapeHtmlAttr($name) ?>" type="<?= $this->escapeHtmlAttr($type) ?>" required autocomplete="<?= $this->escapeHtmlAttr($autocomplete) ?>" spellcheck="false"<?php if ($value !== ''): ?> value="<?= $this->escapeHtmlAttr($value) ?>"<?php endif ?><?php if ($autofocus): ?> autofocus<?php endif ?>>

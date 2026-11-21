@@ -52,6 +52,7 @@ use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
 use ClaviaTest\Support\Fake\InMemorySessionStore;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
+use ClaviaTest\Support\Fake\RecordingMailer;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use PHPUnit\Framework\TestCase;
 
@@ -446,7 +447,7 @@ final class ExternalSignInTest extends TestCase
 
     private function access(FakeIdentityProviders $providers): ConnectionAccess
     {
-        return new ConnectionAccess($this->connections, $providers);
+        return new ConnectionAccess($this->connections, $providers, new RecordingMailer(false));
     }
 
     private function switchOff(string $name): void

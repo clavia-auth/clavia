@@ -86,6 +86,8 @@ final class CookiesTest extends TestCase
         self::assertStringContainsString('Path=/;', $cookies->expireTheme()->toString());
         self::assertStringContainsString('Path=/auth;', $cookies->mfaChallenge('c')->toString());
         self::assertStringContainsString('Path=/auth;', $cookies->expireMfaChallenge()->toString());
+        self::assertStringContainsString('Path=/auth;', $cookies->passwordless('p')->toString());
+        self::assertStringContainsString('Path=/auth;', $cookies->expirePasswordless()->toString());
     }
 
     public function testTheChallengeCookieLivesAsLongAsTheChallengeAndNoLonger(): void
@@ -96,6 +98,16 @@ final class CookiesTest extends TestCase
         self::assertStringContainsString('Max-Age=120;', $cookie);
         self::assertStringContainsString('HttpOnly', $cookie);
         self::assertStringContainsString('Secure', $cookie);
+        self::assertStringContainsString('SameSite=Lax', $cookie);
+    }
+
+    public function testThePasswordlessCookieLivesAsLongAsTheCode(): void
+    {
+        $cookie = new AuthCookies('clavia_session', 604800, true, 120, 480)->passwordless('handle')->toString();
+
+        self::assertStringStartsWith('clavia_passwordless=handle;', $cookie);
+        self::assertStringContainsString('Max-Age=480;', $cookie);
+        self::assertStringContainsString('HttpOnly', $cookie);
         self::assertStringContainsString('SameSite=Lax', $cookie);
     }
 

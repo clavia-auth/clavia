@@ -42,7 +42,10 @@ final class Clients
     {
         return ClientId::fromString($id)->ownership() === Ownership::ThirdParty
             ? []
-            : array_map(ConnectionName::fromString(...), ['github', 'google', ConnectionName::DEFAULT_POOL]);
+            : array_map(
+                ConnectionName::fromString(...),
+                [ConnectionName::EMAIL, 'github', 'google', ConnectionName::DEFAULT_POOL],
+            );
     }
 
     /**

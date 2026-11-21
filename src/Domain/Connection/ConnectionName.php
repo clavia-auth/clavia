@@ -14,8 +14,8 @@ namespace Clavia\Domain\Connection;
 use Clavia\Domain\Shared\InvalidValue;
 
 /**
- * The name of a connection — a way to sign in: `password`, `google`, `github`, a pool or
- * an OpenID Connect provider an operator named.
+ * The name of a connection — a way to sign in: `password`, `email`, `google`, `github`, a
+ * pool or an OpenID Connect provider an operator named.
  *
  * The natural key, and permanent: sessions and accounts record it, every identity linked
  * through an external connection is keyed by it, and it is part of the callback URL
@@ -25,6 +25,9 @@ use Clavia\Domain\Shared\InvalidValue;
 final readonly class ConnectionName
 {
     public const string DEFAULT_POOL = 'password';
+
+    /** The built-in passwordless connection: accounts proven by access to a mailbox. */
+    public const string EMAIL = 'email';
 
     private const string PATTERN = '/^[a-z][a-z0-9-]{0,31}$/D';
 
@@ -57,6 +60,12 @@ final readonly class ConnectionName
     public static function defaultPool(): self
     {
         return new self(self::DEFAULT_POOL);
+    }
+
+    /** The passwordless connection, which every account signing in by email belongs to. */
+    public static function email(): self
+    {
+        return new self(self::EMAIL);
     }
 
     public function equals(self $other): bool

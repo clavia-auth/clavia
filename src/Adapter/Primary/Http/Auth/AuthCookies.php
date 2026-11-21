@@ -26,6 +26,10 @@ use Clavia\Domain\Authentication\PendingExternalSignIn;
  * - **Second-factor challenge** (`clavia_mfa`, path `/auth`): the handle of a sign-in
  *   waiting for its second factor. Lasts as long as the challenge may; deleted when it
  *   ends, either way.
+ * - **Passwordless code** (`clavia_passwordless`, path `/auth`): the handle of a sign-in
+ *   waiting for the code sent by email. The code answers only the challenge this cookie
+ *   names, so it works in the browser that asked and nowhere else. Lasts as long as the
+ *   code does.
  * - **External sign-in** (`clavia_external_state`, path `/auth`): the `state` of a sign-in
  *   sent out to an external provider. The provider echoes the same value; the cookie is
  *   what proves the browser coming back is the one that left. `SameSite=Lax` still sends
@@ -45,6 +49,10 @@ final readonly class AuthCookies
 
     public const string MFA_CHALLENGE_PATH = '/auth';
 
+    public const string PASSWORDLESS = 'clavia_passwordless';
+
+    public const string PASSWORDLESS_PATH = '/auth';
+
     public const string EXTERNAL_SIGN_IN = 'clavia_external_state';
 
     public const string EXTERNAL_SIGN_IN_PATH = '/auth';
@@ -61,12 +69,14 @@ final readonly class AuthCookies
      * @param positive-int     $sessionLifetime   The absolute session lifetime, in seconds.
      * @param bool             $secure            Whether cookies carry `Secure`; false only in development.
      * @param positive-int     $mfaChallengeLifetime How long the second step of a sign-in may take.
+     * @param positive-int     $passwordlessCodeLifetime How long an emailed code stays valid.
      */
     public function __construct(
         public string $sessionCookieName,
         private int $sessionLifetime,
         private bool $secure,
         private int $mfaChallengeLifetime = 300,
+        private int $passwordlessCodeLifetime = 600,
     ) {
     }
 
@@ -113,6 +123,22 @@ final readonly class AuthCookies
     public function expireMfaChallenge(): SetCookie
     {
         return SetCookie::expire(self::MFA_CHALLENGE, self::MFA_CHALLENGE_PATH, $this->secure);
+    }
+
+    public function passwordless(#[\SensitiveParameter] string $handle): SetCookie
+    {
+        return SetCookie::create(
+            self::PASSWORDLESS,
+            $handle,
+            $this->passwordlessCodeLifetime,
+            self::PASSWORDLESS_PATH,
+            $this->secure,
+        );
+    }
+
+    public function expirePasswordless(): SetCookie
+    {
+        return SetCookie::expire(self::PASSWORDLESS, self::PASSWORDLESS_PATH, $this->secure);
     }
 
     public function externalSignIn(#[\SensitiveParameter] string $state): SetCookie

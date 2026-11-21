@@ -57,7 +57,7 @@ final readonly class ConnectionIdentityProviders implements IdentityProviders
     public function for(Connection $connection): ?IdentityProvider
     {
         return match ($connection->strategy) {
-            ConnectionStrategy::Database => null,
+            ConnectionStrategy::Database, ConnectionStrategy::Passwordless => null,
             ConnectionStrategy::Social => $this->social[$connection->name->value] ?? null,
             ConnectionStrategy::Oidc => $this->openIdProvider($connection),
         };

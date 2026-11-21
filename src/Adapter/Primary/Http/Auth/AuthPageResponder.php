@@ -39,7 +39,10 @@ final readonly class AuthPageResponder
     ) {
     }
 
-    public function page(ServerRequestInterface $request, HtmlPage $page): ResponseInterface
+    /**
+     * @param list<SetCookie> $cookies Set along with the page, after the CSRF cookie.
+     */
+    public function page(ServerRequestInterface $request, HtmlPage $page, array $cookies = []): ResponseInterface
     {
         $held = RequestCookies::all($request, AuthCookies::CSRF);
         $csrfToken = $held[0] ?? $this->secrets->token();
@@ -47,6 +50,9 @@ final readonly class AuthPageResponder
         $response = $this->pages
             ->render($request, $page, ['csrfToken' => $csrfToken])
             ->withAddedHeader('Set-Cookie', $this->cookies->csrf($csrfToken)->toString());
+        foreach ($cookies as $cookie) {
+            $response = $response->withAddedHeader('Set-Cookie', $cookie->toString());
+        }
 
         // A second cookie of the same name lives at another path: stop the browser
         // sending a value that can never match.

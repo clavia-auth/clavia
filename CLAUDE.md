@@ -319,6 +319,31 @@ What exists:
     clients and `allow_skipping_consent` on APIs in the Management API;
     `clients:create-m2m --third-party`. The dashboard shows ownership, the API switch and a
     user's authorized applications again.
+- **Passwordless sign-in and mail** (Step 16):
+  - `ConnectionStrategy::Passwordless` and the built-in `email` connection
+    (`ConnectionName::email()`, `Connection::isPasswordless()`); `isExternal()` is social or
+    OIDC only. Migration `0020_passwordless` seeds it — on, not a domain connection, given to
+    no existing application.
+  - `Domain\Authentication\{PasswordlessChallenge,PasswordlessMode,OneTimeCode}`: the
+    code's digest is bound to the browser's handle; `PasswordlessChallenge::address()`
+    normalizes an address (trimmed, lower-cased).
+  - `Port\{Mailer,OutgoingMail,MailUnavailable,MailOutbox,PasswordlessChallengeStore}`;
+    `Adapter\Secondary\Mail\{OutboxMailer,SmtpMailer,NoMailer}` (Symfony Mailer's ESMTP
+    transport, STARTTLS required unless switched off, SMTPS on 465, 15-second timeout),
+    `Redis\{RedisMailOutbox,RedisPasswordlessChallengeStore}`; `MailerFactory` picks by
+    `CLAVIA_EMAIL_BACKEND`, and the settings refuse `smtp` without a host.
+    `Settings::emailSender()`.
+  - `ConnectionAccess` takes the `Mailer`: the passwordless connection is configured, hence
+    usable, only while mail can be sent. `SignInMethods::$email`.
+  - `Application\Authentication\Passwordless\{StartPasswordlessSignIn,AnswerPasswordlessCode,
+    FollowPasswordlessLink,FinishPasswordlessSignIn,DescribePasswordlessChallenge,
+    PasswordlessSendLimit,SignInMail}` with their outcomes (`PasswordlessCodeSent`,
+    `PasswordlessLinkSent`, `PasswordlessCodeRejected`, `PasswordlessRefused` +
+    `PasswordlessFailure`, `PasswordlessPrompt`).
+  - `Adapter\Primary\Http\Auth\{PasswordlessStartHandler,PasswordlessCodeHandler,
+    PasswordlessLinkHandler,PasswordlessPages}`, `templates/auth/passwordless-{code,link}.phtml`,
+    the email form on the login page, the `clavia_passwordless` cookie;
+    `AuthPageResponder::page()` sets extra cookies. CLI `mail:outbox`.
 - **Device authorization** (Step 15):
   - `Domain\OAuth2\{DeviceAuthorization,DevicePoll,DeviceDecision,UserCode}`;
     `GrantType::DeviceCode` (`actsForAPerson()`: a refresh token needs the code or the device
@@ -809,6 +834,20 @@ Conventions established in Step 12:
   handle that is unknown, spent, expired, someone else's or names something deleted is the
   same "expired" page. Showing the screen leaves it; deciding claims it (`GETDEL`).
 
+Conventions established in Step 16:
+
+- **A mailbox is one factor, and its own connection.** Passwordless accounts belong to
+  `email`, created on first sign-in with the address verified; a password account at the
+  same address is another account. What follows the proof is `CompleteFirstFactor`, like
+  every other first factor, so a second factor still applies. `amr` is `otp`.
+- **A code answers one browser; a link answers whoever opens it — on a POST.** The code is
+  checked against the challenge the browser's cookie names, within a small budget of wrong
+  answers; a link's GET only asks, so a mail scanner spends nothing. A code challenge's
+  handle is never accepted as a link.
+- **Mail is sent synchronously and its failure is said plainly** (`503`); a message that
+  cannot go out leaves nothing pending. A backend that sends nothing (`none`) makes the
+  connection unusable rather than failing on use.
+
 Conventions established in Step 15:
 
 - **A device request is checked like an authorization request**, by the same code, and the
@@ -934,7 +973,8 @@ Management API scope.
 | Runtime | **PHP-FPM behind Caddy** (share-nothing; no worker mode) |
 | Short-TTL state | Redis (`ext-redis`), behind store ports |
 | Outbound HTTP | **Guzzle** as the PSR-18 client, injected by interface with PSR-17 factories (decided 2026-11-20) |
-| Dashboard | The existing **React** dashboard (`frontend/`), copied, changed only where the API it calls is designed differently |
+| Outbound mail | **Symfony Mailer**'s ESMTP transport behind the `Mailer` port; console and `none` backends of our own (decided 2026-11-21) |
+| Dashboard | The existing **React** dashboard (`frontend/`), copied, changed only where the API it calls is designed differently — until Phase E replaces it with a **Next.js** application in its own repository, still served at `management.{domain}/dashboard/`, styled with Tailwind v4 and shadcn/ui (decided 2026-11-21) |
 | Auth pages | **laminas-view** PHP templates through `mezzio/mezzio-laminasviewrenderer` — no Twig, no other template language, no JavaScript — see "Auth pages" |
 | Namespace / licence | `Clavia\` · BSD-3-Clause |
 | Existing data | None to carry over — the PHP schema is free to be designed cleanly |
@@ -1062,6 +1102,7 @@ test/
 | `pwdlib[bcrypt]` | `password_hash(PASSWORD_BCRYPT)` behind `PasswordHasher` | |
 | `joserfc` | `web-token/jwt-library` — **verification and JWK handling only** (`JoseSignatureVerifier`) | Never used to sign. |
 | `qrcode` (SVG) | `bacon/bacon-qr-code` SVG writer | Server-side only. |
+| `smtplib` | `symfony/mailer` — the ESMTP transport and `symfony/mime` only, behind the `Mailer` port | No Messenger, no bus: a sign-in email is sent while the person waits for the answer. |
 | Typer CLI | `symfony/console` commands in `Adapter/Primary/Cli`, run by `bin/clavia` | Same command names: `clavia seed-dev`, `keys rotate`, … |
 | uvicorn `--forwarded-allow-ips` | `CLAVIA_TRUSTED_PROXIES`, applied when the request is built | Empty by default: over FastCGI the web server reports the scheme itself. |
 | pytest, `db-test` :5434, Redis db 1 | PHPUnit, same databases, real migrations | Acceptance tests run the PSR-15 pipeline in-process. |
@@ -1105,7 +1146,9 @@ template language, no front-end framework. (Decided 2026-11-20, replacing the ea
   that sets a cookie.
 - No JavaScript on this origin is a security property, not a style choice.
 
-The management dashboard is a separate concern: the React app in `frontend/`, kept as is.
+The management dashboard is a separate concern: the React app in `frontend/`, kept as is until
+Phase E replaces it (see "Dashboard as a Next.js application"). Until then it is maintained, not
+extended: new API features reach it only where a page would otherwise break.
 
 ## Invariants carried over
 
@@ -1552,10 +1595,15 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
   `DeviceAuthorizationStoreContract` against the fake and Redis, the device cases of
   `ClientTest`.
 
-#### [ ] Step 16 — Passwordless and mail
+#### [x] Step 16 — Passwordless and mail
 - `Mailer` port (console/outbox, SMTP, none); code and link challenges; send limits; the built-in
-  `email` connection; CLI `mail outbox`.
-- Python: `auth/passwordless.py`, `mail.py`. Tests: `test_passwordless` (19).
+  `email` connection; CLI `mail:outbox`.
+- Python: `auth/passwordless.py`, `mail.py`. Tests: `test_passwordless` (19) — ported as
+  `PasswordlessTest` (25 cases: mail that cannot leave, the CSRF check, a second factor, the
+  ID token's `amr`, a code handle presented as a link, the code page without a challenge);
+  `PasswordlessSignInTest` (the use cases on fakes), `PasswordlessChallengeTest`,
+  `SignInMailTest`, `MailersTest`, `MailOutboxCommandTest`, `PasswordlessChallengeStoreContract`
+  against the fake and Redis, `RedisMailOutboxTest`.
 
 #### [ ] Step 17 — Back-channel logout and session management
 - Logout token (`typ: logout+jwt`), `sid` on codes and ID tokens, session→clients index,
@@ -1585,7 +1633,53 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
 
 ### Phase E — Beyond the Python project
 - [ ] Audit logs (domain events → `AuditLog` port; the hexagonal seams make this an adapter).
+- [ ] Dashboard as a Next.js application — right after audit logs (decided 2026-11-21); below.
 - [ ] Multi-tenancy, if it turns out to be worth the complexity (see `clavia-old/CLAUDE.md`).
+
+#### [ ] Dashboard as a Next.js application
+
+The dashboard becomes what the server already treats it as — one first-party client of the
+Management API among others — and stops living inside the server's repository.
+
+- **Its own repository** (`clavia-dashboard`), built against the published contract only:
+  `docs/openapi/management-api.yaml` and the discovery document. TypeScript types are generated
+  from the OpenAPI document, not mirrored by hand (today's `types.ts`, `scopes.ts`). Nothing of the
+  server's internals is reachable from it, which proves the API sufficient on its own; the two
+  release independently.
+- **Same address as today: `https://management.{domain}/dashboard/`.** Next.js runs with
+  `basePath: '/dashboard'`; Caddy reverse-proxies `management.{domain}/dashboard/*` to the Next.js
+  server and keeps `/api/v1/*` on PHP-FPM. Dashboard and Management API stay one origin, separate
+  from `auth.*` ("Domain configuration"): the dashboard's server-side calls to `/api/v1/*` and the
+  browser's requests to the dashboard never cross an origin. The dashboard's cookies are scoped to
+  `Path=/dashboard`, `Secure`, `HttpOnly`, `SameSite=Lax`.
+- **A backend for frontend, no token in the browser** (IETF "OAuth 2.0 for Browser-Based
+  Applications", the BFF pattern). The dashboard is a **confidential** first-party client:
+  authorization code + PKCE with `client_secret_basic`; the access, refresh and ID tokens are kept
+  server-side in an encrypted session the browser holds only a cookie for; refresh happens on the
+  server; every Management API call is made by the Next.js server (route handlers / server
+  actions) with the operator's access token. The browser talks to the dashboard only.
+- **Styling: Tailwind v4, kept from the current dashboard** (decided 2026-11-21) — its `@theme`
+  tokens (light and dark, as CSS variables) and its `@utility` components (`btn-*`, `badge-*`,
+  `card`, `input`) carry over, so the move changes the architecture, not the look. Components
+  from **shadcn/ui** (Radix primitives, code owned in the repository) for what a back office
+  needs beyond that — tables, dialogs, comboboxes, toasts; variants with `cva`. Panda CSS was
+  weighed and set aside: typed tokens and recipes, but a rewrite of every page and a far smaller
+  component ecosystem, for a dashboard whose design is settled. Worth reopening only for a
+  design system shared by several Clavia front ends.
+- **Authority stays the operator's**: the dashboard asks for the Management API scopes and gets
+  what the operator's roles grant (Step 10), as today; a page offers only what the token holds.
+- **Sign-out**: RP-Initiated Logout as today, the refresh token revoked server-side (Step 14), and
+  a `backchannel_logout_uri` (Step 17) so a sign-out anywhere ends the dashboard's session too.
+- **The audit trail** (the step before) gets its pages from the start.
+- **On this side**: `frontend/` is removed, with Caddy's static `/dashboard/` handling (replaced by
+  the reverse proxy) and the dashboard origin's entry in the CORS allowlist of `auth.*` (its token,
+  refresh and revocation requests become server-to-server); `seed-dev` registers the
+  dashboard as a confidential client — redirect, post-logout and back-channel logout URIs under
+  `management.{domain}/dashboard/` — and hands its credentials to the dashboard's `.env.local` as
+  it does today; `docker-compose.yml` gains the Next.js service for development.
+- **Tests**: the OpenAPI contract is the only shared artefact, so the server keeps checking every
+  response against it. The dashboard repository carries its own tests and a small end-to-end
+  smoke suite run against a server started from a tagged image.
 
 ## Definition of done for a step
 

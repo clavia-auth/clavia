@@ -51,6 +51,7 @@ use ClaviaTest\Support\Fake\InMemoryLoginStateStore;
 use ClaviaTest\Support\Fake\InMemoryNonceRegistry;
 use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
 use ClaviaTest\Support\Fake\InMemoryRoleRepository;
+use ClaviaTest\Support\Fake\RecordingMailer;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -97,7 +98,7 @@ final class AuthorizeTest extends TestCase
             $this->roles,
             $this->consents,
             $this->consentStates,
-            new ConnectionAccess($this->connections, new FakeIdentityProviders()),
+            new ConnectionAccess($this->connections, new FakeIdentityProviders(), new RecordingMailer(false)),
             new SecretGenerator($random),
             $random,
             $clock,
@@ -398,7 +399,7 @@ final class AuthorizeTest extends TestCase
             $this->roles,
             $this->consents,
             $this->consentStates,
-            new ConnectionAccess($this->connections, new FakeIdentityProviders()),
+            new ConnectionAccess($this->connections, new FakeIdentityProviders(), new RecordingMailer(false)),
             new SecretGenerator($random),
             $random,
             new FrozenClock(),

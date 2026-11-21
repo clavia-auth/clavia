@@ -55,6 +55,9 @@ final readonly class CreateConnection
                 'Social connections are built in: switch them on or off. Register any other OpenID Connect '
                 . "provider as an 'oidc' connection.",
             ),
+            ConnectionStrategy::Passwordless => throw new InvalidValue(
+                "Passwordless sign-in is built in, as the 'email' connection: switch it on or off.",
+            ),
             ConnectionStrategy::Database => $new->hasOidcSettings()
                 ? throw new InvalidValue('A database connection has no OIDC settings.')
                 : Connection::pool(

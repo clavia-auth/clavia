@@ -28,9 +28,16 @@ enum ConnectionStrategy: string
     /** Any OpenID Connect provider, registered by an operator from its issuer. */
     case Oidc = 'oidc';
 
+    /**
+     * Proof of control of a mailbox — a one-time code or a sign-in link sent by email —
+     * standing in for a password. Built in, as the `email` connection: usable only while
+     * the deployment can send mail.
+     */
+    case Passwordless = 'passwordless';
+
     /** Signs people in at another party rather than here. */
     public function isExternal(): bool
     {
-        return $this !== self::Database;
+        return $this === self::Social || $this === self::Oidc;
     }
 }

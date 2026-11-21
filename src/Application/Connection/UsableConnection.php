@@ -21,7 +21,8 @@ use Clavia\Domain\Connection\Connection;
 final readonly class UsableConnection
 {
     /**
-     * @param IdentityProvider|null $provider Null for a database connection, and only for one.
+     * @param IdentityProvider|null $provider Null for a connection that signs people in here — a pool, the
+     *                                       passwordless one — and only for one.
      */
     public function __construct(
         public Connection $connection,

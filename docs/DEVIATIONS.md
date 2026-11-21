@@ -162,6 +162,22 @@ knows what changes.
 | A refresh token for a device | `refresh_token` registered beside the device grant | The same, and `refresh_token` is refused without the code or the device grant | A refresh token is only ever issued with a person's tokens. |
 | What the scope and audience may be | Checked by a copy of the authorization endpoint's rules | Checked by the same code as the authorization endpoint (`ReadRequestedAccess`) | The two cannot drift apart. |
 
+## Passwordless sign-in
+
+| Area | Python | PHP | Why |
+|---|---|---|---|
+| Asking for a code | `200`, the code page itself | `303` to `/auth/passwordless/code`, the challenge in its cookie | Post/redirect/get: reloading the page does not send another email. |
+| What the store keeps of a code | The digest of the six digits | The digest of the code bound to the browser's handle, which is never stored | Six digits are a million guesses from their digest; a dump of Redis must not hand out live codes. |
+| Counting wrong codes, spending a code or a link | Read, change, write back | One atomic Redis script each | Concurrent guesses cannot slip past the budget, and two requests cannot both spend one link. |
+| The send limit | Every request counted, refused ones included | Checked first; only a message that goes out is counted | Someone over the limit does not extend their own lockout by trying again. |
+| Mail that cannot be sent | `503`; the challenge stays parked | `503`; nothing is left pending | Nobody will ever hold the proof for it. |
+| Which address is accepted | Contains `@`, at most 320 characters | `local@domain.tld`, no whitespace, valid UTF-8, at most 320 bytes; lower-cased | A message that cannot be delivered is not worth a slot of the send limit. |
+| Finding the account | By the lower-cased address | Ignoring case, in the `email` connection; the oldest if two match | An operator who rewrote an address with a capital letter has not made a stranger of its owner. |
+| Existing applications | — | Not given the `email` connection by the migration; new ones get every connection | A deployment upgrading does not find a new way into its applications switched on. |
+| `CLAVIA_EMAIL_BACKEND=smtp` without `CLAVIA_SMTP_HOST` | Passwordless sign-in quietly unusable | Refused at start-up | A setting that cannot work is a mistake to report, not a switch. |
+| SMTP security | STARTTLS when `CLAVIA_SMTP_STARTTLS`, on any port | The same, required rather than attempted; implicit TLS (SMTPS) on port 465 | Port 465 is the other submission port, and speaks TLS from the first byte. |
+| `mail outbox` | Typer subcommand | `mail:outbox` (`--limit`) | The CLI's `group:verb` convention. |
+
 ## Roles
 
 | Area | Python | PHP | Why |

@@ -20,6 +20,7 @@ use ClaviaTest\Support\Clients;
 use ClaviaTest\Support\Fake\FakeIdentityProvider;
 use ClaviaTest\Support\Fake\FakeIdentityProviders;
 use ClaviaTest\Support\Fake\InMemoryConnectionRepository;
+use ClaviaTest\Support\Fake\RecordingMailer;
 use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
 
@@ -31,15 +32,18 @@ final class ConnectionAccessTest extends TestCase
 {
     private InMemoryConnectionRepository $connections;
     private ConnectionAccess $access;
+    private RecordingMailer $mailer;
 
     #[\Override]
     protected function setUp(): void
     {
         $this->connections = new InMemoryConnectionRepository();
+        $this->mailer = new RecordingMailer();
         // Google is configured; GitHub is not.
         $this->access = new ConnectionAccess(
             $this->connections,
             new FakeIdentityProviders(new FakeIdentityProvider('google')),
+            $this->mailer,
         );
         $this->connections->add(Connection::pool(
             ConnectionName::fromString('staff'),
@@ -52,22 +56,41 @@ final class ConnectionAccessTest extends TestCase
 
     public function testAConnectionIsUsableWhenSwitchedOnAndAbleToWork(): void
     {
-        self::assertSame(['google', 'password', 'staff'], self::names($this->access->usable()));
+        self::assertSame(['email', 'google', 'password', 'staff'], self::names($this->access->usable()));
         $github = $this->find('github');
         self::assertFalse($this->access->isUsable($github));
         self::assertFalse($this->access->isConfigured($github));
 
         $this->switchOff('google');
 
-        self::assertSame(['password', 'staff'], self::names($this->access->usable()));
+        self::assertSame(['email', 'password', 'staff'], self::names($this->access->usable()));
         self::assertTrue($this->access->isConfigured($this->find('google')), 'Off, but it would work.');
         self::assertTrue($this->access->isConfigured($this->find('staff')));
     }
 
     public function testWithoutAnApplicationEveryUsableConnectionIsAvailable(): void
     {
-        self::assertSame(['google', 'password', 'staff'], self::names($this->access->available(null)));
-        self::assertSame(['password', 'staff'], self::values($this->access->pools(null)));
+        self::assertSame(['email', 'google', 'password', 'staff'], self::names($this->access->available(null)));
+        self::assertSame(['password', 'staff'], self::values($this->access->pools(null)), 'Email is no pool.');
+    }
+
+    public function testThePasswordlessConnectionWorksOnlyWhileMailCanBeSent(): void
+    {
+        $email = $this->find('email');
+        self::assertTrue($this->access->isUsable($email));
+        self::assertNull($this->access->usable()[0]->provider, 'Signed in here, not at a provider.');
+        self::assertNull($this->access->external(ConnectionName::email()), 'Not external.');
+
+        $withoutMail = new ConnectionAccess(
+            $this->connections,
+            new FakeIdentityProviders(new FakeIdentityProvider('google')),
+            new RecordingMailer(false),
+        );
+
+        self::assertFalse($withoutMail->isUsable($email));
+        self::assertFalse($withoutMail->isConfigured($email));
+        self::assertFalse($withoutMail->allows(null, ConnectionName::email()));
+        self::assertSame(['google', 'password', 'staff'], self::names($withoutMail->usable()));
     }
 
     public function testAFirstPartyApplicationGetsItsOwnListAndNothingElse(): void

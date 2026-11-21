@@ -22,6 +22,7 @@ use Clavia\Adapter\Primary\Cli\GrantClientAccessCommand;
 use Clavia\Adapter\Primary\Cli\ListManagementScopesCommand;
 use Clavia\Adapter\Primary\Cli\ListRolesCommand;
 use Clavia\Adapter\Primary\Cli\ListSigningKeysCommand;
+use Clavia\Adapter\Primary\Cli\MailOutboxCommand;
 use Clavia\Adapter\Primary\Cli\MigrateDatabaseCommand;
 use Clavia\Adapter\Primary\Cli\RegisterManagementApiCommand;
 use Clavia\Adapter\Primary\Cli\RotateSigningKeyCommand;
@@ -38,6 +39,9 @@ use Clavia\Adapter\Primary\Http\Auth\LoginPageHandler;
 use Clavia\Adapter\Primary\Http\Auth\LogoutHandler;
 use Clavia\Adapter\Primary\Http\Auth\MfaChallengeHandler;
 use Clavia\Adapter\Primary\Http\Auth\MfaSettingsHandler;
+use Clavia\Adapter\Primary\Http\Auth\PasswordlessCodeHandler;
+use Clavia\Adapter\Primary\Http\Auth\PasswordlessLinkHandler;
+use Clavia\Adapter\Primary\Http\Auth\PasswordlessStartHandler;
 use Clavia\Adapter\Primary\Http\Auth\ThemeHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientConnectionsHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientHandler;
@@ -100,6 +104,13 @@ use Clavia\Application\Authentication\Mfa\DescribeSecondFactorPage;
 use Clavia\Application\Authentication\Mfa\DisableMfa;
 use Clavia\Application\Authentication\Mfa\ResumeTotpEnrollment;
 use Clavia\Application\Authentication\Mfa\TotpSeeds;
+use Clavia\Application\Authentication\Passwordless\AnswerPasswordlessCode;
+use Clavia\Application\Authentication\Passwordless\DescribePasswordlessChallenge;
+use Clavia\Application\Authentication\Passwordless\FinishPasswordlessSignIn;
+use Clavia\Application\Authentication\Passwordless\FollowPasswordlessLink;
+use Clavia\Application\Authentication\Passwordless\PasswordlessSendLimit;
+use Clavia\Application\Authentication\Passwordless\SignInMail;
+use Clavia\Application\Authentication\Passwordless\StartPasswordlessSignIn;
 use Clavia\Application\Authentication\RequireSignIn;
 use Clavia\Application\Authentication\ResolveEndUser;
 use Clavia\Application\Authentication\Sessions;
@@ -183,10 +194,13 @@ use Clavia\Application\Port\DeviceAuthorizationStore;
 use Clavia\Application\Port\ExternalSignInStore;
 use Clavia\Application\Port\IdentityProviders;
 use Clavia\Application\Port\LoginStateStore;
+use Clavia\Application\Port\Mailer;
+use Clavia\Application\Port\MailOutbox;
 use Clavia\Application\Port\MfaChallengeStore;
 use Clavia\Application\Port\NonceRegistry;
 use Clavia\Application\Port\OidcDiscovery;
 use Clavia\Application\Port\PasswordHasher;
+use Clavia\Application\Port\PasswordlessChallengeStore;
 use Clavia\Application\Port\SchemaMigrator;
 use Clavia\Application\Port\SecretCipher;
 use Clavia\Application\Port\SessionStore;
@@ -257,6 +271,7 @@ final class ConfigProvider
         'roles:create' => CreateRoleCommand::class,
         'roles:assign' => AssignRoleCommand::class,
         'roles:list' => ListRolesCommand::class,
+        'mail:outbox' => MailOutboxCommand::class,
     ];
 
     /**
@@ -345,6 +360,19 @@ final class ConfigProvider
                     CompleteExternalSignIn::class => Container\CompleteExternalSignInFactory::class,
                     ExternalSignInHandler::class => Container\ExternalSignInHandlerFactory::class,
                     ExternalSignInCallbackHandler::class => Container\ExternalSignInCallbackHandlerFactory::class,
+                    Mailer::class => Container\MailerFactory::class,
+                    MailOutbox::class => Container\MailOutboxFactory::class,
+                    PasswordlessChallengeStore::class => Container\PasswordlessChallengeStoreFactory::class,
+                    PasswordlessSendLimit::class => Container\PasswordlessSendLimitFactory::class,
+                    SignInMail::class => Container\SignInMailFactory::class,
+                    DescribePasswordlessChallenge::class => Container\DescribePasswordlessChallengeFactory::class,
+                    StartPasswordlessSignIn::class => Container\StartPasswordlessSignInFactory::class,
+                    FinishPasswordlessSignIn::class => Container\FinishPasswordlessSignInFactory::class,
+                    AnswerPasswordlessCode::class => Container\AnswerPasswordlessCodeFactory::class,
+                    FollowPasswordlessLink::class => Container\FollowPasswordlessLinkFactory::class,
+                    PasswordlessStartHandler::class => Container\PasswordlessStartHandlerFactory::class,
+                    PasswordlessCodeHandler::class => Container\PasswordlessCodeHandlerFactory::class,
+                    PasswordlessLinkHandler::class => Container\PasswordlessLinkHandlerFactory::class,
                     ClientInterface::class => Container\HttpClientFactory::class,
                     IdentityProviders::class => Container\IdentityProvidersFactory::class,
                     IdTokenVerifier::class => Container\IdTokenVerifierFactory::class,
@@ -493,6 +521,7 @@ final class ConfigProvider
                     CreateRoleCommand::class => Container\CreateRoleCommandFactory::class,
                     AssignRoleCommand::class => Container\AssignRoleCommandFactory::class,
                     ListRolesCommand::class => Container\ListRolesCommandFactory::class,
+                    MailOutboxCommand::class => Container\MailOutboxCommandFactory::class,
                 ],
             ],
             // The server-rendered pages: `layout::page`, `auth::login`, `error::page`,

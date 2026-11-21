@@ -75,10 +75,10 @@ final class User
     }
 
     /**
-     * Create an account for a person an external provider vouched for: no password, the
-     * address verified, because the provider just reported it as verified — an account is
-     * never created from an address the provider does not vouch for — and belonging to the
-     * connection that signed them in.
+     * Create an account for a person whose address something vouched for — an external
+     * provider reporting it as verified, or a code or link sent to it coming back: no
+     * password, the address verified — an account is never created from an address nothing
+     * vouches for — and belonging to the connection that signed them in.
      *
      * @throws InvalidValue When the email address cannot be one.
      */

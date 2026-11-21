@@ -11,8 +11,12 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Acceptance;
 
+use Clavia\Adapter\Secondary\Mail\NoMailer;
+use Clavia\Adapter\Secondary\Mail\OutboxMailer;
+use Clavia\Adapter\Secondary\Mail\SmtpMailer;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use Clavia\Application\Port\IdentityProviders;
+use Clavia\Application\Port\Mailer;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Application\Port\SchemaMigrator;
 use Clavia\Application\Port\SecretCipher;
@@ -61,6 +65,18 @@ final class WiringTest extends AcceptanceTestCase
             self::assertInstanceOf($service, $console->get($name));
             self::assertSame($name, $console->get($name)->getName());
         }
+    }
+
+    public function testTheMailerIsTheOneTheBackendNames(): void
+    {
+        self::assertInstanceOf(OutboxMailer::class, $this->container()->get(Mailer::class), 'console');
+
+        $this->boot(['CLAVIA_EMAIL_BACKEND' => 'none']);
+        self::assertInstanceOf(NoMailer::class, $this->container()->get(Mailer::class));
+
+        // Built without connecting: the server is only reached when a message goes out.
+        $this->boot(['CLAVIA_EMAIL_BACKEND' => 'smtp', 'CLAVIA_SMTP_HOST' => 'smtp.invalid']);
+        self::assertInstanceOf(SmtpMailer::class, $this->container()->get(Mailer::class));
     }
 
     public function testASigningBackendThatDoesNotExistYetIsRefusedByName(): void

@@ -18,6 +18,9 @@ use Clavia\Adapter\Primary\Http\Auth\LoginPageHandler;
 use Clavia\Adapter\Primary\Http\Auth\LogoutHandler;
 use Clavia\Adapter\Primary\Http\Auth\MfaChallengeHandler;
 use Clavia\Adapter\Primary\Http\Auth\MfaSettingsHandler;
+use Clavia\Adapter\Primary\Http\Auth\PasswordlessCodeHandler;
+use Clavia\Adapter\Primary\Http\Auth\PasswordlessLinkHandler;
+use Clavia\Adapter\Primary\Http\Auth\PasswordlessStartHandler;
 use Clavia\Adapter\Primary\Http\Auth\ThemeHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientConnectionsHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientHandler;
@@ -90,6 +93,17 @@ return static function (Application $app): void {
     // Whether an application may act as the signed-in person: the question, and the answer.
     $app->route('/auth/consent', ConsentHandler::class, ['GET', 'POST'], 'auth.consent');
     $app->route('/auth/device', DeviceHandler::class, ['GET', 'POST'], 'auth.device');
+    // Signing in with a code or a link sent by email: the login page's email form starts
+    // it; the code is typed back in the browser that asked, the link opens anywhere and
+    // signs in only on the POST from the page it opens on.
+    $app->post('/auth/passwordless/start', PasswordlessStartHandler::class, 'auth.passwordless.start');
+    $app->route('/auth/passwordless/code', PasswordlessCodeHandler::class, ['GET', 'POST'], 'auth.passwordless.code');
+    $app->route(
+        '/auth/passwordless/verify',
+        PasswordlessLinkHandler::class,
+        ['GET', 'POST'],
+        'auth.passwordless.verify',
+    );
     // Signing in through an external provider: out, then back. Both are navigations (GET);
     // the callback's path is the redirect URI registered at the provider.
     $app->get('/auth/social/{provider:[a-z][a-z0-9-]*}', ExternalSignInHandler::class, 'auth.social');

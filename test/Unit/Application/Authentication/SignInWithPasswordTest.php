@@ -46,6 +46,7 @@ use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
 use ClaviaTest\Support\Fake\InMemorySessionStore;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
+use ClaviaTest\Support\Fake\RecordingMailer;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use PHPUnit\Framework\TestCase;
 
@@ -96,7 +97,7 @@ final class SignInWithPasswordTest extends TestCase
             new LoginThrottle($this->counter, 3, 900),
             $this->loginStates,
             $this->clients,
-            new ConnectionAccess($this->connections, new FakeIdentityProviders()),
+            new ConnectionAccess($this->connections, new FakeIdentityProviders(), new RecordingMailer(false)),
             new CompleteFirstFactor(
                 $this->sessions,
                 $this->factors,

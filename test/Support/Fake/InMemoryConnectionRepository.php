@@ -37,6 +37,7 @@ final class InMemoryConnectionRepository implements ConnectionRepository
         foreach (
             [
                 ['password', 'Username-Password', ConnectionStrategy::Database, true],
+                ['email', 'Email', ConnectionStrategy::Passwordless, false],
                 ['google', 'Google', ConnectionStrategy::Social, false],
                 ['github', 'GitHub', ConnectionStrategy::Social, false],
             ] as [$name, $displayName, $strategy, $isDomainConnection]

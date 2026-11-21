@@ -291,6 +291,12 @@ final readonly class Settings
         return $this->managementApiIdentifier ?? sprintf('https://%s/api/v1/', $this->managementHost());
     }
 
+    /** The `From` address of every email: `CLAVIA_EMAIL_FROM`, or `no-reply@{rootDomain}`. */
+    public function emailSender(): string
+    {
+        return $this->emailFrom ?? 'no-reply@' . $this->rootDomain;
+    }
+
     /** The issuer identifier: the exact value of every `iss` claim. */
     public function issuer(): string
     {

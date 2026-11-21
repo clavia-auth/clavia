@@ -46,7 +46,7 @@ trait ConnectionRepositoryContract
         $all = $this->connections()->all();
 
         self::assertSame(
-            ['github', 'google', 'password'],
+            ['email', 'github', 'google', 'password'],
             array_map(static fn (Connection $connection): string => $connection->name->value, $all),
         );
         $pool = $this->connections()->find(ConnectionName::defaultPool());
@@ -58,6 +58,11 @@ trait ConnectionRepositoryContract
         self::assertSame(ConnectionStrategy::Social, $this->connections()->find(self::named('google'))?->strategy);
         self::assertFalse($this->connections()->find(self::named('github'))?->isDomainConnection);
         self::assertNull($this->connections()->find(self::named('gitlab')));
+        $email = $this->connections()->find(ConnectionName::email());
+        self::assertSame(ConnectionStrategy::Passwordless, $email?->strategy);
+        self::assertTrue($email?->isEnabled);
+        self::assertFalse($email?->isDomainConnection, 'Strangers are not handed accounts made from an address.');
+        self::assertTrue($email?->isBuiltIn());
     }
 
     #[Test]

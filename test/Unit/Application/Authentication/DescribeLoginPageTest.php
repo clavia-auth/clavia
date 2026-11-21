@@ -35,6 +35,7 @@ use ClaviaTest\Support\Fake\InMemoryConnectionRepository;
 use ClaviaTest\Support\Fake\InMemoryLoginStateStore;
 use ClaviaTest\Support\Fake\InMemorySessionStore;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
+use ClaviaTest\Support\Fake\RecordingMailer;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
@@ -47,11 +48,13 @@ final class DescribeLoginPageTest extends TestCase
     private User $user;
     private InMemoryClientRepository $clients;
     private InMemoryConnectionRepository $connections;
+    private RecordingMailer $mailer;
 
     #[\Override]
     protected function setUp(): void
     {
         $clock = new FrozenClock();
+        $this->mailer = new RecordingMailer();
         $users = new InMemoryUserRepository();
         $this->clients = new InMemoryClientRepository();
         $this->connections = new InMemoryConnectionRepository($this->clients);
@@ -83,6 +86,7 @@ final class DescribeLoginPageTest extends TestCase
             new ConnectionAccess(
                 $this->connections,
                 new FakeIdentityProviders(new FakeIdentityProvider('google'), new FakeIdentityProvider('github')),
+                $this->mailer,
             ),
         );
     }
@@ -109,7 +113,22 @@ final class DescribeLoginPageTest extends TestCase
         $page = ($this->describe)('handle', null);
 
         self::assertFalse($page->methods->password);
+        self::assertFalse($page->methods->email);
         self::assertSame([['google', 'Google']], self::offered($page));
+    }
+
+    public function testTheEmailFormIsOfferedWhenTheApplicationEnablesItAndMailCanBeSent(): void
+    {
+        $this->clients->save(Clients::public('spa')->withConnections([ConnectionName::email()]));
+        $this->loginStates->put('handle', new LoginState('/oauth2/authorize?x=y', ClientId::fromString('spa')));
+
+        $page = ($this->describe)('handle', null);
+
+        self::assertTrue($page->methods->email);
+        self::assertFalse($page->methods->password);
+        self::assertSame([], self::offered($page));
+        self::assertFalse($page->methods->isEmpty());
+        self::assertTrue(($this->describe)(null, null)->methods->email, 'Usable, so offered without a request.');
     }
 
     public function testAConnectionSwitchedOffOrWithoutAWorkingProviderIsNotOffered(): void
@@ -153,6 +172,7 @@ final class DescribeLoginPageTest extends TestCase
         $page = ($this->describe)('handle', null);
 
         self::assertTrue($page->methods->password);
+        self::assertFalse($page->methods->email, 'Not a domain connection.');
         self::assertSame([], self::offered($page));
     }
 

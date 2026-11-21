@@ -6,8 +6,8 @@ Auth0: OAuth2 flows, interactive login with MFA, and a Management API.
 This is the PHP 8.5 implementation. It is being ported feature by feature from the Python
 reference implementation; `CLAUDE.md` holds the migration plan and the current state.
 
-**Status: Step 15 — device authorization.** A person signs in with a password at `/auth/login`, or with
-Google or GitHub once their credentials are configured (`CLAVIA_GOOGLE_CLIENT_ID` / `_SECRET`,
+**Status: Step 16 — passwordless sign-in.** A person signs in with a password at `/auth/login`, with
+a code or a link sent by email, or with Google or GitHub once their credentials are configured (`CLAVIA_GOOGLE_CLIENT_ID` / `_SECRET`,
 `CLAVIA_GITHUB_CLIENT_ID` / `_SECRET`; register
 `https://auth.{domain}/auth/social/{provider}/callback` at the provider) — followed, once they
 turn it on at `/auth/mfa/enroll`, by a code from an authenticator app or a single-use recovery
@@ -62,6 +62,17 @@ a refresh token takes the whole chain with it.
 A device without a browser — a television, a command-line tool — registered for the device
 code grant (RFC 8628) asks `/oauth2/device/code` for a code, shows it, and polls the token
 endpoint while a person approves it at `https://auth.{domain}/auth/device` on another screen.
+
+Signing in by email needs no password: the login page's email form sends six digits, typed
+back in the same browser, or a single-use link that opens on any device and signs in from the
+page it opens on. Those accounts belong to the built-in `email` connection. Mail goes out
+through `CLAVIA_EMAIL_BACKEND`: `smtp` (`CLAVIA_SMTP_HOST`, `_PORT`, `_USERNAME`, `_PASSWORD`,
+`_STARTTLS`; `CLAVIA_EMAIL_FROM`), `none` — which switches email sign-in off — or, in
+development only, `console`, which logs each message and keeps the last ones for
+`bin/clavia mail:outbox`. Sends are limited per address and per client address
+(`CLAVIA_PASSWORDLESS_SEND_LIMIT` an hour); a code takes `CLAVIA_PASSWORDLESS_MAX_ATTEMPTS`
+wrong answers. Applications registered before the `email` connection existed are given it
+with `PUT /api/v1/clients/{client_id}/connections`.
 
 A client registered for the `refresh_token` grant (beside `authorization_code`) gets a
 refresh token with the code flow's tokens. Every refresh returns a new pair and spends the

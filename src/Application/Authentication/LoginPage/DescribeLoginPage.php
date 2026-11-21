@@ -23,9 +23,9 @@ use Clavia\Domain\Identity\UserRepository;
  * What the login page has to show, and where its form may lead.
  *
  * It offers exactly the connections the application behind the handle may use
- * ({@see ConnectionAccess}): a password form when it signs people in from a pool, a link
- * for each external connection. No handle — a page reached directly — offers every
- * usable one.
+ * ({@see ConnectionAccess}): a password form when it signs people in from a pool, an email
+ * form when it signs them in by code or link, a link for each external connection. No
+ * handle — a page reached directly — offers every usable one.
  */
 final readonly class DescribeLoginPage
 {
@@ -56,7 +56,7 @@ final readonly class DescribeLoginPage
             return new LoginPage(
                 $user?->email,
                 [],
-                $user === null ? $this->methods(null) : new SignInMethods(false, []),
+                $user === null ? $this->methods(null) : SignInMethods::none(),
             );
         }
 
@@ -70,11 +70,14 @@ final readonly class DescribeLoginPage
     public function methods(#[\SensitiveParameter] ?string $loginState): SignInMethods
     {
         $password = false;
+        $email = false;
         $providers = [];
         foreach ($this->access->available($this->client($loginState)) as $usable) {
-            if ($usable->provider === null) {
+            if ($usable->connection->isDatabase()) {
                 $password = true;
-            } else {
+            } elseif ($usable->connection->isPasswordless()) {
+                $email = true;
+            } elseif ($usable->provider !== null) {
                 $providers[] = new ExternalProviderOption(
                     $usable->connection->name->value,
                     $usable->connection->displayName,
@@ -82,7 +85,7 @@ final readonly class DescribeLoginPage
             }
         }
 
-        return new SignInMethods($password, $providers);
+        return new SignInMethods($password, $email, $providers);
     }
 
     /**

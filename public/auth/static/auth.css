@@ -133,6 +133,9 @@ button:focus-visible {
 
 .card button:hover { background: var(--accent-hover); }
 
+/* Two submit buttons on one form — the email form's code and link — are two choices. */
+.card form:not(.decision) button + button { margin-top: .5rem; }
+
 .error {
   margin: 0 0 1rem;
   padding: .6rem .7rem;

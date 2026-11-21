@@ -21,17 +21,26 @@ final readonly class SignInMethods
     /**
      * @param bool                         $password  Whether the password form is shown: the application
      *                                                signs people in from at least one pool.
+     * @param bool                         $email     Whether the email form is shown: the application signs
+     *                                                people in with a code or a link sent by email.
      * @param list<ExternalProviderOption> $providers The external connections, in order.
      */
     public function __construct(
         public bool $password,
+        public bool $email,
         public array $providers,
     ) {
+    }
+
+    /** No way in at all. */
+    public static function none(): self
+    {
+        return new self(false, false, []);
     }
 
     /** Whether there is no way in at all — the page says so instead of showing an empty form. */
     public function isEmpty(): bool
     {
-        return ! $this->password && $this->providers === [];
+        return ! $this->password && ! $this->email && $this->providers === [];
     }
 }

@@ -53,7 +53,7 @@ final class ConnectionTest extends TestCase
 
     public function testThePoolsAndProvidersOfTheCodeAreBuiltInAndNotDeleted(): void
     {
-        foreach ([$this->pool(ConnectionName::DEFAULT_POOL), $this->social('google')] as $builtIn) {
+        foreach ([$this->pool(ConnectionName::DEFAULT_POOL), $this->social('google'), $this->email()] as $builtIn) {
             self::assertTrue($builtIn->isBuiltIn());
             try {
                 $builtIn->assertDeletable();
@@ -79,6 +79,9 @@ final class ConnectionTest extends TestCase
         self::assertTrue($this->social('github')->isExternal());
         self::assertTrue($this->oidc()->isExternal());
         self::assertFalse($this->oidc()->isDatabase());
+        self::assertTrue($this->email()->isPasswordless());
+        self::assertFalse($this->email()->isExternal(), 'Signed in here, by mail.');
+        self::assertFalse($this->email()->isDatabase(), 'No passwords, so no pool.');
     }
 
     public function testSwitchingChangesOnlyWhatItNames(): void
@@ -171,6 +174,19 @@ final class ConnectionTest extends TestCase
             ConnectionName::fromString($name),
             ucfirst($name),
             ConnectionStrategy::Social,
+            true,
+            false,
+            null,
+            new DateTimeImmutable(),
+        );
+    }
+
+    private function email(): Connection
+    {
+        return Connection::reconstitute(
+            ConnectionName::email(),
+            'Email',
+            ConnectionStrategy::Passwordless,
             true,
             false,
             null,

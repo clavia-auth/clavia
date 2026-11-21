@@ -8,9 +8,11 @@ import type { Connection } from "../api/types";
 import { config } from "../auth/config";
 import { Dialog, ErrorNote, Field, PageHeader } from "../components/ui";
 
-/** The default pool and the social providers are the code's: switched, never deleted. */
+/** The default pool, email and the social providers are the code's: switched, never deleted. */
 const isBuiltIn = (connection: Connection): boolean =>
-  connection.strategy === "social" || connection.name === "password";
+  connection.strategy === "social" ||
+  connection.strategy === "passwordless" ||
+  connection.name === "password";
 
 export function ConnectionsPage() {
   const connections = useConnections();

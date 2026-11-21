@@ -16,7 +16,7 @@ use DateTimeImmutable;
 
 /**
  * A way to sign in — what Auth0 calls a connection: a pool of accounts with passwords,
- * Google, GitHub, an OpenID Connect provider.
+ * an email address alone, Google, GitHub, an OpenID Connect provider.
  *
  * An application signs people in through the connections enabled for it and no others:
  * its login page shows only those, and a session established through any other does
@@ -165,8 +165,8 @@ final readonly class Connection
      * Whether it may be deleted at all — leaving aside the accounts and identities that
      * depend on it, which the caller checks.
      *
-     * @throws BuiltInConnection When it is a social connection or the default pool: the code's,
-     *                           switched off rather than deleted.
+     * @throws BuiltInConnection When it is a social connection, the passwordless one or the default
+     *                           pool: the code's, switched off rather than deleted.
      */
     public function assertDeletable(): void
     {
@@ -179,12 +179,19 @@ final readonly class Connection
     public function isBuiltIn(): bool
     {
         return $this->strategy === ConnectionStrategy::Social
+            || $this->strategy === ConnectionStrategy::Passwordless
             || $this->name->value === ConnectionName::DEFAULT_POOL;
     }
 
     public function isDatabase(): bool
     {
         return $this->strategy === ConnectionStrategy::Database;
+    }
+
+    /** Signs people in with a code or a link sent to their address. */
+    public function isPasswordless(): bool
+    {
+        return $this->strategy === ConnectionStrategy::Passwordless;
     }
 
     /** Signs people in at another party — social or OIDC — rather than here. */

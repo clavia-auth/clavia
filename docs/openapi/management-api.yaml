@@ -1975,11 +1975,12 @@ components:
 
     ConnectionStrategy:
       type: string
-      enum: [database, social, oidc]
+      enum: [database, social, oidc, passwordless]
       description: |
         `database`: a pool of accounts with passwords, held here. `social`: a provider the
         code implements (Google, GitHub), credentials from the deployment's settings.
-        `oidc`: any OpenID Connect provider, registered from its issuer.
+        `oidc`: any OpenID Connect provider, registered from its issuer. `passwordless`:
+        the built-in `email` connection — a code or a link sent by email; never created.
 
     Connection:
       type: object
@@ -2004,8 +2005,9 @@ components:
         configured:
           type: boolean
           description: |
-            Whether it could work if switched on: always for a pool; for a social connection,
-            when the deployment set its credentials; for an OIDC one, when its secret decrypts.
+            Whether it could work if switched on: always for a pool; for the passwordless one,
+            when the deployment sends mail; for a social connection, when the deployment set its
+            credentials; for an OIDC one, when its secret decrypts.
         usable:
           type: boolean
           description: Switched on and configured — what the login page actually offers.

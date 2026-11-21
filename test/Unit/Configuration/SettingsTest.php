@@ -32,6 +32,7 @@ final class SettingsTest extends TestCase
         'CLAVIA_ROOT_DOMAIN' => 'acme.com',
         'CLAVIA_ENV' => 'production',
         'CLAVIA_EMAIL_BACKEND' => 'smtp',
+        'CLAVIA_SMTP_HOST' => 'smtp.acme.com',
         'CLAVIA_SIGNING_BACKEND' => 'aws-kms',
         'CLAVIA_SIGNING_KEY_REF' => 'arn:aws:kms:eu-west-3:000000000000:key/1234',
     ];
@@ -328,6 +329,23 @@ final class SettingsTest extends TestCase
                 self::assertStringContainsString("'" . $env . "'", $refusal->getMessage());
             }
         }
+    }
+
+    public function testSmtpWithoutAServerIsRefusedEverywhere(): void
+    {
+        $this->expectException(InvalidSettings::class);
+        $this->expectExceptionMessage('CLAVIA_EMAIL_BACKEND=smtp requires CLAVIA_SMTP_HOST');
+
+        Settings::fromEnvironment(self::MINIMAL + ['CLAVIA_EMAIL_BACKEND' => 'smtp']);
+    }
+
+    public function testTheSenderDefaultsToTheDomain(): void
+    {
+        self::assertSame('no-reply@acme.com', Settings::fromEnvironment(self::MINIMAL)->emailSender());
+        self::assertSame(
+            'login@acme.com',
+            Settings::fromEnvironment(self::MINIMAL + ['CLAVIA_EMAIL_FROM' => 'login@acme.com'])->emailSender(),
+        );
     }
 
     #[DataProvider('developmentOnlyShortcuts')]

@@ -12,24 +12,28 @@ declare(strict_types=1);
 namespace Clavia\Application\Connection;
 
 use Clavia\Application\Port\IdentityProviders;
+use Clavia\Application\Port\Mailer;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Connection\Connection;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Connection\ConnectionRepository;
+use Clavia\Domain\Connection\ConnectionStrategy;
 
 /**
  * Which connections a sign-in may use, given the application it is for.
  *
  * The one place the three switches are combined — the connection's own `isEnabled`,
- * whether it can work at all (an external provider the deployment can build), and the
- * application's list or the domain flag — so the login page, the password form, the
- * provider redirect and the authorization endpoint cannot disagree about what is allowed.
+ * whether it can work at all (an external provider the deployment can build, mail for the
+ * passwordless one), and the application's list or the domain flag — so the login page,
+ * the password form, the email form, the provider redirect and the authorization endpoint
+ * cannot disagree about what is allowed.
  */
 final readonly class ConnectionAccess
 {
     public function __construct(
         private ConnectionRepository $connections,
         private IdentityProviders $providers,
+        private Mailer $mailer,
     ) {
     }
 
@@ -60,12 +64,17 @@ final readonly class ConnectionAccess
     }
 
     /**
-     * Whether it could work were it switched on: always for a database connection, for an
-     * external one when the deployment can build its provider.
+     * Whether it could work were it switched on: always for a database connection, for the
+     * passwordless one when the deployment sends mail, for an external one when the
+     * deployment can build its provider.
      */
     public function isConfigured(Connection $connection): bool
     {
-        return ! $connection->isExternal() || $this->providers->for($connection) !== null;
+        return match ($connection->strategy) {
+            ConnectionStrategy::Database => true,
+            ConnectionStrategy::Passwordless => $this->mailer->canSend(),
+            ConnectionStrategy::Social, ConnectionStrategy::Oidc => $this->providers->for($connection) !== null,
+        };
     }
 
     /**
@@ -129,7 +138,7 @@ final readonly class ConnectionAccess
             return null;
         }
         if (! $connection->isExternal()) {
-            return new UsableConnection($connection, null);
+            return $this->isConfigured($connection) ? new UsableConnection($connection, null) : null;
         }
         $provider = $this->providers->for($connection);
 

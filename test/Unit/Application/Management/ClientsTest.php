@@ -199,7 +199,7 @@ final class ClientsTest extends TestCase
     {
         $client = $this->register(new NewClient('SPA', redirectUris: ['https://app.example/cb']))->client;
 
-        self::assertSame(['github', 'google', 'password'], self::names($client->connections));
+        self::assertSame(['email', 'github', 'google', 'password'], self::names($client->connections));
     }
 
     public function testTheConnectionsNamedAreTheOnesEnabled(): void

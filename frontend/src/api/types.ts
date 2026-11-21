@@ -138,7 +138,7 @@ export interface UserPermission extends RolePermission {
  * `database` is a pool of accounts with passwords; `social` a provider the code
  * implements (Google, GitHub); `oidc` any OpenID Connect provider an operator registered.
  */
-export type ConnectionStrategy = "database" | "social" | "oidc";
+export type ConnectionStrategy = "database" | "social" | "oidc" | "passwordless";
 
 /** A way to sign in. */
 export interface Connection {

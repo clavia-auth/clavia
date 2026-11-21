@@ -274,7 +274,7 @@ final class ConnectionsTest extends AcceptanceTestCase
         ]);
 
         self::assertSame(201, $created->getStatusCode(), (string) $created->getBody());
-        self::assertSame(['github', 'google', 'password'], self::json($created)['connections']);
+        self::assertSame(['email', 'github', 'google', 'password'], self::json($created)['connections']);
     }
 
     public function testTheConnectionsOfAnApplicationAreReplacedWhole(): void
@@ -311,11 +311,14 @@ final class ConnectionsTest extends AcceptanceTestCase
         self::assertSame(200, $listed->getStatusCode(), (string) $listed->getBody());
         $connections = self::json($listed);
         self::assertSame(
-            ['github', 'google', 'password'],
+            ['email', 'github', 'google', 'password'],
             array_map(static fn (mixed $connection): mixed => self::at($connection, 'name'), $connections),
         );
         $password = self::named($connections, 'password');
         $google = self::named($connections, 'google');
+        $email = self::named($connections, 'email');
+        self::assertSame('passwordless', self::at($email, 'strategy'));
+        self::assertTrue(self::at($email, 'usable'), 'The test environment sends mail to its outbox.');
         self::assertSame('database', self::at($password, 'strategy'));
         self::assertTrue(self::at($password, 'is_domain_connection'));
         self::assertTrue(self::at($password, 'usable'));

@@ -13,6 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\Port\IdentityProviders;
+use Clavia\Application\Port\Mailer;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Psr\Container\ContainerInterface;
 
@@ -24,7 +25,9 @@ final class ConnectionAccessFactory
         $connections = $container->get(ConnectionRepository::class);
         /** @var IdentityProviders $providers */
         $providers = $container->get(IdentityProviders::class);
+        /** @var Mailer $mailer */
+        $mailer = $container->get(Mailer::class);
 
-        return new ConnectionAccess($connections, $providers);
+        return new ConnectionAccess($connections, $providers, $mailer);
     }
 }

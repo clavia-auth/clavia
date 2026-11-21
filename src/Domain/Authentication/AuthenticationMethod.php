@@ -31,7 +31,11 @@ enum AuthenticationMethod: string
      */
     case External = 'ext';
 
-    /** A one-time password was entered: a TOTP code from an authenticator app. */
+    /**
+     * A one-time password was entered: a TOTP code from an authenticator app, or a code or
+     * single-use link sent by email — a secret delivered out of band, which is the closest
+     * the RFC 8176 registry comes to "proved control of a mailbox".
+     */
     case OneTimePassword = 'otp';
 
     /**
