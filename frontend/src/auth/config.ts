@@ -57,4 +57,5 @@ export const endpoints = {
   token: `${config.issuer}/oauth2/token`,
   revocation: `${config.issuer}/oauth2/revoke`,
   endSession: `${config.issuer}/oidc/logout`,
+  userinfo: `${config.issuer}/oidc/userinfo`,
 } as const;

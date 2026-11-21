@@ -17,6 +17,7 @@ import {
   readSession,
   takePending,
   writeSession,
+  type IdTokenClaims,
   type StoredSession,
 } from "./session";
 
@@ -84,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshToken: body.refresh_token,
       expiresAt: Math.floor(Date.now() / 1000) + (body.expires_in ?? 3600),
       scope: body.scope ?? "",
-      claims: decodeIdToken(body.id_token),
+      claims: await withUserinfo(decodeIdToken(body.id_token), body.access_token),
     };
     writeSession(next);
     setSession(next);
@@ -162,4 +163,21 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     );
   }
   return <>{children}</>;
+}
+
+/**
+ * The ID token names the person by `sub` alone; their name and address are userinfo's
+ * (OIDC Core §5.4). Asked once, at sign-in, and only for display: a userinfo that does
+ * not answer, or answers for someone else (§5.3.2), leaves the claims as they were.
+ */
+async function withUserinfo(claims: IdTokenClaims, accessToken: string): Promise<IdTokenClaims> {
+  try {
+    const response = await fetch(endpoints.userinfo, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!response.ok) return claims;
+    const userinfo = (await response.json()) as { sub?: string; email?: string; name?: string };
+    if (userinfo.sub !== claims.sub) return claims;
+    return { ...claims, email: userinfo.email, name: userinfo.name };
+  } catch {
+    return claims;
+  }
 }

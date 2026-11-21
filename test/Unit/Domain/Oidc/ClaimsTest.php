@@ -94,7 +94,6 @@ final class ClaimsTest extends TestCase
             self::ISSUER,
             $this->user,
             ClientId::fromString('spa'),
-            $this->scope('openid email'),
             Nonce::fromString('n-0S6_WzA2Mj'),
             AuthenticationContext::fromSession($session),
             'the-at-hash',
@@ -116,8 +115,7 @@ final class ClaimsTest extends TestCase
                 // The session that approved it, for a later logout token.
                 'sid' => 'sid-value',
                 'at_hash' => 'the-at-hash',
-                'email' => 'ada@example.com',
-                'email_verified' => false,
+                // Nothing about the person beyond `sub`: that is userinfo's (OIDC Core §5.4).
             ],
             $claims,
         );
@@ -129,7 +127,6 @@ final class ClaimsTest extends TestCase
             self::ISSUER,
             $this->user,
             ClientId::fromString('spa'),
-            $this->scope('openid'),
             null,
             AuthenticationContext::unknown(),
             'the-at-hash',

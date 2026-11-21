@@ -8,6 +8,11 @@
  * exactly why the dashboard lives on `management.*`, apart from the login pages.
  */
 
+/**
+ * Who is signed in: the ID token's `sub` and `amr`, and the name and address userinfo
+ * answered with — the ID token names the person by `sub` alone (OIDC Core §5.4), so
+ * `email` and `name` are absent when userinfo could not be reached.
+ */
 export interface IdTokenClaims {
   sub: string;
   email?: string;

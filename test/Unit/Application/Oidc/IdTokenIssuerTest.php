@@ -85,7 +85,7 @@ final class IdTokenIssuerTest extends TestCase
         self::assertSame('n-1', $claims['nonce']);
         self::assertSame(SigningAlgorithm::RS256->halfHash('the-access-token'), $claims['at_hash']);
         self::assertSame($this->clock->now()->getTimestamp() + 300, $claims['exp']);
-        self::assertSame('ada@example.com', $claims['email']);
+        self::assertArrayNotHasKey('email', $claims, 'The scope releases it at userinfo, not here.');
     }
 
     public function testWithoutAnActiveKeyNothingIsIssued(): void

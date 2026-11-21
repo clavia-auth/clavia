@@ -14,12 +14,17 @@ namespace Clavia\Domain\Oidc;
 use Clavia\Domain\Authentication\AuthenticationContext;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\User;
-use Clavia\Domain\Shared\ScopeSet;
 use DateTimeImmutable;
 
 /**
  * The claims of an ID token (OIDC Core §2): who authenticated, to whom it is said, when
- * and how — then whatever the granted scope releases about the person.
+ * and how — and nothing else about the person.
+ *
+ * What a scope releases (`profile`, `email`) comes from userinfo, which is where OIDC
+ * Core §5.4 puts it whenever an access token is issued — always, here. An ID token
+ * travels further than a userinfo response: through the browser, back as
+ * `id_token_hint`, into logs. `sub` is all a relying party needs from it to know who
+ * signed in.
  *
  * Built once, at the token endpoint, from what the authorization code carried; the
  * signing is somebody else's job.
@@ -43,7 +48,6 @@ final readonly class IdTokenClaims
         string $issuer,
         User $user,
         ClientId $audience,
-        ScopeSet $scope,
         ?Nonce $nonce,
         AuthenticationContext $authentication,
         string $atHash,
@@ -81,8 +85,7 @@ final readonly class IdTokenClaims
         }
         $claims['at_hash'] = $atHash;
 
-        // The protocol claims above win over identity claims of the same name (`sub`).
-        return new self($claims + IdentityClaims::of($user, $scope));
+        return new self($claims);
     }
 
     /**

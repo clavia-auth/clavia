@@ -20,7 +20,6 @@ use Clavia\Domain\Identity\User;
 use Clavia\Domain\OAuth2\AuthorizationCode;
 use Clavia\Domain\Oidc\IdTokenClaims;
 use Clavia\Domain\Oidc\Nonce;
-use Clavia\Domain\Shared\ScopeSet;
 use DateTimeImmutable;
 
 /**
@@ -60,7 +59,6 @@ final readonly class IdTokenIssuer
     ): string {
         return $this->issueFor(
             $code->clientId,
-            $code->scope,
             $code->nonce,
             $code->authentication,
             $user,
@@ -80,7 +78,6 @@ final readonly class IdTokenIssuer
      */
     public function issueFor(
         ClientId $clientId,
-        ScopeSet $scope,
         ?Nonce $nonce,
         AuthenticationContext $authentication,
         User $user,
@@ -93,7 +90,6 @@ final readonly class IdTokenIssuer
             $this->issuer,
             $user,
             $clientId,
-            $scope,
             $nonce,
             $authentication,
             // Hashed with the hash of the algorithm that signs the token (OIDC Core §3.1.3.6).

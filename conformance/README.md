@@ -9,7 +9,7 @@ Clavia is run against the [OpenID Foundation conformance suite](https://gitlab.c
 | Plan | Modules | Conditions | Outcome |
 |---|---|---|---|
 | Config OP | 1 | 25 passed | Passed |
-| Basic OP | 36 | 1637 passed, 1 failed, 6 warnings | 20 passed, 4 for review, 6 warnings, 4 skipped, 1 failed |
+| Basic OP | 36 | 1637 passed, 1 failed, 6 warnings (4 since) | 20 passed, 4 for review, 6 warnings, 4 skipped, 1 failed |
 
 **The one failure is deliberate.** `oidcc-ensure-request-without-nonce-succeeds-for-code-flow`
 sends an authorization request with neither PKCE nor a `nonce`. OAuth 2.1 §7.5.1 allows a
@@ -32,16 +32,12 @@ scopes (and `oidcc-scope-all`), and request objects.
 |---|---|---|
 | `oidcc-userinfo-post-body` | The access token in a form body (RFC 6750 §2.2) is not accepted | RFC 6750 says that method SHOULD NOT be used unless the header cannot be; only the `Authorization` header is. |
 | `oidcc-scope-profile` | Not every `profile` claim is returned | Clavia keeps `name`, `given_name`, `family_name`, `nickname`, `picture`, `locale`, `updated_at` — not `middle_name`, `preferred_username`, `profile`, `website`, `gender`, `birthdate`, `zoneinfo`. |
-| `oidcc-scope-email`, `oidcc-ensure-other-scope-order-succeeds` | `email` is in the ID token, not only from userinfo | The ID token and userinfo carry the same claims (`IdentityClaims::of()`); see "Open questions" below. |
 | `oidcc-ensure-request-with-acr-values-succeeds` | No `acr` claim | `acr_values_supported` is not advertised; `amr` says how the person signed in. |
 | `oidcc-claims-essential` | `name` not returned for an essential `claims` request | The `claims` parameter is not supported (`claims_parameter_supported: false`). |
 
-### Open questions
-
-- Returning scope claims in the ID token is allowed (OIDC Core §5.4 only requires them from
-  userinfo), but an ID token travels further — `id_token_hint`, logs — than a userinfo
-  response. Whether the code flow's ID token should carry only `sub` and the protocol claims is
-  a decision for the project, not this suite.
+Two more warnings of that run — `oidcc-scope-email` and `oidcc-ensure-other-scope-order-succeeds`,
+"`email` in the ID token" — are gone since: the ID token now carries `sub` and the protocol
+claims only, and scope claims come from userinfo (OIDC Core §5.4).
 
 ## Running it
 

@@ -178,7 +178,6 @@ final readonly class DeviceCodeGrant implements Grant
         $idToken = $scope->contains(OidcScope::OPENID)
             ? $this->idTokens->issueFor(
                 $request->clientId,
-                $scope,
                 null,
                 $request->authentication() ?? AuthenticationContext::unknown(),
                 $user,

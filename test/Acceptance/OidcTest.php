@@ -226,28 +226,29 @@ final class OidcTest extends AcceptanceTestCase
         self::assertSame(300, $claims['exp'] - $claims['iat']);
     }
 
-    public function testIdTokenCarriesEmailOnlyWhenScoped(): void
+    public function testTheIdTokenNamesThePersonBySubAloneWhateverTheScope(): void
     {
+        // OIDC Core §5.4: with an access token issued, scope claims come from userinfo.
         $this->publicClient();
         $user = $this->loggedIn();
+        $this->setProfile(Profile::of(name: 'Ada Lovelace', givenName: 'Ada'));
 
-        $withEmail = $this->verifiedIdToken($this->completeFlow('openid email')['id_token'])['claims'];
-        $withoutEmail = $this->verifiedIdToken($this->completeFlow('openid')['id_token'])['claims'];
+        $claims = $this->verifiedIdToken($this->completeFlow('openid profile email')['id_token'])['claims'];
 
-        self::assertSame($user->email, $withEmail['email']);
-        self::assertFalse($withEmail['email_verified']);
-        self::assertArrayNotHasKey('email', $withoutEmail);
-        self::assertArrayNotHasKey('email_verified', $withoutEmail);
+        self::assertSame($user->id->value, $claims['sub']);
+        foreach (['email', 'email_verified', 'name', 'given_name', 'updated_at'] as $claim) {
+            self::assertArrayNotHasKey($claim, $claims, $claim);
+        }
     }
 
-    public function testIdTokenCarriesProfileClaimsThatAreSet(): void
+    public function testUserinfoCarriesTheProfileClaimsThatAreSet(): void
     {
         // Unset profile fields are absent, not null (OIDC Core §5.1).
         $this->publicClient();
         $this->loggedIn();
         $this->setProfile(Profile::of(name: 'Ada Lovelace', givenName: 'Ada'));
 
-        $claims = $this->verifiedIdToken($this->completeFlow('openid profile')['id_token'])['claims'];
+        $claims = self::json($this->userinfo($this->completeFlow('openid profile')['access_token']));
 
         self::assertSame('Ada Lovelace', $claims['name']);
         self::assertSame('Ada', $claims['given_name']);
@@ -414,18 +415,19 @@ final class OidcTest extends AcceptanceTestCase
 
     public function testUserinfoAgreesWithTheIdToken(): void
     {
-        // Both go through one definition of what a scope releases, so they cannot drift.
+        // OIDC Core §5.3.2: the `sub` of userinfo is the ID token's, or the client must not use it.
         $this->publicClient();
-        $this->loggedIn();
+        $user = $this->loggedIn();
         $this->setProfile(Profile::of(name: 'Ada Lovelace'));
         $payload = $this->completeFlow('openid profile email');
 
         $fromUserinfo = self::json($this->userinfo($payload['access_token']));
         $fromIdToken = $this->verifiedIdToken($payload['id_token'])['claims'];
 
-        foreach (['sub', 'name', 'email', 'email_verified', 'updated_at'] as $claim) {
-            self::assertSame($fromIdToken[$claim], $fromUserinfo[$claim], $claim);
-        }
+        self::assertSame($fromIdToken['sub'], $fromUserinfo['sub']);
+        self::assertSame('Ada Lovelace', $fromUserinfo['name']);
+        self::assertSame($user->email, $fromUserinfo['email']);
+        self::assertFalse($fromUserinfo['email_verified']);
     }
 
     public function testUserinfoWithholdsEmailWithoutTheScope(): void

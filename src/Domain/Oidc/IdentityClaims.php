@@ -15,9 +15,10 @@ use Clavia\Domain\Identity\User;
 use Clavia\Domain\Shared\ScopeSet;
 
 /**
- * The claims about a person that a grant of scope releases (OIDC Core §5.4): one
- * definition shared by the ID token and the userinfo endpoint, so the two cannot drift
- * on what a scope means.
+ * The claims about a person that a grant of scope releases (OIDC Core §5.4), as the
+ * userinfo endpoint answers them. The ID token carries none of them: with an access token
+ * issued, §5.4 sends them to userinfo, and {@see IdTokenClaims} names the person by `sub`
+ * alone.
  *
  * `sub` is always present. `profile` releases the profile claims that are set, plus
  * `updated_at`; `email` releases `email` and `email_verified`. Holding a token is not by

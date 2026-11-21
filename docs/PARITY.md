@@ -335,8 +335,8 @@ Every test of the Python project (`tests/`, 404 functions) and the PHP test that
 | `test_id_token_issued_for_openid_scope` | `OidcTest::testIdTokenIssuedForOpenidScope` |  |
 | `test_no_id_token_without_openid_scope` | `OidcTest::testNoIdTokenWithoutOpenidScope` |  |
 | `test_id_token_verifies_against_published_jwks` | `OidcTest::testIdTokenVerifiesAgainstPublishedJwks` |  |
-| `test_id_token_carries_email_only_when_scoped` | `OidcTest::testIdTokenCarriesEmailOnlyWhenScoped` |  |
-| `test_id_token_carries_profile_claims_that_are_set` | `OidcTest::testIdTokenCarriesProfileClaimsThatAreSet` |  |
+| `test_id_token_carries_email_only_when_scoped` | `OidcTest::testTheIdTokenNamesThePersonBySubAloneWhateverTheScope`<br>`OidcTest::testUserinfoWithholdsEmailWithoutTheScope` | Scope claims come from userinfo, not the ID token (DEVIATIONS, OpenID Connect). |
+| `test_id_token_carries_profile_claims_that_are_set` | `OidcTest::testUserinfoCarriesTheProfileClaimsThatAreSet` | Scope claims come from userinfo, not the ID token (DEVIATIONS, OpenID Connect). |
 | `test_nonce_round_trips_into_the_id_token` | `OidcTest::testNonceRoundTripsIntoTheIdToken` |  |
 | `test_replayed_nonce_is_refused` | `OidcTest::testReplayedNonceIsRefused` |  |
 | `test_at_hash_binds_the_id_token_to_the_access_token` | `OidcTest::testAtHashBindsTheIdTokenToTheAccessToken` |  |

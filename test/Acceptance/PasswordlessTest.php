@@ -399,8 +399,13 @@ final class PasswordlessTest extends AcceptanceTestCase
         $claims = $this->verifiedIdToken($token['id_token'] ?? null)['claims'];
 
         self::assertSame(['otp'], $claims['amr'] ?? null);
-        self::assertSame(self::EMAIL, $claims['email'] ?? null);
-        self::assertTrue($claims['email_verified'] ?? null);
+        // The address the code went to is verified; userinfo says so — the ID token names
+        // the person by `sub` alone.
+        $accessToken = $token['access_token'] ?? null;
+        self::assertIsString($accessToken);
+        $userinfo = self::json($this->request('GET', '/oidc/userinfo', ['Authorization' => 'Bearer ' . $accessToken]));
+        self::assertSame(self::EMAIL, $userinfo['email'] ?? null);
+        self::assertTrue($userinfo['email_verified'] ?? null);
     }
 
     public function testASecondFactorStillApplies(): void

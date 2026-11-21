@@ -143,7 +143,7 @@ What exists:
   - `Domain\Oidc` — `SigningKey` (active → retired, published until its grace ends),
     `SigningKeyStatus`, `SigningAlgorithm` (RS256; its hash and `halfHash()` for `at_hash`),
     `PublicJwk` (public members only, `kid` = RFC 7638 thumbprint), `Nonce`, `OidcScope`,
-    `IdentityClaims` (what a scope releases — shared by the ID token and userinfo),
+    `IdentityClaims` (what a scope releases, at userinfo; the ID token carries `sub` and protocol claims only),
     `IdTokenClaims`. `Domain\Identity\Profile` (the `profile` claims) on `User`;
     `Domain\Authentication\AuthenticationContext` (`auth_time`, `amr`) captured on the
     `AuthorizationCode` with its `nonce`. `Domain\OAuth2\BearerTokenError` +
@@ -649,7 +649,8 @@ Conventions established in Step 4:
   there is none, `keys:rotate` retires the active key with `RotateSigningKey::grace()` — twice
   the longest token lifetime plus a day — and publishes both. Nothing ever creates a key on
   first use; issuing without one is `NoActiveSigningKey`, a loud server error.
-- **What a scope releases is `IdentityClaims::of()`**, for the ID token and userinfo alike;
+- **What a scope releases is `IdentityClaims::of()`**, served by userinfo only — the ID token
+  names the person by `sub` and carries protocol claims alone (OIDC Core §5.4, decided 2026-11-21);
   an unknown value is left out, never sent as null.
 - **An ID token reports only what this server witnessed.** `auth_time` and `amr` come from
   the session that approved the code (`EndUser::authentication()`), captured on the code;
@@ -1472,7 +1473,7 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
 
 #### [x] Step 4 — JWKS, ID token, discovery, userinfo
 - Domain: `IdTokenClaims` (incl. `at_hash`, `nonce`, `auth_time`, `amr`), shared
-  `IdentityClaims` for ID token and userinfo, `SigningKey` lifecycle (active/retired + grace),
+  `IdentityClaims` for userinfo, `SigningKey` lifecycle (active/retired + grace),
   `PublicJwk` (RFC 7638 `kid`), `Nonce`, `Profile`, `AuthenticationContext`.
 - Ports: `TokenSigner` (`activeKey`, `sign`, `publicKeys`), `SigningKeyStore`, `NonceRegistry`.
   Adapters: the postgres backend (RSA-2048, RS256, private key sealed with the `kid` as
