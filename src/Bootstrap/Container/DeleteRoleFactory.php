@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Management\Roles\DeleteRole;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Rbac\RoleRepository;
 use Psr\Container\ContainerInterface;
 
@@ -21,7 +22,9 @@ final class DeleteRoleFactory
     {
         /** @var RoleRepository $roles */
         $roles = $container->get(RoleRepository::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new DeleteRole($roles);
+        return new DeleteRole($roles, $events);
     }
 }

@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Management\Provisioning\RegisterManagementApi;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
@@ -34,6 +35,8 @@ final class RegisterManagementApiFactory
         $clock = $container->get(Clock::class);
         /** @var Settings $settings */
         $settings = $container->get(Settings::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
         return new RegisterManagementApi(
             $resourceServers,
@@ -41,6 +44,7 @@ final class RegisterManagementApiFactory
             $secrets,
             $clock,
             Audience::fromString($settings->managementApiAudience()),
+            $events,
         );
     }
 }

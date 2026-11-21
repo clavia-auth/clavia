@@ -14,6 +14,7 @@ namespace Clavia\Bootstrap\Container;
 use Clavia\Application\OAuth2\Token\AuthorizationCodeGrant;
 use Clavia\Application\OAuth2\Token\UserScope;
 use Clavia\Application\Oidc\IdTokenIssuer;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Identity\UserRepository;
@@ -59,6 +60,9 @@ final class AuthorizationCodeGrantFactory
         $refreshAbsoluteLifetime = $settings->refreshTokenAbsoluteLifetime;
         assert($refreshAbsoluteLifetime > 0);
 
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
+
         return new AuthorizationCodeGrant(
             $codes,
             $tokens,
@@ -73,6 +77,7 @@ final class AuthorizationCodeGrantFactory
             $lifetime,
             $refreshLifetime,
             $refreshAbsoluteLifetime,
+            $events,
         );
     }
 }

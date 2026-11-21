@@ -13,7 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Authentication\SignOutEverywhere;
-use Clavia\Application\Oidc\Logout\BackChannelLogout;
+use Clavia\Application\Port\DomainEvents;
 use Psr\Container\ContainerInterface;
 
 final class SignOutEverywhereFactory
@@ -22,9 +22,9 @@ final class SignOutEverywhereFactory
     {
         /** @var Sessions $sessions */
         $sessions = $container->get(Sessions::class);
-        /** @var BackChannelLogout $backChannel */
-        $backChannel = $container->get(BackChannelLogout::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new SignOutEverywhere($sessions, $backChannel);
+        return new SignOutEverywhere($sessions, $events);
     }
 }

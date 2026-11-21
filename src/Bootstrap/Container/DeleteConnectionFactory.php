@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Management\Connections\DeleteConnection;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Identity\ExternalIdentityRepository;
 use Clavia\Domain\Identity\UserRepository;
@@ -27,7 +28,9 @@ final class DeleteConnectionFactory
         $users = $container->get(UserRepository::class);
         /** @var ExternalIdentityRepository $identities */
         $identities = $container->get(ExternalIdentityRepository::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new DeleteConnection($connections, $users, $identities);
+        return new DeleteConnection($connections, $users, $identities, $events);
     }
 }

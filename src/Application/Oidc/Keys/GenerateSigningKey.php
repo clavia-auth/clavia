@@ -11,8 +11,10 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Oidc\Keys;
 
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\SigningKeyStore;
 use Clavia\Application\Port\TransactionManager;
+use Clavia\Domain\Oidc\Event\SigningKeyCreated;
 use Clavia\Domain\Oidc\SigningAlgorithm;
 use Clavia\Domain\Oidc\SigningKey;
 use Clavia\Domain\Shared\Clock;
@@ -31,6 +33,7 @@ final readonly class GenerateSigningKey
         private TransactionManager $transactions,
         private Clock $clock,
         private SigningAlgorithm $algorithm,
+        private DomainEvents $events,
     ) {
     }
 
@@ -46,7 +49,10 @@ final readonly class GenerateSigningKey
                 throw SigningKeyAlreadyActive::for($active);
             }
 
-            return $this->keys->create($this->algorithm, $this->clock->now());
+            $key = $this->keys->create($this->algorithm, $this->clock->now());
+            $this->events->dispatch(new SigningKeyCreated($key));
+
+            return $key;
         });
     }
 }

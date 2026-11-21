@@ -14,6 +14,7 @@ namespace Clavia\Adapter\Primary\Http\Management;
 use Clavia\Adapter\Primary\Http\OpenApi\Validation\RequestRejected;
 use Clavia\Adapter\Primary\Http\Shared\BearerChallenger;
 use Clavia\Adapter\Primary\Http\Shared\BearerCredentials;
+use Clavia\Application\Audit\AuditContext;
 use Clavia\Application\Management\Caller\AuthenticateManagementCaller;
 use Clavia\Application\Management\Conflict;
 use Clavia\Application\Management\NotFound;
@@ -59,6 +60,7 @@ final readonly class ManagementApiMiddleware implements MiddlewareInterface
         private AuthenticateManagementCaller $authenticate,
         private BearerChallenger $challenger,
         private ManagementResponder $responder,
+        private AuditContext $audit,
     ) {
     }
 
@@ -77,6 +79,7 @@ final readonly class ManagementApiMiddleware implements MiddlewareInterface
                 return $this->challenger->missing();
             }
             $caller = ($this->authenticate)($token);
+            $this->audit->actAs($caller->actor());
             $caller->require($this->contract->requiredPermission($operation));
         } catch (BearerTokenError $error) {
             return $this->challenger->refuse($error);

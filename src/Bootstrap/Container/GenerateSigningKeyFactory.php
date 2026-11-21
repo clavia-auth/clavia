@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Oidc\Keys\GenerateSigningKey;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\SigningKeyStore;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Domain\Oidc\SigningAlgorithm;
@@ -30,7 +31,9 @@ final class GenerateSigningKeyFactory
         $clock = $container->get(Clock::class);
         /** @var SigningAlgorithm $algorithm */
         $algorithm = $container->get(SigningAlgorithm::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new GenerateSigningKey($keys, $transactions, $clock, $algorithm);
+        return new GenerateSigningKey($keys, $transactions, $clock, $algorithm, $events);
     }
 }

@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Application\Management\Caller;
 
 use Clavia\Application\Management\ManagementPermission;
+use Clavia\Domain\Audit\Actor;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\OAuth2\BearerTokenError;
@@ -42,6 +43,14 @@ final readonly class ManagementCaller
                 sprintf("The access token does not carry the '%s' scope.", $permission->value),
             );
         }
+    }
+
+    /** Who the trail names: an operator through the application, or a machine client as itself. */
+    public function actor(): Actor
+    {
+        return $this->userId === null
+            ? Actor::application($this->clientId)
+            : Actor::person($this->userId, $this->clientId);
     }
 
     public function isClient(ClientId $client): bool

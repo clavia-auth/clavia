@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\OAuth2\Token\ClientCredentialsGrant;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\ResourceServer\ClientGrantRepository;
@@ -43,6 +44,9 @@ final class ClientCredentialsGrantFactory
         $lifetime = $settings->accessTokenLifetime;
         assert($lifetime > 0);
 
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
+
         return new ClientCredentialsGrant(
             $resourceServers,
             $clientGrants,
@@ -51,6 +55,7 @@ final class ClientCredentialsGrantFactory
             $random,
             $clock,
             $lifetime,
+            $events,
         );
     }
 }

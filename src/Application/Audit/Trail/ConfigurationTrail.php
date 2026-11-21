@@ -1,0 +1,175 @@
+<?php
+
+/**
+ * This file is part of Clavia, an open-source OAuth 2.1 / OpenID Connect authorization server.
+ *
+ * @license   BSD-3-Clause — see the LICENSE file distributed with this source code.
+ * @copyright Copyright (c) 2026 Phayne Limited. (https://phayne.io)
+ */
+
+declare(strict_types=1);
+
+namespace Clavia\Application\Audit\Trail;
+
+use Clavia\Application\Audit\Audit;
+use Clavia\Application\Event\EventSubscriber;
+use Clavia\Domain\Audit\AuditEventType;
+use Clavia\Domain\Audit\AuditTarget;
+use Clavia\Domain\Client\Event\ClientChanged;
+use Clavia\Domain\Client\Event\ClientConnectionsChanged;
+use Clavia\Domain\Client\Event\ClientDeleted;
+use Clavia\Domain\Client\Event\ClientRegistered;
+use Clavia\Domain\Client\Event\ClientSecretRotated;
+use Clavia\Domain\Client\GrantType;
+use Clavia\Domain\Connection\ConnectionName;
+use Clavia\Domain\Connection\Event\ConnectionChanged;
+use Clavia\Domain\Connection\Event\ConnectionCreated;
+use Clavia\Domain\Connection\Event\ConnectionDeleted;
+use Clavia\Domain\Oidc\Event\SigningKeyCreated;
+use Clavia\Domain\Oidc\Event\SigningKeyRotated;
+use Clavia\Domain\ResourceServer\Event\ClientAccessGranted;
+use Clavia\Domain\ResourceServer\Event\ResourceServerChanged;
+use Clavia\Domain\ResourceServer\Event\ResourceServerDeleted;
+use Clavia\Domain\ResourceServer\Event\ResourceServerRegistered;
+
+/**
+ * Applications, APIs, client grants, connections and signing keys — in the audit trail.
+ *
+ * The actor is the request's caller: an operator through the dashboard, a machine client
+ * holding a Management API token, or the system at the console. A change lists what it
+ * touched, never the values: a secret, a redirect URI or a provider's client secret
+ * never reaches the trail.
+ */
+final readonly class ConfigurationTrail implements EventSubscriber
+{
+    public function __construct(private Audit $audit)
+    {
+    }
+
+    #[\Override]
+    public function subscriptions(): array
+    {
+        return [
+            ClientRegistered::class => $this->clientRegistered(...),
+            ClientChanged::class => $this->clientChanged(...),
+            ClientConnectionsChanged::class => $this->clientConnectionsChanged(...),
+            ClientSecretRotated::class => $this->clientSecretRotated(...),
+            ClientDeleted::class => $this->clientDeleted(...),
+            ResourceServerRegistered::class => $this->resourceServerRegistered(...),
+            ResourceServerChanged::class => $this->resourceServerChanged(...),
+            ResourceServerDeleted::class => $this->resourceServerDeleted(...),
+            ClientAccessGranted::class => $this->clientAccessGranted(...),
+            ConnectionCreated::class => $this->connectionCreated(...),
+            ConnectionChanged::class => $this->connectionChanged(...),
+            ConnectionDeleted::class => $this->connectionDeleted(...),
+            SigningKeyCreated::class => $this->signingKeyCreated(...),
+            SigningKeyRotated::class => $this->signingKeyRotated(...),
+        ];
+    }
+
+    private function clientRegistered(ClientRegistered $event): void
+    {
+        $client = $event->client;
+        $this->audit->record(AuditEventType::ClientCreated, AuditTarget::client($client->id), [
+            'name' => $client->name,
+            'client_type' => $client->type->value,
+            'first_party' => $client->isFirstParty(),
+            'grant_types' => array_map(static fn (GrantType $grant): string => $grant->value, $client->grantTypes),
+        ]);
+    }
+
+    private function clientChanged(ClientChanged $event): void
+    {
+        $this->audit->record(AuditEventType::ClientUpdated, AuditTarget::client($event->clientId), [
+            'fields' => $event->changed,
+        ]);
+    }
+
+    private function clientConnectionsChanged(ClientConnectionsChanged $event): void
+    {
+        $this->audit->record(AuditEventType::ClientUpdated, AuditTarget::client($event->clientId), [
+            'fields' => ['connections'],
+            'connections' => array_map(static fn (ConnectionName $name): string => $name->value, $event->connections),
+        ]);
+    }
+
+    private function clientSecretRotated(ClientSecretRotated $event): void
+    {
+        $this->audit->record(AuditEventType::ClientSecretRotated, AuditTarget::client($event->clientId));
+    }
+
+    private function clientDeleted(ClientDeleted $event): void
+    {
+        $this->audit->record(AuditEventType::ClientDeleted, AuditTarget::client($event->client->id), [
+            'name' => $event->client->name,
+        ]);
+    }
+
+    private function resourceServerRegistered(ResourceServerRegistered $event): void
+    {
+        $api = $event->resourceServer;
+        $this->audit->record(AuditEventType::ResourceServerCreated, AuditTarget::resourceServer($api->id), [
+            'identifier' => $api->identifier->value,
+        ]);
+    }
+
+    private function resourceServerChanged(ResourceServerChanged $event): void
+    {
+        $this->audit->record(
+            AuditEventType::ResourceServerUpdated,
+            AuditTarget::resourceServer($event->resourceServerId),
+            ['fields' => $event->changed],
+        );
+    }
+
+    private function resourceServerDeleted(ResourceServerDeleted $event): void
+    {
+        $api = $event->resourceServer;
+        $this->audit->record(AuditEventType::ResourceServerDeleted, AuditTarget::resourceServer($api->id), [
+            'identifier' => $api->identifier->value,
+        ]);
+    }
+
+    private function clientAccessGranted(ClientAccessGranted $event): void
+    {
+        $this->audit->record(AuditEventType::ClientGranted, AuditTarget::client($event->grant->clientId), [
+            'audience' => $event->audience->value,
+            'scope' => $event->grant->scopes->toString(),
+        ]);
+    }
+
+    private function connectionCreated(ConnectionCreated $event): void
+    {
+        $connection = $event->connection;
+        $this->audit->record(AuditEventType::ConnectionCreated, AuditTarget::connection($connection->name), [
+            'strategy' => $connection->strategy->value,
+        ]);
+    }
+
+    private function connectionChanged(ConnectionChanged $event): void
+    {
+        $this->audit->record(AuditEventType::ConnectionUpdated, AuditTarget::connection($event->name), [
+            'fields' => $event->changed,
+        ]);
+    }
+
+    private function connectionDeleted(ConnectionDeleted $event): void
+    {
+        $this->audit->record(AuditEventType::ConnectionDeleted, AuditTarget::connection($event->name));
+    }
+
+    private function signingKeyCreated(SigningKeyCreated $event): void
+    {
+        $this->audit->record(AuditEventType::SigningKeyCreated, AuditTarget::signingKey($event->key->kid()), [
+            'algorithm' => $event->key->algorithm()->value,
+        ]);
+    }
+
+    private function signingKeyRotated(SigningKeyRotated $event): void
+    {
+        $this->audit->record(AuditEventType::SigningKeyRotated, AuditTarget::signingKey($event->active->kid()), [
+            'algorithm' => $event->active->algorithm()->value,
+            'retired_kid' => $event->retired?->kid(),
+        ]);
+    }
+}

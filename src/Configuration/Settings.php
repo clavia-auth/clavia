@@ -170,6 +170,9 @@ final readonly class Settings
         public int $loginMaxAttempts = 10,
         #[Range(min: 1)]
         public int $loginAttemptWindow = 900,
+        /** How long the audit trail keeps an event, days; `clavia audit:purge` removes what is older. */
+        #[Range(min: 1)]
+        public int $auditRetentionDays = 90,
         // ------------------------------------------------------------------
         // Multi-factor authentication
         // ------------------------------------------------------------------

@@ -34,6 +34,7 @@ use Clavia\Domain\Shared\SecretGenerator;
 use ClaviaTest\Support\Clients;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryAccessTokenRepository;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryRefreshTokenRepository;
 use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
 use ClaviaTest\Support\Fake\InMemoryRoleRepository;
@@ -80,6 +81,7 @@ final class RefreshTokenGrantTest extends TestCase
             ),
             3600,
             86_400,
+            new InMemoryDomainEvents(),
         );
 
         $this->client = self::refreshing('spa');

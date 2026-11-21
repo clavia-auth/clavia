@@ -27,6 +27,7 @@ use Clavia\Domain\Shared\SecretGenerator;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryClientGrantRepository;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use ClaviaTest\Support\Fake\SeededRandomSource;
@@ -123,7 +124,13 @@ final class ManagementCommandsTest extends TestCase
     private function grantCommand(): CommandTester
     {
         return new CommandTester(new GrantClientAccessCommand(
-            new GrantClientAccess($this->clients, $this->apis, $this->grants, new FrozenClock()),
+            new GrantClientAccess(
+                $this->clients,
+                $this->apis,
+                $this->grants,
+                new FrozenClock(),
+                new InMemoryDomainEvents(),
+            ),
             self::MANAGEMENT_API,
             self::ISSUER,
         ));
@@ -137,6 +144,7 @@ final class ManagementCommandsTest extends TestCase
             new SecretGenerator(new SeededRandomSource(1)),
             new FrozenClock(),
             Audience::fromString(self::MANAGEMENT_API),
+            new InMemoryDomainEvents(),
         );
     }
 

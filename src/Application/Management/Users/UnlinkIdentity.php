@@ -14,8 +14,10 @@ namespace Clavia\Application\Management\Users;
 use Clavia\Application\Management\Conflict;
 use Clavia\Application\Management\Connections\ReadConnections;
 use Clavia\Application\Management\NotFound;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Domain\Connection\ConnectionRepository;
+use Clavia\Domain\Identity\Event\IdentityUnlinked;
 use Clavia\Domain\Identity\ExternalIdentity;
 use Clavia\Domain\Identity\ExternalIdentityRepository;
 use Clavia\Domain\Identity\UserId;
@@ -37,6 +39,7 @@ final readonly class UnlinkIdentity
         private ExternalIdentityRepository $identities,
         private ConnectionRepository $connections,
         private TransactionManager $transactions,
+        private DomainEvents $events,
     ) {
     }
 
@@ -69,6 +72,7 @@ final readonly class UnlinkIdentity
             }
 
             $this->identities->unlink($user->id, $provider);
+            $this->events->dispatch(new IdentityUnlinked($user->id, $provider));
         });
     }
 }

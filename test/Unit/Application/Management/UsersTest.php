@@ -47,6 +47,7 @@ use ClaviaTest\Support\Fake\FakePasswordHasher;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
 use ClaviaTest\Support\Fake\InMemoryConnectionRepository;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryExternalIdentityRepository;
 use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
 use ClaviaTest\Support\Fake\InMemoryRecoveryCodeRepository;
@@ -89,9 +90,10 @@ final class UsersTest extends TestCase
             $this->clock,
             28800,
             604800,
+            new InMemoryDomainEvents(),
         );
         [$backChannel] = BackChannelLogouts::for(new InMemoryClientRepository(), $this->clock);
-        $this->signOut = new SignOutEverywhere($this->sessions, $backChannel);
+        $this->signOut = new SignOutEverywhere($this->sessions, new InMemoryDomainEvents($backChannel));
     }
 
     public function testACreatedUserHasAHashedPasswordAndTheStandingAsked(): void
@@ -209,7 +211,7 @@ final class UsersTest extends TestCase
         $this->recoveryCodes->replaceAll($user->id, [RecoveryCode::digest('aaaa-bbbb-cccc')], $this->clock->now());
         $reset = new ResetUserMfa(
             $this->users,
-            new DisableMfa($this->factors, $this->recoveryCodes, $this->transactions),
+            new DisableMfa($this->factors, $this->recoveryCodes, $this->transactions, new InMemoryDomainEvents()),
         );
 
         $reset($user->id);
@@ -224,9 +226,11 @@ final class UsersTest extends TestCase
     {
         $this->expectException(NotFound::class);
 
-        new ResetUserMfa($this->users, new DisableMfa($this->factors, $this->recoveryCodes, $this->transactions))(
-            UserId::generate(new SeededRandomSource(9)),
+        $reset = new ResetUserMfa(
+            $this->users,
+            new DisableMfa($this->factors, $this->recoveryCodes, $this->transactions, new InMemoryDomainEvents()),
         );
+        $reset(UserId::generate(new SeededRandomSource(9)));
     }
 
     public function testAnUnknownUserIsNotFound(): void
@@ -239,7 +243,7 @@ final class UsersTest extends TestCase
     public function testDeletingRemovesTheUserButNotTheOneTheCallerActsAs(): void
     {
         $user = $this->create(new NewUser('ada@example.com', 'a-good-password'));
-        $delete = new DeleteUser($this->users, $this->signOut);
+        $delete = new DeleteUser($this->users, $this->signOut, new InMemoryDomainEvents());
 
         try {
             $delete($user->id, new ManagementCaller(ClientId::fromString('dashboard'), $user->id, ScopeSet::empty()));
@@ -356,7 +360,13 @@ final class UsersTest extends TestCase
 
     private function unlink(): UnlinkIdentity
     {
-        return new UnlinkIdentity($this->users, $this->identities, $this->connections, $this->transactions);
+        return new UnlinkIdentity(
+            $this->users,
+            $this->identities,
+            $this->connections,
+            $this->transactions,
+            new InMemoryDomainEvents(),
+        );
     }
 
     private function link(User $user, string $connection, string $subject): void
@@ -372,7 +382,15 @@ final class UsersTest extends TestCase
     {
         $random = new SeededRandomSource($this->users->page(PageRequest::of())->total + 1);
 
-        $created = new CreateUser($this->users, $this->hasher, $random, $this->clock, $this->connections)($new);
+        $create = new CreateUser(
+            $this->users,
+            $this->hasher,
+            $random,
+            $this->clock,
+            $this->connections,
+            new InMemoryDomainEvents(),
+        );
+        $created = $create($new);
         self::assertFalse($created->mfaEnrolled);
 
         return $created->user;
@@ -380,7 +398,14 @@ final class UsersTest extends TestCase
 
     private function update(): UpdateUser
     {
-        return new UpdateUser($this->users, $this->hasher, $this->clock, $this->factors, $this->signOut);
+        return new UpdateUser(
+            $this->users,
+            $this->hasher,
+            $this->clock,
+            $this->factors,
+            $this->signOut,
+            new InMemoryDomainEvents(),
+        );
     }
 
     private function enrol(User $user): void

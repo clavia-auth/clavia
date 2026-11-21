@@ -9,6 +9,7 @@
 
 declare(strict_types=1);
 
+use Clavia\Adapter\Primary\Http\Shared\AuditContextMiddleware;
 use Clavia\Adapter\Primary\Http\Shared\MethodNotAllowedMiddleware;
 use Clavia\Adapter\Primary\Http\Shared\NotFoundHandler;
 use Laminas\Stratigility\Middleware\ErrorHandler;
@@ -26,6 +27,9 @@ use Mezzio\Router\Middleware\RouteMiddleware;
 return static function (Application $app): void {
     // Catches everything below it; the response never describes the error.
     $app->pipe(ErrorHandler::class);
+
+    // Where the request came from, for every audit event it records.
+    $app->pipe(AuditContextMiddleware::class);
 
     $app->pipe(RouteMiddleware::class);
     $app->pipe(MethodNotAllowedMiddleware::class);

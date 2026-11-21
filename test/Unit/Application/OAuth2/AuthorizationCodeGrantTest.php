@@ -39,6 +39,7 @@ use ClaviaTest\Support\Clients;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryAccessTokenRepository;
 use ClaviaTest\Support\Fake\InMemoryAuthorizationCodeRepository;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryRefreshTokenRepository;
 use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
 use ClaviaTest\Support\Fake\InMemoryRoleRepository;
@@ -97,6 +98,7 @@ final class AuthorizationCodeGrantTest extends TestCase
             3600,
             86_400,
             172_800,
+            new InMemoryDomainEvents(),
         );
 
         $this->client = Clients::public('spa');

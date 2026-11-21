@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Management\Provisioning\AssignRole;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\Rbac\RoleRepository;
 use Clavia\Domain\Shared\Clock;
@@ -27,7 +28,9 @@ final class AssignRoleFactory
         $users = $container->get(UserRepository::class);
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new AssignRole($roles, $users, $clock);
+        return new AssignRole($roles, $users, $clock, $events);
     }
 }

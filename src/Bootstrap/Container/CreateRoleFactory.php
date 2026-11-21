@@ -13,6 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Management\Roles\CreateRole;
 use Clavia\Application\Management\Roles\RolePermissions;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Rbac\RoleRepository;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\SecretGenerator;
@@ -30,7 +31,9 @@ final class CreateRoleFactory
         $secrets = $container->get(SecretGenerator::class);
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new CreateRole($roles, $permissions, $secrets, $clock);
+        return new CreateRole($roles, $permissions, $secrets, $clock, $events);
     }
 }

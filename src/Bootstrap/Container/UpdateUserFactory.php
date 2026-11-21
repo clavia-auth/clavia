@@ -13,6 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Authentication\SignOutEverywhere;
 use Clavia\Application\Management\Users\UpdateUser;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Identity\UserRepository;
@@ -33,7 +34,9 @@ final class UpdateUserFactory
         $factors = $container->get(MfaFactorRepository::class);
         /** @var SignOutEverywhere $signOut */
         $signOut = $container->get(SignOutEverywhere::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new UpdateUser($users, $hasher, $clock, $factors, $signOut);
+        return new UpdateUser($users, $hasher, $clock, $factors, $signOut, $events);
     }
 }

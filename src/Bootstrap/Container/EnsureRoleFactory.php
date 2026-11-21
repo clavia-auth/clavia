@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Management\Provisioning\EnsureRole;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Domain\Rbac\RoleRepository;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
@@ -33,7 +34,9 @@ final class EnsureRoleFactory
         $secrets = $container->get(SecretGenerator::class);
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new EnsureRole($roles, $resourceServers, $transactions, $secrets, $clock);
+        return new EnsureRole($roles, $resourceServers, $transactions, $secrets, $clock, $events);
     }
 }

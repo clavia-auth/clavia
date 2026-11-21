@@ -13,8 +13,10 @@ namespace Clavia\Application\Management\Connections;
 
 use Clavia\Application\Management\Conflict;
 use Clavia\Application\Management\NotFound;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Connection\BuiltInConnection;
 use Clavia\Domain\Connection\ConnectionRepository;
+use Clavia\Domain\Connection\Event\ConnectionDeleted;
 use Clavia\Domain\Identity\ExternalIdentityRepository;
 use Clavia\Domain\Identity\UserRepository;
 
@@ -33,6 +35,7 @@ final readonly class DeleteConnection
         private ConnectionRepository $connections,
         private UserRepository $users,
         private ExternalIdentityRepository $identities,
+        private DomainEvents $events,
     ) {
     }
 
@@ -59,5 +62,6 @@ final readonly class DeleteConnection
         }
 
         $this->connections->delete($connection->name);
+        $this->events->dispatch(new ConnectionDeleted($connection->name));
     }
 }

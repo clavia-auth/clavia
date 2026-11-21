@@ -44,6 +44,7 @@ use ClaviaTest\Support\Fake\FakeIdentityProviders;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
 use ClaviaTest\Support\Fake\InMemoryConnectionRepository;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryExternalIdentityRepository;
 use ClaviaTest\Support\Fake\InMemoryExternalSignInStore;
 use ClaviaTest\Support\Fake\InMemoryLoginStateStore;
@@ -95,6 +96,7 @@ final class ExternalSignInTest extends TestCase
             $this->clock,
             28800,
             604800,
+            new InMemoryDomainEvents(),
         );
         $this->clients = new InMemoryClientRepository();
         $this->connections = new InMemoryConnectionRepository($this->clients);
@@ -497,6 +499,7 @@ final class ExternalSignInTest extends TestCase
                 300,
             ),
             self::ISSUER,
+            new InMemoryDomainEvents(),
         );
     }
 

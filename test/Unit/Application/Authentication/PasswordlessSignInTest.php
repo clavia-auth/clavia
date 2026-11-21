@@ -41,6 +41,7 @@ use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryAttemptCounter;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
 use ClaviaTest\Support\Fake\InMemoryConnectionRepository;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryLoginStateStore;
 use ClaviaTest\Support\Fake\InMemoryMfaChallengeStore;
 use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
@@ -80,7 +81,14 @@ final class PasswordlessSignInTest extends TestCase
         $this->clients->save(Clients::public('spa'));
         $this->users = new InMemoryUserRepository();
         $secrets = new SecretGenerator(new SeededRandomSource(1));
-        $this->sessions = new Sessions(new InMemorySessionStore($this->clock), $secrets, $this->clock, 28800, 604800);
+        $this->sessions = new Sessions(
+            new InMemorySessionStore($this->clock),
+            $secrets,
+            $this->clock,
+            28800,
+            604800,
+            new InMemoryDomainEvents(),
+        );
         $access = new ConnectionAccess(
             new InMemoryConnectionRepository($this->clients),
             new FakeIdentityProviders(),
@@ -117,7 +125,13 @@ final class PasswordlessSignInTest extends TestCase
             600,
             900,
         );
-        $this->answer = new AnswerPasswordlessCode($this->challenges, $describe, $finish, 3);
+        $this->answer = new AnswerPasswordlessCode(
+            $this->challenges,
+            $describe,
+            $finish,
+            3,
+            new InMemoryDomainEvents(),
+        );
         $this->follow = new FollowPasswordlessLink($this->challenges, $finish);
     }
 

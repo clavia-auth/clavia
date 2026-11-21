@@ -13,8 +13,11 @@ namespace Clavia\Application\OAuth2\Consent;
 
 use Clavia\Application\Authentication\EndUser;
 use Clavia\Application\OAuth2\Authorize\RequestRefused;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Authentication\LocalPath;
 use Clavia\Domain\Consent\ConsentRepository;
+use Clavia\Domain\Consent\Event\ConsentGiven as ConsentGivenEvent;
+use Clavia\Domain\Consent\Event\ConsentRefused;
 use Clavia\Domain\Consent\UserConsent;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use Clavia\Domain\Shared\Clock;
@@ -37,6 +40,7 @@ final readonly class DecideConsent
         private HeldConsents $held,
         private ConsentRepository $consents,
         private Clock $clock,
+        private DomainEvents $events,
     ) {
     }
 
@@ -56,6 +60,13 @@ final readonly class DecideConsent
         $pending = $held->pending;
 
         if (! $allow) {
+            $this->events->dispatch(new ConsentRefused(
+                $pending->userId,
+                $pending->clientId,
+                $pending->resourceServerId,
+                $pending->scope,
+            ));
+
             return new RequestRefused(
                 $pending->redirectUri,
                 OAuth2Error::accessDenied('The user did not allow the application to proceed.'),
@@ -79,6 +90,12 @@ final readonly class DecideConsent
             $pending->resourceServerId,
             $pending->scope,
             $now,
+        ));
+        $this->events->dispatch(new ConsentGivenEvent(
+            $pending->userId,
+            $pending->clientId,
+            $pending->resourceServerId,
+            $pending->scope,
         ));
 
         return new ConsentGiven($resumeAt->value);

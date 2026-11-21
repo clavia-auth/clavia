@@ -14,6 +14,7 @@ namespace Clavia\Bootstrap\Container;
 use Clavia\Application\Management\Clients\BackChannelLogoutRegistration;
 use Clavia\Application\Management\Clients\ClientConnections;
 use Clavia\Application\Management\Clients\RegisterClient;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Shared\Clock;
@@ -36,7 +37,9 @@ final class RegisterClientFactory
         $connections = $container->get(ClientConnections::class);
         /** @var BackChannelLogoutRegistration $backChannel */
         $backChannel = $container->get(BackChannelLogoutRegistration::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new RegisterClient($clients, $hasher, $secrets, $clock, $connections, $backChannel);
+        return new RegisterClient($clients, $hasher, $secrets, $clock, $connections, $backChannel, $events);
     }
 }

@@ -12,8 +12,11 @@ declare(strict_types=1);
 namespace Clavia\Application\Oidc\Logout;
 
 use Clavia\Application\Authentication\Sessions;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\SignatureVerifier;
 use Clavia\Application\Port\TokenSigner;
+use Clavia\Domain\Authentication\Event\SessionEndReason;
+use Clavia\Domain\Authentication\Event\SessionsEnded;
 use Clavia\Domain\Authentication\LocalPath;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientId;
@@ -42,11 +45,11 @@ final readonly class EndSession
 {
     public function __construct(
         private Sessions $sessions,
-        private BackChannelLogout $backChannel,
         private ClientRepository $clients,
         private TokenSigner $keys,
         private SignatureVerifier $verifier,
         private string $issuer,
+        private DomainEvents $events,
     ) {
     }
 
@@ -66,7 +69,14 @@ final readonly class EndSession
         }
 
         if ($request->confirmed || $provenFor === $session->userId->value) {
-            $this->backChannel->sessionsEnded($this->sessions->end($request->sessionId));
+            $ended = $this->sessions->end($request->sessionId);
+            if ($ended !== null) {
+                $this->events->dispatch(new SessionsEnded(
+                    SessionEndReason::RpInitiatedLogout,
+                    [$ended],
+                    $client instanceof Client ? $client->id : null,
+                ));
+            }
 
             return new SignedOut($this->location($destination, $request->state), true);
         }

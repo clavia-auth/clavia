@@ -49,6 +49,7 @@ enum ManagementPermission: string
     case CreateConnections = 'create:connections';
     case UpdateConnections = 'update:connections';
     case DeleteConnections = 'delete:connections';
+    case ReadAuditEvents = 'read:audit_events';
 
     /** A sentence for the permission, shown wherever one is assigned. */
     public function description(): string
@@ -65,6 +66,7 @@ enum ManagementPermission: string
             'clients' => 'client applications',
             'roles' => 'roles and who holds them',
             'connections' => 'the ways users sign in',
+            'audit_events' => 'the audit trail',
             default => 'APIs',
         };
     }

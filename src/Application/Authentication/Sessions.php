@@ -11,8 +11,10 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Authentication;
 
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\SessionStore;
 use Clavia\Domain\Authentication\AuthenticationMethod;
+use Clavia\Domain\Authentication\Event\SignedIn;
 use Clavia\Domain\Authentication\Session;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Connection\ConnectionName;
@@ -41,6 +43,7 @@ final readonly class Sessions
         private Clock $clock,
         private int $idleLifetime,
         private int $absoluteLifetime,
+        private DomainEvents $events,
     ) {
     }
 
@@ -78,6 +81,9 @@ final readonly class Sessions
         $sessionId = $this->secrets->token();
 
         $this->store->save($sessionId, $session, $session->idleWindowAt($now, $this->idleLifetime));
+
+        // Every way in ends here — password, second factor, email, provider.
+        $this->events->dispatch(new SignedIn($session));
 
         return $sessionId;
     }

@@ -14,9 +14,12 @@ namespace Clavia\Application\Authentication\Mfa;
 use Clavia\Application\Authentication\LoginThrottle;
 use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Authentication\SignIn\SignedIn;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\MfaChallengeStore;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Domain\Authentication\AuthenticationMethod;
+use Clavia\Domain\Authentication\Event\SignInRefusal;
+use Clavia\Domain\Authentication\Event\SignInRefused;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCode;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
@@ -59,6 +62,7 @@ final readonly class CompleteSecondFactor
         private TransactionManager $transactions,
         private Clock $clock,
         private int $maxAttempts,
+        private DomainEvents $events,
     ) {
     }
 
@@ -74,6 +78,14 @@ final readonly class CompleteSecondFactor
 
         if ($user === null || $secondFactor === null) {
             $this->throttle->recordFailure($user?->email ?? '', $attempt->clientAddress);
+            // The password was right — whoever is here holds it — and that is all.
+            $this->events->dispatch(new SignInRefused(
+                AuthenticationMethod::OneTimePassword,
+                SignInRefusal::WrongSecondFactor,
+                $challenge->userId,
+                clientId: $challenge->clientId,
+                connection: $challenge->connection,
+            ));
 
             return $this->challenges->recordFailure($attempt->challenge, $this->maxAttempts)
                 ? new SecondFactorRejected()

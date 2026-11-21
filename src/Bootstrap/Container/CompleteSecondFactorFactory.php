@@ -15,6 +15,7 @@ use Clavia\Application\Authentication\LoginThrottle;
 use Clavia\Application\Authentication\Mfa\CompleteSecondFactor;
 use Clavia\Application\Authentication\Mfa\TotpSeeds;
 use Clavia\Application\Authentication\Sessions;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\MfaChallengeStore;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Configuration\Settings;
@@ -51,6 +52,9 @@ final class CompleteSecondFactorFactory
         $maxAttempts = $settings->mfaMaxAttempts;
         assert($maxAttempts > 0);
 
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
+
         return new CompleteSecondFactor(
             $challenges,
             $users,
@@ -62,6 +66,7 @@ final class CompleteSecondFactorFactory
             $transactions,
             $clock,
             $maxAttempts,
+            $events,
         );
     }
 }

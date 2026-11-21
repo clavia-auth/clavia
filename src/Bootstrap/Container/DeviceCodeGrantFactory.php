@@ -15,6 +15,7 @@ use Clavia\Application\OAuth2\Token\DeviceCodeGrant;
 use Clavia\Application\OAuth2\Token\UserScope;
 use Clavia\Application\Oidc\IdTokenIssuer;
 use Clavia\Application\Port\DeviceAuthorizationStore;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
@@ -55,6 +56,9 @@ final class DeviceCodeGrantFactory
         $refreshAbsoluteLifetime = $settings->refreshTokenAbsoluteLifetime;
         assert($refreshAbsoluteLifetime > 0);
 
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
+
         return new DeviceCodeGrant(
             $requests,
             $tokens,
@@ -68,6 +72,7 @@ final class DeviceCodeGrantFactory
             $lifetime,
             $refreshLifetime,
             $refreshAbsoluteLifetime,
+            $events,
         );
     }
 }

@@ -14,6 +14,7 @@ namespace Clavia\Application\OAuth2\Token;
 use Clavia\Application\OAuth2\RequestParameters;
 use Clavia\Application\Oidc\IdTokenIssuer;
 use Clavia\Application\Port\DeviceAuthorizationStore;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Authentication\AuthenticationContext;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
@@ -25,6 +26,7 @@ use Clavia\Domain\OAuth2\AccessTokenId;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\DeviceAuthorization;
 use Clavia\Domain\OAuth2\DevicePoll;
+use Clavia\Domain\OAuth2\Event\AccessTokenIssued;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use Clavia\Domain\OAuth2\RefreshToken;
 use Clavia\Domain\OAuth2\RefreshTokenId;
@@ -65,6 +67,7 @@ final readonly class DeviceCodeGrant implements Grant
         private int $accessTokenLifetimeSeconds,
         private int $refreshTokenLifetimeSeconds,
         private int $refreshTokenAbsoluteLifetimeSeconds,
+        private DomainEvents $events,
     ) {
     }
 
@@ -174,6 +177,7 @@ final readonly class DeviceCodeGrant implements Grant
             $refreshToken?->familyId,
         );
         $this->tokens->add($token);
+        $this->events->dispatch(new AccessTokenIssued($token, GrantType::DeviceCode, $refreshToken !== null));
 
         $idToken = $scope->contains(OidcScope::OPENID)
             ? $this->idTokens->issueFor(

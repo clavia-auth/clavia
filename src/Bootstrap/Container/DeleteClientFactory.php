@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Management\Clients\DeleteClient;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Client\ClientRepository;
 use Psr\Container\ContainerInterface;
 
@@ -21,7 +22,9 @@ final class DeleteClientFactory
     {
         /** @var ClientRepository $clients */
         $clients = $container->get(ClientRepository::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new DeleteClient($clients);
+        return new DeleteClient($clients, $events);
     }
 }

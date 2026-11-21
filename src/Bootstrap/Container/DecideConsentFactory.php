@@ -13,6 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\OAuth2\Consent\DecideConsent;
 use Clavia\Application\OAuth2\Consent\HeldConsents;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Consent\ConsentRepository;
 use Clavia\Domain\Shared\Clock;
 use Psr\Container\ContainerInterface;
@@ -27,7 +28,9 @@ final class DecideConsentFactory
         $consents = $container->get(ConsentRepository::class);
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new DecideConsent($held, $consents, $clock);
+        return new DecideConsent($held, $consents, $clock, $events);
     }
 }

@@ -24,6 +24,7 @@ use Clavia\Adapter\Primary\Cli\ListRolesCommand;
 use Clavia\Adapter\Primary\Cli\ListSigningKeysCommand;
 use Clavia\Adapter\Primary\Cli\MailOutboxCommand;
 use Clavia\Adapter\Primary\Cli\MigrateDatabaseCommand;
+use Clavia\Adapter\Primary\Cli\PurgeAuditEventsCommand;
 use Clavia\Adapter\Primary\Cli\RegisterManagementApiCommand;
 use Clavia\Adapter\Primary\Cli\RotateSigningKeyCommand;
 use Clavia\Adapter\Primary\Cli\SeedDevelopmentDataCommand;
@@ -43,6 +44,7 @@ use Clavia\Adapter\Primary\Http\Auth\PasswordlessCodeHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessLinkHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessStartHandler;
 use Clavia\Adapter\Primary\Http\Auth\ThemeHandler;
+use Clavia\Adapter\Primary\Http\Management\AuditEventsHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientConnectionsHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientsHandler;
@@ -75,6 +77,7 @@ use Clavia\Adapter\Primary\Http\Oidc\DiscoveryHandler;
 use Clavia\Adapter\Primary\Http\Oidc\EndSessionHandler;
 use Clavia\Adapter\Primary\Http\Oidc\JwksHandler;
 use Clavia\Adapter\Primary\Http\Oidc\UserInfoHandler;
+use Clavia\Adapter\Primary\Http\Shared\AuditContextMiddleware;
 use Clavia\Adapter\Primary\Http\Shared\BearerChallenger;
 use Clavia\Adapter\Primary\Http\Shared\ErrorResponder;
 use Clavia\Adapter\Primary\Http\Shared\HealthHandler;
@@ -93,6 +96,14 @@ use Clavia\Adapter\Secondary\Signing\Remote\PublicKeyCache;
 use Clavia\Adapter\Secondary\System\AfterResponseTasks;
 use Clavia\Adapter\Secondary\System\SystemClock;
 use Clavia\Adapter\Secondary\System\SystemRandomSource;
+use Clavia\Application\Audit\Audit;
+use Clavia\Application\Audit\AuditContext;
+use Clavia\Application\Audit\PurgeAuditEvents;
+use Clavia\Application\Audit\ReadAuditEvents;
+use Clavia\Application\Audit\Trail\AuthenticationTrail;
+use Clavia\Application\Audit\Trail\AuthorizationTrail;
+use Clavia\Application\Audit\Trail\ConfigurationTrail;
+use Clavia\Application\Audit\Trail\DirectoryTrail;
 use Clavia\Application\Authentication\DevelopmentAutoLogin;
 use Clavia\Application\Authentication\External\BeginExternalSignIn;
 use Clavia\Application\Authentication\External\CompleteExternalSignIn;
@@ -127,6 +138,7 @@ use Clavia\Application\Development\BuildAuthorizationUrl;
 use Clavia\Application\Development\SeedDashboardClient;
 use Clavia\Application\Development\SeedDevelopmentData;
 use Clavia\Application\Development\SeedManagementAccess;
+use Clavia\Application\Event\EventSubscriber;
 use Clavia\Application\Management\Caller\AuthenticateManagementCaller;
 use Clavia\Application\Management\Clients\BackChannelLogoutRegistration;
 use Clavia\Application\Management\Clients\ClientConnections;
@@ -201,6 +213,7 @@ use Clavia\Application\Port\BackChannelLogoutDelivery;
 use Clavia\Application\Port\ConsentStateStore;
 use Clavia\Application\Port\DeferredTasks;
 use Clavia\Application\Port\DeviceAuthorizationStore;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\ExternalSignInStore;
 use Clavia\Application\Port\IdentityProviders;
 use Clavia\Application\Port\LoginStateStore;
@@ -221,6 +234,7 @@ use Clavia\Application\Port\TokenSigner;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Application\Secrets\GenerateEncryptionKey;
 use Clavia\Configuration\Settings;
+use Clavia\Domain\Audit\AuditLog;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
 use Clavia\Domain\Client\ClientRepository;
@@ -259,12 +273,12 @@ use Symfony\Component\Console\Application as ConsoleApplication;
  */
 final class ConfigProvider
 {
+    private const string TEMPLATES = __DIR__ . '/../../templates';
+
     /**
      * Console commands, by the name they are run with. Loaded lazily: `clavia config`
      * does not construct the collaborators of every other command.
      */
-    private const string TEMPLATES = __DIR__ . '/../../templates';
-
     public const array CONSOLE_COMMANDS = [
         'config' => ShowConfigCommand::class,
         'db:migrate' => MigrateDatabaseCommand::class,
@@ -283,6 +297,21 @@ final class ConfigProvider
         'roles:assign' => AssignRoleCommand::class,
         'roles:list' => ListRolesCommand::class,
         'mail:outbox' => MailOutboxCommand::class,
+        'audit:purge' => PurgeAuditEventsCommand::class,
+    ];
+
+    /**
+     * Who acts on domain events, in the order they are told: the audit trail first, so an
+     * event is on record before anything else happens because of it.
+     *
+     * @var list<class-string<EventSubscriber>>
+     */
+    public const array EVENT_SUBSCRIBERS = [
+        AuthenticationTrail::class,
+        AuthorizationTrail::class,
+        ConfigurationTrail::class,
+        DirectoryTrail::class,
+        BackChannelLogout::class,
     ];
 
     /**
@@ -300,6 +329,9 @@ final class ConfigProvider
                     StreamFactoryInterface::class => StreamFactory::class,
                     RequestFactoryInterface::class => RequestFactory::class,
                     SignatureVerifier::class => JoseSignatureVerifier::class,
+
+                    // One per request: where it came from and who is acting, for the audit trail.
+                    AuditContext::class => AuditContext::class,
 
                     // Ports whose adapter needs nothing to be built
                     Clock::class => SystemClock::class,
@@ -475,6 +507,18 @@ final class ConfigProvider
                     AttemptCounter::class => Container\AttemptCounterFactory::class,
                     NonceRegistry::class => Container\NonceRegistryFactory::class,
                     TokenSigner::class => Container\TokenSignerFactory::class,
+                    AuditLog::class => Container\AuditLogFactory::class,
+                    Audit::class => Container\AuditFactory::class,
+                    AuthenticationTrail::class => Container\AuthenticationTrailFactory::class,
+                    AuthorizationTrail::class => Container\AuthorizationTrailFactory::class,
+                    ConfigurationTrail::class => Container\ConfigurationTrailFactory::class,
+                    DirectoryTrail::class => Container\DirectoryTrailFactory::class,
+                    DomainEvents::class => Container\DomainEventsFactory::class,
+                    ReadAuditEvents::class => Container\ReadAuditEventsFactory::class,
+                    PurgeAuditEvents::class => Container\PurgeAuditEventsFactory::class,
+                    AuditContextMiddleware::class => Container\AuditContextMiddlewareFactory::class,
+                    AuditEventsHandler::class => Container\AuditEventsHandlerFactory::class,
+                    PurgeAuditEventsCommand::class => Container\PurgeAuditEventsCommandFactory::class,
                     PublicKeyCache::class => Container\PublicKeyCacheFactory::class,
                     Container\SigningHttpClientFactory::SERVICE => Container\SigningHttpClientFactory::class,
                     SigningKeyStore::class => Container\SigningKeyStoreFactory::class,

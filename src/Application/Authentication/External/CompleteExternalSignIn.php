@@ -15,10 +15,12 @@ use Clavia\Application\Authentication\SignIn\CompleteFirstFactor;
 use Clavia\Application\Authentication\SignIn\SecondFactorRequired;
 use Clavia\Application\Authentication\SignIn\SignedIn;
 use Clavia\Application\Connection\ConnectionAccess;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\ExternalSignInStore;
 use Clavia\Application\Port\IdentityProviderFailed;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Domain\Authentication\AuthenticationMethod;
+use Clavia\Domain\Authentication\Event\SignInRefused;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\User;
@@ -49,6 +51,7 @@ final readonly class CompleteExternalSignIn
         private LoginStateStore $loginStates,
         private CompleteFirstFactor $completeFirstFactor,
         private string $issuer,
+        private DomainEvents $events,
     ) {
     }
 
@@ -68,8 +71,15 @@ final readonly class CompleteExternalSignIn
             return null;
         }
         $connection = $usable->connection;
-        $refuse = static fn (ExternalSignInFailure $reason): ExternalSignInRefused
-            => new ExternalSignInRefused($reason, $connection->displayName);
+        $refuse = function (ExternalSignInFailure $reason) use ($connection): ExternalSignInRefused {
+            $this->events->dispatch(new SignInRefused(
+                AuthenticationMethod::External,
+                $reason->refusal(),
+                connection: $connection->name,
+            ));
+
+            return new ExternalSignInRefused($reason, $connection->displayName);
+        };
 
         if ($callback->errorReported || $callback->code === null || $callback->state === null) {
             return $refuse(ExternalSignInFailure::Cancelled);

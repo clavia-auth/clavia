@@ -11,10 +11,11 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Oidc\Keys;
 
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\SigningKeyStore;
 use Clavia\Application\Port\TransactionManager;
+use Clavia\Domain\Oidc\Event\SigningKeyRotated;
 use Clavia\Domain\Oidc\SigningAlgorithm;
-use Clavia\Domain\Oidc\SigningKey;
 use Clavia\Domain\Shared\Clock;
 
 /**
@@ -40,6 +41,7 @@ final readonly class RotateSigningKey
         private Clock $clock,
         private SigningAlgorithm $algorithm,
         private int $graceSeconds,
+        private DomainEvents $events,
     ) {
     }
 
@@ -70,7 +72,10 @@ final readonly class RotateSigningKey
                 $this->keys->save($outgoing);
             }
 
-            return new Rotation($this->keys->create($this->algorithm, $now), $outgoing);
+            $incoming = $this->keys->create($this->algorithm, $now);
+            $this->events->dispatch(new SigningKeyRotated($incoming, $outgoing));
+
+            return new Rotation($incoming, $outgoing);
         });
     }
 }

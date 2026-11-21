@@ -16,9 +16,12 @@ use Clavia\Application\Oidc\Keys\ListSigningKeys;
 use Clavia\Application\Oidc\Keys\PublishSigningKeys;
 use Clavia\Application\Oidc\Keys\RotateSigningKey;
 use Clavia\Application\Oidc\Keys\SigningKeyAlreadyActive;
+use Clavia\Domain\Oidc\Event\SigningKeyCreated;
+use Clavia\Domain\Oidc\Event\SigningKeyRotated;
 use Clavia\Domain\Oidc\PublicJwk;
 use Clavia\Domain\Oidc\SigningAlgorithm;
 use ClaviaTest\Support\Fake\FrozenClock;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemorySigningKeys;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use PHPUnit\Framework\TestCase;
@@ -29,12 +32,14 @@ final class SigningKeyLifecycleTest extends TestCase
 
     private FrozenClock $clock;
     private InMemorySigningKeys $keys;
+    private InMemoryDomainEvents $events;
 
     #[\Override]
     protected function setUp(): void
     {
         $this->clock = new FrozenClock('2026-01-15T10:00:00Z');
         $this->keys = new InMemorySigningKeys($this->clock);
+        $this->events = new InMemoryDomainEvents();
     }
 
     public function testTheFirstKeyIsGeneratedActive(): void
@@ -76,6 +81,18 @@ final class SigningKeyLifecycleTest extends TestCase
         );
     }
 
+    public function testGeneratingAndRotatingSayWhichKeysTookOver(): void
+    {
+        $old = $this->generate()();
+
+        $rotation = $this->rotate()();
+
+        self::assertSame($old->kid(), $this->events->ofType(SigningKeyCreated::class)[0]->key->kid());
+        $rotated = $this->events->ofType(SigningKeyRotated::class)[0];
+        self::assertSame($rotation->active->kid(), $rotated->active->kid());
+        self::assertSame($old->kid(), $rotated->retired?->kid());
+    }
+
     public function testRotatingWithNoActiveKeySimplyCreatesOne(): void
     {
         $rotation = $this->rotate()();
@@ -110,6 +127,7 @@ final class SigningKeyLifecycleTest extends TestCase
             new InMemoryTransactionManager(),
             $this->clock,
             SigningAlgorithm::RS256,
+            $this->events,
         );
     }
 
@@ -121,6 +139,7 @@ final class SigningKeyLifecycleTest extends TestCase
             $this->clock,
             SigningAlgorithm::RS256,
             self::GRACE,
+            $this->events,
         );
     }
 }

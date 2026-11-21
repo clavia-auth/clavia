@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Clients;
 
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Application\Port\SecretNotHashable;
 use Clavia\Domain\Client\Client;
@@ -18,6 +19,7 @@ use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\ClientType;
+use Clavia\Domain\Client\Event\ClientRegistered;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\Ownership;
 use Clavia\Domain\Shared\Clock;
@@ -47,6 +49,7 @@ final readonly class RegisterMachineClient
         private PasswordHasher $hasher,
         private SecretGenerator $secrets,
         private Clock $clock,
+        private DomainEvents $events,
     ) {
     }
 
@@ -87,6 +90,7 @@ final readonly class RegisterMachineClient
             $this->clock->now(),
         );
         $this->clients->save($client);
+        $this->events->dispatch(new ClientRegistered($client));
 
         return new RegisteredMachineClient($client, $secret, $generated);
     }

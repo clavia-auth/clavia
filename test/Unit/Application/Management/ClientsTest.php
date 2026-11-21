@@ -37,6 +37,7 @@ use ClaviaTest\Support\Fake\FakePasswordHasher;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
 use ClaviaTest\Support\Fake\InMemoryConnectionRepository;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -137,7 +138,7 @@ final class ClientsTest extends TestCase
             grantTypes: ['authorization_code'],
             responseTypes: ['code'],
         ))->client;
-        $update = new UpdateClient($this->clients, self::backChannel());
+        $update = new UpdateClient($this->clients, self::backChannel(), new InMemoryDomainEvents());
 
         self::assertSame('Renamed', $update($client->id, new ClientChanges(name: 'Renamed'))->name);
 
@@ -149,7 +150,8 @@ final class ClientsTest extends TestCase
     {
         $registered = $this->register(new NewClient(type: 'confidential', grantTypes: ['client_credentials']));
 
-        $rotated = new RotateClientSecret($this->clients, $this->hasher, $this->secrets)($registered->client->id);
+        $rotate = new RotateClientSecret($this->clients, $this->hasher, $this->secrets, new InMemoryDomainEvents());
+        $rotated = $rotate($registered->client->id);
 
         self::assertNotNull($rotated->secret);
         self::assertNotSame($registered->secret, $rotated->secret);
@@ -164,13 +166,13 @@ final class ClientsTest extends TestCase
 
         $this->expectException(InvalidValue::class);
 
-        new RotateClientSecret($this->clients, $this->hasher, $this->secrets)($client->id);
+        new RotateClientSecret($this->clients, $this->hasher, $this->secrets, new InMemoryDomainEvents())($client->id);
     }
 
     public function testDeletingRemovesTheClientButNotTheCallersOwn(): void
     {
         $client = $this->register(new NewClient(type: 'confidential', grantTypes: ['client_credentials']))->client;
-        $delete = new DeleteClient($this->clients);
+        $delete = new DeleteClient($this->clients, new InMemoryDomainEvents());
 
         try {
             $delete($client->id, new ManagementCaller($client->id, null, ScopeSet::empty()));
@@ -246,7 +248,7 @@ final class ClientsTest extends TestCase
     public function testTheConnectionsOfAClientAreReplacedWhole(): void
     {
         $client = $this->register(new NewClient('SPA', redirectUris: ['https://app.example/cb']))->client;
-        $replace = new ClientConnections($this->clients, $this->connections);
+        $replace = new ClientConnections($this->clients, $this->connections, new InMemoryDomainEvents());
 
         $updated = $replace($client->id, ['github']);
 
@@ -259,7 +261,8 @@ final class ClientsTest extends TestCase
     {
         $this->expectException(NotFound::class);
 
-        new ClientConnections($this->clients, $this->connections)(ClientId::fromString('nobody'), []);
+        $replace = new ClientConnections($this->clients, $this->connections, new InMemoryDomainEvents());
+        $replace(ClientId::fromString('nobody'), []);
     }
 
     /**
@@ -279,8 +282,9 @@ final class ClientsTest extends TestCase
             $this->hasher,
             $this->secrets,
             new FrozenClock(),
-            new ClientConnections($this->clients, $this->connections),
+            new ClientConnections($this->clients, $this->connections, new InMemoryDomainEvents()),
             self::backChannel(),
+            new InMemoryDomainEvents(),
         )($new);
     }
 
@@ -294,7 +298,7 @@ final class ClientsTest extends TestCase
         ))->client;
         self::assertSame('https://spa.test/logout', $client->backChannelLogout?->uri->value);
         self::assertFalse($client->backChannelLogout?->sessionRequired);
-        $update = new UpdateClient($this->clients, self::backChannel());
+        $update = new UpdateClient($this->clients, self::backChannel(), new InMemoryDomainEvents());
 
         $required = $update($client->id, new ClientChanges(backChannelLogoutSessionRequired: true));
         self::assertSame('https://spa.test/logout', $required->backChannelLogout?->uri->value);

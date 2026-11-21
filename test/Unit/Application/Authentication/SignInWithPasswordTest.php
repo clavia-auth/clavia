@@ -40,6 +40,7 @@ use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryAttemptCounter;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
 use ClaviaTest\Support\Fake\InMemoryConnectionRepository;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryLoginStateStore;
 use ClaviaTest\Support\Fake\InMemoryMfaChallengeStore;
 use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
@@ -85,6 +86,7 @@ final class SignInWithPasswordTest extends TestCase
             $this->clock,
             28800,
             604800,
+            new InMemoryDomainEvents(),
         );
         $this->factors = new InMemoryMfaFactorRepository(new InMemoryTransactionManager());
         $this->challenges = new InMemoryMfaChallengeStore($this->clock);
@@ -105,6 +107,7 @@ final class SignInWithPasswordTest extends TestCase
                 new SecretGenerator(new SeededRandomSource(3)),
                 300,
             ),
+            new InMemoryDomainEvents(),
         );
 
         $this->user = User::register(

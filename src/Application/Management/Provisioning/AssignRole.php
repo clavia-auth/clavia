@@ -12,8 +12,10 @@ declare(strict_types=1);
 namespace Clavia\Application\Management\Provisioning;
 
 use Clavia\Application\Management\NotFound;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserRepository;
+use Clavia\Domain\Rbac\Event\RoleGiven;
 use Clavia\Domain\Rbac\Role;
 use Clavia\Domain\Rbac\RoleRepository;
 use Clavia\Domain\Shared\Clock;
@@ -30,6 +32,7 @@ final readonly class AssignRole
         private RoleRepository $roles,
         private UserRepository $users,
         private Clock $clock,
+        private DomainEvents $events,
     ) {
     }
 
@@ -45,7 +48,11 @@ final readonly class AssignRole
         $role = $this->roles->findByName($roleName) ?? throw NotFound::of('role');
         $user = $this->users->findByEmail(ConnectionName::defaultPool(), $email) ?? throw NotFound::of('user');
 
-        $this->roles->assign($role->id, $user->id, $this->clock->now());
+        $held = array_any($this->roles->rolesOf($user->id), static fn (Role $one): bool => $one->id->equals($role->id));
+        if (! $held) {
+            $this->roles->assign($role->id, $user->id, $this->clock->now());
+            $this->events->dispatch(new RoleGiven($role->id, $user->id));
+        }
 
         return $this->roles->rolesOf($user->id);
     }

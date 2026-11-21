@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Management\Roles\RoleAssignments;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\Rbac\RoleRepository;
@@ -30,7 +31,9 @@ final class RoleAssignmentsFactory
         $transactions = $container->get(TransactionManager::class);
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new RoleAssignments($roles, $users, $transactions, $clock);
+        return new RoleAssignments($roles, $users, $transactions, $clock, $events);
     }
 }

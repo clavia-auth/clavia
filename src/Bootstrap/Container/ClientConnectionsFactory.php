@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Management\Clients\ClientConnections;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Psr\Container\ContainerInterface;
@@ -24,7 +25,9 @@ final class ClientConnectionsFactory
         $clients = $container->get(ClientRepository::class);
         /** @var ConnectionRepository $connections */
         $connections = $container->get(ConnectionRepository::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new ClientConnections($clients, $connections);
+        return new ClientConnections($clients, $connections, $events);
     }
 }

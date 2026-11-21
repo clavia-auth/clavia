@@ -35,6 +35,7 @@ use ClaviaTest\Support\Fake\FakeSecretCipher;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryAttemptCounter;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryMfaChallengeStore;
 use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
 use ClaviaTest\Support\Fake\InMemoryRecoveryCodeRepository;
@@ -83,6 +84,7 @@ final class CompleteSecondFactorTest extends TestCase
             $this->clock,
             28800,
             604800,
+            new InMemoryDomainEvents(),
         );
         $seeds = new TotpSeeds(new FakeSecretCipher(), 'Clavia');
         $this->complete = new CompleteSecondFactor(
@@ -96,6 +98,7 @@ final class CompleteSecondFactorTest extends TestCase
             $transactions,
             $this->clock,
             3,
+            new InMemoryDomainEvents(),
         );
 
         $this->user = User::register(

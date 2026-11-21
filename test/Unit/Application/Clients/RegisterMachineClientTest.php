@@ -22,6 +22,7 @@ use Clavia\Domain\Shared\SecretGenerator;
 use ClaviaTest\Support\Fake\FakePasswordHasher;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Command\Command;
@@ -46,6 +47,7 @@ final class RegisterMachineClientTest extends TestCase
             $this->hasher,
             new SecretGenerator(new SeededRandomSource(1)),
             new FrozenClock(),
+            new InMemoryDomainEvents(),
         );
     }
 

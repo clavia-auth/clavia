@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Oidc\Keys\RotateSigningKey;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\SigningKeyStore;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Configuration\Settings;
@@ -39,6 +40,16 @@ final class RotateSigningKeyFactory
         $longest = max($settings->idTokenLifetime, $settings->accessTokenLifetime);
         assert($longest > 0);
 
-        return new RotateSigningKey($keys, $transactions, $clock, $algorithm, RotateSigningKey::grace($longest));
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
+
+        return new RotateSigningKey(
+            $keys,
+            $transactions,
+            $clock,
+            $algorithm,
+            RotateSigningKey::grace($longest),
+            $events,
+        );
     }
 }

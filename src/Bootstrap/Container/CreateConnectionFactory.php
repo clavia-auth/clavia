@@ -13,6 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Management\Connections\CreateConnection;
 use Clavia\Application\Management\Connections\OidcConfiguration;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Shared\Clock;
 use Psr\Container\ContainerInterface;
@@ -27,7 +28,9 @@ final class CreateConnectionFactory
         $oidc = $container->get(OidcConfiguration::class);
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new CreateConnection($connections, $oidc, $clock);
+        return new CreateConnection($connections, $oidc, $clock, $events);
     }
 }

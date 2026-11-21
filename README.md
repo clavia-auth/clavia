@@ -6,7 +6,7 @@ Auth0: OAuth2 flows, interactive login with MFA, and a Management API.
 This is the PHP 8.5 implementation. It is being ported feature by feature from the Python
 reference implementation; `CLAUDE.md` holds the migration plan and the current state.
 
-**Status: Step 20 — parity gate.** A person signs in with a password at `/auth/login`, with
+**Status: Step 20 done; Phase E under way (audit logs).** A person signs in with a password at `/auth/login`, with
 a code or a link sent by email, or with Google or GitHub once their credentials are configured (`CLAVIA_GOOGLE_CLIENT_ID` / `_SECRET`,
 `CLAVIA_GITHUB_CLIENT_ID` / `_SECRET`; register
 `https://auth.{domain}/auth/social/{provider}/callback` at the provider) — followed, once they
@@ -104,6 +104,17 @@ passing, its Basic OP plan — results and how to run them in
 registered with `"require_pkce": false`: a confidential client so registered may omit PKCE from
 an OpenID Connect request that carries a `nonce` (OAuth 2.1 §7.5.1). Every other client, and
 every public one, always uses PKCE.
+
+Everything that changes who can sign in or what they hold is written to an append-only audit
+trail: sign-ins and refused attempts (with the reason, never the password), sign-outs, second
+factors turned on or off, consents and device approvals, tokens issued and replays caught,
+and every change made through the Management API or at the shell — who acted (a person
+through an application, a machine client, the system), on what, from which address. It is
+read at `GET /api/v1/audit-events` (scope `read:audit_events`), filtered by type, actor,
+application, target, outcome and time. Rows cannot be updated, by the application or by
+anyone with SQL; the only deletion is `clavia audit:purge`, which removes what is older than
+`CLAVIA_AUDIT_RETENTION_DAYS` (90 by default) — run it daily from a scheduler
+(`0 3 * * * bin/clavia audit:purge`, or a scheduled task in your platform).
 
 A client registered for the `refresh_token` grant (beside `authorization_code`) gets a
 refresh token with the code flow's tokens. Every refresh returns a new pair and spends the

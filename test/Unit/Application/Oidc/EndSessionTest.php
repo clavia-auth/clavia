@@ -34,6 +34,7 @@ use Clavia\Domain\Shared\Url;
 use ClaviaTest\Support\BackChannelLogouts;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemorySessionStore;
 use ClaviaTest\Support\Fake\InMemorySigningKeys;
 use ClaviaTest\Support\Fake\SeededRandomSource;
@@ -61,6 +62,7 @@ final class EndSessionTest extends TestCase
             $this->clock,
             28800,
             604800,
+            new InMemoryDomainEvents(),
         );
         $this->keys = new InMemorySigningKeys($this->clock);
         $this->keys->create(SigningAlgorithm::RS256, $this->clock->now());
@@ -70,11 +72,11 @@ final class EndSessionTest extends TestCase
         [$backChannel] = BackChannelLogouts::for($this->clients, $this->clock);
         $this->endSession = new EndSession(
             $this->sessions,
-            $backChannel,
             $this->clients,
             $this->keys,
             new JoseSignatureVerifier(),
             self::ISSUER,
+            new InMemoryDomainEvents($backChannel),
         );
         $this->userId = UserId::generate(new SeededRandomSource(2));
     }

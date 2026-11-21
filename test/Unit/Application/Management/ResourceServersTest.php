@@ -41,6 +41,7 @@ use Clavia\Domain\Shared\Url;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryClientGrantRepository;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use ClaviaTest\Support\Fake\SeededRandomSource;
@@ -129,7 +130,7 @@ final class ResourceServersTest extends TestCase
     public function testAnUpdateRenamesOrReplacesThePermissions(): void
     {
         $api = $this->register(new NewResourceServer('https://x.test/', 'X', [new PermissionDefinition('a')]));
-        $update = new UpdateResourceServer($this->apis);
+        $update = new UpdateResourceServer($this->apis, new InMemoryDomainEvents());
 
         $renamed = $update($api->id, 'Y', null);
         self::assertSame('Y', $renamed->name);
@@ -148,7 +149,7 @@ final class ResourceServersTest extends TestCase
         $client = $this->machineClient();
         $this->grant()($client->id, $api->identifier);
 
-        new DeleteResourceServer($this->apis)($api->id);
+        new DeleteResourceServer($this->apis, new InMemoryDomainEvents())($api->id);
 
         self::assertNull($this->apis->find($api->id));
         self::assertNull($this->grants->find($client->id, $api->id));
@@ -205,13 +206,14 @@ final class ResourceServersTest extends TestCase
         $api = $this->registerManagementApi()();
 
         try {
-            new DeleteResourceServer($this->apis)($api->id);
+            new DeleteResourceServer($this->apis, new InMemoryDomainEvents())($api->id);
             self::fail('The Management API was deleted.');
         } catch (SystemApiProtected) {
         }
 
         $this->expectException(SystemApiProtected::class);
-        new UpdateResourceServer($this->apis)($api->id, null, [new PermissionDefinition('read:users')]);
+        $update = new UpdateResourceServer($this->apis, new InMemoryDomainEvents());
+        $update($api->id, null, [new PermissionDefinition('read:users')]);
     }
 
     // ── Grants ─────────────────────────────────────────────────────────────────
@@ -286,7 +288,7 @@ final class ResourceServersTest extends TestCase
         $api = $this->register(new NewResourceServer('https://x.test/', 'X', allowSkippingConsent: false));
         self::assertFalse($api->allowSkippingConsent);
 
-        $update = new UpdateResourceServer($this->apis);
+        $update = new UpdateResourceServer($this->apis, new InMemoryDomainEvents());
 
         self::assertTrue($update($api->id, null, null, allowSkippingConsent: true)->allowSkippingConsent);
         self::assertTrue($update($api->id, 'Y', null)->allowSkippingConsent, 'Left alone when not named.');
@@ -308,7 +310,7 @@ final class ResourceServersTest extends TestCase
 
     private function register(NewResourceServer $new): ResourceServer
     {
-        return new RegisterResourceServer($this->apis, $this->secrets, $this->clock)($new);
+        return new RegisterResourceServer($this->apis, $this->secrets, $this->clock, new InMemoryDomainEvents())($new);
     }
 
     private function registerManagementApi(): RegisterManagementApi
@@ -319,12 +321,19 @@ final class ResourceServersTest extends TestCase
             $this->secrets,
             $this->clock,
             Audience::fromString(self::MANAGEMENT_API),
+            new InMemoryDomainEvents(),
         );
     }
 
     private function grant(): GrantClientAccess
     {
-        return new GrantClientAccess($this->clients, $this->apis, $this->grants, $this->clock);
+        return new GrantClientAccess(
+            $this->clients,
+            $this->apis,
+            $this->grants,
+            $this->clock,
+            new InMemoryDomainEvents(),
+        );
     }
 
     private function machineClient(): Client

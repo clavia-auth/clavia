@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Management\Users\CreateUser;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Identity\UserRepository;
@@ -33,7 +34,9 @@ final class CreateUserFactory
         $clock = $container->get(Clock::class);
         /** @var ConnectionRepository $connections */
         $connections = $container->get(ConnectionRepository::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new CreateUser($users, $hasher, $random, $clock, $connections);
+        return new CreateUser($users, $hasher, $random, $clock, $connections, $events);
     }
 }

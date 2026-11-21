@@ -12,12 +12,14 @@ declare(strict_types=1);
 namespace Clavia\Application\OAuth2\Token;
 
 use Clavia\Application\OAuth2\RequestParameters;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\OAuth2\AccessToken;
 use Clavia\Domain\OAuth2\AccessTokenId;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
+use Clavia\Domain\OAuth2\Event\AccessTokenIssued;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use Clavia\Domain\Oidc\OidcScope;
 use Clavia\Domain\ResourceServer\ClientGrantRepository;
@@ -70,6 +72,7 @@ final readonly class ClientCredentialsGrant implements Grant
         private RandomSource $random,
         private Clock $clock,
         private int $accessTokenLifetimeSeconds,
+        private DomainEvents $events,
     ) {
     }
 
@@ -121,6 +124,7 @@ final readonly class ClientCredentialsGrant implements Grant
             $this->accessTokenLifetimeSeconds,
         );
         $this->tokens->add($token);
+        $this->events->dispatch(new AccessTokenIssued($token, GrantType::ClientCredentials, false));
 
         return new IssuedToken($value, AccessToken::TOKEN_TYPE, $token->lifetimeFrom($now), $token->scope);
     }

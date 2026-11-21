@@ -28,6 +28,7 @@ use ClaviaTest\Support\Fake\FakePasswordHasher;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryClientGrantRepository;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
 use ClaviaTest\Support\Fake\InMemoryRoleRepository;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
@@ -141,11 +142,12 @@ final class SeedManagementAccessTest extends TestCase
                 $secrets,
                 $clock,
                 Audience::fromString('https://management.clavia.test/api/v1/'),
+                new InMemoryDomainEvents(),
             ),
-            new RegisterMachineClient($this->clients, $this->hasher, $secrets, $clock),
-            new GrantClientAccess($this->clients, $this->apis, $this->grants, $clock),
-            new EnsureRole($this->roles, $this->apis, $transactions, $secrets, $clock),
-            new AssignRole($this->roles, $this->users, $clock),
+            new RegisterMachineClient($this->clients, $this->hasher, $secrets, $clock, new InMemoryDomainEvents()),
+            new GrantClientAccess($this->clients, $this->apis, $this->grants, $clock, new InMemoryDomainEvents()),
+            new EnsureRole($this->roles, $this->apis, $transactions, $secrets, $clock, new InMemoryDomainEvents()),
+            new AssignRole($this->roles, $this->users, $clock, new InMemoryDomainEvents()),
             $transactions,
             $isDevelopment,
         );

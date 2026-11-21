@@ -14,8 +14,10 @@ namespace Clavia\Application\Management\Clients;
 use Clavia\Application\Management\Caller\ManagementCaller;
 use Clavia\Application\Management\Conflict;
 use Clavia\Application\Management\NotFound;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
+use Clavia\Domain\Client\Event\ClientDeleted;
 
 /**
  * `DELETE /api/v1/clients/{client_id}`: the client, and every code, token and grant it
@@ -23,8 +25,10 @@ use Clavia\Domain\Client\ClientRepository;
  */
 final readonly class DeleteClient
 {
-    public function __construct(private ClientRepository $clients)
-    {
+    public function __construct(
+        private ClientRepository $clients,
+        private DomainEvents $events,
+    ) {
     }
 
     /**
@@ -41,5 +45,6 @@ final readonly class DeleteClient
         }
 
         $this->clients->delete($client->id);
+        $this->events->dispatch(new ClientDeleted($client));
     }
 }

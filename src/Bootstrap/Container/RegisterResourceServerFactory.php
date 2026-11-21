@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Management\ResourceServers\RegisterResourceServer;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\SecretGenerator;
@@ -27,7 +28,9 @@ final class RegisterResourceServerFactory
         $secrets = $container->get(SecretGenerator::class);
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new RegisterResourceServer($resourceServers, $secrets, $clock);
+        return new RegisterResourceServer($resourceServers, $secrets, $clock, $events);
     }
 }

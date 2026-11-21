@@ -12,9 +12,11 @@ declare(strict_types=1);
 namespace Clavia\Application\Management\Clients;
 
 use Clavia\Application\Management\NotFound;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
+use Clavia\Domain\Client\Event\ClientConnectionsChanged;
 use Clavia\Domain\Connection\Connection;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Connection\ConnectionRepository;
@@ -34,6 +36,7 @@ final readonly class ClientConnections
     public function __construct(
         private ClientRepository $clients,
         private ConnectionRepository $connections,
+        private DomainEvents $events,
     ) {
     }
 
@@ -49,6 +52,7 @@ final readonly class ClientConnections
 
         $updated = $client->withConnections($this->existing($names));
         $this->clients->save($updated);
+        $this->events->dispatch(new ClientConnectionsChanged($updated->id, $updated->connections));
 
         return $updated;
     }
@@ -69,10 +73,19 @@ final readonly class ClientConnections
             $known[$connection->name->value] = $connection->name;
         }
 
-        return array_map(
-            static fn (string $name): ConnectionName => $known[$name] ?? throw NotFound::of('connection'),
-            array_values(array_unique($names)),
-        );
+        return $names
+            |> array_unique(...)
+            |> array_values(...)
+            |> (
+                /**
+                 * @param list<string> $unique
+                 * @return list<ConnectionName>
+                 */
+                static fn (array $unique): array => array_map(
+                    static fn (string $name): ConnectionName => $known[$name] ?? throw NotFound::of('connection'),
+                    $unique,
+                )
+            );
     }
 
     /**

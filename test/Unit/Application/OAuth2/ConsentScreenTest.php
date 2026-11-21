@@ -39,6 +39,7 @@ use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
 use ClaviaTest\Support\Fake\InMemoryConsentRepository;
 use ClaviaTest\Support\Fake\InMemoryConsentStateStore;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
 use PHPUnit\Framework\TestCase;
@@ -71,7 +72,7 @@ final class ConsentScreenTest extends TestCase
         $this->consents = new InMemoryConsentRepository($users, $clients, $this->resourceServers);
         $held = new HeldConsents($this->states, $users, $clients, $this->resourceServers);
         $this->describe = new DescribeConsent($held, ScopeSet::fromString('openid profile email'));
-        $this->decide = new DecideConsent($held, $this->consents, $this->clock);
+        $this->decide = new DecideConsent($held, $this->consents, $this->clock, new InMemoryDomainEvents());
 
         $user = User::register(
             UserId::fromString('00000000-0000-4000-8000-000000000001'),

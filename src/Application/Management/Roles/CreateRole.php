@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Management\Roles;
 
+use Clavia\Application\Port\DomainEvents;
+use Clavia\Domain\Rbac\Event\RoleCreated;
 use Clavia\Domain\Rbac\Role;
 use Clavia\Domain\Rbac\RoleId;
 use Clavia\Domain\Rbac\RoleRepository;
@@ -29,6 +31,7 @@ final readonly class CreateRole
         private RolePermissions $permissions,
         private SecretGenerator $secrets,
         private Clock $clock,
+        private DomainEvents $events,
     ) {
     }
 
@@ -46,6 +49,7 @@ final readonly class CreateRole
             $this->clock->now(),
         );
         $this->roles->save($role);
+        $this->events->dispatch(new RoleCreated($role));
 
         return $role;
     }

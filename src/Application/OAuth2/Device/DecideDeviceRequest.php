@@ -14,8 +14,11 @@ namespace Clavia\Application\OAuth2\Device;
 use Clavia\Application\Authentication\EndUser;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\Port\DeviceAuthorizationStore;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Consent\ConsentRepository;
 use Clavia\Domain\Consent\UserConsent;
+use Clavia\Domain\OAuth2\Event\DeviceRequestApproved;
+use Clavia\Domain\OAuth2\Event\DeviceRequestRefused;
 use Clavia\Domain\Rbac\RoleRepository;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\Shared\Clock;
@@ -40,6 +43,7 @@ final readonly class DecideDeviceRequest
         private RoleRepository $roles,
         private ConsentRepository $consents,
         private Clock $clock,
+        private DomainEvents $events,
     ) {
     }
 
@@ -69,6 +73,13 @@ final readonly class DecideDeviceRequest
         if (! $allow || $noPermission) {
             $request->deny($endUser->userId, $now);
             $this->store->save($request);
+            $this->events->dispatch(new DeviceRequestRefused(
+                $endUser->userId,
+                $client->id,
+                $request->scope,
+                $request->audience,
+                $noPermission,
+            ));
 
             return new DeviceDecided(false, $noPermission);
         }
@@ -84,6 +95,12 @@ final readonly class DecideDeviceRequest
         // The device holds no session here: nothing to tell it about when the browser signs out.
         $request->approve($endUser->userId, $endUser->authentication()->withoutSession(), $now);
         $this->store->save($request);
+        $this->events->dispatch(new DeviceRequestApproved(
+            $endUser->userId,
+            $client->id,
+            $request->scope,
+            $request->audience,
+        ));
 
         return new DeviceDecided(true);
     }

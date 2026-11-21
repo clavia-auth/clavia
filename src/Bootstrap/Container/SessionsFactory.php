@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Authentication\Sessions;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\SessionStore;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Shared\Clock;
@@ -35,6 +36,9 @@ final class SessionsFactory
         $absolute = $settings->sessionAbsoluteLifetime;
         assert($idle > 0 && $absolute > 0);
 
-        return new Sessions($store, $secrets, $clock, $idle, $absolute);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
+
+        return new Sessions($store, $secrets, $clock, $idle, $absolute, $events);
     }
 }

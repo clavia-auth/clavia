@@ -13,10 +13,13 @@ namespace Clavia\Application\OAuth2\TokenManagement;
 
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
 use Clavia\Application\OAuth2\Token\TokenRequest;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\OAuth2\AccessToken;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
+use Clavia\Domain\OAuth2\Event\AccessTokenRevoked;
+use Clavia\Domain\OAuth2\Event\RefreshTokenRevoked;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use Clavia\Domain\OAuth2\RefreshTokenRepository;
 use Clavia\Domain\Shared\Clock;
@@ -48,6 +51,7 @@ final readonly class RevokeToken
         private RefreshTokenRepository $refreshTokens,
         private TransactionManager $transactions,
         private Clock $clock,
+        private DomainEvents $events,
     ) {
     }
 
@@ -70,15 +74,18 @@ final readonly class RevokeToken
 
         $now = $this->clock->now();
         if ($token instanceof AccessToken) {
-            $this->accessTokens->revoke($token->id, $now);
+            $this->transactions->transactional(function () use ($token, $now): void {
+                $this->accessTokens->revoke($token->id, $now);
+                $this->events->dispatch(new AccessTokenRevoked($token->clientId, $token->userId));
+            });
 
             return;
         }
 
-        $family = $token->familyId;
-        $this->transactions->transactional(function () use ($family, $now): void {
-            $this->refreshTokens->revokeFamily($family, $now);
-            $this->accessTokens->revokeFamily($family, $now);
+        $this->transactions->transactional(function () use ($token, $now): void {
+            $this->refreshTokens->revokeFamily($token->familyId, $now);
+            $this->accessTokens->revokeFamily($token->familyId, $now);
+            $this->events->dispatch(new RefreshTokenRevoked($token->clientId, $token->userId));
         });
     }
 }

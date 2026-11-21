@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Clients\RegisterMachineClient;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Shared\Clock;
@@ -30,7 +31,9 @@ final class RegisterMachineClientFactory
         $secrets = $container->get(SecretGenerator::class);
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new RegisterMachineClient($clients, $hasher, $secrets, $clock);
+        return new RegisterMachineClient($clients, $hasher, $secrets, $clock, $events);
     }
 }

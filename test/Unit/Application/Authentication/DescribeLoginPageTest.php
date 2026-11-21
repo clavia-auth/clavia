@@ -32,6 +32,7 @@ use ClaviaTest\Support\Fake\FakeIdentityProviders;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
 use ClaviaTest\Support\Fake\InMemoryConnectionRepository;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryLoginStateStore;
 use ClaviaTest\Support\Fake\InMemorySessionStore;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
@@ -65,6 +66,7 @@ final class DescribeLoginPageTest extends TestCase
             $clock,
             28800,
             604800,
+            new InMemoryDomainEvents(),
         );
         $this->user = User::register(
             UserId::generate(new SeededRandomSource(2)),

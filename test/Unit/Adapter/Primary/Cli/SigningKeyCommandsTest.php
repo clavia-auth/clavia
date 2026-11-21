@@ -19,6 +19,7 @@ use Clavia\Application\Oidc\Keys\ListSigningKeys;
 use Clavia\Application\Oidc\Keys\RotateSigningKey;
 use Clavia\Domain\Oidc\SigningAlgorithm;
 use ClaviaTest\Support\Fake\FrozenClock;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemorySigningKeys;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use PHPUnit\Framework\TestCase;
@@ -115,6 +116,7 @@ final class SigningKeyCommandsTest extends TestCase
                 new InMemoryTransactionManager(),
                 $this->clock,
                 SigningAlgorithm::RS256,
+                new InMemoryDomainEvents(),
             ),
         ));
     }
@@ -127,6 +129,7 @@ final class SigningKeyCommandsTest extends TestCase
             $this->clock,
             SigningAlgorithm::RS256,
             3600,
+            new InMemoryDomainEvents(),
         )));
     }
 }

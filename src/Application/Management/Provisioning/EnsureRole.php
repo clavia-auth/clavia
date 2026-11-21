@@ -12,7 +12,10 @@ declare(strict_types=1);
 namespace Clavia\Application\Management\Provisioning;
 
 use Clavia\Application\Management\NotFound;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\TransactionManager;
+use Clavia\Domain\Rbac\Event\RoleChanged;
+use Clavia\Domain\Rbac\Event\RoleCreated;
 use Clavia\Domain\Rbac\GrantedPermission;
 use Clavia\Domain\Rbac\Role;
 use Clavia\Domain\Rbac\RoleId;
@@ -42,6 +45,7 @@ final readonly class EnsureRole
         private TransactionManager $transactions,
         private SecretGenerator $secrets,
         private Clock $clock,
+        private DomainEvents $events,
     ) {
     }
 
@@ -78,6 +82,9 @@ final readonly class EnsureRole
                 ? Role::define(RoleId::generate($this->secrets), $name, $description, $granted, $this->clock->now())
                 : $existing->alsoGranting($granted);
             $this->roles->save($role);
+            $this->events->dispatch($existing === null
+                ? new RoleCreated($role)
+                : new RoleChanged($role->id, ['permissions']));
 
             return $role;
         });

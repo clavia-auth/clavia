@@ -13,6 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\OAuth2\Token\RefreshTokenGrant;
 use Clavia\Application\OAuth2\Token\UserScope;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Identity\UserRepository;
@@ -51,6 +52,9 @@ final class RefreshTokenGrantFactory
         $refreshLifetime = $settings->refreshTokenLifetime;
         assert($refreshLifetime > 0);
 
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
+
         return new RefreshTokenGrant(
             $refreshTokens,
             $tokens,
@@ -62,6 +66,7 @@ final class RefreshTokenGrantFactory
             $userScope,
             $lifetime,
             $refreshLifetime,
+            $events,
         );
     }
 }

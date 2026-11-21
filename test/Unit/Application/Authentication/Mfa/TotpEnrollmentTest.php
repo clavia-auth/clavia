@@ -27,6 +27,7 @@ use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use ClaviaTest\Support\Fake\FakeSecretCipher;
 use ClaviaTest\Support\Fake\FrozenClock;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
 use ClaviaTest\Support\Fake\InMemoryRecoveryCodeRepository;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
@@ -156,7 +157,13 @@ final class TotpEnrollmentTest extends TestCase
         self::assertNotNull($this->confirm($this->codeFor($this->begin())));
         $committed = $this->transactions->committed;
 
-        (new DisableMfa($this->factors, $this->recoveryCodes, $this->transactions))($this->user->id);
+        $disable = new DisableMfa(
+            $this->factors,
+            $this->recoveryCodes,
+            $this->transactions,
+            new InMemoryDomainEvents(),
+        );
+        $disable($this->user->id);
 
         self::assertNull($this->factors->find($this->user->id));
         self::assertSame(0, $this->recoveryCodes->unusedCount($this->user->id));
@@ -207,6 +214,7 @@ final class TotpEnrollmentTest extends TestCase
             new SeededRandomSource(9),
             $this->clock,
             4,
+            new InMemoryDomainEvents(),
         ))($this->user->id, $code);
     }
 

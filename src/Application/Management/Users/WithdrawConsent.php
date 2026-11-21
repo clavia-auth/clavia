@@ -12,8 +12,10 @@ declare(strict_types=1);
 namespace Clavia\Application\Management\Users;
 
 use Clavia\Application\Management\NotFound;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Consent\ConsentRepository;
+use Clavia\Domain\Consent\Event\ConsentWithdrawn;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
 
@@ -31,6 +33,7 @@ final readonly class WithdrawConsent
     public function __construct(
         private UserRepository $users,
         private ConsentRepository $consents,
+        private DomainEvents $events,
     ) {
     }
 
@@ -41,5 +44,6 @@ final readonly class WithdrawConsent
     {
         $this->users->find($userId) ?? throw NotFound::of('user');
         $this->consents->withdraw($userId, $clientId);
+        $this->events->dispatch(new ConsentWithdrawn($userId, $clientId));
     }
 }

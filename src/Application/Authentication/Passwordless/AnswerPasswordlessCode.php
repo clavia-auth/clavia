@@ -13,8 +13,13 @@ namespace Clavia\Application\Authentication\Passwordless;
 
 use Clavia\Application\Authentication\SignIn\SecondFactorRequired;
 use Clavia\Application\Authentication\SignIn\SignedIn;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\PasswordlessChallengeStore;
+use Clavia\Domain\Authentication\AuthenticationMethod;
+use Clavia\Domain\Authentication\Event\SignInRefusal;
+use Clavia\Domain\Authentication\Event\SignInRefused;
 use Clavia\Domain\Authentication\OneTimeCode;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Shared\InvalidValue;
 
 /**
@@ -36,6 +41,7 @@ final readonly class AnswerPasswordlessCode
         private DescribePasswordlessChallenge $describe,
         private FinishPasswordlessSignIn $finish,
         private int $maxAttempts,
+        private DomainEvents $events,
     ) {
     }
 
@@ -59,6 +65,14 @@ final readonly class AnswerPasswordlessCode
             $accepted = false;
         }
         if (! $accepted) {
+            $this->events->dispatch(new SignInRefused(
+                AuthenticationMethod::OneTimePassword,
+                SignInRefusal::WrongCode,
+                email: $challenge->email,
+                clientId: $challenge->clientId,
+                connection: ConnectionName::email(),
+            ));
+
             return $this->challenges->recordFailure($handle, $this->maxAttempts)
                 ? new PasswordlessCodeRejected($this->describe->prompt($challenge))
                 : new PasswordlessRefused(PasswordlessFailure::Expired);

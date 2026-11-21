@@ -20,6 +20,7 @@ use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\SecretGenerator;
 use ClaviaTest\Support\Fake\FrozenClock;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemorySessionStore;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
 use ClaviaTest\Support\Fake\SeededRandomSource;
@@ -44,6 +45,7 @@ final class ResolveEndUserTest extends TestCase
             $this->clock,
             28800,
             604800,
+            new InMemoryDomainEvents(),
         );
         $now = $this->clock->now();
         $this->user = User::register(UserId::generate(new SeededRandomSource(2)), 'jane@example.com', null, $now);

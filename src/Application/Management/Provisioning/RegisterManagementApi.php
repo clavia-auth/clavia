@@ -12,7 +12,10 @@ declare(strict_types=1);
 namespace Clavia\Application\Management\Provisioning;
 
 use Clavia\Application\Management\ManagementPermission;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\TransactionManager;
+use Clavia\Domain\ResourceServer\Event\ResourceServerChanged;
+use Clavia\Domain\ResourceServer\Event\ResourceServerRegistered;
 use Clavia\Domain\ResourceServer\Permission;
 use Clavia\Domain\ResourceServer\ResourceServer;
 use Clavia\Domain\ResourceServer\ResourceServerId;
@@ -45,6 +48,7 @@ final readonly class RegisterManagementApi
         private SecretGenerator $secrets,
         private Clock $clock,
         private Audience $identifier,
+        private DomainEvents $events,
     ) {
     }
 
@@ -75,6 +79,9 @@ final readonly class RegisterManagementApi
                 : $existing->asSystem($existing->name === '' ? self::NAME : $existing->name, $permissions);
 
             $this->resourceServers->save($resourceServer);
+            $this->events->dispatch($existing === null
+                ? new ResourceServerRegistered($resourceServer)
+                : new ResourceServerChanged($resourceServer->id, ['permissions']));
 
             return $resourceServer;
         });

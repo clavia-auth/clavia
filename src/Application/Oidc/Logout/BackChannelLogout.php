@@ -11,12 +11,14 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Oidc\Logout;
 
+use Clavia\Application\Event\EventSubscriber;
 use Clavia\Application\Oidc\CompactJws;
 use Clavia\Application\Port\BackChannelLogoutDelivery;
 use Clavia\Application\Port\DeferredTasks;
 use Clavia\Application\Port\NoActiveSigningKey;
 use Clavia\Application\Port\SigningFailed;
 use Clavia\Application\Port\TokenSigner;
+use Clavia\Domain\Authentication\Event\SessionsEnded;
 use Clavia\Domain\Authentication\Session;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
@@ -38,9 +40,10 @@ use Clavia\Domain\Shared\SecretGenerator;
  * others signed in. What notifies is every way a session is *ended*: the two logout
  * endpoints, an operator, an account deactivated or deleted. What does not: a session
  * running out on its own (nothing runs when a key lapses), and the quiet replacement of a
- * session when the same browser signs in again — the person did not leave.
+ * session when the same browser signs in again — the person did not leave. Those are the
+ * use cases that dispatch {@see SessionsEnded}, which this subscribes to.
  */
-final readonly class BackChannelLogout
+final readonly class BackChannelLogout implements EventSubscriber
 {
     /**
      * @param non-empty-string $issuer          The issuer identifier, exactly as discovery states it.
@@ -61,16 +64,20 @@ final readonly class BackChannelLogout
     ) {
     }
 
-    /**
-     * Schedule the logout tokens for these ended sessions — none for a session no
-     * application signed in through.
-     */
-    public function sessionsEnded(?Session ...$sessions): void
+    #[\Override]
+    public function subscriptions(): array
     {
-        foreach ($sessions as $session) {
-            if ($session === null) {
-                continue;
-            }
+        return [SessionsEnded::class => $this->sessionsEnded(...)];
+    }
+
+    /**
+     * Schedule the logout tokens for the ended sessions — none for a session no
+     * application signed in through. The sessions are already gone from the store (it is
+     * not transactional), so they are reported whatever the rest of the request does.
+     */
+    private function sessionsEnded(SessionsEnded $event): void
+    {
+        foreach ($event->sessions as $session) {
             foreach ($session->clients as $client) {
                 $this->deferred->defer(function () use ($session, $client): void {
                     $this->notify($session, $client);

@@ -11,7 +11,9 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Authentication\Mfa;
 
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\TransactionManager;
+use Clavia\Domain\Authentication\Event\SecondFactorRemoved;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
 use Clavia\Domain\Identity\UserId;
@@ -26,14 +28,20 @@ final readonly class DisableMfa
         private MfaFactorRepository $factors,
         private RecoveryCodeRepository $recoveryCodes,
         private TransactionManager $transactions,
+        private DomainEvents $events,
     ) {
     }
 
-    public function __invoke(UserId $userId): void
+    /**
+     * @param bool $byTheirOwner False when an operator resets it for them: the request's actor
+     *                           is then who did it.
+     */
+    public function __invoke(UserId $userId, bool $byTheirOwner = true): void
     {
-        $this->transactions->transactional(function () use ($userId): void {
+        $this->transactions->transactional(function () use ($userId, $byTheirOwner): void {
             $this->factors->removeAll($userId);
             $this->recoveryCodes->removeAll($userId);
+            $this->events->dispatch(new SecondFactorRemoved($userId, $byTheirOwner));
         });
     }
 }

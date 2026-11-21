@@ -15,6 +15,7 @@ use Clavia\Adapter\Primary\Http\Management\ManagementApiMiddleware;
 use Clavia\Adapter\Primary\Http\Management\ManagementContract;
 use Clavia\Adapter\Primary\Http\Management\ManagementResponder;
 use Clavia\Adapter\Primary\Http\Shared\BearerChallenger;
+use Clavia\Application\Audit\AuditContext;
 use Clavia\Application\Management\Caller\AuthenticateManagementCaller;
 use Clavia\Configuration\Settings;
 use Psr\Container\ContainerInterface;
@@ -31,6 +32,8 @@ final class ManagementApiMiddlewareFactory
         $settings = $container->get(Settings::class);
         /** @var ManagementResponder $responder */
         $responder = $container->get(ManagementResponder::class);
+        /** @var AuditContext $audit */
+        $audit = $container->get(AuditContext::class);
 
         return new ManagementApiMiddleware(
             $contract,
@@ -39,6 +42,7 @@ final class ManagementApiMiddlewareFactory
             // audience is refused here.
             new BearerChallenger($settings->managementApiAudience()),
             $responder,
+            $audit,
         );
     }
 }

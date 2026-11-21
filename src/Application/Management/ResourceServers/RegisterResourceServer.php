@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Management\ResourceServers;
 
+use Clavia\Application\Port\DomainEvents;
+use Clavia\Domain\ResourceServer\Event\ResourceServerRegistered;
 use Clavia\Domain\ResourceServer\ResourceServer;
 use Clavia\Domain\ResourceServer\ResourceServerId;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
@@ -32,6 +34,7 @@ final readonly class RegisterResourceServer
         private ResourceServerRepository $resourceServers,
         private SecretGenerator $secrets,
         private Clock $clock,
+        private DomainEvents $events,
     ) {
     }
 
@@ -53,6 +56,7 @@ final readonly class RegisterResourceServer
             allowSkippingConsent: $new->allowSkippingConsent,
         );
         $this->resourceServers->save($resourceServer);
+        $this->events->dispatch(new ResourceServerRegistered($resourceServer));
 
         return $resourceServer;
     }

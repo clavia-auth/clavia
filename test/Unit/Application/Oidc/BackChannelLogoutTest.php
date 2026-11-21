@@ -11,7 +11,10 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Application\Oidc;
 
+use Clavia\Application\Event\EventSubscriber;
 use Clavia\Domain\Authentication\AuthenticationMethod;
+use Clavia\Domain\Authentication\Event\SessionEndReason;
+use Clavia\Domain\Authentication\Event\SessionsEnded;
 use Clavia\Domain\Authentication\Session;
 use Clavia\Domain\Client\BackChannelLogout;
 use Clavia\Domain\Client\ClientId;
@@ -24,6 +27,7 @@ use ClaviaTest\Support\BackChannelLogouts;
 use ClaviaTest\Support\Clients;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use PHPUnit\Framework\TestCase;
 
@@ -49,7 +53,7 @@ final class BackChannelLogoutTest extends TestCase
     {
         [$backChannel, $tasks, $delivery] = BackChannelLogouts::for($this->clients, $this->clock);
 
-        $backChannel->sessionsEnded($this->session('spa', 'quiet', 'deleted'), null, $this->session());
+        self::end($backChannel, $this->session('spa', 'quiet', 'deleted'), $this->session());
 
         self::assertCount(0, $delivery->delivered, 'Deferred until after the response.');
         self::assertSame(3, $tasks->count(), 'One task per application.');
@@ -65,7 +69,7 @@ final class BackChannelLogoutTest extends TestCase
         [$backChannel, $tasks, $delivery] = BackChannelLogouts::for($this->clients, $this->clock);
         $session = $this->session('spa');
 
-        $backChannel->sessionsEnded($session);
+        self::end($backChannel, $session);
         $tasks->run();
 
         $parts = explode('.', $delivery->delivered[0]['token'] ?? '');
@@ -87,6 +91,22 @@ final class BackChannelLogoutTest extends TestCase
         self::assertSame($this->clock->now()->getTimestamp() + 120, $claims['exp'] ?? null);
         self::assertSame([LogoutTokenClaims::EVENT => []], $claims['events'] ?? null);
         self::assertArrayNotHasKey('nonce', $claims);
+    }
+
+    public function testItActsOnSessionsEndedAndNothingElse(): void
+    {
+        [$backChannel] = BackChannelLogouts::for($this->clients, $this->clock);
+
+        self::assertSame([SessionsEnded::class], array_keys($backChannel->subscriptions()));
+    }
+
+    /** End the sessions as a use case does: by saying so. */
+    private static function end(EventSubscriber $backChannel, Session ...$sessions): void
+    {
+        (new InMemoryDomainEvents($backChannel))->dispatch(new SessionsEnded(
+            SessionEndReason::SignedOut,
+            array_values($sessions),
+        ));
     }
 
     private function session(string ...$clients): Session

@@ -39,7 +39,8 @@ the social providers and operator-registered OpenID Connect providers, enabled p
 application — token introspection and revocation, device authorization, passwordless sign-in by email, and
 back-channel logout with session management, and the authentication-request parameters
 (`prompt`, `max_age`, request objects refused), and remote signing backends (AWS KMS, Google
-Cloud KMS, Azure Key Vault, a class of the operator's own); the dashboard is in `frontend/`.**
+Cloud KMS, Azure Key Vault, a class of the operator's own); the dashboard is in `frontend/`.
+Phase E has begun with the audit trail (`GET /api/v1/audit-events`, `clavia audit:purge`).**
 The application answers `GET /healthz`,
 `GET|POST /oauth2/authorize`, `POST /oauth2/token`, `POST /oauth2/introspect`, `POST /oauth2/revoke`,
 `POST /oauth2/device/code`, `GET|POST /auth/device`,
@@ -430,6 +431,41 @@ What exists:
     UserIdentitiesHandler}`; `templates/auth/login.phtml` shows only the methods available.
     The dashboard has a Connections page, a client's connections, a user's pool and
     linked identities.
+- **Audit trail** (Phase E):
+  - `Domain\Audit` — `AuditEvent` (built by `record()`: detail names snake_case and never a
+    credential, at most sixteen, values cut to 512 bytes, lists to sixteen items), `AuditEventId`,
+    `AuditEventType` (the dotted names: `authentication.failed`, `client.secret_rotated`…),
+    `Actor` + `ActorKind` (a person, through an application or not; an application; the system;
+    nobody yet), `AuditTarget` + `TargetType`, `Outcome`, `AuditQuery`, the `AuditLog` port
+    (`append`, `page`, `purgeBefore`).
+  - Domain events (`Domain\Shared\DomainEvent`, a marker): one readonly class per fact, in an
+    `Event` namespace per context — `Authentication\Event\{SignedIn,SignInRefused (+
+    SignInRefusal),SessionsEnded (+ SessionEndReason),SecondFactorEnrolled,SecondFactorRemoved}`,
+    `Consent\Event\*`, `OAuth2\Event\{AccessTokenIssued,AuthorizationCodeReplayed,
+    RefreshTokenReplayed,AccessTokenRevoked,RefreshTokenRevoked,DeviceRequestApproved,
+    DeviceRequestRefused}`, `Client\Event\*`, `ResourceServer\Event\*`, `Identity\Event\*`,
+    `Rbac\Event\*`, `Connection\Event\*`, `Oidc\Event\{SigningKeyCreated,SigningKeyRotated}`.
+  - `Application\Port\DomainEvents` (`dispatch()`, synchronous) and `Application\Event\EventSubscriber`
+    (`subscriptions()`: event class → closure). `Adapter\Secondary\Events\{Psr14DomainEvents,
+    SynchronousEventDispatcher,SubscriberListenerProvider}` — the port on PSR-14, with a dispatcher
+    and listener provider of our own. Subscribers are listed in `ConfigProvider::EVENT_SUBSCRIBERS`.
+  - `Application\Audit` — `Trail\{AuthenticationTrail,AuthorizationTrail,ConfigurationTrail,
+    DirectoryTrail}` (the subscribers that turn events into audit events: types, targets, actors,
+    details), `Audit` (the recorder they write through: `record()`, `refused()`), `AuditContext`
+    (request-scoped: the client address and user agent, and who the caller is),
+    `ReadAuditEvents`, `PurgeAuditEvents`. `Oidc\Logout\BackChannelLogout` subscribes to
+    `SessionsEnded`; `SignOut`, `EndSession` and `SignOutEverywhere` no longer call it.
+  - `Adapter\Secondary\Persistence\PhpDb\PhpDbAuditLog`; migration `0023_audit_events` (a trigger
+    refuses every `UPDATE`). `Adapter\Primary\Http\Shared\AuditContextMiddleware` (piped after
+    `ErrorHandler`: `REMOTE_ADDR`, `User-Agent`); `ManagementApiMiddleware` sets the actor from
+    `ManagementCaller::actor()`. `Management\AuditEventsHandler` (`GET /api/v1/audit-events`,
+    `read:audit_events`), `Cli\PurgeAuditEventsCommand` (`audit:purge`); setting
+    `CLAVIA_AUDIT_RETENTION_DAYS` (90).
+  - Tests: `AuditTrailTest` (acceptance), `AuditTrailsTest` (the mapping, and that every
+    domain event is recorded by exactly one trail), `AuditEventTest`, `AuditTest`,
+    `AuditLogContract` against `InMemoryAuditLog` and PostgreSQL, `DomainEventsContract` against
+    `Fake\InMemoryDomainEvents` and `Psr14DomainEventsTest`; use-case tests pass
+    `new InMemoryDomainEvents()` (or one wired to a subscriber) and look at `ofType()`.
 - **Error pages for browsers** (after Step 3): `Adapter\Primary\Http\Shared\ClientPreference`
   (`Accept` negotiation), `ErrorResponder` + `ErrorPage`, `PageRenderer` + `HtmlPage` (the
   layout, headers and CSP every server-rendered page shares). 404, 405, 500 and the
@@ -859,6 +895,34 @@ Conventions established in Step 12:
   handle that is unknown, spent, expired, someone else's or names something deleted is the
   same "expired" page. Showing the screen leaves it; deciding claims it (`GETDEL`).
 
+Conventions established by the audit trail:
+
+- **A use case says what happened; it does not decide what follows.** It dispatches a domain
+  event — past tense, typed with domain objects, never a secret — through `DomainEvents`, right
+  after the change it describes, and knows nothing of who listens. What follows (the audit
+  trail, back-channel logout, anything later) is a subscriber, registered in
+  `ConfigProvider::EVENT_SUBSCRIBERS`. A new fact is a new event class and a line in a trail;
+  `AuditTrailsTest` fails while an event is recorded by no trail.
+- **Dispatch is synchronous, inside the use case's transaction**: a change rolled back leaves
+  no audit event, and an event never describes a change that did not happen. A subscriber's
+  failure fails the use case. Work for other servers is deferred by its subscriber
+  (`DeferredTasks`), never by the dispatcher. A refusal worth knowing about (a wrong password,
+  a replayed code or refresh token) is dispatched outside any transaction that would roll it
+  back, so it survives the refusal.
+- **Who acted comes from the request, not from the use case.** `AuditContext` is filled by
+  the HTTP edge (origin by `AuditContextMiddleware`, the Management API caller by
+  `ManagementApiMiddleware`); the shell leaves it empty and the system is the actor. A trail
+  names the actor from the event only where the event says better — the person signing in,
+  the client a token is issued to, nobody for a refusal.
+- **The trail holds facts, never secrets.** The trails alone choose what an audit event says;
+  detail names containing `secret`, `password`, `token`, `credential`, `assertion`, `verifier`,
+  `private` or `cookie` are refused (a `LogicException`: it is this codebase's bug); a change
+  lists the *fields* it touched, not their values; typed input (an address at the login page)
+  is cut, never refused.
+- **The trail is append-only.** No adapter updates a row and the database refuses it; the only
+  deletion is `audit:purge`, by age. `seed-dev`'s own writes (the development user, the
+  dashboard client) are not recorded; what it does through the provisioning use cases is.
+
 Conventions established in Step 17:
 
 - **A session ended is a session reported**, by whatever ends it — the logout endpoints, an
@@ -866,7 +930,9 @@ Conventions established in Step 17:
   and registered a back-channel logout URI. A session that runs out, or is replaced when the
   same browser signs in again, is not reported.
 - **Work for other servers runs after the response** (`DeferredTasks`), one task per
-  recipient, best effort, logged on failure, never retried.
+  recipient, best effort, logged on failure, never retried. Since the audit trail,
+  `BackChannelLogout` is a subscriber to `SessionsEnded`, which every way of ending a session
+  dispatches.
 - **An operator-supplied URL this server sends to is checked twice**: at registration
   (`OutboundUrls`, a 422), and at every send by the adapter that sends.
 
@@ -1725,7 +1791,8 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
 - Publish the repository; archive the Python project as reference.
 
 ### Phase E — Beyond the Python project
-- [ ] Audit logs (domain events → `AuditLog` port; the hexagonal seams make this an adapter).
+- [x] Audit logs: the `AuditLog` port, recorded by every use case that changes access, read at
+  `GET /api/v1/audit-events`, trimmed by `audit:purge` (see "Current state").
 - [ ] Dashboard as a Next.js application — right after audit logs (decided 2026-11-21); below.
 - [ ] Multi-tenancy, if it turns out to be worth the complexity (see `clavia-old/CLAUDE.md`).
 
@@ -1751,6 +1818,16 @@ Management API among others — and stops living inside the server's repository.
   server-side in an encrypted session the browser holds only a cookie for; refresh happens on the
   server; every Management API call is made by the Next.js server (route handlers / server
   actions) with the operator's access token. The browser talks to the dashboard only.
+- **Architecture** (asked 2026-11-21: "clean, robust, state of the art; clean code, hexagonal
+  if suitable"): App Router with React Server Components; the Management API, the OIDC client
+  and the session store behind ports (`core/`: domain types and use cases, no Next.js or
+  `fetch` in it), adapters at the edge (`adapters/`: the generated OpenAPI client, the token
+  endpoint, the encrypted session), `app/` routes and server actions as the primary adapters.
+  Mutations are server actions validated with zod; reads are server components with
+  streaming and `loading.tsx` skeletons; optimistic updates and toasts so the UI stays fluid.
+- **Look and feel**: professional and smooth — the palette taken from the logo
+  (`public/auth/static/clavia-icon.svg`: green `#52B788`, gold `#D4A843`) as the shadcn/ui theme
+  tokens, light and dark.
 - **Styling: Tailwind v4, kept from the current dashboard** (decided 2026-11-21) — its `@theme`
   tokens (light and dark, as CSS variables) and its `@utility` components (`btn-*`, `badge-*`,
   `card`, `input`) carry over, so the move changes the architecture, not the look. Components

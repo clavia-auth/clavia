@@ -15,6 +15,7 @@ use Clavia\Application\Authentication\LoginThrottle;
 use Clavia\Application\Authentication\SignIn\CompleteFirstFactor;
 use Clavia\Application\Authentication\SignIn\SignInWithPassword;
 use Clavia\Application\Connection\ConnectionAccess;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Domain\Client\ClientRepository;
@@ -39,6 +40,8 @@ final class SignInWithPasswordFactory
         $access = $container->get(ConnectionAccess::class);
         /** @var CompleteFirstFactor $completeFirstFactor */
         $completeFirstFactor = $container->get(CompleteFirstFactor::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
         return new SignInWithPassword(
             $users,
@@ -48,6 +51,7 @@ final class SignInWithPasswordFactory
             $clients,
             $access,
             $completeFirstFactor,
+            $events,
         );
     }
 }

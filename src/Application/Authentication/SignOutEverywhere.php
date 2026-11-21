@@ -11,13 +11,16 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Authentication;
 
-use Clavia\Application\Oidc\Logout\BackChannelLogout;
+use Clavia\Application\Port\DomainEvents;
+use Clavia\Domain\Authentication\Event\SessionEndReason;
+use Clavia\Domain\Authentication\Event\SessionsEnded;
 use Clavia\Domain\Authentication\Session;
 use Clavia\Domain\Identity\UserId;
 
 /**
- * End an account's browser sessions — every one, or the one a `sid` names — and tell the
- * applications that signed in through them ({@see BackChannelLogout}).
+ * End an account's browser sessions — every one, or the one a `sid` names — and say so
+ * ({@see SessionsEnded}), so that back-channel logout tells the applications that signed
+ * in through them.
  *
  * What an operator does from the Management API, and what happens to an account that is
  * deactivated or deleted: from then on nothing it signed in to here should still treat it
@@ -28,7 +31,7 @@ final readonly class SignOutEverywhere
 {
     public function __construct(
         private Sessions $sessions,
-        private BackChannelLogout $backChannel,
+        private DomainEvents $events,
     ) {
     }
 
@@ -38,7 +41,7 @@ final readonly class SignOutEverywhere
     public function __invoke(UserId $userId): array
     {
         $ended = $this->sessions->endEverywhere($userId);
-        $this->backChannel->sessionsEnded(...$ended);
+        $this->events->dispatch(new SessionsEnded(SessionEndReason::EndedEverywhere, $ended));
 
         return $ended;
     }
@@ -49,7 +52,9 @@ final readonly class SignOutEverywhere
     public function one(UserId $userId, string $sid): ?Session
     {
         $ended = $this->sessions->endBySid($userId, $sid);
-        $this->backChannel->sessionsEnded($ended);
+        if ($ended !== null) {
+            $this->events->dispatch(new SessionsEnded(SessionEndReason::EndedByOperator, [$ended]));
+        }
 
         return $ended;
     }

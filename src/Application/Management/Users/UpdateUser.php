@@ -13,8 +13,10 @@ namespace Clavia\Application\Management\Users;
 
 use Clavia\Application\Authentication\SignOutEverywhere;
 use Clavia\Application\Management\NotFound;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
+use Clavia\Domain\Identity\Event\UserChanged;
 use Clavia\Domain\Identity\PasswordPolicy;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
@@ -37,6 +39,7 @@ final readonly class UpdateUser
         private Clock $clock,
         private MfaFactorRepository $factors,
         private SignOutEverywhere $signOut,
+        private DomainEvents $events,
     ) {
     }
 
@@ -70,6 +73,16 @@ final readonly class UpdateUser
         }
 
         $this->users->save($user);
+        // What changed, by field — never the password, only that it was set.
+        $this->events->dispatch(new UserChanged($user->id, array_merge(
+            array_keys(array_filter([
+                'email' => $changes->email !== null,
+                'email_verified' => $changes->emailVerified !== null,
+                'has_password' => $changes->password !== null,
+                'is_active' => $changes->isActive !== null,
+            ])),
+            array_map(strval(...), array_keys($changes->profile)),
+        ), $deactivated));
         // A deactivated account is signed out everywhere, and its applications told so.
         if ($deactivated) {
             ($this->signOut)($user->id);

@@ -15,6 +15,8 @@ use Clavia\Application\Authentication\SignOutEverywhere;
 use Clavia\Application\Management\Caller\ManagementCaller;
 use Clavia\Application\Management\Conflict;
 use Clavia\Application\Management\NotFound;
+use Clavia\Application\Port\DomainEvents;
+use Clavia\Domain\Identity\Event\UserDeleted;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
 
@@ -28,6 +30,7 @@ final readonly class DeleteUser
     public function __construct(
         private UserRepository $users,
         private SignOutEverywhere $signOut,
+        private DomainEvents $events,
     ) {
     }
 
@@ -45,5 +48,6 @@ final readonly class DeleteUser
 
         ($this->signOut)($user->id);
         $this->users->delete($user->id);
+        $this->events->dispatch(new UserDeleted($user));
     }
 }

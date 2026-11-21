@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Management\Clients\RotateClientSecret;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Shared\SecretGenerator;
@@ -27,7 +28,9 @@ final class RotateClientSecretFactory
         $hasher = $container->get(PasswordHasher::class);
         /** @var SecretGenerator $secrets */
         $secrets = $container->get(SecretGenerator::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new RotateClientSecret($clients, $hasher, $secrets);
+        return new RotateClientSecret($clients, $hasher, $secrets, $events);
     }
 }

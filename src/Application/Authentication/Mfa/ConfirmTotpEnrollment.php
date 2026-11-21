@@ -11,7 +11,9 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Authentication\Mfa;
 
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\TransactionManager;
+use Clavia\Domain\Authentication\Event\SecondFactorEnrolled;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCode;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
@@ -42,6 +44,7 @@ final readonly class ConfirmTotpEnrollment
         private RandomSource $random,
         private Clock $clock,
         private int $recoveryCodeCount,
+        private DomainEvents $events,
     ) {
     }
 
@@ -66,6 +69,7 @@ final readonly class ConfirmTotpEnrollment
 
             $codes = RecoveryCode::issue($this->random, $this->recoveryCodeCount);
             $this->recoveryCodes->replaceAll($userId, array_map(RecoveryCode::digest(...), $codes), $now);
+            $this->events->dispatch(new SecondFactorEnrolled($userId));
 
             return $codes;
         });

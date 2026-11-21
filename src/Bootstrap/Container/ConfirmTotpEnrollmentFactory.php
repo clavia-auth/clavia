@@ -13,6 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Authentication\Mfa\ConfirmTotpEnrollment;
 use Clavia\Application\Authentication\Mfa\TotpSeeds;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
@@ -42,6 +43,9 @@ final class ConfirmTotpEnrollmentFactory
         $recoveryCodeCount = $settings->mfaRecoveryCodeCount;
         assert($recoveryCodeCount > 0);
 
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
+
         return new ConfirmTotpEnrollment(
             $factors,
             $recoveryCodes,
@@ -50,6 +54,7 @@ final class ConfirmTotpEnrollmentFactory
             $random,
             $clock,
             $recoveryCodeCount,
+            $events,
         );
     }
 }

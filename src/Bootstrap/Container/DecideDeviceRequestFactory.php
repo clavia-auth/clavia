@@ -15,6 +15,7 @@ use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\OAuth2\Device\DecideDeviceRequest;
 use Clavia\Application\OAuth2\Device\PendingDeviceRequests;
 use Clavia\Application\Port\DeviceAuthorizationStore;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Consent\ConsentRepository;
 use Clavia\Domain\Rbac\RoleRepository;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
@@ -39,7 +40,18 @@ final class DecideDeviceRequestFactory
         $consents = $container->get(ConsentRepository::class);
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new DecideDeviceRequest($pending, $store, $connections, $resourceServers, $roles, $consents, $clock);
+        return new DecideDeviceRequest(
+            $pending,
+            $store,
+            $connections,
+            $resourceServers,
+            $roles,
+            $consents,
+            $clock,
+            $events,
+        );
     }
 }

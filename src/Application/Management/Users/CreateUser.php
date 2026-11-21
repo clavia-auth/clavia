@@ -13,9 +13,11 @@ namespace Clavia\Application\Management\Users;
 
 use Clavia\Application\Management\Connections\ReadConnections;
 use Clavia\Application\Management\NotFound;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Connection\ConnectionRepository;
+use Clavia\Domain\Identity\Event\UserCreated;
 use Clavia\Domain\Identity\PasswordPolicy;
 use Clavia\Domain\Identity\Profile;
 use Clavia\Domain\Identity\User;
@@ -40,6 +42,7 @@ final readonly class CreateUser
         private RandomSource $random,
         private Clock $clock,
         private ConnectionRepository $connections,
+        private DomainEvents $events,
     ) {
     }
 
@@ -78,6 +81,7 @@ final readonly class CreateUser
         }
 
         $this->users->save($user);
+        $this->events->dispatch(new UserCreated($user));
 
         // A new account has no second factor: enrolling one is something its holder does.
         return new ManagedUser($user, false);

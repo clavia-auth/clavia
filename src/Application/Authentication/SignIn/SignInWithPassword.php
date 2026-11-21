@@ -13,11 +13,15 @@ namespace Clavia\Application\Authentication\SignIn;
 
 use Clavia\Application\Authentication\LoginThrottle;
 use Clavia\Application\Connection\ConnectionAccess;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Domain\Authentication\AuthenticationMethod;
+use Clavia\Domain\Authentication\Event\SignInRefusal;
+use Clavia\Domain\Authentication\Event\SignInRefused;
 use Clavia\Domain\Authentication\LocalPath;
 use Clavia\Domain\Authentication\LoginState;
+use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\User;
@@ -50,6 +54,7 @@ final readonly class SignInWithPassword
         private ClientRepository $clients,
         private ConnectionAccess $access,
         private CompleteFirstFactor $completeFirstFactor,
+        private DomainEvents $events,
     ) {
     }
 
@@ -63,7 +68,7 @@ final readonly class SignInWithPassword
             return new PasswordSignInUnavailable();
         }
 
-        $user = $this->authenticate($attempt, $pools);
+        $user = $this->authenticate($attempt, $pools, $clientId);
         if ($user === null) {
             return new CredentialsRejected();
         }
@@ -97,10 +102,11 @@ final readonly class SignInWithPassword
     /**
      * @param non-empty-list<ConnectionName> $pools
      */
-    private function authenticate(PasswordSignIn $attempt, array $pools): ?User
+    private function authenticate(PasswordSignIn $attempt, array $pools, ?ClientId $clientId): ?User
     {
         if ($this->throttle->isThrottled($attempt->email, $attempt->clientAddress)) {
             $this->hasher->simulateVerification($attempt->password);
+            $this->refused($attempt, $clientId, SignInRefusal::Throttled);
 
             return null;
         }
@@ -118,6 +124,7 @@ final readonly class SignInWithPassword
         if ($candidates === []) {
             $this->hasher->simulateVerification($attempt->password);
             $this->throttle->recordFailure($attempt->email, $attempt->clientAddress);
+            $this->refused($attempt, $clientId, SignInRefusal::UnknownAccount);
 
             return null;
         }
@@ -132,7 +139,32 @@ final readonly class SignInWithPassword
 
         // A wrong password against every candidate is one failure.
         $this->throttle->recordFailure($attempt->email, $attempt->clientAddress);
+        $this->refused(
+            $attempt,
+            $clientId,
+            SignInRefusal::WrongPassword,
+            count($candidates) === 1 ? $candidates[0] : null,
+        );
 
         return null;
+    }
+
+    /**
+     * A refused password, for the trail: the address typed — never the password — and why.
+     * The account is named only when the address designates exactly one.
+     */
+    private function refused(
+        PasswordSignIn $attempt,
+        ?ClientId $clientId,
+        SignInRefusal $reason,
+        ?User $user = null,
+    ): void {
+        $this->events->dispatch(new SignInRefused(
+            AuthenticationMethod::Password,
+            $reason,
+            $user?->id,
+            $attempt->email,
+            $clientId,
+        ));
     }
 }

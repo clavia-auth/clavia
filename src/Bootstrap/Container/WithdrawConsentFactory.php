@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Management\Users\WithdrawConsent;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Consent\ConsentRepository;
 use Clavia\Domain\Identity\UserRepository;
 use Psr\Container\ContainerInterface;
@@ -24,7 +25,9 @@ final class WithdrawConsentFactory
         $users = $container->get(UserRepository::class);
         /** @var ConsentRepository $consents */
         $consents = $container->get(ConsentRepository::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new WithdrawConsent($users, $consents);
+        return new WithdrawConsent($users, $consents, $events);
     }
 }

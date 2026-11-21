@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Application\OAuth2\Token;
 
 use Clavia\Application\OAuth2\RequestParameters;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
@@ -20,6 +21,8 @@ use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AccessToken;
 use Clavia\Domain\OAuth2\AccessTokenId;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
+use Clavia\Domain\OAuth2\Event\AccessTokenIssued;
+use Clavia\Domain\OAuth2\Event\RefreshTokenReplayed;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use Clavia\Domain\OAuth2\Refresh;
 use Clavia\Domain\OAuth2\RefreshTokenId;
@@ -71,6 +74,7 @@ final readonly class RefreshTokenGrant implements Grant
         private UserScope $userScope,
         private int $accessTokenLifetimeSeconds,
         private int $refreshTokenLifetimeSeconds,
+        private DomainEvents $events,
     ) {
     }
 
@@ -126,6 +130,7 @@ final readonly class RefreshTokenGrant implements Grant
         if ($refresh === Refresh::Replayed) {
             $this->refreshTokens->revokeFamily($spent->familyId, $now);
             $this->tokens->revokeFamily($spent->familyId, $now);
+            $this->events->dispatch(new RefreshTokenReplayed($spent->userId, $spent->clientId, $client->id));
         }
         if ($refresh !== Refresh::Usable) {
             // Unknown, foreign, revoked, replayed and expired tokens are one answer.
@@ -174,6 +179,7 @@ final readonly class RefreshTokenGrant implements Grant
             $this->accessTokenLifetimeSeconds,
         );
         $this->tokens->add($token);
+        $this->events->dispatch(new AccessTokenIssued($token, GrantType::RefreshToken, true));
 
         return new IssuedToken(
             $value,

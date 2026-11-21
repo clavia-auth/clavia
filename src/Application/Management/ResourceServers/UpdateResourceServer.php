@@ -12,6 +12,8 @@ declare(strict_types=1);
 namespace Clavia\Application\Management\ResourceServers;
 
 use Clavia\Application\Management\NotFound;
+use Clavia\Application\Port\DomainEvents;
+use Clavia\Domain\ResourceServer\Event\ResourceServerChanged;
 use Clavia\Domain\ResourceServer\ResourceServer;
 use Clavia\Domain\ResourceServer\ResourceServerId;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
@@ -30,8 +32,10 @@ use Clavia\Domain\Shared\InvalidValue;
  */
 final readonly class UpdateResourceServer
 {
-    public function __construct(private ResourceServerRepository $resourceServers)
-    {
+    public function __construct(
+        private ResourceServerRepository $resourceServers,
+        private DomainEvents $events,
+    ) {
     }
 
     /**
@@ -67,6 +71,12 @@ final readonly class UpdateResourceServer
             $resourceServer = $resourceServer->renamed($name);
         }
         $this->resourceServers->save($resourceServer);
+        $this->events->dispatch(new ResourceServerChanged($resourceServer->id, array_keys(array_filter([
+            'name' => $name !== null,
+            'permissions' => $permissions !== null,
+            'enforce_policies' => $enforcePolicies !== null,
+            'allow_skipping_consent' => $allowSkippingConsent !== null,
+        ]))));
 
         return $resourceServer;
     }

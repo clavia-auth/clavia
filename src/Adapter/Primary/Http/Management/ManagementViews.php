@@ -19,6 +19,7 @@ use Clavia\Application\Management\Roles\EffectivePermission;
 use Clavia\Application\Management\Users\DescribedConsent;
 use Clavia\Application\Management\Users\ManagedSession;
 use Clavia\Application\Management\Users\ManagedUser;
+use Clavia\Domain\Audit\AuditEvent;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\GrantType;
@@ -281,6 +282,30 @@ final class ManagementViews
     }
 
     /** RFC 3339, in UTC, to the second. */
+    /**
+     * @return array<string, mixed>
+     */
+    public static function auditEvent(AuditEvent $event): array
+    {
+        return [
+            'id' => $event->id->value,
+            'type' => $event->type->value,
+            'occurred_at' => self::instant($event->occurredAt),
+            'outcome' => $event->outcome->value,
+            'actor' => [
+                'kind' => $event->actor->kind->value,
+                'user_id' => $event->actor->userId?->value,
+                'client_id' => $event->actor->clientId?->value,
+            ],
+            'target' => $event->target === null
+                ? null
+                : ['type' => $event->target->type->value, 'id' => $event->target->id],
+            'details' => (object) $event->details,
+            'client_address' => $event->clientAddress,
+            'user_agent' => $event->userAgent,
+        ];
+    }
+
     private static function instant(DateTimeImmutable $instant): string
     {
         return $instant->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z');

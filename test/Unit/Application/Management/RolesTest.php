@@ -43,6 +43,7 @@ use Clavia\Domain\Shared\PageRequest;
 use Clavia\Domain\Shared\ScopeSet;
 use Clavia\Domain\Shared\SecretGenerator;
 use ClaviaTest\Support\Fake\FrozenClock;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
 use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
 use ClaviaTest\Support\Fake\InMemoryRoleRepository;
@@ -146,7 +147,7 @@ final class RolesTest extends TestCase
     public function testAnUpdateChangesOnlyWhatItNames(): void
     {
         $role = $this->create('Billing', [$this->reference($this->invoices, 'invoices:read')]);
-        $update = new UpdateRole($this->roles, $this->permissions());
+        $update = new UpdateRole($this->roles, $this->permissions(), new InMemoryDomainEvents());
 
         $renamed = $update($role->id, new RoleChanges(name: 'Accounts'));
         self::assertSame('Accounts', $renamed->name);
@@ -164,7 +165,7 @@ final class RolesTest extends TestCase
     public function testDeletingARoleThatDoesNotExistIsNotFound(): void
     {
         $role = $this->create('Billing', []);
-        $delete = new DeleteRole($this->roles);
+        $delete = new DeleteRole($this->roles, new InMemoryDomainEvents());
 
         $delete($role->id);
         self::assertNull($this->roles->find($role->id));
@@ -277,7 +278,14 @@ final class RolesTest extends TestCase
 
     public function testEnsuringARoleAddsToItAndNeverTakesAway(): void
     {
-        $ensure = new EnsureRole($this->roles, $this->apis, $this->transactions, $this->secrets, $this->clock);
+        $ensure = new EnsureRole(
+            $this->roles,
+            $this->apis,
+            $this->transactions,
+            $this->secrets,
+            $this->clock,
+            new InMemoryDomainEvents(),
+        );
         $audience = Audience::fromString(self::INVOICES);
 
         $first = $ensure('Billing', 'Bills people', $audience, ScopeSet::fromString('invoices:read'));
@@ -293,7 +301,14 @@ final class RolesTest extends TestCase
 
     public function testEnsuringARoleRefusesWhatTheApiDoesNotDefineOrAnApiThatIsNotThere(): void
     {
-        $ensure = new EnsureRole($this->roles, $this->apis, $this->transactions, $this->secrets, $this->clock);
+        $ensure = new EnsureRole(
+            $this->roles,
+            $this->apis,
+            $this->transactions,
+            $this->secrets,
+            $this->clock,
+            new InMemoryDomainEvents(),
+        );
 
         try {
             $ensure('Billing', '', Audience::fromString(self::INVOICES), ScopeSet::fromString('invoices:delete'));
@@ -311,7 +326,7 @@ final class RolesTest extends TestCase
     {
         $this->create('Billing', []);
         $jane = $this->user('jane@example.com');
-        $assign = new AssignRole($this->roles, $this->users, $this->clock);
+        $assign = new AssignRole($this->roles, $this->users, $this->clock, new InMemoryDomainEvents());
 
         self::assertSame(['Billing'], self::names($assign('Billing', 'jane@example.com')));
         self::assertSame(['Billing'], self::names($this->roles->rolesOf($jane->id)));
@@ -334,7 +349,13 @@ final class RolesTest extends TestCase
      */
     private function create(string $name, array $permissions): Role
     {
-        return (new CreateRole($this->roles, $this->permissions(), $this->secrets, $this->clock))(
+        return (new CreateRole(
+            $this->roles,
+            $this->permissions(),
+            $this->secrets,
+            $this->clock,
+            new InMemoryDomainEvents(),
+        ))(
             new NewRole($name, '', $permissions),
         );
     }
@@ -351,7 +372,13 @@ final class RolesTest extends TestCase
 
     private function assignments(): RoleAssignments
     {
-        return new RoleAssignments($this->roles, $this->users, $this->transactions, $this->clock);
+        return new RoleAssignments(
+            $this->roles,
+            $this->users,
+            $this->transactions,
+            $this->clock,
+            new InMemoryDomainEvents(),
+        );
     }
 
     private function reference(ResourceServer $api, string $value): PermissionReference

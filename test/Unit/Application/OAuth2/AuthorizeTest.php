@@ -48,6 +48,7 @@ use ClaviaTest\Support\Fake\InMemoryClientRepository;
 use ClaviaTest\Support\Fake\InMemoryConnectionRepository;
 use ClaviaTest\Support\Fake\InMemoryConsentRepository;
 use ClaviaTest\Support\Fake\InMemoryConsentStateStore;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryLoginStateStore;
 use ClaviaTest\Support\Fake\InMemoryNonceRegistry;
 use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
@@ -98,6 +99,7 @@ final class AuthorizeTest extends TestCase
             $clock,
             28800,
             604800,
+            new InMemoryDomainEvents(),
         );
         $this->authorize = new Authorize(
             $this->clients,

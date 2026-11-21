@@ -14,6 +14,7 @@ namespace Clavia\Bootstrap\Container;
 use Clavia\Application\Authentication\Passwordless\AnswerPasswordlessCode;
 use Clavia\Application\Authentication\Passwordless\DescribePasswordlessChallenge;
 use Clavia\Application\Authentication\Passwordless\FinishPasswordlessSignIn;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\PasswordlessChallengeStore;
 use Clavia\Configuration\Settings;
 use Psr\Container\ContainerInterface;
@@ -34,6 +35,9 @@ final class AnswerPasswordlessCodeFactory
         $maxAttempts = $settings->passwordlessMaxAttempts;
         assert($maxAttempts > 0);
 
-        return new AnswerPasswordlessCode($challenges, $describe, $finish, $maxAttempts);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
+
+        return new AnswerPasswordlessCode($challenges, $describe, $finish, $maxAttempts, $events);
     }
 }

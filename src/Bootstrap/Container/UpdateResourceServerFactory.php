@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Management\ResourceServers\UpdateResourceServer;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Psr\Container\ContainerInterface;
 
@@ -21,7 +22,9 @@ final class UpdateResourceServerFactory
     {
         /** @var ResourceServerRepository $resourceServers */
         $resourceServers = $container->get(ResourceServerRepository::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new UpdateResourceServer($resourceServers);
+        return new UpdateResourceServer($resourceServers, $events);
     }
 }

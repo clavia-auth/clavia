@@ -17,6 +17,7 @@ use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\SecretGenerator;
 use ClaviaTest\Support\Fake\FrozenClock;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemorySessionStore;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use PHPUnit\Framework\TestCase;
@@ -42,6 +43,7 @@ final class SessionsTest extends TestCase
             $this->clock,
             self::IDLE,
             self::ABSOLUTE,
+            new InMemoryDomainEvents(),
         );
         $this->userId = UserId::generate(new SeededRandomSource(2));
     }

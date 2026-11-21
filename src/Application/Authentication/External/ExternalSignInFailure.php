@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Authentication\External;
 
+use Clavia\Domain\Authentication\Event\SignInRefusal;
+
 /**
  * Why an external sign-in did not end in a session. The HTTP adapter words each one;
  * nothing the provider said is ever part of the wording.
@@ -43,4 +45,19 @@ enum ExternalSignInFailure
      * connection — it stopped while the person was at the provider, or never did.
      */
     case NotAvailable;
+
+    /** The same failure, as the audit trail names it. */
+    public function refusal(): SignInRefusal
+    {
+        return match ($this) {
+            self::Cancelled => SignInRefusal::Cancelled,
+            self::StartedInAnotherBrowser => SignInRefusal::StartedInAnotherBrowser,
+            self::Expired => SignInRefusal::Expired,
+            self::ProviderFailed => SignInRefusal::ProviderFailed,
+            self::NoVerifiedEmail => SignInRefusal::NoVerifiedEmail,
+            self::AddressAlreadyUsed => SignInRefusal::AddressAlreadyUsed,
+            self::AccountDisabled => SignInRefusal::AccountDisabled,
+            self::NotAvailable => SignInRefusal::NotAvailable,
+        };
+    }
 }

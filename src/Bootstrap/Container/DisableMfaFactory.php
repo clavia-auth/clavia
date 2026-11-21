@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Authentication\Mfa\DisableMfa;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
@@ -27,7 +28,9 @@ final class DisableMfaFactory
         $recoveryCodes = $container->get(RecoveryCodeRepository::class);
         /** @var TransactionManager $transactions */
         $transactions = $container->get(TransactionManager::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new DisableMfa($factors, $recoveryCodes, $transactions);
+        return new DisableMfa($factors, $recoveryCodes, $transactions, $events);
     }
 }

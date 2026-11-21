@@ -13,6 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Management\Connections\OidcConfiguration;
 use Clavia\Application\Management\Connections\UpdateConnection;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Psr\Container\ContainerInterface;
 
@@ -24,7 +25,9 @@ final class UpdateConnectionFactory
         $connections = $container->get(ConnectionRepository::class);
         /** @var OidcConfiguration $oidc */
         $oidc = $container->get(OidcConfiguration::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new UpdateConnection($connections, $oidc);
+        return new UpdateConnection($connections, $oidc, $events);
     }
 }

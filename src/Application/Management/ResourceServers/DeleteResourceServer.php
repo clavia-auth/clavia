@@ -12,6 +12,8 @@ declare(strict_types=1);
 namespace Clavia\Application\Management\ResourceServers;
 
 use Clavia\Application\Management\NotFound;
+use Clavia\Application\Port\DomainEvents;
+use Clavia\Domain\ResourceServer\Event\ResourceServerDeleted;
 use Clavia\Domain\ResourceServer\ResourceServerId;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\ResourceServer\SystemApiProtected;
@@ -23,8 +25,10 @@ use Clavia\Domain\ResourceServer\SystemApiProtected;
  */
 final readonly class DeleteResourceServer
 {
-    public function __construct(private ResourceServerRepository $resourceServers)
-    {
+    public function __construct(
+        private ResourceServerRepository $resourceServers,
+        private DomainEvents $events,
+    ) {
     }
 
     /**
@@ -37,5 +41,6 @@ final readonly class DeleteResourceServer
         $resourceServer->assertDeletable();
 
         $this->resourceServers->delete($resourceServer->id);
+        $this->events->dispatch(new ResourceServerDeleted($resourceServer));
     }
 }

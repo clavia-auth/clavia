@@ -11,10 +11,12 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Management\Connections;
 
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Connection\Connection;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Connection\ConnectionStrategy;
+use Clavia\Domain\Connection\Event\ConnectionCreated;
 use Clavia\Domain\Shared\AlreadyExists;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\InvalidValue;
@@ -34,6 +36,7 @@ final readonly class CreateConnection
         private ConnectionRepository $connections,
         private OidcConfiguration $oidc,
         private Clock $clock,
+        private DomainEvents $events,
     ) {
     }
 
@@ -84,6 +87,7 @@ final readonly class CreateConnection
             ),
         };
         $this->connections->add($connection);
+        $this->events->dispatch(new ConnectionCreated($connection));
 
         return $connection;
     }

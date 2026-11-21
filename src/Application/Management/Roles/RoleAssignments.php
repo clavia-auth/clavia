@@ -12,9 +12,13 @@ declare(strict_types=1);
 namespace Clavia\Application\Management\Roles;
 
 use Clavia\Application\Management\NotFound;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
+use Clavia\Domain\Rbac\Event\RoleGiven;
+use Clavia\Domain\Rbac\Event\RoleTaken;
+use Clavia\Domain\Rbac\Event\UserRolesReplaced;
 use Clavia\Domain\Rbac\Role;
 use Clavia\Domain\Rbac\RoleId;
 use Clavia\Domain\Rbac\RoleRepository;
@@ -35,6 +39,7 @@ final readonly class RoleAssignments
         private UserRepository $users,
         private TransactionManager $transactions,
         private Clock $clock,
+        private DomainEvents $events,
     ) {
     }
 
@@ -54,6 +59,7 @@ final readonly class RoleAssignments
             $now = $this->clock->now();
             foreach ($users as $user) {
                 $this->roles->assign($role, $user, $now);
+                $this->events->dispatch(new RoleGiven($role, $user));
             }
         });
     }
@@ -66,7 +72,10 @@ final readonly class RoleAssignments
         $this->requireRole($role);
         $this->requireUser($user);
 
-        $this->roles->unassign($role, $user);
+        $this->transactions->transactional(function () use ($role, $user): void {
+            $this->roles->unassign($role, $user);
+            $this->events->dispatch(new RoleTaken($role, $user));
+        });
     }
 
     /**
@@ -97,9 +106,12 @@ final readonly class RoleAssignments
             $this->requireRole($role);
         }
 
-        $this->roles->replaceRolesOf($user, $roles, $this->clock->now());
+        return $this->transactions->transactional(function () use ($user, $roles): array {
+            $this->roles->replaceRolesOf($user, $roles, $this->clock->now());
+            $this->events->dispatch(new UserRolesReplaced($user, $roles));
 
-        return $this->roles->rolesOf($user);
+            return $this->roles->rolesOf($user);
+        });
     }
 
     /**

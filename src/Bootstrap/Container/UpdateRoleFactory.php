@@ -13,6 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Management\Roles\RolePermissions;
 use Clavia\Application\Management\Roles\UpdateRole;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Rbac\RoleRepository;
 use Psr\Container\ContainerInterface;
 
@@ -24,7 +25,9 @@ final class UpdateRoleFactory
         $roles = $container->get(RoleRepository::class);
         /** @var RolePermissions $permissions */
         $permissions = $container->get(RolePermissions::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new UpdateRole($roles, $permissions);
+        return new UpdateRole($roles, $permissions, $events);
     }
 }

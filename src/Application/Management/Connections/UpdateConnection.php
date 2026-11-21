@@ -12,8 +12,10 @@ declare(strict_types=1);
 namespace Clavia\Application\Management\Connections;
 
 use Clavia\Application\Management\NotFound;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Connection\Connection;
 use Clavia\Domain\Connection\ConnectionRepository;
+use Clavia\Domain\Connection\Event\ConnectionChanged;
 use Clavia\Domain\Shared\InvalidValue;
 
 /**
@@ -31,6 +33,7 @@ final readonly class UpdateConnection
     public function __construct(
         private ConnectionRepository $connections,
         private OidcConfiguration $oidc,
+        private DomainEvents $events,
     ) {
     }
 
@@ -63,6 +66,14 @@ final readonly class UpdateConnection
             ));
         }
         $this->connections->save($connection);
+        $this->events->dispatch(new ConnectionChanged($connection->name, array_merge(
+            array_keys(array_filter([
+                'display_name' => $displayName !== null,
+                'is_enabled' => $isEnabled !== null,
+                'is_domain_connection' => $isDomainConnection !== null,
+            ])),
+            array_map(static fn (string|int $field): string => 'oidc.' . $field, array_keys($oidc)),
+        )));
 
         return $connection;
     }

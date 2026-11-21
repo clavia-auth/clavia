@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Management\Provisioning\GrantClientAccess;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\ResourceServer\ClientGrantRepository;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
@@ -30,7 +31,9 @@ final class GrantClientAccessFactory
         $clientGrants = $container->get(ClientGrantRepository::class);
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new GrantClientAccess($clients, $resourceServers, $clientGrants, $clock);
+        return new GrantClientAccess($clients, $resourceServers, $clientGrants, $clock, $events);
     }
 }

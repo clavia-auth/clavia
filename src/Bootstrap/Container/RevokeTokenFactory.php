@@ -14,6 +14,7 @@ namespace Clavia\Bootstrap\Container;
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
 use Clavia\Application\OAuth2\TokenManagement\IssuedTokens;
 use Clavia\Application\OAuth2\TokenManagement\RevokeToken;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\RefreshTokenRepository;
@@ -36,7 +37,9 @@ final class RevokeTokenFactory
         $transactions = $container->get(TransactionManager::class);
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new RevokeToken($authenticator, $tokens, $accessTokens, $refreshTokens, $transactions, $clock);
+        return new RevokeToken($authenticator, $tokens, $accessTokens, $refreshTokens, $transactions, $clock, $events);
     }
 }

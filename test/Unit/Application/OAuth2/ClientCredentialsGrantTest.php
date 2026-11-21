@@ -31,6 +31,7 @@ use ClaviaTest\Support\Clients;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryAccessTokenRepository;
 use ClaviaTest\Support\Fake\InMemoryClientGrantRepository;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -64,6 +65,7 @@ final class ClientCredentialsGrantTest extends TestCase
             $random,
             $this->clock,
             900,
+            new InMemoryDomainEvents(),
         );
 
         $this->client = Clients::confidential('machine', '$hash$');

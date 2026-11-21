@@ -12,11 +12,13 @@ declare(strict_types=1);
 namespace Clavia\Application\Management\Provisioning;
 
 use Clavia\Application\Management\NotFound;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\ResourceServer\ClientGrant;
 use Clavia\Domain\ResourceServer\ClientGrantRepository;
+use Clavia\Domain\ResourceServer\Event\ClientAccessGranted;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\Clock;
@@ -41,6 +43,7 @@ final readonly class GrantClientAccess
         private ResourceServerRepository $resourceServers,
         private ClientGrantRepository $clientGrants,
         private Clock $clock,
+        private DomainEvents $events,
     ) {
     }
 
@@ -82,6 +85,7 @@ final readonly class GrantClientAccess
             $this->clock->now(),
         );
         $this->clientGrants->save($grant);
+        $this->events->dispatch(new ClientAccessGranted($grant, $audience));
 
         return $grant;
     }

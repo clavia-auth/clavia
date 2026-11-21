@@ -12,6 +12,8 @@ declare(strict_types=1);
 namespace Clavia\Application\Management\Roles;
 
 use Clavia\Application\Management\NotFound;
+use Clavia\Application\Port\DomainEvents;
+use Clavia\Domain\Rbac\Event\RoleChanged;
 use Clavia\Domain\Rbac\Role;
 use Clavia\Domain\Rbac\RoleId;
 use Clavia\Domain\Rbac\RoleRepository;
@@ -29,6 +31,7 @@ final readonly class UpdateRole
     public function __construct(
         private RoleRepository $roles,
         private RolePermissions $permissions,
+        private DomainEvents $events,
     ) {
     }
 
@@ -51,6 +54,11 @@ final readonly class UpdateRole
             $role = $role->granting($this->permissions->resolve($changes->permissions));
         }
         $this->roles->save($role);
+        $this->events->dispatch(new RoleChanged($role->id, array_keys(array_filter([
+            'name' => $changes->name !== null,
+            'description' => $changes->description !== null,
+            'permissions' => $changes->permissions !== null,
+        ]))));
 
         return $role;
     }

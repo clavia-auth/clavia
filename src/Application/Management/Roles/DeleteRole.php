@@ -12,6 +12,8 @@ declare(strict_types=1);
 namespace Clavia\Application\Management\Roles;
 
 use Clavia\Application\Management\NotFound;
+use Clavia\Application\Port\DomainEvents;
+use Clavia\Domain\Rbac\Event\RoleDeleted;
 use Clavia\Domain\Rbac\RoleId;
 use Clavia\Domain\Rbac\RoleRepository;
 
@@ -21,8 +23,10 @@ use Clavia\Domain\Rbac\RoleRepository;
  */
 final readonly class DeleteRole
 {
-    public function __construct(private RoleRepository $roles)
-    {
+    public function __construct(
+        private RoleRepository $roles,
+        private DomainEvents $events,
+    ) {
     }
 
     /**
@@ -30,10 +34,9 @@ final readonly class DeleteRole
      */
     public function __invoke(RoleId $id): void
     {
-        if ($this->roles->find($id) === null) {
-            throw NotFound::of('role');
-        }
+        $role = $this->roles->find($id) ?? throw NotFound::of('role');
 
         $this->roles->delete($id);
+        $this->events->dispatch(new RoleDeleted($role));
     }
 }

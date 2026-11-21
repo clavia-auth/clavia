@@ -13,6 +13,7 @@ namespace Clavia\Application\OAuth2\Token;
 
 use Clavia\Application\OAuth2\RequestParameters;
 use Clavia\Application\Oidc\IdTokenIssuer;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
@@ -25,6 +26,8 @@ use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\AuthorizationCode;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
 use Clavia\Domain\OAuth2\CodeVerifier;
+use Clavia\Domain\OAuth2\Event\AccessTokenIssued;
+use Clavia\Domain\OAuth2\Event\AuthorizationCodeReplayed;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use Clavia\Domain\OAuth2\Redemption;
 use Clavia\Domain\OAuth2\RefreshToken;
@@ -80,6 +83,7 @@ final readonly class AuthorizationCodeGrant implements Grant
         private int $accessTokenLifetimeSeconds,
         private int $refreshTokenLifetimeSeconds,
         private int $refreshTokenAbsoluteLifetimeSeconds,
+        private DomainEvents $events,
     ) {
     }
 
@@ -133,6 +137,7 @@ final readonly class AuthorizationCodeGrant implements Grant
             // callers was legitimate: revoke what it already produced (RFC 6749 §4.1.2).
             $this->tokens->revokeIssuedFrom($code->id, $now);
             $this->refreshTokens->revokeIssuedFrom($code->id, $now);
+            $this->events->dispatch(new AuthorizationCodeReplayed($code->userId, $code->clientId, $client->id));
         }
         if ($redemption !== Redemption::Redeemed) {
             // Unknown, foreign, replayed and expired codes are one answer to the caller.
@@ -235,6 +240,7 @@ final readonly class AuthorizationCodeGrant implements Grant
             $refreshToken?->familyId,
         );
         $this->tokens->add($token);
+        $this->events->dispatch(new AccessTokenIssued($token, GrantType::AuthorizationCode, $refreshToken !== null));
 
         $idToken = $scope->contains(OidcScope::OPENID)
             ? $this->idTokens->issue($code, $user, $value, $now)

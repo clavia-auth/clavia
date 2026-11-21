@@ -24,6 +24,7 @@ use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\SecretGenerator;
 use ClaviaTest\Support\Fake\FrozenClock;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
 use ClaviaTest\Support\Fake\InMemoryRoleRepository;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
@@ -107,7 +108,8 @@ final class RoleCommandsTest extends TestCase
             null,
             $this->clock->now(),
         ));
-        $tester = new CommandTester(new AssignRoleCommand(new AssignRole($this->roles, $this->users, $this->clock)));
+        $assign = new AssignRole($this->roles, $this->users, $this->clock, new InMemoryDomainEvents());
+        $tester = new CommandTester(new AssignRoleCommand($assign));
 
         self::assertSame(Command::SUCCESS, $tester->execute(['role' => 'Support', 'email' => 'jane@example.com']));
         self::assertSame("jane@example.com now holds: Support\n", $tester->getDisplay(true));
@@ -136,7 +138,14 @@ final class RoleCommandsTest extends TestCase
     private function createCommand(): CommandTester
     {
         return new CommandTester(new CreateRoleCommand(
-            new EnsureRole($this->roles, $this->apis, new InMemoryTransactionManager(), $this->secrets, $this->clock),
+            new EnsureRole(
+                $this->roles,
+                $this->apis,
+                new InMemoryTransactionManager(),
+                $this->secrets,
+                $this->clock,
+                new InMemoryDomainEvents(),
+            ),
             self::MANAGEMENT_API,
         ));
     }
@@ -149,6 +158,7 @@ final class RoleCommandsTest extends TestCase
             $this->secrets,
             $this->clock,
             Audience::fromString(self::MANAGEMENT_API),
+            new InMemoryDomainEvents(),
         ))();
     }
 }

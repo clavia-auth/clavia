@@ -35,6 +35,6 @@ final readonly class ResetUserMfa
     public function __invoke(UserId $id): void
     {
         $this->users->find($id) ?? throw NotFound::of('user');
-        ($this->disable)($id);
+        ($this->disable)($id, byTheirOwner: false);
     }
 }

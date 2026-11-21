@@ -12,12 +12,14 @@ declare(strict_types=1);
 namespace Clavia\Application\Management\Clients;
 
 use Clavia\Application\Management\NotFound;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\ClientType;
+use Clavia\Domain\Client\Event\ClientRegistered;
 use Clavia\Domain\Client\Ownership;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\InvalidValue;
@@ -39,6 +41,7 @@ final readonly class RegisterClient
         private Clock $clock,
         private ClientConnections $connections,
         private BackChannelLogoutRegistration $backChannel,
+        private DomainEvents $events,
     ) {
     }
 
@@ -80,6 +83,7 @@ final readonly class RegisterClient
             $new->requirePkce,
         );
         $this->clients->save($client);
+        $this->events->dispatch(new ClientRegistered($client));
 
         return new ClientWithSecret($client, $secret);
     }

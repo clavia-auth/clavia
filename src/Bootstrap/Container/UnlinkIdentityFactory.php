@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Management\Users\UnlinkIdentity;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Identity\ExternalIdentityRepository;
@@ -30,7 +31,9 @@ final class UnlinkIdentityFactory
         $connections = $container->get(ConnectionRepository::class);
         /** @var TransactionManager $transactions */
         $transactions = $container->get(TransactionManager::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new UnlinkIdentity($users, $identities, $connections, $transactions);
+        return new UnlinkIdentity($users, $identities, $connections, $transactions, $events);
     }
 }

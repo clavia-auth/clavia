@@ -11,7 +11,9 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Authentication;
 
-use Clavia\Application\Oidc\Logout\BackChannelLogout;
+use Clavia\Application\Port\DomainEvents;
+use Clavia\Domain\Authentication\Event\SessionEndReason;
+use Clavia\Domain\Authentication\Event\SessionsEnded;
 use Clavia\Domain\Authentication\LocalPath;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Shared\InvalidValue;
@@ -32,8 +34,8 @@ final readonly class SignOut
 {
     public function __construct(
         private Sessions $sessions,
-        private BackChannelLogout $backChannel,
         private ClientRepository $clients,
+        private DomainEvents $events,
     ) {
     }
 
@@ -45,7 +47,10 @@ final readonly class SignOut
      */
     public function __invoke(#[\SensitiveParameter] ?string $sessionId, ?string $next): string
     {
-        $this->backChannel->sessionsEnded($this->sessions->end($sessionId));
+        $ended = $this->sessions->end($sessionId);
+        if ($ended !== null) {
+            $this->events->dispatch(new SessionsEnded(SessionEndReason::SignedOut, [$ended]));
+        }
 
         return $this->isTrusted($next) ? (string) $next : LocalPath::DEFAULT;
     }

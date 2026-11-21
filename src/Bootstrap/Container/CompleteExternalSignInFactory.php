@@ -15,6 +15,7 @@ use Clavia\Application\Authentication\External\CompleteExternalSignIn;
 use Clavia\Application\Authentication\External\ResolveExternalAccount;
 use Clavia\Application\Authentication\SignIn\CompleteFirstFactor;
 use Clavia\Application\Connection\ConnectionAccess;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\ExternalSignInStore;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Configuration\Settings;
@@ -39,6 +40,8 @@ final class CompleteExternalSignInFactory
         $completeFirstFactor = $container->get(CompleteFirstFactor::class);
         /** @var Settings $settings */
         $settings = $container->get(Settings::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
         return new CompleteExternalSignIn(
             $access,
@@ -48,6 +51,7 @@ final class CompleteExternalSignInFactory
             $loginStates,
             $completeFirstFactor,
             $settings->issuer(),
+            $events,
         );
     }
 }

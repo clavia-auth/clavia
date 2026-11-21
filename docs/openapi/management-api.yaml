@@ -47,6 +47,10 @@ tags:
     description: |
       The ways people sign in — pools of accounts with passwords, social providers, OpenID
       Connect providers — and which applications may use each.
+  - name: audit
+    description: |
+      The audit trail: sign-ins, sessions, consents, tokens and every change to the
+      configuration, append-only and kept for CLAVIA_AUDIT_RETENTION_DAYS. Read-only.
 
 paths:
   /api/v1/users:
@@ -1270,6 +1274,79 @@ paths:
         '422':
           $ref: '#/components/responses/Unprocessable'
 
+  /api/v1/audit-events:
+    get:
+      tags: [audit]
+      operationId: listAuditEvents
+      summary: Read the audit trail, newest first.
+      description: |
+        Every filter given must hold. `client_id` matches the application that acted or that
+        a person acted through; `target_type` and `target_id` go together.
+      security:
+        - managementToken: [read:audit_events]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - name: type
+          in: query
+          description: One or more event types, comma-separated.
+          schema:
+            type: string
+            maxLength: 1024
+        - name: actor_user_id
+          in: query
+          description: The person who acted.
+          schema:
+            type: string
+            format: uuid
+        - name: client_id
+          in: query
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+        - name: target_type
+          in: query
+          schema:
+            $ref: '#/components/schemas/AuditTargetType'
+        - name: target_id
+          in: query
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+        - name: outcome
+          in: query
+          schema:
+            $ref: '#/components/schemas/AuditOutcome'
+        - name: since
+          in: query
+          description: From this instant, included.
+          schema:
+            type: string
+            format: date-time
+        - name: until
+          in: query
+          description: Up to this instant, excluded.
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: One page of audit events.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEventPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
 components:
   securitySchemes:
     managementToken:
@@ -1303,6 +1380,7 @@ components:
             create:connections: Create pools and OpenID Connect providers
             update:connections: Switch, rename and reconfigure connections
             delete:connections: Delete pools and OpenID Connect providers nothing depends on
+            read:audit_events: Read the audit trail
 
   headers:
     Location:
@@ -1544,6 +1622,93 @@ components:
           $ref: '#/components/schemas/PageNumber'
         per_page:
           $ref: '#/components/schemas/PerPage'
+
+    AuditEventPage:
+      description: One page of audit events, newest first.
+      type: object
+      additionalProperties: false
+      required: [items, total, page, per_page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+        total:
+          $ref: '#/components/schemas/Total'
+        page:
+          $ref: '#/components/schemas/PageNumber'
+        per_page:
+          $ref: '#/components/schemas/PerPage'
+
+    AuditEvent:
+      type: object
+      additionalProperties: false
+      required: [id, type, occurred_at, outcome, actor, target, details, client_address, user_agent]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [authentication.succeeded, authentication.failed, session.ended, mfa.enrolled, mfa.removed, consent.given, consent.refused, consent.withdrawn, device.approved, device.refused, token.issued, token.revoked, token.code_replayed, token.refresh_replayed, client.created, client.updated, client.deleted, client.secret_rotated, client.granted, user.created, user.updated, user.deleted, user.identity_unlinked, user.roles_changed, role.created, role.updated, role.deleted, resource_server.created, resource_server.updated, resource_server.deleted, connection.created, connection.updated, connection.deleted, signing_key.created, signing_key.rotated]
+        occurred_at:
+          type: string
+          format: date-time
+        outcome:
+          $ref: '#/components/schemas/AuditOutcome'
+        actor:
+          type: object
+          additionalProperties: false
+          required: [kind, user_id, client_id]
+          description: |
+            Who acted: a `person` (with the application they acted through, if any), an
+            `application` as itself, the `system` console, or `anonymous` — nobody known yet.
+          properties:
+            kind:
+              type: string
+              enum: [person, application, system, anonymous]
+            user_id:
+              type: string
+              format: uuid
+              nullable: true
+            client_id:
+              type: string
+              nullable: true
+        target:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [type, id]
+          properties:
+            type:
+              $ref: '#/components/schemas/AuditTargetType'
+            id:
+              type: string
+        details:
+          type: object
+          description: Short, flat values — a grant type, a scope, a reason. Never a credential.
+          additionalProperties:
+            oneOf:
+              - type: string
+              - type: integer
+              - type: boolean
+              - type: array
+                items:
+                  type: string
+        client_address:
+          type: string
+          nullable: true
+        user_agent:
+          type: string
+          nullable: true
+
+    AuditOutcome:
+      type: string
+      enum: [success, failure]
+
+    AuditTargetType:
+      type: string
+      enum: [user, client, resource_server, role, connection, signing_key]
 
     RolePage:
       description: One page of roles, newest first.

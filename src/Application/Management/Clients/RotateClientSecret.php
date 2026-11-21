@@ -12,9 +12,11 @@ declare(strict_types=1);
 namespace Clavia\Application\Management\Clients;
 
 use Clavia\Application\Management\NotFound;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
+use Clavia\Domain\Client\Event\ClientSecretRotated;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\SecretGenerator;
 
@@ -31,6 +33,7 @@ final readonly class RotateClientSecret
         private ClientRepository $clients,
         private PasswordHasher $hasher,
         private SecretGenerator $secrets,
+        private DomainEvents $events,
     ) {
     }
 
@@ -45,6 +48,7 @@ final readonly class RotateClientSecret
         $secret = $this->secrets->token();
         $rotated = $client->withSecretHash($this->hasher->hash($secret));
         $this->clients->save($rotated);
+        $this->events->dispatch(new ClientSecretRotated($rotated->id));
 
         return new ClientWithSecret($rotated, $secret);
     }

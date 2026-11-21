@@ -22,6 +22,7 @@ use Clavia\Adapter\Primary\Http\Auth\PasswordlessCodeHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessLinkHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessStartHandler;
 use Clavia\Adapter\Primary\Http\Auth\ThemeHandler;
+use Clavia\Adapter\Primary\Http\Management\AuditEventsHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientConnectionsHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientsHandler;
@@ -205,6 +206,7 @@ return static function (Application $app): void {
         'api.resource-server',
     );
     $app->route('/api/v1/roles', $management(RolesHandler::class), ['GET', 'POST'], 'api.roles');
+    $app->route('/api/v1/audit-events', $management(AuditEventsHandler::class), ['GET'], 'api.audit-events');
     $app->route(
         '/api/v1/roles/{role_id}',
         $management(RoleHandler::class),

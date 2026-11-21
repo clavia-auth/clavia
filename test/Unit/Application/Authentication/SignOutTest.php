@@ -21,6 +21,7 @@ use ClaviaTest\Support\BackChannelLogouts;
 use ClaviaTest\Support\Clients;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
+use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemorySessionStore;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -41,11 +42,12 @@ final class SignOutTest extends TestCase
             $clock,
             28800,
             604800,
+            new InMemoryDomainEvents(),
         );
         $clients = new InMemoryClientRepository();
         $clients->save(Clients::public('spa', ['https://app.example/cb', 'http://localhost:3000/callback']));
         [$backChannel] = BackChannelLogouts::for($clients, $clock);
-        $this->signOut = new SignOut($this->sessions, $backChannel, $clients);
+        $this->signOut = new SignOut($this->sessions, $clients, new InMemoryDomainEvents($backChannel));
     }
 
     public function testTheSessionIsEnded(): void
