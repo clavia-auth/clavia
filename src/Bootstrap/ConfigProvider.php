@@ -89,6 +89,7 @@ use Clavia\Adapter\Secondary\IdentityProvider\ProviderHttp;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use Clavia\Adapter\Secondary\Redis\RedisConnection;
 use Clavia\Adapter\Secondary\Signing\Jose\JoseSignatureVerifier;
+use Clavia\Adapter\Secondary\Signing\Remote\PublicKeyCache;
 use Clavia\Adapter\Secondary\System\AfterResponseTasks;
 use Clavia\Adapter\Secondary\System\SystemClock;
 use Clavia\Adapter\Secondary\System\SystemRandomSource;
@@ -472,6 +473,8 @@ final class ConfigProvider
                     AttemptCounter::class => Container\AttemptCounterFactory::class,
                     NonceRegistry::class => Container\NonceRegistryFactory::class,
                     TokenSigner::class => Container\TokenSignerFactory::class,
+                    PublicKeyCache::class => Container\PublicKeyCacheFactory::class,
+                    Container\SigningHttpClientFactory::SERVICE => Container\SigningHttpClientFactory::class,
                     SigningKeyStore::class => Container\SigningKeyStoreFactory::class,
 
                     // Primary adapter: HTTP

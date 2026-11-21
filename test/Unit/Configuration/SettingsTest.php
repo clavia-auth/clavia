@@ -283,6 +283,58 @@ final class SettingsTest extends TestCase
         Settings::fromEnvironment(self::MINIMAL + ['CLAVIA_SIGNING_BACKEND' => 'aws-kms']);
     }
 
+    public function testRetiredKeysAreListedForARemoteBackendOnly(): void
+    {
+        $remote = ['CLAVIA_SIGNING_BACKEND' => 'aws-kms', 'CLAVIA_SIGNING_KEY_REF' => 'key-3'];
+
+        $settings = Settings::fromEnvironment(
+            self::MINIMAL + $remote + ['CLAVIA_SIGNING_RETIRED_KEY_REFS' => 'key-2, key-1'],
+        );
+
+        self::assertSame(['key-2', 'key-1'], $settings->signingRetiredKeyRefs);
+        self::assertSame([], Settings::fromEnvironment(self::MINIMAL)->signingRetiredKeyRefs);
+
+        $refusals = [
+            'the postgres backend retires its own keys' => ['CLAVIA_SIGNING_RETIRED_KEY_REFS' => 'key-1'],
+            'never the active one' => $remote + ['CLAVIA_SIGNING_RETIRED_KEY_REFS' => 'key-1,key-3'],
+            'each retired key once' => $remote + ['CLAVIA_SIGNING_RETIRED_KEY_REFS' => 'key-1,key-1'],
+        ];
+        foreach ($refusals as $message => $variables) {
+            try {
+                Settings::fromEnvironment($variables + self::MINIMAL);
+                self::fail($message);
+            } catch (InvalidSettings $refused) {
+                self::assertStringContainsString($message, $refused->getMessage());
+            }
+        }
+    }
+
+    public function testAnAzureApplicationIsNamedWholeAndProvedOneWay(): void
+    {
+        $application = [
+            'CLAVIA_AZURE_TENANT_ID' => 'tenant',
+            'CLAVIA_AZURE_CLIENT_ID' => 'client',
+            'CLAVIA_AZURE_CLIENT_SECRET' => 'secret',
+        ];
+        self::assertSame('secret', Settings::fromEnvironment(self::MINIMAL + $application)->azureClientSecret);
+        // A client id alone selects a user-assigned managed identity.
+        $identity = Settings::fromEnvironment(self::MINIMAL + ['CLAVIA_AZURE_CLIENT_ID' => 'client']);
+        self::assertSame('client', $identity->azureClientId);
+
+        $refusals = [
+            'not both' => $application + ['CLAVIA_AZURE_FEDERATED_TOKEN_FILE' => '/var/run/token'],
+            'needs CLAVIA_AZURE_TENANT_ID and CLAVIA_AZURE_CLIENT_ID' => ['CLAVIA_AZURE_CLIENT_SECRET' => 'secret'],
+        ];
+        foreach ($refusals as $message => $variables) {
+            try {
+                Settings::fromEnvironment($variables + self::MINIMAL);
+                self::fail($message);
+            } catch (InvalidSettings $refused) {
+                self::assertStringContainsString($message, $refused->getMessage());
+            }
+        }
+    }
+
     public function testAProductionConfigurationIsAccepted(): void
     {
         $settings = Settings::fromEnvironment(self::PRODUCTION);

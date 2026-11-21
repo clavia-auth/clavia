@@ -336,6 +336,36 @@ final class SettingsBuilder
             ));
         }
 
+        if ($settings->signingRetiredKeyRefs !== []) {
+            if ($settings->signingBackend === 'postgres') {
+                throw new InvalidSettings(
+                    'CLAVIA_SIGNING_RETIRED_KEY_REFS is for a remote signing backend; the postgres backend '
+                    . 'retires its own keys (`clavia keys:rotate`).',
+                );
+            }
+            $references = $settings->signingRetiredKeyRefs;
+            $repeated = count(array_unique($references)) !== count($references);
+            if ($repeated || in_array($settings->signingKeyRef, $references, true)) {
+                throw new InvalidSettings(
+                    'CLAVIA_SIGNING_RETIRED_KEY_REFS names each retired key once, and never the active one.',
+                );
+            }
+        }
+
+        if ($settings->azureClientSecret !== null || $settings->azureFederatedTokenFile !== null) {
+            if ($settings->azureClientSecret !== null && $settings->azureFederatedTokenFile !== null) {
+                throw new InvalidSettings(
+                    'Set CLAVIA_AZURE_CLIENT_SECRET or CLAVIA_AZURE_FEDERATED_TOKEN_FILE, not both: they are '
+                    . 'two ways of proving the same application.',
+                );
+            }
+            if ($settings->azureTenantId === null || $settings->azureClientId === null) {
+                throw new InvalidSettings(
+                    'Signing in to Azure as an application needs CLAVIA_AZURE_TENANT_ID and CLAVIA_AZURE_CLIENT_ID.',
+                );
+            }
+        }
+
         if ($settings->emailBackend === EmailBackend::Smtp && ($settings->smtpHost ?? '') === '') {
             throw new InvalidSettings('CLAVIA_EMAIL_BACKEND=smtp requires CLAVIA_SMTP_HOST naming the mail server.');
         }

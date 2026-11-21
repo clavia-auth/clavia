@@ -1,0 +1,80 @@
+<?php
+
+/**
+ * This file is part of Clavia, an open-source OAuth 2.1 / OpenID Connect authorization server.
+ *
+ * @license   BSD-3-Clause — see the LICENSE file distributed with this source code.
+ * @copyright Copyright (c) 2026 Phayne Limited. (https://phayne.io)
+ */
+
+declare(strict_types=1);
+
+namespace ClaviaTest\Support\Fake;
+
+use Clavia\Adapter\Secondary\Signing\Remote\Gcp\GcpKmsKey;
+use Laminas\Diactoros\Response\JsonResponse;
+use Psr\Http\Message\RequestInterface;
+use Psr\Http\Message\ResponseInterface;
+
+/**
+ * Google Cloud KMS's REST API for one key version, answering from a {@see LocalHsm} as the
+ * service does: a SHA-256 digest only, its CRC32C verified, checksums on what it returns.
+ * Wrong ones can be ordered, to see them caught.
+ */
+final class FakeCloudKms
+{
+    public string $algorithm = 'RSA_SIGN_PKCS1_2048_SHA256';
+
+    public bool $corruptSignature = false;
+
+    public bool $confirmDigest = true;
+
+    public function __construct(
+        public readonly string $keyVersion,
+        private readonly LocalHsm $hsm = new LocalHsm(),
+        private readonly string $token = 'google-token',
+    ) {
+    }
+
+    public function __invoke(RequestInterface $request): ResponseInterface
+    {
+        if ($request->getHeaderLine('Authorization') !== 'Bearer ' . $this->token) {
+            return new JsonResponse(['error' => ['code' => 401, 'message' => 'Request had invalid credentials.']], 401);
+        }
+
+        return match ([$request->getMethod(), (string) $request->getUri()]) {
+            ['POST', GcpKmsKey::API . $this->keyVersion . ':asymmetricSign'] => $this->sign($request),
+            ['GET', GcpKmsKey::API . $this->keyVersion . '/publicKey'] => new JsonResponse([
+                'pem' => $this->hsm->publicPem(),
+                'algorithm' => $this->algorithm,
+                'pemCrc32c' => self::crc32c($this->hsm->publicPem()),
+                'name' => $this->keyVersion,
+            ]),
+            default => new JsonResponse(['error' => ['code' => 404, 'message' => 'Not found.']], 404),
+        };
+    }
+
+    private function sign(RequestInterface $request): ResponseInterface
+    {
+        /** @var array{digest: array{sha256?: string}, digestCrc32c?: string} $body */
+        $body = json_decode((string) $request->getBody(), true, flags: JSON_THROW_ON_ERROR);
+        $digest = base64_decode($body['digest']['sha256'] ?? '', true);
+        if ($digest === false || strlen($digest) !== 32) {
+            return new JsonResponse(['error' => ['code' => 400, 'message' => 'Digest is not a SHA-256.']], 400);
+        }
+
+        $signature = $this->hsm->signDigest($digest);
+
+        return new JsonResponse([
+            'signature' => base64_encode($this->corruptSignature ? strrev($signature) : $signature),
+            'signatureCrc32c' => self::crc32c($signature),
+            'verifiedDigestCrc32c' => $this->confirmDigest && ($body['digestCrc32c'] ?? null) === self::crc32c($digest),
+            'name' => $this->keyVersion,
+        ]);
+    }
+
+    private static function crc32c(string $bytes): string
+    {
+        return (string) hexdec(hash('crc32c', $bytes));
+    }
+}

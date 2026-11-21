@@ -6,7 +6,7 @@ Auth0: OAuth2 flows, interactive login with MFA, and a Management API.
 This is the PHP 8.5 implementation. It is being ported feature by feature from the Python
 reference implementation; `CLAUDE.md` holds the migration plan and the current state.
 
-**Status: Step 18 — authentication-request parameters.** A person signs in with a password at `/auth/login`, with
+**Status: Step 19 — remote signing backends.** A person signs in with a password at `/auth/login`, with
 a code or a link sent by email, or with Google or GitHub once their credentials are configured (`CLAVIA_GOOGLE_CLIENT_ID` / `_SECRET`,
 `CLAVIA_GITHUB_CLIENT_ID` / `_SECRET`; register
 `https://auth.{domain}/auth/social/{provider}/callback` at the provider) — followed, once they
@@ -15,7 +15,7 @@ code — and completes the Authorization Code + PKCE flow in a browser;
 `/oauth2/token` issues an opaque access token and, for an OpenID Connect request, an RS256 ID token. The provider metadata is
 published at `/.well-known/openid-configuration` (and `/.well-known/oauth-authorization-server`),
 the signing keys at `/oidc/jwks.json`, and `/oidc/userinfo` answers bearer tokens. Signing keys
-are managed with `clavia keys:generate|rotate|list`. Machine clients (`clavia
+are managed with `clavia keys:generate|rotate|list` (with the `postgres` backend). Machine clients (`clavia
 clients:create-m2m`) get subject-less tokens through the Client Credentials grant for the API
 they name in `audience`, within what their client grant on it allows. The Management API
 (`https://management.{domain}/api/v1/`) manages users, clients and APIs; its contract is
@@ -86,6 +86,17 @@ An application decides how fresh the sign-in must be: `prompt=login` (or `select
 asks the person to sign in again, `max_age` sets how old a sign-in may be, and `prompt=none`
 answers `login_required` rather than showing a page. Request objects (`request`,
 `request_uri`) are refused with the errors OpenID Connect defines for them.
+
+Tokens are signed in the database by default (`CLAVIA_SIGNING_BACKEND=postgres`, keys sealed
+with `CLAVIA_SECRET_ENCRYPTION_KEY`), or by a key that never leaves its provider: `aws-kms`
+(`composer require aws/aws-sdk-php`), `gcp-kms` (`composer require google/auth`) or
+`azure-key-vault`, with `CLAVIA_SIGNING_KEY_REF` naming the key version — a key ARN or id,
+`projects/…/cryptoKeyVersions/N`, `https://<vault>.vault.azure.net/keys/<name>/<version>`.
+To rotate, create a new key there, make it the reference, and list the old one in
+`CLAVIA_SIGNING_RETIRED_KEY_REFS` until its tokens have expired. Azure uses the host's managed
+identity, or an application named by `CLAVIA_AZURE_TENANT_ID`, `CLAVIA_AZURE_CLIENT_ID` and a
+`CLAVIA_AZURE_CLIENT_SECRET` or `CLAVIA_AZURE_FEDERATED_TOKEN_FILE`. Any other value is the class
+name of your own `RemoteSigningKey` — an HSM, Vault Transit — built from the key reference.
 
 A client registered for the `refresh_token` grant (beside `authorization_code`) gets a
 refresh token with the code flow's tokens. Every refresh returns a new pair and spends the

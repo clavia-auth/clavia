@@ -102,11 +102,11 @@ final class SeedDevelopmentDataCommand extends Command
                 ? "Created public client {$seeded->clientId->value}"
                 : "Client {$seeded->clientId->value} already exists",
         );
-        $output->writeln(
-            $seeded->signingKeyCreated
-                ? "Created signing key {$seeded->signingKeyId}"
-                : "Signing key {$seeded->signingKeyId} is already active",
-        );
+        $output->writeln(match (true) {
+            $seeded->signingKeyId === null => 'Signing keys are held by the signing backend',
+            $seeded->signingKeyCreated => "Created signing key {$seeded->signingKeyId}",
+            default => "Signing key {$seeded->signingKeyId} is already active",
+        });
         $output->writeln(
             "Registered the Management API as {$management->managementApi->value}",
             OutputInterface::OUTPUT_RAW,

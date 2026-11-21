@@ -54,10 +54,16 @@
         "web-token/jwt-library": "^4.0"
     },
     "require-dev": {
+        "aws/aws-sdk-php": "^3.407",
         "deptrac/deptrac": "^4.7",
+        "google/auth": "^1.55",
         "phpunit/phpunit": "^12.5",
         "squizlabs/php_codesniffer": "^4.0",
         "vimeo/psalm": "^7.11"
+    },
+    "suggest": {
+        "aws/aws-sdk-php": "^3.407 — for CLAVIA_SIGNING_BACKEND=aws-kms",
+        "google/auth": "^1.55 — for CLAVIA_SIGNING_BACKEND=gcp-kms"
     },
     "autoload": {
         "psr-4": {

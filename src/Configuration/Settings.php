@@ -45,6 +45,7 @@ final readonly class Settings
      * @internal Use {@see self::fromEnvironment()}: this constructor checks nothing.
      *
      * @param list<non-empty-string> $trustedProxies
+     * @param list<string> $signingRetiredKeyRefs
      * @param list<string> $scopesSupported
      */
     public function __construct(
@@ -84,15 +85,35 @@ final readonly class Settings
         public string $signingBackend = 'postgres',
         /**
          * Provider-specific key identifier. Required by every backend except
-         * `postgres`, which keeps its keys in the database.
+         * `postgres`, which keeps its keys in the database. It names one immutable key
+         * version — an AWS key ARN or id, a GCP `cryptoKeyVersions/…` resource, a
+         * versioned Key Vault key URL — never an alias that could be repointed.
          */
         public ?string $signingKeyRef = null,
+        /**
+         * Keys of the same remote backend that sign nothing any more but stay in the JWKS
+         * until every token they signed has expired: the rotation path for a provider
+         * that does not rotate an asymmetric key itself. Refused with `postgres`, which
+         * retires its own keys.
+         */
+        public array $signingRetiredKeyRefs = [],
         /** JWS algorithm for issued tokens. RS256 is mandatory-to-implement for OIDC. */
         public string $signingAlgorithm = 'RS256',
         /** Region for the AWS KMS backend. Falls through to the AWS resolution chain when unset. */
         public ?string $awsRegion = null,
         /** Aims the AWS KMS backend at a local emulator. Refused outside development. */
         public ?string $awsKmsEndpointUrl = null,
+        /**
+         * The Microsoft Entra tenant for the Azure Key Vault backend. With
+         * `azureClientId`, and a secret or a federated token file, the backend signs in
+         * as that application; without them it uses the managed identity of the host.
+         */
+        public ?string $azureTenantId = null,
+        /** The application to sign in as, or the user-assigned managed identity to use. */
+        public ?string $azureClientId = null,
+        public ?string $azureClientSecret = null,
+        /** The token AKS workload identity projects into the pod, presented instead of a secret. */
+        public ?string $azureFederatedTokenFile = null,
         /**
          * Base64 32-byte key encrypting secrets that must be readable back. Without
          * it the postgres backend refuses to create or use a key: there is no fallback

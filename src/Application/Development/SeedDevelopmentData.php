@@ -56,7 +56,8 @@ final readonly class SeedDevelopmentData
         private ClientRepository $clients,
         private PasswordHasher $hasher,
         private TransactionManager $transactions,
-        private SigningKeyStore $signingKeys,
+        /** Null when the signing backend keeps its keys at a provider. */
+        private ?SigningKeyStore $signingKeys,
         private SigningAlgorithm $signingAlgorithm,
         private SecretGenerator $secrets,
         private RandomSource $random,
@@ -129,10 +130,11 @@ final readonly class SeedDevelopmentData
         }
 
         // A token endpoint without a key fails loudly by design; a development setup
-        // should not have to learn that the hard way.
-        $signingKey = $this->signingKeys->lockActive();
-        $signingKeyCreated = $signingKey === null;
-        if ($signingKey === null) {
+        // should not have to learn that the hard way. A remote backend's key is the
+        // provider's to create.
+        $signingKey = $this->signingKeys?->lockActive();
+        $signingKeyCreated = $this->signingKeys !== null && $signingKey === null;
+        if ($this->signingKeys !== null && $signingKey === null) {
             $signingKey = $this->signingKeys->create($this->signingAlgorithm, $now);
         }
 
@@ -141,7 +143,7 @@ final readonly class SeedDevelopmentData
             $userCreated,
             $client->id,
             $clientCreated,
-            $signingKey->kid(),
+            $signingKey?->kid(),
             $signingKeyCreated,
         );
     }

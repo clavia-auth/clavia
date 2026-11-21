@@ -29,7 +29,7 @@ and multi-tenancy.
 
 ## Current state
 
-**Steps 0 to 18 are done: the foundations, Authorization Code + PKCE, the login page with
+**Steps 0 to 19 are done: the foundations, Authorization Code + PKCE, the login page with
 browser sessions, OpenID Connect (ID tokens, discovery, JWKS, userinfo), Client
 Credentials for machine clients holding a grant on an API, the Management API with
 audiences in the user's flow, two-factor authentication (TOTP and recovery codes),
@@ -38,7 +38,8 @@ tokens, application ownership with the consent screen, and connections — pools
 the social providers and operator-registered OpenID Connect providers, enabled per
 application — token introspection and revocation, device authorization, passwordless sign-in by email, and
 back-channel logout with session management, and the authentication-request parameters
-(`prompt`, `max_age`, request objects refused); the dashboard is in `frontend/`.**
+(`prompt`, `max_age`, request objects refused), and remote signing backends (AWS KMS, Google
+Cloud KMS, Azure Key Vault, a class of the operator's own); the dashboard is in `frontend/`.**
 The application answers `GET /healthz`,
 `GET|POST /oauth2/authorize`, `POST /oauth2/token`, `POST /oauth2/introspect`, `POST /oauth2/revoke`,
 `POST /oauth2/device/code`, `GET|POST /auth/device`,
@@ -158,8 +159,8 @@ What exists:
     `Redis\RedisNonceRegistry`; `Persistence\PhpDb\Jsonb`.
   - `Adapter\Primary\Http\Oidc\{DiscoveryHandler,JwksHandler,UserInfoHandler}`,
     `Http\Shared\{BearerCredentials,BearerChallenger}`; `Cli\{GenerateSigningKey,RotateSigningKey,ListSigningKeys}Command`.
-    `seed-dev` creates a signing key when none is active. `Bootstrap\SigningBackend` refuses
-    every backend but `postgres` by name.
+    `seed-dev` creates a signing key when none is active (with `postgres`; Step 19 made the
+    key store postgres-only and the remote backends real).
   - Migrations `0005_user_profiles`, `0006_authorization_code_authentication`,
     `0007_oidc_signing_keys` (a partial unique index allows one active key).
 - **Client Credentials** (Step 5):
@@ -1306,23 +1307,33 @@ Consequences worth knowing before touching the OIDC/signing code:
   rather than delegated to a generic helper, because a remote backend has to name the same
   primitive precisely — AWS KMS's `RSASSA_PKCS1_V1_5_SHA_256`. Get it wrong and signatures verify
   locally and nowhere else.
-- **Two differences between providers are easy to get wrong**: AWS hashes the message itself; GCP
-  and Azure expect a pre-computed digest. Send the wrong shape and the signature covers the wrong
-  bytes — a failure that shows up at every verifier and nowhere in this code. And the same
-  primitive has three names: `RS256` is AWS's `RSASSA_PKCS1_V1_5_SHA_256`, GCP's
-  `RSA_SIGN_PKCS1_2048_SHA256`, and Azure's own `RS256`.
-- **`kid` is deliberately not the provider's full key reference.** An AWS ARN carries the account
-  number, a GCP resource name carries the project — neither needs publishing to every client that
-  fetches the JWKS.
-- **`CLAVIA_SIGNING_BACKEND`** selects `postgres`, `aws-kms`, `gcp-kms`, `azure-key-vault`, or a
-  custom adapter's class name, with `CLAVIA_SIGNING_KEY_REF` naming the provider's key. Cloud SDKs
-  are Composer suggestions so a deployment installs one, not three. `postgres` (the key stored,
+- **Every remote key is handed a digest, never the message.** AWS can hash a message itself (up
+  to 4 KB); GCP and Azure only sign a digest. `RemoteTokenSigner` hashes the signing input and
+  every provider signs that (AWS with `MessageType=DIGEST`), so there is one shape and no 4 KB
+  ceiling. Send the wrong shape and the signature covers the wrong bytes — which is why
+  `RemoteTokenSigner` verifies each signature against the published key before returning it.
+  The same primitive has three names: `RS256` is AWS's `RSASSA_PKCS1_V1_5_SHA_256`, GCP's
+  `RSA_SIGN_PKCS1_*_SHA256`, and Azure's own `RS256`.
+- **`kid` is the RFC 7638 thumbprint of the public key**, for every backend. An AWS ARN carries the
+  account number, a GCP resource name the project, a vault URL the vault — none of it is
+  published. A reference names one immutable key version (key ARN or id, `cryptoKeyVersions/N`,
+  a versioned vault URL); an alias or an unversioned key is refused at boot, because repointing
+  it would change the key under every token issued — and under the cached public key.
+- **`CLAVIA_SIGNING_BACKEND`** selects `postgres`, `aws-kms`, `gcp-kms`, `azure-key-vault`, or the
+  name of a class implementing `RemoteSigningKey` (built from the key reference alone), with
+  `CLAVIA_SIGNING_KEY_REF` naming the provider's key and `CLAVIA_SIGNING_RETIRED_KEY_REFS` the
+  retired ones still published. AWS uses `aws/aws-sdk-php`, GCP `google/auth` for its
+  credentials and REST for the calls; Azure has no PHP SDK for Key Vault and is REST throughout
+  (managed identity by default; an Entra application with a secret or a federated token file
+  when `CLAVIA_AZURE_*` name one). They are Composer suggestions so a deployment installs one,
+  not three. Nothing calls a provider at boot. `postgres` (the key stored,
   AES-256-GCM-encrypted with `kid` as associated data, in the database) is the only extractable
   option and the only one needing no external service: right for development, a warning in
   production. `CLAVIA_SECRET_ENCRYPTION_KEY` is required by it; there is no plaintext fallback.
 - **Production runs on `aws-kms`.** KMS does not rotate an asymmetric key itself; rotation means
-  creating a second key and publishing both in the JWKS until every token signed with the old one
-  has expired. The task role needs only `kms:Sign` and `kms:GetPublicKey`.
+  creating a second key, making it `CLAVIA_SIGNING_KEY_REF` and moving the old one to
+  `CLAVIA_SIGNING_RETIRED_KEY_REFS` until every token it signed has expired. The task role needs
+  only `kms:Sign` and `kms:GetPublicKey`.
 
 ### Domain configuration
 
@@ -1664,10 +1675,27 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
 - Tests: `AuthorizePromptTest` (18 acceptance cases), `MaxAgeTest`, the `login`/`max_age`/
   request-object cases of `AuthorizeTest` and `PromptTest`, `OidcTest` (the prompt values).
 
-#### [ ] Step 19 — Remote signing backends
+#### [x] Step 19 — Remote signing backends
 - `aws-kms`, `gcp-kms`, `azure-key-vault` and custom-class adapters behind `TokenSigner`
   (message-vs-digest semantics per provider); SDKs as optional Composer suggestions.
 - Tests: rest of `test_signing_backends` (15), against fakes.
+- Done: `Adapter\Secondary\Signing\Remote\` — `RemoteSigningKey` (the SPI, also a custom
+  backend's contract: `reference()`, `sign($digest, $alg)`, `publicKey($alg)`),
+  `RemoteTokenSigner` (kid = thumbprint, retired keys published, every signature verified before
+  it leaves, public keys memoised and cached), `PublicKeyCache` (`Redis\RedisPublicKeyCache`, a
+  day), `SubjectPublicKeyInfo`, `JsonApi`, `AccessTokens`/`IssuedToken`, `InvalidKeyReference`;
+  `Aws\AwsKmsKey` (SDK, `MessageType=DIGEST`), `Gcp\{GcpKmsKey,GoogleCredentials}` (REST, CRC32C
+  both ways; `google/auth`), `Azure\{AzureKeyVaultKey,ManagedIdentity,EntraApplication}` (REST,
+  no SDK). `Bootstrap\{SigningBackend,RemoteSigningKeys}`, `SigningHttpClientFactory` (no SSRF
+  pin: IMDS is link-local). Settings `signingRetiredKeyRefs`, `azureTenantId`, `azureClientId`,
+  `azureClientSecret`, `azureFederatedTokenFile`. `SigningKeyStore` and `keys:*` refuse a remote
+  backend; `seed-dev` leaves its keys alone. `aws/aws-sdk-php` and `google/auth` are
+  `require-dev` (so the adapters are analysed) and `suggest`.
+- Tests: `RemoteSigningKeyContract` against `AwsKmsKeyTest`, `GcpKmsKeyTest`,
+  `AzureKeyVaultKeyTest`; `AzureCredentialsTest`, `RemoteTokenSignerTest`,
+  `RemoteSigningSupportTest`, `RedisPublicKeyCacheTest`, `RemoteSigningTest` (acceptance: boot
+  refusals, and a custom backend end to end through the JWKS); fakes `LocalHsm`, `FakeKms` (the
+  real SDK on `Aws\MockHandler`), `FakeCloudKms`, `FakeKeyVault`, `LocalSigningKey`.
 
 ### Phase D — Parity and cut-over
 

@@ -20,11 +20,9 @@ use Clavia\Application\Port\Mailer;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Application\Port\SchemaMigrator;
 use Clavia\Application\Port\SecretCipher;
-use Clavia\Application\Port\TokenSigner;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Bootstrap\ConfigProvider;
 use Clavia\Bootstrap\Container\HttpClientFactory;
-use Clavia\Configuration\InvalidSettings;
 use Clavia\Domain\Connection\Connection;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Connection\ConnectionStrategy;
@@ -77,23 +75,6 @@ final class WiringTest extends AcceptanceTestCase
         // Built without connecting: the server is only reached when a message goes out.
         $this->boot(['CLAVIA_EMAIL_BACKEND' => 'smtp', 'CLAVIA_SMTP_HOST' => 'smtp.invalid']);
         self::assertInstanceOf(SmtpMailer::class, $this->container()->get(Mailer::class));
-    }
-
-    public function testASigningBackendThatDoesNotExistYetIsRefusedByName(): void
-    {
-        // An operator who configured a KMS must never end up signing from PostgreSQL unawares.
-        $this->boot([
-            'CLAVIA_SIGNING_BACKEND' => 'aws-kms',
-            'CLAVIA_SIGNING_KEY_REF' => 'arn:aws:kms:eu-west-1:1:key/x',
-        ]);
-
-        try {
-            $this->container()->get(TokenSigner::class);
-            self::fail('A signer was built for a backend that does not exist.');
-        } catch (ServiceNotCreatedException $refusal) {
-            self::assertInstanceOf(InvalidSettings::class, $refusal->getPrevious());
-            self::assertStringContainsString("CLAVIA_SIGNING_BACKEND='aws-kms'", $refusal->getPrevious()->getMessage());
-        }
     }
 
     public function testASigningAlgorithmNoKeyCanProduceIsRefused(): void

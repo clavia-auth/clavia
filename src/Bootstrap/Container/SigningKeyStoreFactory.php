@@ -26,7 +26,7 @@ final class SigningKeyStoreFactory
         /** @var Settings $settings */
         $settings = $container->get(Settings::class);
 
-        SigningBackend::requirePostgres($settings);
+        SigningBackend::requireManagedKeys($settings);
 
         /** @var Database $database */
         $database = $container->get(Database::class);
