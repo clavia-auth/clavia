@@ -9,7 +9,6 @@
 
 declare(strict_types=1);
 
-
 namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;

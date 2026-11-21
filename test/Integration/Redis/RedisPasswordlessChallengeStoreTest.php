@@ -9,7 +9,6 @@
 
 declare(strict_types=1);
 
-
 namespace ClaviaTest\Integration\Redis;
 
 use Clavia\Adapter\Secondary\Redis\Keys;
@@ -62,7 +61,7 @@ final class RedisPasswordlessChallengeStoreTest extends IntegrationTestCase
         self::assertStringNotContainsString('the-plain-handle', implode('|', $keys));
         $fields = $this->redis()->hGetAll(Keys::forSecret('passwordless', 'the-plain-handle'));
         self::assertIsArray($fields);
-        self::assertStringNotContainsString('424242', implode('|', $fields));
+        self::assertStringNotContainsString('424242', json_encode($fields, JSON_THROW_ON_ERROR));
     }
 
     public function testAnEntryThatCannotBeReadIsAnEntryThatIsNotThere(): void

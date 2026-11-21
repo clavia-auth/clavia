@@ -9,7 +9,6 @@
 
 declare(strict_types=1);
 
-
 namespace ClaviaTest\Acceptance;
 
 use Clavia\Application\Authentication\Mfa\TotpSeeds;
@@ -17,6 +16,7 @@ use Clavia\Application\Port\Mailer;
 use Clavia\Application\Port\MailOutbox;
 use Clavia\Application\Port\OutgoingMail;
 use Clavia\Domain\Authentication\AuthenticationMethod;
+use Clavia\Domain\Authentication\LocalPath;
 use Clavia\Domain\Authentication\Mfa\MfaFactor;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Mfa\Totp;
@@ -115,7 +115,8 @@ final class PasswordlessTest extends AcceptanceTestCase
         $signedIn = $this->submitCode(self::codeIn($mail));
 
         self::assertSame(303, $signedIn->getStatusCode(), (string) $signedIn->getBody());
-        self::assertSame('/', $signedIn->getHeaderLine('Location'));
+        // Nothing to return to: the login page, which says who is signed in.
+        self::assertSame(LocalPath::DEFAULT, $signedIn->getHeaderLine('Location'));
         $account = $this->users()->findByEmail(ConnectionName::email(), self::EMAIL);
         self::assertNotNull($account);
         self::assertNull($account->passwordHash());
@@ -191,7 +192,8 @@ final class PasswordlessTest extends AcceptanceTestCase
         self::assertNull($this->cookie(self::SESSION_COOKIE));
 
         $this->setCookie(self::CODE_COOKIE, $handle, '/auth');
-        self::assertSame('/', $this->submitCode($code)->getHeaderLine('Location'), 'Still alive where it was asked.');
+        self::assertSame(303, $this->submitCode($code)->getStatusCode());
+        self::assertNotNull($this->cookie(self::SESSION_COOKIE), 'Still alive where it was asked.');
     }
 
     public function testACodeIsSingleUse(): void
@@ -200,7 +202,8 @@ final class PasswordlessTest extends AcceptanceTestCase
         $code = self::codeIn($this->lastMail());
         $handle = $this->cookie(self::CODE_COOKIE, '/auth');
         self::assertNotNull($handle);
-        self::assertSame('/', $this->submitCode($code)->getHeaderLine('Location'));
+        $this->submitCode($code);
+        self::assertNotNull($this->cookie(self::SESSION_COOKIE));
 
         $this->clearCookies();
         $this->setCookie(self::CODE_COOKIE, $handle, '/auth');
@@ -382,7 +385,7 @@ final class PasswordlessTest extends AcceptanceTestCase
         self::assertSame(303, $signedIn->getStatusCode());
         self::assertStringStartsWith('/oauth2/authorize?', $signedIn->getHeaderLine('Location'));
         self::assertNull($this->loginState($state), 'The login page handle is spent.');
-        $back = $this->get('/oauth2/authorize', self::queryOf($signedIn->getHeaderLine('Location')));
+        $back = $this->get('/oauth2/authorize', self::locationQuery($signedIn));
         self::assertNotSame('', $this->extractCode($back));
     }
 
@@ -527,16 +530,6 @@ final class PasswordlessTest extends AcceptanceTestCase
         self::assertIsString($state);
 
         return $state;
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private static function queryOf(string $location): array
-    {
-        parse_str((string) parse_url($location, PHP_URL_QUERY), $query);
-
-        return array_filter($query, is_string(...));
     }
 
     private function confirmSecondFactor(User $user): void

@@ -9,7 +9,6 @@
 
 declare(strict_types=1);
 
-
 namespace ClaviaTest\Unit\Application\Authentication;
 
 use Clavia\Application\Authentication\Passwordless\SignInMail;

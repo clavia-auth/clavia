@@ -9,7 +9,6 @@
 
 declare(strict_types=1);
 
-
 namespace ClaviaTest\Support\Fake;
 
 use Symfony\Component\Mailer\Envelope;

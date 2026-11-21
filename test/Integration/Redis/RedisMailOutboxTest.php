@@ -9,7 +9,6 @@
 
 declare(strict_types=1);
 
-
 namespace ClaviaTest\Integration\Redis;
 
 use Clavia\Adapter\Secondary\Redis\RedisConnection;

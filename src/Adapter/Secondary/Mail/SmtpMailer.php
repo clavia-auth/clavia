@@ -9,7 +9,6 @@
 
 declare(strict_types=1);
 
-
 namespace Clavia\Adapter\Secondary\Mail;
 
 use Clavia\Application\Port\Mailer;
@@ -18,7 +17,6 @@ use Clavia\Application\Port\OutgoingMail;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 use Symfony\Component\Mailer\Transport\Smtp\EsmtpTransport;
-use Symfony\Component\Mailer\Transport\Smtp\Stream\SocketStream;
 use Symfony\Component\Mailer\Transport\TransportInterface;
 use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
@@ -33,12 +31,6 @@ use Symfony\Component\Mime\Exception\RfcComplianceException;
  */
 final readonly class SmtpMailer implements Mailer
 {
-    /**
-     * Seconds a silent mail server may hold up a sign-in. Someone is waiting on the page
-     * for the answer; PHP's default socket timeout is a minute.
-     */
-    private const float TIMEOUT_SECONDS = 15.0;
-
     public function __construct(
         private TransportInterface $transport,
         private Address $from,
@@ -65,10 +57,6 @@ final readonly class SmtpMailer implements Mailer
     ): EsmtpTransport {
         $implicitTls = $port === 465;
         $transport = new EsmtpTransport($host, $port, $implicitTls, logger: $logger);
-        $stream = $transport->getStream();
-        if ($stream instanceof SocketStream) {
-            $stream->setTimeout(self::TIMEOUT_SECONDS);
-        }
         if (! $implicitTls) {
             $transport->setAutoTls($startTls);
             $transport->setRequireTls($startTls);

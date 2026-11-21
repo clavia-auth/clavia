@@ -329,7 +329,7 @@ What exists:
     normalizes an address (trimmed, lower-cased).
   - `Port\{Mailer,OutgoingMail,MailUnavailable,MailOutbox,PasswordlessChallengeStore}`;
     `Adapter\Secondary\Mail\{OutboxMailer,SmtpMailer,NoMailer}` (Symfony Mailer's ESMTP
-    transport, STARTTLS required unless switched off, SMTPS on 465, 15-second timeout),
+    transport, STARTTLS required unless switched off, SMTPS on 465),
     `Redis\{RedisMailOutbox,RedisPasswordlessChallengeStore}`; `MailerFactory` picks by
     `CLAVIA_EMAIL_BACKEND`, and the settings refuse `smtp` without a host.
     `Settings::emailSender()`.

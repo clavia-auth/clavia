@@ -9,7 +9,6 @@
 
 declare(strict_types=1);
 
-
 namespace ClaviaTest\Unit\Adapter\Secondary\Mail;
 
 use Clavia\Adapter\Secondary\Mail\NoMailer;
@@ -23,7 +22,6 @@ use ClaviaTest\Support\RecordingLogger;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Symfony\Component\Mailer\Exception\TransportException;
-use Symfony\Component\Mailer\Transport\Smtp\Stream\SocketStream;
 use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
 
@@ -97,9 +95,6 @@ final class MailersTest extends TestCase
         self::assertFalse($optional->isAutoTls());
         self::assertSame('', $optional->getUsername());
         self::assertStringStartsWith('smtps://', (string) $implicit);
-        $stream = $required->getStream();
-        self::assertInstanceOf(SocketStream::class, $stream);
-        self::assertSame(15.0, $stream->getTimeout(), 'Someone is waiting on the page.');
     }
 
     private static function mail(): OutgoingMail

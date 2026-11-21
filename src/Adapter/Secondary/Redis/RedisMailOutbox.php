@@ -9,7 +9,6 @@
 
 declare(strict_types=1);
 
-
 namespace Clavia\Adapter\Secondary\Redis;
 
 use Clavia\Application\Port\MailOutbox;

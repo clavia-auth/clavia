@@ -9,7 +9,6 @@
 
 declare(strict_types=1);
 
-
 namespace ClaviaTest\Unit\Application\Authentication;
 
 use Clavia\Application\Authentication\Passwordless\AnswerPasswordlessCode;
@@ -244,7 +243,7 @@ final class PasswordlessSignInTest extends TestCase
 
         $this->mailer->failing = false;
         $this->startWith('ada@example.com', 'link');
-        self::assertSame(1, count($this->mailer->sent));
+        self::assertCount(1, $this->mailer->sent);
     }
 
     public function testADisabledAccountIsNotSignedIn(): void

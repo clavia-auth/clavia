@@ -9,7 +9,6 @@
 
 declare(strict_types=1);
 
-
 namespace ClaviaTest\Unit\Support;
 
 use Clavia\Application\Port\PasswordlessChallengeStore;

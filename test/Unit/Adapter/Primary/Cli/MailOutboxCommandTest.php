@@ -9,7 +9,6 @@
 
 declare(strict_types=1);
 
-
 namespace ClaviaTest\Unit\Adapter\Primary\Cli;
 
 use Clavia\Adapter\Primary\Cli\MailOutboxCommand;
