@@ -58,6 +58,11 @@ export interface Client {
   response_types: ResponseType[];
   /** Where a sign-out the application starts at `/oidc/logout` may send the browser back. */
   post_logout_redirect_uris: string[];
+  /**
+   * Who runs it: the operator (first-party) or somebody else (third-party, id `tpc_…`).
+   * Fixed at registration.
+   */
+  is_first_party: boolean;
   created_at: string;
 }
 
@@ -79,6 +84,8 @@ export interface ResourceServer {
   is_system: boolean;
   /** RBAC: narrow a user's token to what their roles grant on this API. */
   enforce_policies: boolean;
+  /** First-party applications skip the consent screen for this API's permissions. */
+  allow_skipping_consent: boolean;
   created_at: string;
 }
 
@@ -96,6 +103,18 @@ export interface RolePermission extends Permission {
 
 export interface RoleDetail extends Role {
   permissions: RolePermission[];
+}
+
+/** What a user allowed one application to do on one API, acting as them. */
+export interface UserConsent {
+  client_id: string;
+  client_name: string;
+  is_first_party: boolean;
+  /** The API's identifier; null for a request that named none. */
+  audience: string | null;
+  scopes: string[];
+  granted_at: string;
+  updated_at: string;
 }
 
 /** An effective permission of a user, and every role that grants it. */

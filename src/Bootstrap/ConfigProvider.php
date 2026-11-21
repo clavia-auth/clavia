@@ -29,6 +29,7 @@ use Clavia\Adapter\Primary\Cli\SeedDevelopmentDataCommand;
 use Clavia\Adapter\Primary\Cli\ShowConfigCommand;
 use Clavia\Adapter\Primary\Http\Auth\AuthCookies;
 use Clavia\Adapter\Primary\Http\Auth\AuthPageResponder;
+use Clavia\Adapter\Primary\Http\Auth\ConsentHandler;
 use Clavia\Adapter\Primary\Http\Auth\ExternalSignInCallbackHandler;
 use Clavia\Adapter\Primary\Http\Auth\ExternalSignInHandler;
 use Clavia\Adapter\Primary\Http\Auth\LoginHandler;
@@ -48,6 +49,7 @@ use Clavia\Adapter\Primary\Http\Management\RoleHandler;
 use Clavia\Adapter\Primary\Http\Management\RolesHandler;
 use Clavia\Adapter\Primary\Http\Management\RoleUsersHandler;
 use Clavia\Adapter\Primary\Http\Management\RotateClientSecretHandler;
+use Clavia\Adapter\Primary\Http\Management\UserConsentsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserHandler;
 use Clavia\Adapter\Primary\Http\Management\UserMfaHandler;
 use Clavia\Adapter\Primary\Http\Management\UserPermissionsHandler;
@@ -122,11 +124,16 @@ use Clavia\Application\Management\Roles\RolePermissions;
 use Clavia\Application\Management\Roles\UpdateRole;
 use Clavia\Application\Management\Users\CreateUser;
 use Clavia\Application\Management\Users\DeleteUser;
+use Clavia\Application\Management\Users\ReadConsents;
 use Clavia\Application\Management\Users\ReadUsers;
 use Clavia\Application\Management\Users\ResetUserMfa;
 use Clavia\Application\Management\Users\UpdateUser;
+use Clavia\Application\Management\Users\WithdrawConsent;
 use Clavia\Application\OAuth2\Authorize\Authorize;
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
+use Clavia\Application\OAuth2\Consent\DecideConsent;
+use Clavia\Application\OAuth2\Consent\DescribeConsent;
+use Clavia\Application\OAuth2\Consent\HeldConsents;
 use Clavia\Application\OAuth2\Token\AuthorizationCodeGrant;
 use Clavia\Application\OAuth2\Token\ClientCredentialsGrant;
 use Clavia\Application\OAuth2\Token\IssueToken;
@@ -142,6 +149,7 @@ use Clavia\Application\Oidc\Keys\RotateSigningKey;
 use Clavia\Application\Oidc\Logout\EndSession;
 use Clavia\Application\Oidc\UserInfo\ReadUserInfo;
 use Clavia\Application\Port\AttemptCounter;
+use Clavia\Application\Port\ConsentStateStore;
 use Clavia\Application\Port\ExternalSignInStore;
 use Clavia\Application\Port\IdentityProviders;
 use Clavia\Application\Port\LoginStateStore;
@@ -160,6 +168,7 @@ use Clavia\Configuration\Settings;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
 use Clavia\Domain\Client\ClientRepository;
+use Clavia\Domain\Consent\ConsentRepository;
 use Clavia\Domain\Identity\ExternalIdentityRepository;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
@@ -258,6 +267,9 @@ final class ConfigProvider
                     SeedDashboardClient::class => Container\SeedDashboardClientFactory::class,
                     ClientAuthenticator::class => Container\ClientAuthenticatorFactory::class,
                     Authorize::class => Container\AuthorizeFactory::class,
+                    HeldConsents::class => Container\HeldConsentsFactory::class,
+                    DescribeConsent::class => Container\DescribeConsentFactory::class,
+                    DecideConsent::class => Container\DecideConsentFactory::class,
                     AuthorizationCodeGrant::class => Container\AuthorizationCodeGrantFactory::class,
                     RefreshTokenGrant::class => Container\RefreshTokenGrantFactory::class,
                     UserScope::class => Container\UserScopeFactory::class,
@@ -308,6 +320,7 @@ final class ConfigProvider
                     RequireSignIn::class => Container\RequireSignInFactory::class,
                     ResetUserMfa::class => Container\ResetUserMfaFactory::class,
                     MfaChallengeHandler::class => Container\MfaChallengeHandlerFactory::class,
+                    ConsentHandler::class => Container\ConsentHandlerFactory::class,
                     MfaSettingsHandler::class => Container\MfaSettingsHandlerFactory::class,
                     UserMfaHandler::class => Container\UserMfaHandlerFactory::class,
                     ReadUsers::class => Container\ReadUsersFactory::class,
@@ -334,6 +347,8 @@ final class ConfigProvider
                     RoleAssignments::class => Container\RoleAssignmentsFactory::class,
                     ReadRoleHolders::class => Container\ReadRoleHoldersFactory::class,
                     ReadEffectivePermissions::class => Container\ReadEffectivePermissionsFactory::class,
+                    ReadConsents::class => Container\ReadConsentsFactory::class,
+                    WithdrawConsent::class => Container\WithdrawConsentFactory::class,
                     EnsureRole::class => Container\EnsureRoleFactory::class,
                     AssignRole::class => Container\AssignRoleFactory::class,
 
@@ -351,7 +366,9 @@ final class ConfigProvider
                     ResourceServerRepository::class => Container\ResourceServerRepositoryFactory::class,
                     ClientGrantRepository::class => Container\ClientGrantRepositoryFactory::class,
                     RoleRepository::class => Container\RoleRepositoryFactory::class,
+                    ConsentRepository::class => Container\ConsentRepositoryFactory::class,
                     LoginStateStore::class => Container\LoginStateStoreFactory::class,
+                    ConsentStateStore::class => Container\ConsentStateStoreFactory::class,
                     SessionStore::class => Container\SessionStoreFactory::class,
                     AttemptCounter::class => Container\AttemptCounterFactory::class,
                     NonceRegistry::class => Container\NonceRegistryFactory::class,
@@ -393,6 +410,7 @@ final class ConfigProvider
                     RoleUsersHandler::class => Container\RoleUsersHandlerFactory::class,
                     UserRolesHandler::class => Container\UserRolesHandlerFactory::class,
                     UserPermissionsHandler::class => Container\UserPermissionsHandlerFactory::class,
+                    UserConsentsHandler::class => Container\UserConsentsHandlerFactory::class,
 
                     // Primary adapter: CLI
                     ConsoleApplication::class => Container\ConsoleApplicationFactory::class,

@@ -29,22 +29,22 @@ and multi-tenancy.
 
 ## Current state
 
-**Steps 0 to 11 are done: the foundations, Authorization Code + PKCE, the login page with
+**Steps 0 to 12 are done: the foundations, Authorization Code + PKCE, the login page with
 browser sessions, OpenID Connect (ID tokens, discovery, JWKS, userinfo), Client
 Credentials for machine clients holding a grant on an API, the Management API with
 audiences in the user's flow, two-factor authentication (TOTP and recovery codes),
-signing in with Google or GitHub, RP-Initiated Logout, roles (RBAC) and rotating refresh
-tokens; the dashboard is in `frontend/`.**
+signing in with Google or GitHub, RP-Initiated Logout, roles (RBAC), rotating refresh
+tokens, and application ownership with the consent screen; the dashboard is in `frontend/`.**
 The application answers `GET /healthz`,
 `GET|POST /oauth2/authorize`, `POST /oauth2/token`, `GET /.well-known/openid-configuration`,
 `GET /.well-known/oauth-authorization-server`, `GET /oidc/jwks.json`, `GET|POST /oidc/userinfo`,
 `GET|POST /oidc/logout`,
 `GET|POST /auth/login`, `GET|POST /auth/mfa`, `GET|POST /auth/mfa/enroll`,
 `POST /auth/mfa/enroll/confirm`, `POST /auth/mfa/disable`, `GET /auth/social/{provider}` and
-its `/callback`, `POST /auth/logout`,
+its `/callback`, `GET|POST /auth/consent`, `POST /auth/logout`,
 `POST /auth/theme` and the Management API under `/api/v1/` (users with their second factor,
-roles and effective permissions, clients with secret rotation, resource servers, roles and
-their holders): a person can sign in with a
+roles, effective permissions and consents, clients with secret rotation, resource servers,
+roles and their holders): a person can sign in with a
 password or through Google or GitHub — and, once they have turned it on, a code from their authenticator app or a
 recovery code — complete the flow in a browser, naming an API in `audience` if the client
 wants its permissions — on an API that enforces roles, only what their roles grant there —
@@ -291,6 +291,29 @@ What exists:
     `0017_refresh_tokens` (and `oauth2_access_tokens.refresh_family_id`).
   - `refresh_token` in the token response, discovery and the Management API's `GrantType`;
     the dashboard is seeded with it.
+- **Ownership and consent** (Step 12):
+  - `Domain\Client\Ownership`, read from the id: `ClientId::THIRD_PARTY_PREFIX` (`tpc_`),
+    `ClientId::generate($secrets, $ownership)`, `Client::isFirstParty()`.
+    `ResourceServer::$allowSkippingConsent` and `allowingConsentSkip()` (refused off for a
+    system API: `SystemApiProtected::consent()`).
+  - `Domain\Consent\{UserConsent,ConsentRepository,ConsentPolicy,PendingConsent}`;
+    `Domain\OAuth2\Prompt` (`none`, `consent`); `ErrorCode::LoginRequired|ConsentRequired`.
+  - `Authorize` refuses a third-party application a system API (`access_denied`, before
+    sign-in), answers `prompt=none` with `login_required`/`consent_required`, and puts a
+    request needing consent on hold (`ConsentRequired`). `AuthorizationRequest::resumption()`
+    rebuilds the request as a `GET` from its parameters; `RequestParameters::with()` and
+    `toQueryString()`.
+  - `Application\OAuth2\Consent\{HeldConsents,DescribeConsent,DecideConsent}` with
+    `ConsentScreen`, `ConsentedApi`, `ScopeLine`, `ConsentGiven`; `Port\ConsentStateStore`.
+    `Management\Users\{ReadConsents,WithdrawConsent,DescribedConsent}`. `ClientCredentialsGrant`
+    and `GrantClientAccess` keep third-party machines off system APIs.
+  - `Adapter\Secondary\Redis\RedisConsentStateStore`, `PhpDb\PhpDbConsentRepository`;
+    migration `0018_consent` (`user_consents`, `resource_servers.allow_skipping_consent`).
+  - `Adapter\Primary\Http\Auth\{ConsentHandler,ConsentPages}`, `templates/auth/consent.phtml`
+    and `consent-expired.phtml`; `Management\UserConsentsHandler`; `is_first_party` on
+    clients and `allow_skipping_consent` on APIs in the Management API;
+    `clients:create-m2m --third-party`. The dashboard shows ownership, the API switch and a
+    user's authorized applications again.
 - **Error pages for browsers** (after Step 3): `Adapter\Primary\Http\Shared\ClientPreference`
   (`Accept` negotiation), `ErrorResponder` + `ErrorPage`, `PageRenderer` + `HtmlPage` (the
   layout, headers and CSP every server-rendered page shares). 404, 405, 500 and the
@@ -699,6 +722,25 @@ Conventions established in Step 11:
   (`CLAVIA_REFRESH_TOKEN_ABSOLUTE_LIFETIME`) fixed at sign-in. No token outlives the family.
 - **A refresh issues no ID token** (OIDC Core §12.2) and ignores `audience`: a family is for
   one API.
+
+Conventions established in Step 12:
+
+- **Ownership is identity, written in the id.** A third-party application is registered
+  under `tpc_…` and stays third-party; nothing stores it a second time. A third-party
+  application never gets a token for a system API — on anybody's behalf (refused at the
+  authorization endpoint before anyone signs in) or as itself (refused by `clients:grant`
+  and again at the token endpoint, so a grant written around the command mints nothing).
+- **Who is asked is `ConsentPolicy`'s decision**, made after the roles check and before a
+  code exists: `prompt=consent` asks; a first-party application does not ask for no API or
+  an API that allows skipping; otherwise a consent on record must cover every scope for this
+  application on this API. Allowing widens the record; refusing records nothing.
+- **A request waiting for the person is resumed, not replayed from storage.** The login page
+  and the consent screen send the browser back to `/oauth2/authorize` with every parameter
+  (`AuthorizationRequest::resumption()`), minus a `prompt` value that has been satisfied, and
+  the endpoint decides again with everything as it is then.
+- **A handle is the only thing a page's URL or form carries**, for consent as for sign-in; a
+  handle that is unknown, spent, expired, someone else's or names something deleted is the
+  same "expired" page. Showing the screen leaves it; deciding claims it (`GETDEL`).
 
 **Known defect in the database library, worked around.** At the pinned commit,
 `php-db/phpdb-pgsql` runs `SELECT LASTVAL()` after every statement to fetch a "last generated
@@ -1360,11 +1402,15 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
   concurrent-refresh case is the row lock: the in-memory and PostgreSQL contracts lock inside a
   transaction, and only one spend can see the token unspent.
 
-#### [ ] Step 12 — Application ownership and consent
-- `isFirstParty`, `tpc_` ids, `UserConsent`, the consent decision table (`prompt=consent`,
-  third-party, `allow_skipping_consent`), `ConsentStateStore`, `/auth/consent`,
-  `/users/{id}/consents`.
-- Python: `oauth2/consent.py`, `auth/consent.py`. Tests: `test_consent` (23).
+#### [x] Step 12 — Application ownership and consent
+- Ownership in the client id (`tpc_`), `UserConsent` (migration `0018`), the consent decision
+  table (`prompt=consent`, third-party, `allow_skipping_consent`), `ConsentStateStore`,
+  `/auth/consent`, `/users/{id}/consents`; `prompt=none` answers `login_required` and
+  `consent_required`. Third-party applications never reach a system API.
+- Python: `oauth2/consent.py`, `auth/consent.py`. Tests: `test_consent` (23) — ported as
+  `ConsentTest` (26 cases); `ConsentPolicyTest`, `UserConsentTest`, `PromptTest`,
+  `ConsentScreenTest`, the consent cases of `AuthorizeTest`, `ConsentRepositoryContract`
+  and `ConsentStateStoreContract` against the fakes, PostgreSQL and Redis.
 
 #### [ ] Step 13 — Connections
 - Database pools, built-in social, operator-registered OIDC connections (discovery, nonce + PKCE,

@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Cli;
 
 use Clavia\Application\Clients\RegisterMachineClient;
+use Clavia\Domain\Client\Ownership;
 use Clavia\Domain\Shared\InvalidValue;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -24,6 +25,9 @@ use Symfony\Component\Console\Output\OutputInterface;
  * Works in every environment, unlike `seed-dev`: a machine client is the first thing a
  * real deployment needs before it can call anything else. The secret is printed once
  * and stored hashed; lose it and the fix is a new client, not a recovery.
+ *
+ * `--third-party` registers somebody else's machine: its id starts with `tpc_`, and it can
+ * never be granted a system API.
  */
 #[AsCommand(
     name: 'clients:create-m2m',
@@ -51,6 +55,12 @@ final class CreateMachineClientCommand extends Command
                 null,
                 InputOption::VALUE_REQUIRED,
                 'Use this secret (at least 32 characters) instead of a generated one. Prefer generating.',
+            )
+            ->addOption(
+                'third-party',
+                null,
+                InputOption::VALUE_NONE,
+                "Somebody else's machine: it can never be granted the Management API.",
             );
     }
 
@@ -63,7 +73,11 @@ final class CreateMachineClientCommand extends Command
         $secret = $input->getOption('secret');
 
         try {
-            $registered = ($this->register)($name, is_string($secret) && $secret !== '' ? $secret : null);
+            $registered = ($this->register)(
+                $name,
+                is_string($secret) && $secret !== '' ? $secret : null,
+                $input->getOption('third-party') === true ? Ownership::ThirdParty : Ownership::FirstParty,
+            );
         } catch (InvalidValue $refusal) {
             $output->writeln('<error>' . $refusal->getMessage() . '</error>');
 
@@ -71,7 +85,11 @@ final class CreateMachineClientCommand extends Command
         }
 
         $clientId = $registered->client->id->value;
-        $output->writeln(sprintf('Registered confidential client "%s"', $registered->client->name));
+        $output->writeln(sprintf(
+            'Registered %sconfidential client "%s"',
+            $registered->client->isFirstParty() ? '' : 'third-party ',
+            $registered->client->name,
+        ));
         $output->writeln("  client_id:     {$clientId}");
         $output->writeln("  client_secret: {$registered->secret}", OutputInterface::OUTPUT_RAW);
         if ($registered->secretGenerated) {

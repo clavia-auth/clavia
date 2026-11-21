@@ -20,6 +20,7 @@ use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\GrantType;
+use Clavia\Domain\Client\Ownership;
 use Clavia\Domain\Client\ResponseType;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
@@ -110,7 +111,7 @@ final readonly class SeedDevelopmentData
         if ($client === null) {
             // A public client: no secret, PKCE is its only proof of possession.
             $client = Client::register(
-                ClientId::generate($this->secrets),
+                ClientId::generate($this->secrets, Ownership::FirstParty),
                 self::CLIENT_NAME,
                 ClientType::Public,
                 ClientAuthMethod::None,

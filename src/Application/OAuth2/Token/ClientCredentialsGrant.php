@@ -93,6 +93,11 @@ final readonly class ClientCredentialsGrant implements Grant
 
         $resourceServer = $this->resourceServers->findByIdentifier($audience)
             ?? throw OAuth2Error::invalidTarget('No API is registered with this audience.');
+        if ($resourceServer->isSystem && ! $client->isFirstParty()) {
+            // Checked before the grant, so that even one written around `clients:grant` —
+            // which refuses it — mints nothing.
+            throw OAuth2Error::accessDenied('Third-party applications cannot access this API.');
+        }
 
         $grant = $this->clientGrants->find($client->id, $resourceServer->id)
             ?? throw OAuth2Error::accessDenied('The client has not been granted access to this API.');

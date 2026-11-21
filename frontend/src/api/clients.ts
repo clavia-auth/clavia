@@ -17,10 +17,12 @@ export interface ClientCreate {
   grant_types: GrantType[];
   response_types: ResponseType[];
   post_logout_redirect_uris?: string[];
+  /** False registers a third-party application (id `tpc_…`). Omitted means first-party. */
+  is_first_party?: boolean;
 }
 
-/** The type is identity, not configuration: it is fixed at registration. */
-export type ClientUpdate = Partial<Omit<ClientCreate, "client_type">>;
+/** The type and the ownership are identity, not configuration: both are fixed at registration. */
+export type ClientUpdate = Partial<Omit<ClientCreate, "client_type" | "is_first_party">>;
 
 const keys = {
   all: ["clients"] as const,

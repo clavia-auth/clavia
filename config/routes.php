@@ -9,6 +9,7 @@
 
 declare(strict_types=1);
 
+use Clavia\Adapter\Primary\Http\Auth\ConsentHandler;
 use Clavia\Adapter\Primary\Http\Auth\ExternalSignInCallbackHandler;
 use Clavia\Adapter\Primary\Http\Auth\ExternalSignInHandler;
 use Clavia\Adapter\Primary\Http\Auth\LoginHandler;
@@ -26,6 +27,7 @@ use Clavia\Adapter\Primary\Http\Management\RoleHandler;
 use Clavia\Adapter\Primary\Http\Management\RolesHandler;
 use Clavia\Adapter\Primary\Http\Management\RoleUsersHandler;
 use Clavia\Adapter\Primary\Http\Management\RotateClientSecretHandler;
+use Clavia\Adapter\Primary\Http\Management\UserConsentsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserHandler;
 use Clavia\Adapter\Primary\Http\Management\UserMfaHandler;
 use Clavia\Adapter\Primary\Http\Management\UserPermissionsHandler;
@@ -74,6 +76,8 @@ return static function (Application $app): void {
     $app->route('/auth/mfa/enroll', MfaSettingsHandler::class, ['GET', 'POST'], 'auth.mfa.enroll');
     $app->post('/auth/mfa/enroll/confirm', MfaSettingsHandler::class, 'auth.mfa.enroll.confirm');
     $app->post('/auth/mfa/disable', MfaSettingsHandler::class, 'auth.mfa.disable');
+    // Whether an application may act as the signed-in person: the question, and the answer.
+    $app->route('/auth/consent', ConsentHandler::class, ['GET', 'POST'], 'auth.consent');
     // Signing in through an external provider: out, then back. Both are navigations (GET);
     // the callback's path is the redirect URI registered at the provider.
     $app->get('/auth/social/{provider:[a-z][a-z0-9-]*}', ExternalSignInHandler::class, 'auth.social');
@@ -105,6 +109,16 @@ return static function (Application $app): void {
         '/api/v1/users/{user_id}/permissions',
         $management(UserPermissionsHandler::class),
         'api.user.permissions',
+    );
+    $app->get(
+        '/api/v1/users/{user_id}/consents',
+        $management(UserConsentsHandler::class),
+        'api.user.consents',
+    );
+    $app->delete(
+        '/api/v1/users/{user_id}/consents/{client_id}',
+        $management(UserConsentsHandler::class),
+        'api.user.consent',
     );
     $app->route('/api/v1/clients', $management(ClientsHandler::class), ['GET', 'POST'], 'api.clients');
     $app->route(

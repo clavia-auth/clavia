@@ -11,8 +11,10 @@ import {
   useSetUserRoles,
   useUpdateUser,
   useUser,
+  useUserConsents,
   useUserPermissions,
   useUserRoles,
+  useWithdrawUserConsent,
 } from "../api/users";
 import type { User } from "../api/types";
 import { BackLink, ErrorNote, Field, KeyValue, PageHeader, formatDate } from "../components/ui";
@@ -157,7 +159,56 @@ function UserDetail({ user }: { user: User }) {
       </div>
 
       <RolesPanel user={user} />
+      <ConsentsPanel user={user} />
     </>
+  );
+}
+
+/** Applications the user allowed to act as them, and the way to take that back. */
+function ConsentsPanel({ user }: { user: User }) {
+  const consents = useUserConsents(user.id);
+  const withdraw = useWithdrawUserConsent(user.id);
+
+  return (
+    <section className="card mt-6 p-6">
+      <h2 className="mb-1 text-sm font-semibold">Authorized applications</h2>
+      <p className="mb-3 text-xs text-muted">
+        What this user agreed to on the consent screen. First-party applications that skipped it are not listed.
+        Withdrawing makes the application ask again; tokens it already holds run to their expiry.
+      </p>
+      <ErrorNote error={consents.error ?? withdraw.error} />
+      {consents.data?.length === 0 && <p className="text-sm text-muted">None.</p>}
+      <ul className="divide-y divide-line">
+        {consents.data?.map((consent) => (
+          <li key={`${consent.client_id}:${consent.audience ?? ""}`} className="flex items-start justify-between gap-4 py-3 text-sm">
+            <div>
+              <Link to={`/clients/${consent.client_id}`} className="font-medium hover:underline">
+                {consent.client_name || consent.client_id}
+              </Link>
+              <span className={`ml-2 ${consent.is_first_party ? "badge-muted" : "badge-gold"}`}>
+                {consent.is_first_party ? "First-party" : "Third-party"}
+              </span>
+              <div className="mt-1 font-mono text-xs text-muted">{consent.scopes.join(" ")}</div>
+              <div className="text-xs text-muted">
+                {consent.audience ?? "Sign-in only"} · granted {formatDate(consent.granted_at)}
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={withdraw.isPending}
+              onClick={() => {
+                if (confirm(`Withdraw what ${user.email} allowed ${consent.client_name || consent.client_id}, on every API?`)) {
+                  void withdraw.mutateAsync(consent.client_id);
+                }
+              }}
+            >
+              Withdraw
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

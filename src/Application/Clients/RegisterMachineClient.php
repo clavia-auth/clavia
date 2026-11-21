@@ -19,6 +19,7 @@ use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\GrantType;
+use Clavia\Domain\Client\Ownership;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\SecretGenerator;
@@ -33,7 +34,8 @@ use Clavia\Domain\Shared\SecretGenerator;
  * the first check instead of half-working.
  *
  * It holds nothing until a client grant binds it to an API. Every call registers a new
- * client; the id is generated, so there is nothing to recognise a rerun by.
+ * client; the id is generated, so there is nothing to recognise a rerun by. A
+ * third-party one can be granted any API but a system one.
  */
 final readonly class RegisterMachineClient
 {
@@ -49,13 +51,17 @@ final readonly class RegisterMachineClient
     }
 
     /**
-     * @param string|null $secret A secret to use instead of a generated one. Generating is better.
+     * @param string|null $secret    A secret to use instead of a generated one. Generating is better.
+     * @param Ownership   $ownership Somebody else's machine is registered as third-party.
      *
      * @throws InvalidValue When the name is too long, or a chosen secret is shorter than 32
      *                      characters or cannot be hashed faithfully.
      */
-    public function __invoke(string $name, #[\SensitiveParameter] ?string $secret = null): RegisteredMachineClient
-    {
+    public function __invoke(
+        string $name,
+        #[\SensitiveParameter] ?string $secret = null,
+        Ownership $ownership = Ownership::FirstParty,
+    ): RegisteredMachineClient {
         $generated = $secret === null;
         $secret ??= $this->secrets->token();
 
@@ -70,7 +76,7 @@ final readonly class RegisterMachineClient
         }
 
         $client = Client::register(
-            ClientId::generate($this->secrets),
+            ClientId::generate($this->secrets, $ownership),
             $name,
             ClientType::Confidential,
             ClientAuthMethod::ClientSecretBasic,

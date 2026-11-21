@@ -16,6 +16,7 @@ use Clavia\Application\OAuth2\Authorize\AuthorizationOutcome;
 use Clavia\Application\OAuth2\Authorize\AuthorizationRequest;
 use Clavia\Application\OAuth2\Authorize\Authorize;
 use Clavia\Application\OAuth2\Authorize\CodeIssued;
+use Clavia\Application\OAuth2\Authorize\ConsentRequired;
 use Clavia\Application\OAuth2\Authorize\LoginRequired;
 use Clavia\Application\OAuth2\Authorize\RequestRefused;
 use Clavia\Application\OAuth2\RequestParameters;
@@ -23,10 +24,15 @@ use Clavia\Application\Port\NonceRegistry;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\Session;
 use Clavia\Domain\Client\ClientId;
+use Clavia\Domain\Consent\UserConsent;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\OAuth2\ErrorCode;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use Clavia\Domain\Oidc\Nonce;
+use Clavia\Domain\ResourceServer\Permission;
+use Clavia\Domain\ResourceServer\ResourceServer;
+use Clavia\Domain\ResourceServer\ResourceServerId;
+use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\ScopeSet;
 use Clavia\Domain\Shared\SecretGenerator;
@@ -34,6 +40,8 @@ use ClaviaTest\Support\Clients;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryAuthorizationCodeRepository;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
+use ClaviaTest\Support\Fake\InMemoryConsentRepository;
+use ClaviaTest\Support\Fake\InMemoryConsentStateStore;
 use ClaviaTest\Support\Fake\InMemoryLoginStateStore;
 use ClaviaTest\Support\Fake\InMemoryNonceRegistry;
 use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
@@ -46,7 +54,7 @@ use PHPUnit\Framework\TestCase;
 final class AuthorizeTest extends TestCase
 {
     private const string CHALLENGE = 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM';
-    private const string TARGET = '/oauth2/authorize?the=original&query=string';
+    private const string ENDPOINT = '/oauth2/authorize';
 
     private InMemoryClientRepository $clients;
     private InMemoryAuthorizationCodeRepository $codes;
@@ -54,6 +62,8 @@ final class AuthorizeTest extends TestCase
     private InMemoryNonceRegistry $nonces;
     private InMemoryResourceServerRepository $resourceServers;
     private InMemoryRoleRepository $roles;
+    private InMemoryConsentRepository $consents;
+    private InMemoryConsentStateStore $consentStates;
     private Authorize $authorize;
     private UserId $userId;
 
@@ -68,6 +78,8 @@ final class AuthorizeTest extends TestCase
         $this->nonces = new InMemoryNonceRegistry($clock);
         $this->resourceServers = new InMemoryResourceServerRepository();
         $this->roles = new InMemoryRoleRepository($this->resourceServers);
+        $this->consents = new InMemoryConsentRepository();
+        $this->consentStates = new InMemoryConsentStateStore($clock);
         $this->userId = UserId::generate(new SeededRandomSource(2));
         $this->authorize = new Authorize(
             $this->clients,
@@ -76,6 +88,8 @@ final class AuthorizeTest extends TestCase
             $this->nonces,
             $this->resourceServers,
             $this->roles,
+            $this->consents,
+            $this->consentStates,
             new SecretGenerator($random),
             $random,
             $clock,
@@ -310,7 +324,7 @@ final class AuthorizeTest extends TestCase
 
         $outcome = ($this->authorize)(new AuthorizationRequest(
             $this->valid(['nonce' => 'n-0S6_WzA2Mj']),
-            self::TARGET,
+            self::ENDPOINT,
             new EndUser($this->userId, $session),
         ));
 
@@ -374,6 +388,8 @@ final class AuthorizeTest extends TestCase
             $raced,
             $this->resourceServers,
             $this->roles,
+            $this->consents,
+            $this->consentStates,
             new SecretGenerator($random),
             $random,
             new FrozenClock(),
@@ -384,7 +400,7 @@ final class AuthorizeTest extends TestCase
 
         $outcome = $authorize(new AuthorizationRequest(
             $this->valid(['nonce' => 'once']),
-            self::TARGET,
+            self::ENDPOINT,
             new EndUser($this->userId),
         ));
 
@@ -397,7 +413,9 @@ final class AuthorizeTest extends TestCase
     {
         $this->authorizeAsUser($this->valid(['nonce' => 'once']));
 
-        $outcome = ($this->authorize)(new AuthorizationRequest($this->valid(['nonce' => 'once']), self::TARGET, null));
+        $outcome = ($this->authorize)(
+            new AuthorizationRequest($this->valid(['nonce' => 'once']), self::ENDPOINT, null),
+        );
 
         self::assertInstanceOf(RequestRefused::class, $outcome);
         self::assertSame(0, $this->loginStates->count());
@@ -426,13 +444,14 @@ final class AuthorizeTest extends TestCase
 
     public function testWithoutAUserTheRequestIsParkedBehindAnOpaqueHandle(): void
     {
-        $outcome = ($this->authorize)(new AuthorizationRequest($this->valid(), self::TARGET, null));
+        $outcome = ($this->authorize)(new AuthorizationRequest($this->valid(), self::ENDPOINT, null));
 
         self::assertInstanceOf(LoginRequired::class, $outcome);
         self::assertMatchesRegularExpression('/^[A-Za-z0-9_-]{43}$/D', $outcome->loginState);
         $parked = $this->loginStates->get($outcome->loginState);
         self::assertNotNull($parked);
-        self::assertSame(self::TARGET, $parked->nextUrl);
+        // Every parameter, in the query: a request posted to the endpoint resumes whole.
+        self::assertSame(self::ENDPOINT . '?' . $this->valid()->toQueryString(), $parked->nextUrl);
         self::assertSame('spa', $parked->clientId?->value);
         self::assertSame([], $this->codes->all());
     }
@@ -440,7 +459,7 @@ final class AuthorizeTest extends TestCase
     public function testAnInvalidRequestIsRefusedBeforeAnyoneIsAskedToSignIn(): void
     {
         $outcome = ($this->authorize)(
-            new AuthorizationRequest($this->valid(['code_challenge' => null]), self::TARGET, null),
+            new AuthorizationRequest($this->valid(['code_challenge' => null]), self::ENDPOINT, null),
         );
 
         self::assertInstanceOf(RequestRefused::class, $outcome);
@@ -452,13 +471,126 @@ final class AuthorizeTest extends TestCase
         try {
             ($this->authorize)(new AuthorizationRequest(
                 $this->valid(['redirect_uri' => 'https://evil.example/cb']),
-                self::TARGET,
+                self::ENDPOINT,
                 null,
             ));
             self::fail('The request was accepted.');
         } catch (OAuth2Error) {
             self::assertSame(0, $this->loginStates->count());
         }
+    }
+
+    // ── Consent ─────────────────────────────────────────────────────────────────
+
+    public function testAThirdPartyApplicationIsPutOnHoldForTheConsentScreen(): void
+    {
+        $this->clients->save(Clients::public('tpc_partner'));
+
+        $outcome = $this->authorizeAsUser($this->valid(['client_id' => 'tpc_partner', 'prompt' => 'consent login']));
+
+        self::assertInstanceOf(ConsentRequired::class, $outcome);
+        $held = $this->consentStates->find($outcome->consentState);
+        self::assertNotNull($held);
+        self::assertTrue($held->userId->equals($this->userId));
+        self::assertSame('tpc_partner', $held->clientId->value);
+        self::assertSame(Clients::REDIRECT_URI, $held->redirectUri);
+        self::assertSame('xyz', $held->state);
+        self::assertSame('openid', $held->scope->toString());
+        self::assertNull($held->resourceServerId);
+        // Back to the same request — without the `consent` it prompted for, or it would
+        // ask forever; other values stay.
+        self::assertSame(
+            self::ENDPOINT . '?' . $this->valid(['client_id' => 'tpc_partner', 'prompt' => 'login'])->toQueryString(),
+            $held->resumeAt,
+        );
+        self::assertSame([], $this->codes->all());
+    }
+
+    public function testAConsentOnRecordThatCoversTheRequestIssuesTheCode(): void
+    {
+        $this->clients->save(Clients::public('tpc_partner'));
+        $this->consents->save(UserConsent::give(
+            $this->userId,
+            ClientId::fromString('tpc_partner'),
+            null,
+            ScopeSet::fromString('openid email'),
+            new DateTimeImmutable('2026-01-15T09:00:00Z'),
+        ));
+
+        $outcome = $this->authorizeAsUser($this->valid(['client_id' => 'tpc_partner']));
+
+        self::assertInstanceOf(CodeIssued::class, $outcome);
+    }
+
+    public function testPromptConsentPutsEvenAFirstPartyRequestOnHold(): void
+    {
+        $outcome = $this->authorizeAsUser($this->valid(['prompt' => 'consent']));
+
+        self::assertInstanceOf(ConsentRequired::class, $outcome);
+        self::assertSame(
+            self::ENDPOINT . '?' . $this->valid()->toQueryString(),
+            $this->consentStates->find($outcome->consentState)?->resumeAt,
+        );
+    }
+
+    public function testPromptNoneCannotAskForConsent(): void
+    {
+        $this->clients->save(Clients::public('tpc_partner'));
+
+        $outcome = $this->authorizeAsUser($this->valid(['client_id' => 'tpc_partner', 'prompt' => 'none']));
+
+        self::assertInstanceOf(RequestRefused::class, $outcome);
+        self::assertSame(ErrorCode::ConsentRequired, $outcome->error->error);
+        self::assertSame('xyz', $outcome->state);
+        self::assertSame(0, $this->consentStates->count());
+    }
+
+    public function testPromptNoneCannotAskAnyoneToSignIn(): void
+    {
+        $outcome = ($this->authorize)(
+            new AuthorizationRequest($this->valid(['prompt' => 'none']), self::ENDPOINT, null),
+        );
+
+        self::assertInstanceOf(RequestRefused::class, $outcome);
+        self::assertSame(ErrorCode::LoginRequired, $outcome->error->error);
+        self::assertSame(0, $this->loginStates->count());
+    }
+
+    public function testPromptNoneWithAnotherValueIsRefused(): void
+    {
+        $outcome = $this->authorizeAsUser($this->valid(['prompt' => 'none consent']));
+
+        self::assertInstanceOf(RequestRefused::class, $outcome);
+        self::assertSame(ErrorCode::InvalidRequest, $outcome->error->error);
+    }
+
+    public function testAThirdPartyApplicationNeverReachesASystemApi(): void
+    {
+        $this->clients->save(Clients::public('tpc_partner'));
+        $this->resourceServers->save(ResourceServer::register(
+            ResourceServerId::fromString('rs_aaaaaaaaaaaaaaaa'),
+            Audience::fromString('https://management.example/api/v1/'),
+            'Management',
+            [Permission::of('read:users')],
+            new DateTimeImmutable('2026-01-15T09:00:00Z'),
+            isSystem: true,
+            enforcePolicies: true,
+        ));
+
+        // Refused before anyone is asked to sign in, let alone to consent.
+        $outcome = ($this->authorize)(new AuthorizationRequest(
+            $this->valid([
+                'client_id' => 'tpc_partner',
+                'scope' => 'openid read:users',
+                'audience' => 'https://management.example/api/v1/',
+            ]),
+            self::ENDPOINT,
+            null,
+        ));
+
+        self::assertInstanceOf(RequestRefused::class, $outcome);
+        self::assertSame(ErrorCode::AccessDenied, $outcome->error->error);
+        self::assertSame(0, $this->loginStates->count());
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -513,7 +645,7 @@ final class AuthorizeTest extends TestCase
 
     private function authorizeAsUser(RequestParameters $parameters): AuthorizationOutcome
     {
-        return ($this->authorize)(new AuthorizationRequest($parameters, self::TARGET, new EndUser($this->userId)));
+        return ($this->authorize)(new AuthorizationRequest($parameters, self::ENDPOINT, new EndUser($this->userId)));
     }
 
     private function refusedOutright(RequestParameters $parameters): OAuth2Error

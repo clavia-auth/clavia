@@ -37,6 +37,14 @@ final class SystemApiProtected extends DomainException
         ));
     }
 
+    public static function consent(ResourceServer $api): self
+    {
+        return new self(sprintf(
+            "The system API '%s' never asks for consent: only first-party applications can reach it.",
+            $api->identifier->value,
+        ));
+    }
+
     public static function deletion(ResourceServer $api): self
     {
         return new self(sprintf(

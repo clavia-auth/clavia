@@ -48,8 +48,9 @@ final readonly class GrantClientAccess
      * @param ScopeSet|null $scopes Null for every permission the API defines.
      *
      * @throws NotFound     When the client or the API does not exist.
-     * @throws InvalidValue When the API does not define one of the scopes, or the client is not
-     *                      registered for the client credentials grant.
+     * @throws InvalidValue When the API does not define one of the scopes, the client is not
+     *                      registered for the client credentials grant, or a third-party client
+     *                      would be granted a system API.
      */
     public function __invoke(ClientId $clientId, Audience $audience, ?ScopeSet $scopes = null): ClientGrant
     {
@@ -61,6 +62,16 @@ final readonly class GrantClientAccess
             throw new InvalidValue(sprintf(
                 "The client '%s' is not registered for the client credentials grant.",
                 $client->id->value,
+            ));
+        }
+
+        if ($resourceServer->isSystem && ! $client->isFirstParty()) {
+            // The server's own API administers this very deployment: an outsider's machine
+            // never gets near it, however it is configured.
+            throw new InvalidValue(sprintf(
+                "The client '%s' is third-party: it cannot be granted the system API '%s'.",
+                $client->id->value,
+                $resourceServer->identifier->value,
             ));
         }
 

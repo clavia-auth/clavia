@@ -15,6 +15,7 @@ use Clavia\Application\Management\Clients\ClientWithSecret;
 use Clavia\Application\Management\Roles\DescribedPermission;
 use Clavia\Application\Management\Roles\DescribedRole;
 use Clavia\Application\Management\Roles\EffectivePermission;
+use Clavia\Application\Management\Users\DescribedConsent;
 use Clavia\Application\Management\Users\ManagedUser;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\GrantType;
@@ -31,7 +32,7 @@ use DateTimeZone;
 /**
  * The JSON shape of each resource, as `docs/openapi/management-api.yaml` describes it
  * (`User`, `Client`, `ClientWithSecret`, `ResourceServer`, `Role`, `RoleWithPermissions`,
- * `EffectivePermission`, the `…Page` envelopes).
+ * `EffectivePermission`, `UserConsent`, the `…Page` envelopes).
  *
  * What is left out is left out on purpose: a password hash or a client secret hash is
  * never part of a resource, and a client secret appears only in {@see self::clientWithSecret()}.
@@ -106,6 +107,7 @@ final class ManagementViews
                 static fn (Url $uri): string => $uri->value,
                 $client->postLogoutRedirectUris,
             ),
+            'is_first_party' => $client->isFirstParty(),
             'created_at' => self::instant($client->createdAt),
         ];
     }
@@ -136,6 +138,7 @@ final class ManagementViews
             ),
             'is_system' => $api->isSystem,
             'enforce_policies' => $api->enforcePolicies,
+            'allow_skipping_consent' => $api->allowSkippingConsent,
             'created_at' => self::instant($api->createdAt),
         ];
     }
@@ -173,6 +176,25 @@ final class ManagementViews
                 static fn (Role $role): array => ['id' => $role->id->value, 'name' => $role->name],
                 $effective->roles,
             ),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public static function consent(DescribedConsent $described): array
+    {
+        $scopes = $described->consent->scope->toList();
+        sort($scopes);
+
+        return [
+            'client_id' => $described->client->id->value,
+            'client_name' => $described->client->name,
+            'is_first_party' => $described->client->isFirstParty(),
+            'audience' => $described->audience?->value,
+            'scopes' => $scopes,
+            'granted_at' => self::instant($described->consent->grantedAt),
+            'updated_at' => self::instant($described->consent->updatedAt),
         ];
     }
 

@@ -61,7 +61,7 @@ knows what changes.
 | Order of the checks | Authentication, then FastAPI's validation and the scope dependency in declaration order | Credentials, token and audience (401), scope (403), then the request (400/415/422) | A caller without the scope learns nothing about what the operation would have accepted. |
 | `token_endpoint_auth_method` when omitted | One default for every client | `none` for a public client, `client_secret_basic` for a confidential one | The only coherent value for each type; RFC 6749 §2.3.1 requires every server to support Basic. |
 | The code flow on a registration | `authorization_code` and the `code` response type checked separately | They must come together, and either needs a redirect URI | Half of the code flow is a client no request can succeed for, refused where the mistake is made (also by `PATCH`). |
-| Grant types and fields not built yet | The device grant, `is_first_party`, `allowed_connections`… | Absent from the contract, so refused as unknown; they arrive with their steps | A field the server would ignore is a promise it does not keep. |
+| Grant types and fields not built yet | The device grant, `allowed_connections`… | Absent from the contract, so refused as unknown; they arrive with their steps | A field the server would ignore is a promise it does not keep. |
 | Management scopes | Included roles and connections | Users, clients, APIs and roles; the connection scopes arrive with Step 13 | A scope no route checks would be granted for nothing. |
 | `audience` in a user's flow | Checked at the authorization endpoint | Checked there, stored on the code, and checked again at redemption: a permission withdrawn meanwhile is not issued, and a code for an API deleted meanwhile is `invalid_grant` | Scope is narrowed at issuance and re-checked at redemption, not trusted from authorization time. |
 | `seed-dev` | Created the machine client and granted it the Management API | The same, with a fixed, printed secret (`dev-m2m-secret-for-local-development-only`) and the token request to run | A development deployment should reach `/api/v1/*` straight after seeding. |
@@ -118,6 +118,18 @@ knows what changes.
 | A deactivated account, at a refresh | Refused after the token was spent | Refused before | The same rule: `used` means refreshed. |
 | Revoking a family's access tokens | Through a `refresh_token_id` on each access token | A `refresh_family_id` on each access token | One statement revokes them, whatever became of the tokens in between. |
 | Concurrent refreshes of one token | A threaded acceptance test | Not raced in a test: PHP-FPM has no threads in a test. The row lock is the guarantee, and the contracts prove the lock is taken inside a transaction | The behaviour is the database's, not the code's. |
+
+## Consent
+
+| Area | Python | PHP | Why |
+|---|---|---|---|
+| Where ownership is stored | An `is_first_party` column, and the `tpc_` prefix on the id | The prefix alone: a third-party id starts with `tpc_`, a generated first-party id is letters and digits | One fact in one place. Ownership is identity, fixed at registration, and the id is where it is visible without a lookup; a column could only disagree with it. |
+| A consent's API | Its identifier as text, with `''` standing for "no API" | A foreign key onto `resource_servers`, null for no API, kept to one row by `UNIQUE NULLS NOT DISTINCT` | Deleting an API takes the consents given for it along, as every other link does. |
+| `allow_skipping_consent` on a system API | May be turned off | Always on (409 to turn it off) | Only first-party applications reach a system API, and they are the operator's own: there is nobody to ask. |
+| `prompt` | Every value of OIDC Core §3.1.2.1 | `none` and `consent`; `login` and `select_account` are ignored until Step 18, and `prompt_values_supported` is not advertised yet | The two values consent needs; the rest belong to the step that makes re-authentication part of the authorize decision. `prompt=none` with nobody signed in is `login_required` already. |
+| Resuming a request after sign-in or consent | The request's own URL | A `GET` to the endpoint carrying every parameter in its query | A request posted to `/oauth2/authorize` was resumed without its parameters; now it is resumed whole. |
+| Refusing at the consent screen | `303` to the application | `302`, with `iss` (RFC 9207) like every authorization response | One way an authorization response travels. |
+| Withdrawing a consent | `DELETE …/consents/{client_id}`, `update:users` | The same | — |
 
 ## Roles
 

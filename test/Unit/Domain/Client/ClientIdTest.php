@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace ClaviaTest\Unit\Domain\Client;
 
 use Clavia\Domain\Client\ClientId;
+use Clavia\Domain\Client\Ownership;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\SecretGenerator;
 use ClaviaTest\Support\Fake\SeededRandomSource;
@@ -24,11 +25,24 @@ final class ClientIdTest extends TestCase
     {
         $secrets = new SecretGenerator(new SeededRandomSource(1));
 
-        $first = ClientId::generate($secrets);
-        $second = ClientId::generate($secrets);
+        $first = ClientId::generate($secrets, Ownership::FirstParty);
+        $second = ClientId::generate($secrets, Ownership::FirstParty);
 
         self::assertMatchesRegularExpression('/^[A-Za-z0-9]{32}$/D', $first->value);
         self::assertFalse($first->equals($second));
+        self::assertSame(Ownership::FirstParty, $first->ownership());
+    }
+
+    public function testAThirdPartyIdCarriesThePrefixAndSaysSo(): void
+    {
+        $id = ClientId::generate(new SecretGenerator(new SeededRandomSource(1)), Ownership::ThirdParty);
+
+        self::assertMatchesRegularExpression('/^tpc_[A-Za-z0-9]{32}$/D', $id->value);
+        self::assertSame(Ownership::ThirdParty, $id->ownership());
+        self::assertSame(Ownership::ThirdParty, ClientId::fromString('tpc_partner')->ownership());
+        // Ownership is the prefix, exactly: not a look-alike.
+        self::assertSame(Ownership::FirstParty, ClientId::fromString('tpcpartner')->ownership());
+        self::assertSame(Ownership::FirstParty, ClientId::fromString('TPC_partner')->ownership());
     }
 
     #[DataProvider('accepted')]

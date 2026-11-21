@@ -57,6 +57,7 @@ final readonly class ClientsHandler implements RequestHandlerInterface
             $body->strings('grant_types') ?? [],
             $body->strings('response_types') ?? [],
             $body->strings('post_logout_redirect_uris') ?? [],
+            $body->bool('is_first_party') ?? true,
         ));
 
         return $this->responder->created(

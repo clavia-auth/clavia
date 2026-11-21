@@ -128,6 +128,26 @@ function ResourceServerDetail({ api }: { api: ResourceServer }) {
             </label>
           </section>
 
+          <section className="card p-6">
+            <h2 className="mb-1 text-sm font-semibold">Consent</h2>
+            <label className="mt-3 flex items-start gap-3 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 accent-accent"
+                checked={api.allow_skipping_consent}
+                disabled={api.is_system || update.isPending}
+                onChange={(event) => void update.mutateAsync({ allow_skipping_consent: event.target.checked })}
+              />
+              <span>
+                <span className="font-medium">Allow first-party applications to skip consent</span>
+                <span className="block text-xs text-muted">
+                  {api.is_system
+                    ? "Always on for a system API: only your own applications can reach it."
+                    : "When on, your own applications are not shown the consent screen for this API's permissions — signing in is the consent. Third-party applications always ask, whatever this says."}
+                </span>
+              </span>
+            </label>
+          </section>
         </aside>
       </div>
     </>

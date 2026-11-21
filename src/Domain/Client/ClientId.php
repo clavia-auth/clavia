@@ -20,10 +20,19 @@ use Clavia\Domain\Shared\SecretGenerator;
  * Generated, not chosen, and immutable: "changing" a client id is registering a new
  * client. It is not a secret: it travels in every authorization request, in browser
  * history and in logs.
+ *
+ * It also says who runs the application: a third-party application's id starts with
+ * {@see self::THIRD_PARTY_PREFIX} (the convention Auth0 established), and no other does —
+ * a generated id is letters and digits only. Ownership is identity, so it lives in the
+ * identifier and cannot drift from it.
  */
 final readonly class ClientId
 {
     public const int MAX_LENGTH = 64;
+
+    public const string THIRD_PARTY_PREFIX = 'tpc_';
+
+    private const int GENERATED_LENGTH = 32;
 
     /**
      * @param non-empty-string $value
@@ -47,10 +56,23 @@ final readonly class ClientId
         return new self($value);
     }
 
-    /** A fresh identifier: 32 letters and digits, as unguessable as it is unmemorable. */
-    public static function generate(SecretGenerator $secrets): self
+    /**
+     * A fresh identifier: 32 letters and digits, as unguessable as it is unmemorable,
+     * prefixed {@see self::THIRD_PARTY_PREFIX} for somebody else's application.
+     */
+    public static function generate(SecretGenerator $secrets, Ownership $ownership): self
     {
-        return new self($secrets->alphanumeric(32));
+        $random = $secrets->alphanumeric(self::GENERATED_LENGTH);
+
+        return new self($ownership === Ownership::ThirdParty ? self::THIRD_PARTY_PREFIX . $random : $random);
+    }
+
+    /** Who runs the application this identifies, as its id says. */
+    public function ownership(): Ownership
+    {
+        return str_starts_with($this->value, self::THIRD_PARTY_PREFIX)
+            ? Ownership::ThirdParty
+            : Ownership::FirstParty;
     }
 
     public function equals(self $other): bool

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, query } from "./client";
-import type { Page, Role, User, UserPermission } from "./types";
+import type { Page, Role, User, UserConsent, UserPermission } from "./types";
 
 export interface UserListParams {
   page?: number;
@@ -108,5 +108,22 @@ export function useResetUserMfa(id: string) {
   return useMutation({
     mutationFn: () => api<void>(`/users/${id}/mfa`, { method: "DELETE" }),
     onSuccess: () => client.invalidateQueries({ queryKey: keys.all }),
+  });
+}
+
+export function useUserConsents(id: string) {
+  return useQuery({
+    queryKey: [...keys.one(id), "consents"],
+    queryFn: () => api<UserConsent[]>(`/users/${id}/consents`),
+  });
+}
+
+/** Withdraw everything the user allowed one application; it has to ask again. */
+export function useWithdrawUserConsent(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (clientId: string) =>
+      api<void>(`/users/${id}/consents/${encodeURIComponent(clientId)}`, { method: "DELETE" }),
+    onSuccess: () => client.invalidateQueries({ queryKey: [...keys.one(id), "consents"] }),
   });
 }

@@ -220,6 +220,66 @@ paths:
         '422':
           $ref: '#/components/responses/Unprocessable'
 
+  /api/v1/users/{user_id}/consents:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [users]
+      operationId: listUserConsents
+      summary: The applications a user allowed to act as them, and what they allowed.
+      description: |
+        Only what the user was actually asked on the consent screen: a first-party
+        application that did without it has nothing here. Oldest first.
+      security:
+        - managementToken: [read:users]
+      responses:
+        '200':
+          description: The user's consents.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserConsent'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/users/{user_id}/consents/{client_id}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+      - $ref: '#/components/parameters/ClientId'
+    delete:
+      tags: [users]
+      operationId: withdrawUserConsent
+      summary: Withdraw everything a user allowed one application, on every API.
+      description: |
+        The application's next authorization request asks again. Tokens it already holds
+        run to their own expiry. Idempotent: nothing to withdraw is still withdrawn; only
+        an unknown user is a 404.
+      security:
+        - managementToken: [update:users]
+      responses:
+        '204':
+          description: Withdrawn.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
   /api/v1/users/{user_id}/roles:
     parameters:
       - $ref: '#/components/parameters/UserId'
@@ -1306,7 +1366,7 @@ components:
       type: object
       additionalProperties: false
       required: [client_id, name, client_type, token_endpoint_auth_method, redirect_uris, grant_types,
-        response_types, post_logout_redirect_uris, created_at]
+        response_types, post_logout_redirect_uris, is_first_party, created_at]
       properties:
         client_id:
           type: string
@@ -1332,16 +1392,26 @@ components:
           type: array
           items:
             type: string
+        is_first_party:
+          $ref: '#/components/schemas/IsFirstParty'
         created_at:
           type: string
           format: date-time
+
+    IsFirstParty:
+      type: boolean
+      description: |
+        Who runs the application. First-party — the operator's own — skips the consent screen
+        unless the API it asks for insists. Third-party — somebody else's, its id starting
+        with `tpc_` — puts every scope to the person on the consent screen, and is never
+        given a token for a system API, on anybody's behalf or as itself.
 
     ClientWithSecret:
       description: A client, with the only copy of its secret there will ever be.
       type: object
       additionalProperties: false
       required: [client_id, name, client_type, token_endpoint_auth_method, redirect_uris, grant_types,
-        response_types, post_logout_redirect_uris, created_at, client_secret]
+        response_types, post_logout_redirect_uris, is_first_party, created_at, client_secret]
       properties:
         client_id:
           type: string
@@ -1367,6 +1437,8 @@ components:
           type: array
           items:
             type: string
+        is_first_party:
+          $ref: '#/components/schemas/IsFirstParty'
         created_at:
           type: string
           format: date-time
@@ -1408,6 +1480,12 @@ components:
           description: |
             Where a sign-out the client starts at `/oidc/logout` may send the browser back
             (OpenID Connect RP-Initiated Logout 1.0 §3.1). Matched exactly.
+        is_first_party:
+          type: boolean
+          default: true
+          description: |
+            `false` registers a third-party application: its id starts with `tpc_`. See
+            `IsFirstParty`. Fixed for good: there is no such field on an update.
       description: |
         `client_type` defaults to `public`; `token_endpoint_auth_method` to `none` for a
         public client and `client_secret_basic` for a confidential one.
@@ -1416,6 +1494,9 @@ components:
       type: object
       additionalProperties: false
       minProperties: 1
+      description: |
+        `client_type` and `is_first_party` are identity, not configuration: neither can change
+        (422 if sent). Register another client instead.
       properties:
         name:
           type: string
@@ -1470,7 +1551,8 @@ components:
     ResourceServer:
       type: object
       additionalProperties: false
-      required: [id, identifier, name, permissions, is_system, enforce_policies, created_at]
+      required: [id, identifier, name, permissions, is_system, enforce_policies, allow_skipping_consent,
+        created_at]
       properties:
         id:
           type: string
@@ -1488,6 +1570,8 @@ components:
           description: An API the server itself depends on. Not deletable; its permissions are the server's own.
         enforce_policies:
           $ref: '#/components/schemas/EnforcePolicies'
+        allow_skipping_consent:
+          $ref: '#/components/schemas/AllowSkippingConsent'
         created_at:
           type: string
           format: date-time
@@ -1498,6 +1582,14 @@ components:
         Whether a token issued on a person's behalf carries only the permissions their roles
         grant on this API, and is refused to somebody holding none. Machine clients are
         governed by their client grants either way. Always on for a system API.
+
+    AllowSkippingConsent:
+      type: boolean
+      description: |
+        Whether a first-party application asking for this API's permissions on a person's
+        behalf may do without the consent screen: the operator runs both, so signing in is
+        the consent. A third-party application asks whatever this says. Always on for a
+        system API, which no third-party application reaches.
 
     ResourceServerCreate:
       type: object
@@ -1522,6 +1614,10 @@ components:
           type: boolean
           default: false
           description: See `ResourceServer.enforce_policies`.
+        allow_skipping_consent:
+          type: boolean
+          default: true
+          description: See `ResourceServer.allow_skipping_consent`.
 
     ResourceServerUpdate:
       type: object
@@ -1529,7 +1625,8 @@ components:
       minProperties: 1
       description: |
         A system API may be renamed and nothing else: its permissions are the server's own,
-        and turning its roles off would hand them to anybody who can sign in (409).
+        turning its roles off would hand them to anybody who can sign in, and no
+        third-party application reaches it to be asked about (409).
       properties:
         name:
           type: string
@@ -1541,6 +1638,36 @@ components:
             $ref: '#/components/schemas/PermissionInput'
         enforce_policies:
           type: boolean
+        allow_skipping_consent:
+          type: boolean
+
+    UserConsent:
+      type: object
+      additionalProperties: false
+      required: [client_id, client_name, is_first_party, audience, scopes, granted_at, updated_at]
+      properties:
+        client_id:
+          type: string
+        client_name:
+          type: string
+        is_first_party:
+          $ref: '#/components/schemas/IsFirstParty'
+        audience:
+          type: string
+          nullable: true
+          description: The identifier of the API it is for; null for a request that named none.
+        scopes:
+          type: array
+          description: Everything agreed to, OpenID Connect scopes included, sorted.
+          items:
+            type: string
+        granted_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          description: When the scopes last widened.
 
     RoleName:
       type: string

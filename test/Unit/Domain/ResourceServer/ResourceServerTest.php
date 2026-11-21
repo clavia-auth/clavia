@@ -257,6 +257,46 @@ final class ResourceServerTest extends TestCase
         );
     }
 
+    public function testFirstPartyApplicationsMaySkipConsentUntilTheApiInsists(): void
+    {
+        $api = $this->api(['a']);
+        self::assertTrue($api->allowSkippingConsent);
+
+        $insisting = $api->allowingConsentSkip(false);
+
+        self::assertFalse($insisting->allowSkippingConsent);
+        self::assertFalse($insisting->renamed('Billing')->allowSkippingConsent);
+        self::assertFalse($insisting->enforcingPolicies(true)->allowSkippingConsent);
+        self::assertFalse($insisting->withPermissions([Permission::of('b')])->allowSkippingConsent);
+        self::assertTrue($insisting->allowingConsentSkip(true)->allowSkippingConsent);
+    }
+
+    public function testASystemApiNeverAsksForConsent(): void
+    {
+        $system = $this->api(['a'])->allowingConsentSkip(false)->asSystem('Management', [Permission::of('a')]);
+        self::assertTrue($system->allowSkippingConsent, 'Provisioning turns it back on.');
+        self::assertTrue($system->allowingConsentSkip(true)->allowSkippingConsent);
+
+        $this->expectException(SystemApiProtected::class);
+        $system->allowingConsentSkip(false);
+    }
+
+    public function testASystemApiCannotBeBuiltAskingForConsent(): void
+    {
+        $this->expectException(InvalidValue::class);
+
+        ResourceServer::register(
+            ResourceServerId::fromString('rs_aaaaaaaaaaaaaaaa'),
+            Audience::fromString('https://management.example/api/v1/'),
+            'Management',
+            [],
+            new DateTimeImmutable('2026-01-15T10:00:00Z'),
+            isSystem: true,
+            enforcePolicies: true,
+            allowSkippingConsent: false,
+        );
+    }
+
     /**
      * @param list<string> $permissions
      */

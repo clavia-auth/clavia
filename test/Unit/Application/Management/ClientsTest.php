@@ -65,6 +65,22 @@ final class ClientsTest extends TestCase
         self::assertTrue($this->hasher->verify($registered->secret, (string) $stored->secretHash()));
     }
 
+    public function testOwnershipIsWrittenIntoTheGeneratedId(): void
+    {
+        $ours = $this->register(new NewClient('Ours', 'confidential', grantTypes: ['client_credentials']));
+        $theirs = $this->register(new NewClient(
+            'Theirs',
+            'confidential',
+            grantTypes: ['client_credentials'],
+            firstParty: false,
+        ));
+
+        self::assertTrue($ours->client->isFirstParty());
+        self::assertMatchesRegularExpression('/^[A-Za-z0-9]{32}$/D', $ours->client->id->value);
+        self::assertFalse($theirs->client->isFirstParty());
+        self::assertMatchesRegularExpression('/^tpc_[A-Za-z0-9]{32}$/D', $theirs->client->id->value);
+    }
+
     public function testAPublicClientGetsNoSecretAndAuthenticatesWithNone(): void
     {
         $registered = $this->register(new NewClient(

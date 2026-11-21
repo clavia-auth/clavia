@@ -48,6 +48,7 @@ final readonly class ResourceServer
         public DateTimeImmutable $createdAt,
         public bool $isSystem,
         public bool $enforcePolicies,
+        public bool $allowSkippingConsent,
     ) {
     }
 
@@ -63,10 +64,16 @@ final readonly class ResourceServer
      *                                          their roles grant here, and is refused to somebody holding
      *                                          nothing. Always on for a system API: what an operator may do
      *                                          there has to depend on who they are.
+     * @param bool             $allowSkippingConsent Whether a first-party application asking for these
+     *                                               permissions on a person's behalf may do without the
+     *                                               consent screen: the operator runs both, so signing in
+     *                                               is the consent. A third-party application asks
+     *                                               whatever this says. Always on for a system API, which
+     *                                               no third-party application can reach.
      *
      * @throws InvalidValue When the identifier is longer than 255 bytes, the name longer than
      *                      120 characters, a permission is defined twice, or a system API would
-     *                      not enforce roles.
+     *                      not enforce roles or would ask for consent.
      */
     public static function register(
         ResourceServerId $id,
@@ -76,6 +83,7 @@ final readonly class ResourceServer
         DateTimeImmutable $createdAt,
         bool $isSystem = false,
         bool $enforcePolicies = false,
+        bool $allowSkippingConsent = true,
     ): self {
         if (strlen($identifier->value) > self::MAX_IDENTIFIER_LENGTH) {
             throw new InvalidValue('An API identifier is at most 255 bytes.');
@@ -85,6 +93,9 @@ final readonly class ResourceServer
         }
         if ($isSystem && ! $enforcePolicies) {
             throw new InvalidValue('A system API always enforces roles.');
+        }
+        if ($isSystem && ! $allowSkippingConsent) {
+            throw new InvalidValue('A system API never asks for consent: only first-party applications reach it.');
         }
 
         $byValue = [];
@@ -99,7 +110,16 @@ final readonly class ResourceServer
         $sorted = array_values($byValue);
         usort($sorted, static fn (Permission $a, Permission $b): int => strcmp($a->value->value, $b->value->value));
 
-        return new self($id, $identifier, $name, $sorted, $createdAt, $isSystem, $enforcePolicies);
+        return new self(
+            $id,
+            $identifier,
+            $name,
+            $sorted,
+            $createdAt,
+            $isSystem,
+            $enforcePolicies,
+            $allowSkippingConsent,
+        );
     }
 
     /**
@@ -117,6 +137,7 @@ final readonly class ResourceServer
             $this->createdAt,
             $this->isSystem,
             $this->enforcePolicies,
+            $this->allowSkippingConsent,
         );
     }
 
@@ -142,6 +163,34 @@ final readonly class ResourceServer
             $this->createdAt,
             $this->isSystem,
             $enforce,
+            $this->allowSkippingConsent,
+        );
+    }
+
+    /**
+     * The same API, letting first-party applications do without the consent screen for
+     * its permissions or not.
+     *
+     * Refused for a system API: only first-party applications ever reach one, and they are
+     * the operator's own — there is nobody to ask about.
+     *
+     * @throws SystemApiProtected
+     */
+    public function allowingConsentSkip(bool $allow): self
+    {
+        if ($this->isSystem && ! $allow) {
+            throw SystemApiProtected::consent($this);
+        }
+
+        return new self(
+            $this->id,
+            $this->identifier,
+            $this->name,
+            $this->permissions,
+            $this->createdAt,
+            $this->isSystem,
+            $this->enforcePolicies,
+            $allow,
         );
     }
 
@@ -171,12 +220,14 @@ final readonly class ResourceServer
             $this->createdAt,
             false,
             $this->enforcePolicies,
+            $this->allowSkippingConsent,
         );
     }
 
     /**
-     * The same API, marked as one the server depends on — enforcing roles, as a system API
-     * always does — defining exactly `$permissions`. For provisioning on the machine only.
+     * The same API, marked as one the server depends on — enforcing roles and never asking
+     * for consent, as a system API always does — defining exactly `$permissions`. For
+     * provisioning on the machine only.
      *
      * @param list<Permission> $permissions
      *
@@ -184,7 +235,7 @@ final readonly class ResourceServer
      */
     public function asSystem(string $name, array $permissions): self
     {
-        return self::register($this->id, $this->identifier, $name, $permissions, $this->createdAt, true, true);
+        return self::register($this->id, $this->identifier, $name, $permissions, $this->createdAt, true, true, true);
     }
 
     /**

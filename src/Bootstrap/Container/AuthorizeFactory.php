@@ -12,10 +12,12 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\OAuth2\Authorize\Authorize;
+use Clavia\Application\Port\ConsentStateStore;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Application\Port\NonceRegistry;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Client\ClientRepository;
+use Clavia\Domain\Consent\ConsentRepository;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
 use Clavia\Domain\Rbac\RoleRepository;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
@@ -41,6 +43,10 @@ final class AuthorizeFactory
         $resourceServers = $container->get(ResourceServerRepository::class);
         /** @var RoleRepository $roles */
         $roles = $container->get(RoleRepository::class);
+        /** @var ConsentRepository $consents */
+        $consents = $container->get(ConsentRepository::class);
+        /** @var ConsentStateStore $consentStates */
+        $consentStates = $container->get(ConsentStateStore::class);
         /** @var SecretGenerator $secrets */
         $secrets = $container->get(SecretGenerator::class);
         /** @var RandomSource $random */
@@ -64,6 +70,8 @@ final class AuthorizeFactory
             $nonces,
             $resourceServers,
             $roles,
+            $consents,
+            $consentStates,
             $secrets,
             $random,
             $clock,

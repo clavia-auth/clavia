@@ -14,6 +14,7 @@ export interface ResourceServerCreate {
   name: string;
   permissions: Permission[];
   enforce_policies?: boolean;
+  allow_skipping_consent?: boolean;
 }
 
 export type ResourceServerUpdate = Partial<Omit<ResourceServerCreate, "identifier">>;

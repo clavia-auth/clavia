@@ -6,7 +6,7 @@ Auth0: OAuth2 flows, interactive login with MFA, and a Management API.
 This is the PHP 8.5 implementation. It is being ported feature by feature from the Python
 reference implementation; `CLAUDE.md` holds the migration plan and the current state.
 
-**Status: Step 11 — refresh tokens.** A person signs in with a password at `/auth/login`, or with
+**Status: Step 12 — application ownership and consent.** A person signs in with a password at `/auth/login`, or with
 Google or GitHub once their credentials are configured (`CLAVIA_GOOGLE_CLIENT_ID` / `_SECRET`,
 `CLAVIA_GITHUB_CLIENT_ID` / `_SECRET`; register
 `https://auth.{domain}/auth/social/{provider}/callback` at the provider) — followed, once they
@@ -47,6 +47,14 @@ refresh token with the code flow's tokens. Every refresh returns a new pair and 
 old refresh token; presenting a spent one revokes the whole chain and every access token it
 issued. A chain lives `CLAVIA_REFRESH_TOKEN_LIFETIME` without use (30 days by default) and
 `CLAVIA_REFRESH_TOKEN_ABSOLUTE_LIFETIME` at most (90 days).
+
+An application is first-party (the operator's own) or third-party (`"is_first_party": false`
+at registration, or `clavia clients:create-m2m --third-party`; its id starts with `tpc_`).
+A third-party application asks the person on a consent screen at `/auth/consent` for every
+scope, and the answer is remembered; a first-party one asks only when the API it names has
+`allow_skipping_consent` off, or when it sends `prompt=consent`. A third-party application
+never gets a token for the Management API. A user's consents are listed and withdrawn under
+`/api/v1/users/{user_id}/consents`.
 
 ## Architecture
 

@@ -71,6 +71,31 @@ final class RequestParametersTest extends TestCase
         self::assertSame('a', $parameters->get('123'));
     }
 
+    public function testTheRequestCanBeRebuiltAsAQueryWithOneParameterChanged(): void
+    {
+        $parameters = new RequestParameters([
+            'prompt' => ['consent login'],
+            'redirect_uri' => ['https://app.example/cb?a=1'],
+            'state' => ['é x'],
+        ]);
+
+        self::assertSame(
+            'prompt=consent%20login&redirect_uri=https%3A%2F%2Fapp.example%2Fcb%3Fa%3D1&state=%C3%A9%20x',
+            $parameters->toQueryString(),
+        );
+        self::assertSame(
+            'prompt=login&redirect_uri=https%3A%2F%2Fapp.example%2Fcb%3Fa%3D1&state=%C3%A9%20x',
+            $parameters->with('prompt', 'login')->toQueryString(),
+            'Replaced in place.',
+        );
+        self::assertSame(
+            'state=%C3%A9%20x',
+            $parameters->with('prompt', null)->with('redirect_uri', null)->toQueryString(),
+        );
+        self::assertSame('x=1', new RequestParameters([])->with('x', '1')->toQueryString());
+        self::assertSame('consent login', $parameters->get('prompt'), 'The original is untouched.');
+    }
+
     public function testAMapHasNoRepetition(): void
     {
         $parameters = RequestParameters::fromMap(['grant_type' => 'authorization_code', 'code' => 'abc']);

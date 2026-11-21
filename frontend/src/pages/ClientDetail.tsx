@@ -161,11 +161,21 @@ function ClientDetail({ client }: { client: Client }) {
             items={[
               ["Client ID", <code className="font-mono text-xs">{client.client_id}</code>],
               ["Type", <span className={client.client_type === "confidential" ? "badge-ok" : "badge-muted"}>{client.client_type}</span>],
+              [
+                "Ownership",
+                client.is_first_party ? (
+                  <span className="badge-muted">First-party</span>
+                ) : (
+                  <span className="badge-gold">Third-party</span>
+                ),
+              ],
               ["Response types", client.response_types.join(", ") || "—"],
             ]}
           />
           <p className="mt-4 text-xs text-muted">
-            The type is identity, not configuration: to change it, register a new application.
+            Type and ownership are identity, not configuration: to change either, register a new application.
+            {!client.is_first_party &&
+              " A third-party application puts every scope to the user on the consent screen and can never reach the Management API."}
           </p>
           <p className="mt-3 text-xs text-muted">
             An application holds no permissions of its own. On a user's behalf it may request whatever the

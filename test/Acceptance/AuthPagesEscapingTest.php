@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace ClaviaTest\Acceptance;
 
 use Clavia\Adapter\Primary\Http\Auth\AuthPageResponder;
+use Clavia\Adapter\Primary\Http\Auth\ConsentPages;
 use Clavia\Adapter\Primary\Http\Auth\LoginPages;
 use Clavia\Adapter\Primary\Http\Auth\MfaPages;
 use Clavia\Adapter\Primary\Http\Oidc\EndSessionHandler;
@@ -20,6 +21,9 @@ use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
 use Clavia\Application\Authentication\External\ExternalProviderOption;
 use Clavia\Application\Authentication\Mfa\MfaStatus;
 use Clavia\Application\Authentication\Mfa\TotpEnrollment;
+use Clavia\Application\OAuth2\Consent\ConsentedApi;
+use Clavia\Application\OAuth2\Consent\ConsentScreen;
+use Clavia\Application\OAuth2\Consent\ScopeLine;
 use Clavia\Application\Oidc\Logout\SignOutConfirmationNeeded;
 use ClaviaTest\Support\AcceptanceTestCase;
 use Laminas\Diactoros\ServerRequest;
@@ -74,6 +78,24 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
             error: self::HOSTILE,
         )];
         yield 'the second step: error' => [MfaPages::challenge([], self::HOSTILE, 401)];
+        yield 'the consent screen: application, account, scopes, API and handle' => [ConsentPages::question(
+            new ConsentScreen(
+                self::HOSTILE,
+                self::HOSTILE,
+                [new ScopeLine(self::HOSTILE, self::HOSTILE)],
+                new ConsentedApi(self::HOSTILE, self::HOSTILE, [new ScopeLine(self::HOSTILE, self::HOSTILE)]),
+                [],
+            ),
+            self::HOSTILE,
+            self::HOSTILE,
+            400,
+        )];
+        yield 'the expired consent screen' => [new HtmlPage(
+            template: 'auth::consent-expired',
+            title: self::HOSTILE,
+            heading: self::HOSTILE,
+            error: self::HOSTILE,
+        )];
         yield 'the two-factor settings: email' => [MfaPages::settings(new MfaStatus(self::HOSTILE, true, 3))];
         yield 'the two-factor settings, off: email' => [MfaPages::settings(new MfaStatus(self::HOSTILE, false, 0))];
         yield 'the set-up page: seed and error' => [

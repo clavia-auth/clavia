@@ -183,6 +183,42 @@ final class ClientCredentialsGrantTest extends TestCase
         return $this->grant->issue(RequestParameters::fromMap($parameters), $this->client);
     }
 
+    public function testAThirdPartyMachineGetsNoTokenForASystemApiWhateverItHolds(): void
+    {
+        $system = ResourceServer::register(
+            ResourceServerId::fromString('rs_systemsystemsyst'),
+            Audience::fromString('https://management.example/api/v1/'),
+            'Management',
+            [Permission::of('read:users')],
+            $this->clock->now(),
+            isSystem: true,
+            enforcePolicies: true,
+        );
+        $this->resourceServers->save($system);
+        $outsider = Clients::confidential('tpc_machine', '$hash$');
+        // A grant written around `clients:grant`, which refuses it.
+        $this->clientGrants->save(ClientGrant::grant(
+            $outsider->id,
+            $system,
+            ScopeSet::fromString('read:users'),
+            $this->clock->now(),
+        ));
+        $this->clientGrants->save(ClientGrant::grant(
+            $this->client->id,
+            $system,
+            ScopeSet::fromString('read:users'),
+            $this->clock->now(),
+        ));
+        $parameters = RequestParameters::fromMap([
+            'grant_type' => 'client_credentials',
+            'audience' => 'https://management.example/api/v1/',
+        ]);
+
+        self::assertSame('read:users', $this->grant->issue($parameters, $this->client)->scope->toString());
+        $this->expectExceptionObject(OAuth2Error::accessDenied('Third-party applications cannot access this API.'));
+        $this->grant->issue($parameters, $outsider);
+    }
+
     /**
      * @param list<string> $permissions
      */

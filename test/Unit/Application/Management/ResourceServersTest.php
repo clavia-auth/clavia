@@ -258,6 +258,40 @@ final class ResourceServersTest extends TestCase
         $this->grant()($spa->id, $api->identifier);
     }
 
+    public function testAThirdPartyMachineCanBeGrantedAnyApiButASystemOne(): void
+    {
+        $outsider = Client::register(
+            ClientId::fromString('tpc_machine'),
+            'Partner machine',
+            ClientType::Confidential,
+            ClientAuthMethod::ClientSecretBasic,
+            '$hash$',
+            [],
+            [GrantType::ClientCredentials],
+            [],
+            $this->clock->now(),
+        );
+        $this->clients->save($outsider);
+        $ordinary = $this->register(new NewResourceServer('https://x.test/', 'X', [new PermissionDefinition('a')]));
+        $system = $this->registerManagementApi()();
+
+        self::assertSame('a', $this->grant()($outsider->id, $ordinary->identifier)->scopes->toString());
+        $this->expectException(InvalidValue::class);
+        $this->expectExceptionMessage('third-party');
+        $this->grant()($outsider->id, $system->identifier);
+    }
+
+    public function testAnUpdateDecidesWhetherFirstPartyApplicationsMaySkipConsent(): void
+    {
+        $api = $this->register(new NewResourceServer('https://x.test/', 'X', allowSkippingConsent: false));
+        self::assertFalse($api->allowSkippingConsent);
+
+        $update = new UpdateResourceServer($this->apis);
+
+        self::assertTrue($update($api->id, null, null, allowSkippingConsent: true)->allowSkippingConsent);
+        self::assertTrue($update($api->id, 'Y', null)->allowSkippingConsent, 'Left alone when not named.');
+    }
+
     public function testGrantingAnUnknownClientOrApiIsNotFound(): void
     {
         $api = $this->registerManagementApi()();

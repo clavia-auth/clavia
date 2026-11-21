@@ -23,6 +23,10 @@ final readonly class NewClient
      * @param list<string> $grantTypes
      * @param list<string> $responseTypes
      * @param list<string> $postLogoutRedirectUris
+     * @param bool         $firstParty    Whether the operator runs it. False registers a third-party
+     *                                    application: its id starts with `tpc_`, every scope it asks for
+     *                                    goes to the consent screen, and it never reaches a system API.
+     *                                    Fixed for good.
      */
     public function __construct(
         public string $name = '',
@@ -32,6 +36,7 @@ final readonly class NewClient
         public array $grantTypes = [],
         public array $responseTypes = [],
         public array $postLogoutRedirectUris = [],
+        public bool $firstParty = true,
     ) {
     }
 }

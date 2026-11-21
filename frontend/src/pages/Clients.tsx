@@ -21,6 +21,7 @@ import {
 const schema = z.object({
   name: z.string().min(1, "Give the application a name.").max(120),
   kind: z.enum(["spa", "web", "m2m"]),
+  ownership: z.enum(["first", "third"]),
   redirect_uris: z.string(),
 });
 type Form = z.infer<typeof schema>;
@@ -103,6 +104,7 @@ export function ClientsPage() {
                     <span className={client.client_type === "confidential" ? "badge-ok" : "badge-muted"}>
                       {client.client_type}
                     </span>
+                    {!client.is_first_party && <span className="badge-gold ml-2">Third-party</span>}
                   </td>
                   <td className="px-4 py-3 text-muted">{client.grant_types.join(", ") || "—"}</td>
                   <td className="px-4 py-3 text-muted">{formatDate(client.created_at)}</td>
@@ -126,7 +128,7 @@ function CreateClientDialog({ open, onClose }: { open: boolean; onClose: () => v
   const [created, setCreated] = useState<ClientCreated | null>(null);
   const form = useForm<Form>({
     resolver: zodResolver(schema),
-    defaultValues: { kind: "spa", redirect_uris: "", name: "" },
+    defaultValues: { kind: "spa", ownership: "first", redirect_uris: "", name: "" },
   });
   const kind = KINDS[form.watch("kind")];
 
@@ -139,6 +141,7 @@ function CreateClientDialog({ open, onClose }: { open: boolean; onClose: () => v
       grant_types: [...preset.grant_types],
       response_types: [...preset.response_types],
       redirect_uris: values.redirect_uris.split(/\s+/).filter(Boolean),
+      is_first_party: values.ownership === "first",
     });
     if (result.client_secret) {
       setCreated(result); // show the secret once, before leaving the dialog
@@ -189,6 +192,19 @@ function CreateClientDialog({ open, onClose }: { open: boolean; onClose: () => v
                   {preset.label}
                 </option>
               ))}
+            </select>
+          </Field>
+          <Field
+            label="Ownership"
+            hint={
+              form.watch("ownership") === "first"
+                ? "Yours: users are not asked for consent unless an API insists. Cannot be changed later."
+                : "Somebody else's: every scope goes through the consent screen, the id is prefixed tpc_, and it can never reach the Management API. Cannot be changed later."
+            }
+          >
+            <select className="input" {...form.register("ownership")}>
+              <option value="first">First-party — run by this organisation</option>
+              <option value="third">Third-party — run by a partner or external developer</option>
             </select>
           </Field>
           {form.watch("kind") !== "m2m" && (

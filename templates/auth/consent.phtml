@@ -1,0 +1,49 @@
+<?php
+/**
+ * The consent screen: an application asks to act as the signed-in person.
+ *
+ * Every word comes from the server — the application's registered name, the API's
+ * definitions — never from the request that led here. Two submit buttons on one form:
+ * the decision is the value of the one pressed, with no script.
+ *
+ * Variables (set by Clavia\Adapter\Primary\Http\Auth\ConsentPages):
+ * @var Laminas\View\Renderer\PhpRenderer $this
+ * @var string $csrfToken
+ * @var string $consentState
+ * @var string $clientName
+ * @var string $email
+ * @var list<Clavia\Application\OAuth2\Consent\ScopeLine> $oidcScopes
+ * @var Clavia\Application\OAuth2\Consent\ConsentedApi|null $api
+ */
+?>
+<?php $this->placeholder('subtitle')->captureStart() ?>
+      <p class="subtitle"><strong><?= $this->escapeHtml($clientName) ?></strong> wants to access your account, <span class="who"><?= $this->escapeHtml($email) ?></span>.</p>
+<?php $this->placeholder('subtitle')->captureEnd() ?>
+<?php if ($oidcScopes !== []): ?>
+    <p class="hint">It is asking to:</p>
+    <ul class="scopes">
+<?php foreach ($oidcScopes as $scope): ?>
+      <li>
+        <span class="scope-description"><?= $this->escapeHtml($scope->description) ?></span>
+        <code class="scope-value"><?= $this->escapeHtml($scope->value) ?></code>
+      </li>
+<?php endforeach ?>
+    </ul>
+<?php endif ?>
+<?php if ($api !== null && $api->permissions !== []): ?>
+    <p class="hint">On <strong><?= $this->escapeHtml($api->name) ?></strong>, acting as you:</p>
+    <ul class="scopes">
+<?php foreach ($api->permissions as $permission): ?>
+      <li>
+        <span class="scope-description"><?= $this->escapeHtml($permission->description) ?></span>
+        <code class="scope-value"><?= $this->escapeHtml($permission->value) ?></code>
+      </li>
+<?php endforeach ?>
+    </ul>
+<?php endif ?>
+    <form method="post" action="/auth/consent" class="decision">
+<?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => $consentState]) ?>
+      <button type="submit" name="decision" value="allow" autofocus>Allow</button>
+      <button type="submit" name="decision" value="deny" class="secondary">Don't allow</button>
+    </form>
+    <p class="hint">You can withdraw this later; the application will then have to ask again.</p>

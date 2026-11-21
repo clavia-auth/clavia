@@ -11,7 +11,9 @@ declare(strict_types=1);
 
 namespace Clavia\Application\OAuth2\Authorize;
 
+use Clavia\Application\Authentication\EndUser;
 use Clavia\Application\OAuth2\RequestParameters;
+use Clavia\Application\Port\ConsentStateStore;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Application\Port\NonceRegistry;
 use Clavia\Domain\Authentication\LoginState;
@@ -19,11 +21,15 @@ use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\ResponseType;
+use Clavia\Domain\Consent\ConsentPolicy;
+use Clavia\Domain\Consent\ConsentRepository;
+use Clavia\Domain\Consent\PendingConsent;
 use Clavia\Domain\OAuth2\AuthorizationCode;
 use Clavia\Domain\OAuth2\AuthorizationCodeId;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
 use Clavia\Domain\OAuth2\CodeChallenge;
 use Clavia\Domain\OAuth2\OAuth2Error;
+use Clavia\Domain\OAuth2\Prompt;
 use Clavia\Domain\Oidc\Nonce;
 use Clavia\Domain\Oidc\OidcScope;
 use Clavia\Domain\Rbac\RoleRepository;
@@ -52,6 +58,11 @@ use Clavia\Domain\Shared\SecretGenerator;
  * 3. **Only then, the user.** Nobody is ever shown a login page for a request that
  *    would be refused anyway: an endpoint that asks for credentials on the strength of
  *    attacker-supplied parameters is a phishing surface.
+ * 4. **Then their consent**, when {@see ConsentPolicy} says the request has to be put to
+ *    them: the request goes on hold, and the browser to the consent screen.
+ *
+ * With `prompt=none` nothing may be shown: where step 3 or 4 would show a page, the
+ * client is told `login_required` or `consent_required` instead (OIDC Core §3.1.2.6).
  */
 final readonly class Authorize
 {
@@ -69,6 +80,8 @@ final readonly class Authorize
         private NonceRegistry $nonces,
         private ResourceServerRepository $resourceServers,
         private RoleRepository $roles,
+        private ConsentRepository $consents,
+        private ConsentStateStore $consentStates,
         private SecretGenerator $secrets,
         private RandomSource $random,
         private Clock $clock,
@@ -96,13 +109,23 @@ final readonly class Authorize
             [$scope, $target] = $this->validate($parameters, $client);
             $challenge = $this->challenge($parameters);
             $nonce = $this->nonce($parameters, $client, $scope);
+            $prompt = Prompt::fromParameter($parameters->get('prompt'));
         } catch (OAuth2Error $refusal) {
             return new RequestRefused($redirectUri, $refusal, $state);
         }
 
-        if ($request->endUser === null) {
+        $endUser = $request->endUser;
+        if ($endUser === null) {
+            if ($prompt->forbidsInteraction()) {
+                return new RequestRefused(
+                    $redirectUri,
+                    OAuth2Error::loginRequired("Nobody is signed in, and 'prompt=none' forbids asking."),
+                    $state,
+                );
+            }
+
             $handle = $this->secrets->token();
-            $this->loginStates->put($handle, new LoginState($request->requestTarget, $client->id));
+            $this->loginStates->put($handle, new LoginState($request->resumption($parameters), $client->id));
 
             return new LoginRequired($handle);
         }
@@ -114,13 +137,26 @@ final readonly class Authorize
         if (
             $target !== null
             && $target->enforcePolicies
-            && $this->roles->permissionsHeld($request->endUser->userId, $target->id)->isEmpty()
+            && $this->roles->permissionsHeld($endUser->userId, $target->id)->isEmpty()
         ) {
             return new RequestRefused(
                 $redirectUri,
                 OAuth2Error::accessDenied('Your account holds no permission on this API.'),
                 $state,
             );
+        }
+
+        $given = $this->consents->find($endUser->userId, $client->id, $target?->id);
+        if (ConsentPolicy::mustAsk($client, $target, $prompt, $scope, $given)) {
+            if ($prompt->forbidsInteraction()) {
+                return new RequestRefused(
+                    $redirectUri,
+                    OAuth2Error::consentRequired("The request needs consent, and 'prompt=none' forbids asking."),
+                    $state,
+                );
+            }
+
+            return $this->holdForConsent($request, $endUser, $client, $redirectUri, $state, $scope, $target, $prompt);
         }
 
         // Spent only now that a code is about to exist; atomic, so of two concurrent
@@ -134,18 +170,47 @@ final readonly class Authorize
             AuthorizationCodeId::generate($this->random),
             Digest::of($code),
             $client->id,
-            $request->endUser->userId,
+            $endUser->userId,
             $redirectUri,
             $scope,
             $challenge,
             $target?->identifier,
             $nonce,
-            $request->endUser->authentication(),
+            $endUser->authentication(),
             $this->clock->now(),
             $this->codeLifetimeSeconds,
         ));
 
         return new CodeIssued($redirectUri, $code, $state);
+    }
+
+    /**
+     * Put the request on hold behind a fresh handle, for the consent screen to show and
+     * decide. Allowing sends the browser back to the request — without the `consent` it
+     * may have prompted for, which has then been given, or it would ask forever.
+     */
+    private function holdForConsent(
+        AuthorizationRequest $request,
+        EndUser $endUser,
+        Client $client,
+        string $redirectUri,
+        ?string $state,
+        ScopeSet $scope,
+        ?ResourceServer $target,
+        Prompt $prompt,
+    ): ConsentRequired {
+        $handle = $this->secrets->token();
+        $this->consentStates->park($handle, new PendingConsent(
+            $request->resumption($request->parameters->with('prompt', $prompt->without(Prompt::CONSENT))),
+            $redirectUri,
+            $state,
+            $endUser->userId,
+            $client->id,
+            $scope,
+            $target?->id,
+        ));
+
+        return new ConsentRequired($handle);
     }
 
     /**
@@ -199,7 +264,8 @@ final readonly class Authorize
 
     /**
      * Everything that can be reported back to the client: repetition, the response
-     * type, the audience and the scope.
+     * type, the audience — which a third-party application may not set to a system API —
+     * and the scope.
      *
      * @return array{ScopeSet, ResourceServer|null} The scope, and the API it was checked against.
      *
@@ -231,6 +297,12 @@ final readonly class Authorize
         }
 
         $target = $this->target($parameters);
+        if ($target !== null && $target->isSystem && ! $client->isFirstParty()) {
+            // The server's own API — its users, its applications, its roles — is for the
+            // operator's applications only: an outsider's application gets no token for it
+            // on anybody's behalf, whatever the person would agree to.
+            throw OAuth2Error::accessDenied('Third-party applications cannot access this API.');
+        }
 
         try {
             $scope = ScopeSet::fromString($parameters->get('scope') ?? '');

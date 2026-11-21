@@ -27,12 +27,15 @@ final readonly class NewResourceServer
      * @param list<PermissionDefinition> $permissions
      * @param bool                       $enforcePolicies Whether a person's token carries only what their
      *                                                    roles grant on the API.
+     * @param bool                       $allowSkippingConsent Whether first-party applications may do without
+     *                                                         the consent screen for its permissions.
      */
     public function __construct(
         public string $identifier,
         public string $name = '',
         public array $permissions = [],
         public bool $enforcePolicies = false,
+        public bool $allowSkippingConsent = true,
     ) {
     }
 

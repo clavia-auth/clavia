@@ -16,6 +16,7 @@ use Clavia\Application\Clients\RegisterMachineClient;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\GrantType;
+use Clavia\Domain\Client\Ownership;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\SecretGenerator;
 use ClaviaTest\Support\Fake\FakePasswordHasher;
@@ -60,6 +61,15 @@ final class RegisterMachineClientTest extends TestCase
         self::assertSame([GrantType::ClientCredentials], $stored->grantTypes);
         self::assertSame([], $stored->redirectUris);
         self::assertSame([], $stored->responseTypes);
+    }
+
+    public function testAThirdPartyMachineIsRegisteredUnderAPrefixedId(): void
+    {
+        $registered = ($this->register)('Partner worker', ownership: Ownership::ThirdParty);
+
+        self::assertMatchesRegularExpression('/^tpc_[A-Za-z0-9]{32}$/D', $registered->client->id->value);
+        self::assertFalse($registered->client->isFirstParty());
+        self::assertTrue(($this->register)('Ours')->client->isFirstParty());
     }
 
     public function testTheGeneratedSecretIsReturnedOnceAndStoredHashed(): void
@@ -118,6 +128,21 @@ final class RegisterMachineClientTest extends TestCase
         self::assertStringContainsString('the only time it can be shown', $display);
         self::assertStringContainsString('curl -s https://auth.clavia.test/oauth2/token', $display);
         self::assertStringContainsString('-d grant_type=client_credentials', $display);
+    }
+
+    public function testTheCommandRegistersSomebodyElsesMachineAsThirdParty(): void
+    {
+        $tester = new CommandTester(new CreateMachineClientCommand($this->register, 'https://auth.clavia.test'));
+
+        self::assertSame(Command::SUCCESS, $tester->execute(['name' => 'Partner', '--third-party' => true]));
+
+        $client = $this->clients->all()[0] ?? null;
+        self::assertNotNull($client);
+        self::assertFalse($client->isFirstParty());
+        self::assertStringContainsString(
+            'Registered third-party confidential client "Partner"',
+            $tester->getDisplay(true),
+        );
     }
 
     public function testTheCommandReportsARefusedSecretInsteadOfATrace(): void

@@ -23,6 +23,9 @@ use DateTimeImmutable;
  * for a machine, its client grant) holds there. A per-client scope list would be a
  * third answer to the same question, one that names no API and can only drift from the
  * two that do.
+ *
+ * Who runs it ({@see Ownership}) is read from its id: a third-party application is
+ * registered under a `tpc_` id, and that never changes.
  */
 final readonly class Client
 {
@@ -265,6 +268,18 @@ final readonly class Client
     public function isPublic(): bool
     {
         return $this->type === ClientType::Public;
+    }
+
+    /** Who runs it — fixed at registration, written into its id. */
+    public function ownership(): Ownership
+    {
+        return $this->id->ownership();
+    }
+
+    /** Whether the operator of this server runs it; see {@see Ownership}. */
+    public function isFirstParty(): bool
+    {
+        return $this->ownership() === Ownership::FirstParty;
     }
 
     /**

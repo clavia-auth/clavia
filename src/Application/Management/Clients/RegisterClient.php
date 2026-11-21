@@ -17,6 +17,7 @@ use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\ClientType;
+use Clavia\Domain\Client\Ownership;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\SecretGenerator;
@@ -53,7 +54,7 @@ final readonly class RegisterClient
         $secret = $type === ClientType::Confidential ? $this->secrets->token() : null;
 
         $client = Client::register(
-            ClientId::generate($this->secrets),
+            ClientId::generate($this->secrets, $new->firstParty ? Ownership::FirstParty : Ownership::ThirdParty),
             $new->name,
             $type,
             $authMethod,

@@ -17,6 +17,7 @@ use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\GrantType;
+use Clavia\Domain\Client\Ownership;
 use Clavia\Domain\Client\ResponseType;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\InvalidValue;
@@ -69,7 +70,7 @@ final readonly class SeedDashboardClient
         $existing = $this->clients->findByName(self::CLIENT_NAME);
         $client = $existing === null
             ? Client::register(
-                ClientId::generate($this->secrets),
+                ClientId::generate($this->secrets, Ownership::FirstParty),
                 self::CLIENT_NAME,
                 ClientType::Public,
                 ClientAuthMethod::None,

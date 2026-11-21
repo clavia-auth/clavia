@@ -55,6 +55,38 @@ final readonly class RequestParameters
     }
 
     /**
+     * The same parameters, with `$name` set to `$value` alone — in its place when it was
+     * there, last when it was not — or removed, when null.
+     */
+    public function with(string $name, ?string $value): self
+    {
+        $values = $this->values;
+        if ($value === null) {
+            unset($values[$name]);
+        } else {
+            $values[$name] = [$value];
+        }
+
+        return new self($values);
+    }
+
+    /**
+     * Every parameter as a query string (RFC 3986 encoding), repetitions included, in the
+     * order they were given — to send the browser back to the same request.
+     */
+    public function toQueryString(): string
+    {
+        $pairs = [];
+        foreach ($this->values as $name => $values) {
+            foreach ($values as $value) {
+                $pairs[] = rawurlencode((string) $name) . '=' . rawurlencode($value);
+            }
+        }
+
+        return implode('&', $pairs);
+    }
+
+    /**
      * The names given more than once.
      *
      * @return list<string>

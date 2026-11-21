@@ -13,7 +13,8 @@ namespace Clavia\Domain\OAuth2;
 
 /**
  * The registered OAuth 2.0 error codes this server answers with
- * (RFC 6749 §4.1.2.1 for the authorization endpoint, §5.2 for the token endpoint).
+ * (RFC 6749 §4.1.2.1 for the authorization endpoint, §5.2 for the token endpoint), and
+ * those OpenID Connect adds to the authorization endpoint's.
  */
 enum ErrorCode: string
 {
@@ -51,4 +52,16 @@ enum ErrorCode: string
      * Auth0 uses it: a different fix from an unknown API, and from a scope too wide.
      */
     case AccessDenied = 'access_denied';
+
+    /**
+     * `prompt=none`, and nobody is signed in: the person would have had to be shown the
+     * login page (OpenID Connect Core §3.1.2.6).
+     */
+    case LoginRequired = 'login_required';
+
+    /**
+     * `prompt=none`, and the person would have had to be asked for consent (OpenID
+     * Connect Core §3.1.2.6).
+     */
+    case ConsentRequired = 'consent_required';
 }

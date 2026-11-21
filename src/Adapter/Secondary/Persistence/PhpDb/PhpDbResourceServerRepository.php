@@ -32,11 +32,12 @@ use Throwable;
  * deleted and inserted again would have taken every role's grant of it along.
  *
  * @psalm-type ResourceServerRow = array{id: string, identifier: string, name: string, is_system: bool,
- *     enforce_policies: bool, created_at: string}
+ *     enforce_policies: bool, allow_skipping_consent: bool, created_at: string}
  */
 final readonly class PhpDbResourceServerRepository implements ResourceServerRepository
 {
-    private const string COLUMNS = 'id, identifier, name, is_system, enforce_policies, created_at';
+    private const string COLUMNS = 'id, identifier, name, is_system, enforce_policies, allow_skipping_consent, '
+        . 'created_at';
 
     public function __construct(
         private Database $database,
@@ -102,12 +103,14 @@ final readonly class PhpDbResourceServerRepository implements ResourceServerRepo
         /** @var mixed $stored */
         $stored = $this->database->fetchValue(
             <<<'SQL'
-                INSERT INTO resource_servers (id, identifier, name, is_system, enforce_policies, created_at)
-                VALUES (:id, :identifier, :name, :is_system, :enforce_policies, :created_at)
+                INSERT INTO resource_servers
+                    (id, identifier, name, is_system, enforce_policies, allow_skipping_consent, created_at)
+                VALUES (:id, :identifier, :name, :is_system, :enforce_policies, :allow_skipping_consent, :created_at)
                 ON CONFLICT (id) DO UPDATE SET
                     name = EXCLUDED.name,
                     is_system = EXCLUDED.is_system,
-                    enforce_policies = EXCLUDED.enforce_policies
+                    enforce_policies = EXCLUDED.enforce_policies,
+                    allow_skipping_consent = EXCLUDED.allow_skipping_consent
                 RETURNING identifier
                 SQL,
             [
@@ -116,6 +119,7 @@ final readonly class PhpDbResourceServerRepository implements ResourceServerRepo
                 'name' => $resourceServer->name,
                 'is_system' => $resourceServer->isSystem,
                 'enforce_policies' => $resourceServer->enforcePolicies,
+                'allow_skipping_consent' => $resourceServer->allowSkippingConsent,
                 'created_at' => Timestamp::toDatabase($resourceServer->createdAt),
             ],
         );
@@ -192,6 +196,7 @@ final readonly class PhpDbResourceServerRepository implements ResourceServerRepo
             Timestamp::fromDatabase($row['created_at']),
             $row['is_system'],
             $row['enforce_policies'],
+            $row['allow_skipping_consent'],
         );
     }
 }

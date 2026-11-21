@@ -50,6 +50,7 @@ final readonly class RegisterResourceServer
             NewResourceServer::permissions($new->permissions),
             $this->clock->now(),
             enforcePolicies: $new->enforcePolicies,
+            allowSkippingConsent: $new->allowSkippingConsent,
         );
         $this->resourceServers->save($resourceServer);
 

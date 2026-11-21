@@ -20,15 +20,26 @@ use Clavia\Application\OAuth2\RequestParameters;
 final readonly class AuthorizationRequest
 {
     /**
-     * @param RequestParameters $parameters    Query and body parameters together, unvalidated.
-     * @param string            $requestTarget This request's own path and query string — where the
-     *                                         browser returns to after signing in.
-     * @param EndUser|null      $endUser       Who is signed in, when somebody is.
+     * @param RequestParameters $parameters Query and body parameters together, unvalidated.
+     * @param string            $endpoint   The path the request arrived at.
+     * @param EndUser|null      $endUser    Who is signed in, when somebody is.
      */
     public function __construct(
         public RequestParameters $parameters,
-        public string $requestTarget,
+        public string $endpoint,
         public ?EndUser $endUser,
     ) {
+    }
+
+    /**
+     * Where to send the browser to make this request again — after it signed in, or
+     * consented — as a `GET` carrying every parameter in its query, whichever method
+     * brought it here: a request posted to the endpoint is resumed with all of it.
+     */
+    public function resumption(RequestParameters $parameters): string
+    {
+        $query = $parameters->toQueryString();
+
+        return $query === '' ? $this->endpoint : $this->endpoint . '?' . $query;
     }
 }
