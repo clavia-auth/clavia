@@ -98,14 +98,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     const idToken = session?.idToken;
+    const refreshToken = session?.refreshToken;
     // Leave without starting a new sign-in: this page is about to be abandoned,
     // and a guarded route reacting to the dropped session would otherwise send the
     // browser back to the authorization server instead of to the logout.
     suppressLogin();
     expire();
-    // The refresh token is not handed back: token revocation (RFC 7009) arrives with
-    // Step 14. Dropped from this tab, nothing here can present it again, and it runs
-    // out on its own.
+    // The refresh token is handed back (RFC 7009), taking its whole chain with it, so
+    // a copy left anywhere stops working now rather than when it runs out. A beacon,
+    // because the page is being left: it is sent even as the navigation starts, and
+    // a form-encoded body needs no preflight. Its answer does not matter.
+    if (refreshToken) {
+      const body = new URLSearchParams({
+        token: refreshToken,
+        token_type_hint: "refresh_token",
+        client_id: config.clientId,
+      });
+      if (!navigator.sendBeacon(endpoints.revocation, body)) {
+        void fetch(endpoints.revocation, { method: "POST", body, keepalive: true }).catch(() => undefined);
+      }
+    }
     //
     // RP-Initiated Logout: a top-level navigation, because that is the only request
     // the auth origin's SameSite=Lax session cookie travels with. The ID token

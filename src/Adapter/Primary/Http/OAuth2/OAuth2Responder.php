@@ -56,6 +56,17 @@ final readonly class OAuth2Responder
         return new JsonResponse($payload, 200, self::NO_STORE);
     }
 
+    /** A request that succeeded with nothing to say: `200`, an empty body, not cached. */
+    public function done(): ResponseInterface
+    {
+        $response = $this->responses->createResponse(200);
+        foreach (self::NO_STORE as $name => $value) {
+            $response = $response->withHeader($name, $value);
+        }
+
+        return $response;
+    }
+
     /**
      * An error of the token endpoint, answered to the client (RFC 6749 §5.2).
      *

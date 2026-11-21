@@ -60,7 +60,9 @@ use Clavia\Adapter\Primary\Http\Management\UserPermissionsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserRolesHandler;
 use Clavia\Adapter\Primary\Http\Management\UsersHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
+use Clavia\Adapter\Primary\Http\OAuth2\IntrospectionHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\OAuth2Responder;
+use Clavia\Adapter\Primary\Http\OAuth2\RevocationHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\TokenHandler;
 use Clavia\Adapter\Primary\Http\Oidc\DiscoveryHandler;
 use Clavia\Adapter\Primary\Http\Oidc\EndSessionHandler;
@@ -155,6 +157,9 @@ use Clavia\Application\OAuth2\Token\ClientCredentialsGrant;
 use Clavia\Application\OAuth2\Token\IssueToken;
 use Clavia\Application\OAuth2\Token\RefreshTokenGrant;
 use Clavia\Application\OAuth2\Token\UserScope;
+use Clavia\Application\OAuth2\TokenManagement\IntrospectToken;
+use Clavia\Application\OAuth2\TokenManagement\IssuedTokens;
+use Clavia\Application\OAuth2\TokenManagement\RevokeToken;
 use Clavia\Application\Oidc\CompactJws;
 use Clavia\Application\Oidc\Discovery\ProviderMetadata;
 use Clavia\Application\Oidc\IdTokenIssuer;
@@ -294,6 +299,9 @@ final class ConfigProvider
                     ClientCredentialsGrant::class => Container\ClientCredentialsGrantFactory::class,
                     RegisterMachineClient::class => Container\RegisterMachineClientFactory::class,
                     IssueToken::class => Container\IssueTokenFactory::class,
+                    IssuedTokens::class => Container\IssuedTokensFactory::class,
+                    IntrospectToken::class => Container\IntrospectTokenFactory::class,
+                    RevokeToken::class => Container\RevokeTokenFactory::class,
                     SeedDevelopmentData::class => Container\SeedDevelopmentDataFactory::class,
                     SeedManagementAccess::class => Container\SeedManagementAccessFactory::class,
                     BuildAuthorizationUrl::class => Container\BuildAuthorizationUrlFactory::class,
@@ -417,6 +425,8 @@ final class ConfigProvider
                     OAuth2Responder::class => Container\OAuth2ResponderFactory::class,
                     AuthorizeHandler::class => Container\AuthorizeHandlerFactory::class,
                     TokenHandler::class => Container\TokenHandlerFactory::class,
+                    IntrospectionHandler::class => Container\IntrospectionHandlerFactory::class,
+                    RevocationHandler::class => Container\RevocationHandlerFactory::class,
                     AuthCookies::class => Container\AuthCookiesFactory::class,
                     AuthPageResponder::class => Container\AuthPageResponderFactory::class,
                     LoginPageHandler::class => Container\LoginPageHandlerFactory::class,

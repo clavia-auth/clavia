@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Oidc\Discovery;
 
+use Clavia\Application\OAuth2\TokenManagement\IntrospectToken;
+use Clavia\Application\OAuth2\TokenManagement\RevokeToken;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\ResponseType;
@@ -35,6 +37,8 @@ final readonly class ProviderMetadata
      */
     public const string AUTHORIZATION_ENDPOINT = '/oauth2/authorize';
     public const string TOKEN_ENDPOINT = '/oauth2/token';
+    public const string INTROSPECTION_ENDPOINT = '/oauth2/introspect';
+    public const string REVOCATION_ENDPOINT = '/oauth2/revoke';
     public const string USERINFO_ENDPOINT = '/oidc/userinfo';
     public const string JWKS_URI = '/oidc/jwks.json';
     public const string END_SESSION_ENDPOINT = '/oidc/logout';
@@ -97,6 +101,12 @@ final readonly class ProviderMetadata
                 static fn (ClientAuthMethod $method): string => $method->value,
                 $this->tokenAuthMethods,
             ),
+            // RFC 8414 §2: introspection (RFC 7662) takes a secret; revocation (RFC 7009) a public
+            // client's id too.
+            'introspection_endpoint' => $this->issuer . self::INTROSPECTION_ENDPOINT,
+            'introspection_endpoint_auth_methods_supported' => self::methods(IntrospectToken::AUTH_METHODS),
+            'revocation_endpoint' => $this->issuer . self::REVOCATION_ENDPOINT,
+            'revocation_endpoint_auth_methods_supported' => self::methods(RevokeToken::AUTH_METHODS),
             'claim_types_supported' => ['normal'],
             'claims_supported' => self::CLAIMS,
             'claims_parameter_supported' => false,
@@ -108,5 +118,15 @@ final readonly class ProviderMetadata
             // RFC 9207 §3: every authorization response names its issuer.
             'authorization_response_iss_parameter_supported' => true,
         ];
+    }
+
+    /**
+     * @param list<ClientAuthMethod> $methods
+     *
+     * @return list<string>
+     */
+    private static function methods(array $methods): array
+    {
+        return array_map(static fn (ClientAuthMethod $method): string => $method->value, $methods);
     }
 }

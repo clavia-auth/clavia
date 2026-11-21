@@ -102,6 +102,15 @@ final readonly class PhpDbAccessTokenRepository implements AccessTokenRepository
     }
 
     #[\Override]
+    public function revoke(AccessTokenId $id, DateTimeImmutable $now): int
+    {
+        return $this->database->execute(
+            'UPDATE oauth2_access_tokens SET revoked_at = :now WHERE id = :id AND revoked_at IS NULL',
+            ['now' => Timestamp::toDatabase($now), 'id' => $id->value],
+        );
+    }
+
+    #[\Override]
     public function revokeFamily(RefreshTokenId $family, DateTimeImmutable $now): int
     {
         return $this->database->execute(

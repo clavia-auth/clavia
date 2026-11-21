@@ -64,4 +64,7 @@ enum ErrorCode: string
      * Connect Core §3.1.2.6).
      */
     case ConsentRequired = 'consent_required';
+
+    /** RFC 7009 §2.2.1: a `token_type_hint` naming a kind of token the server does not keep. */
+    case UnsupportedTokenType = 'unsupported_token_type';
 }

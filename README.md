@@ -6,7 +6,7 @@ Auth0: OAuth2 flows, interactive login with MFA, and a Management API.
 This is the PHP 8.5 implementation. It is being ported feature by feature from the Python
 reference implementation; `CLAUDE.md` holds the migration plan and the current state.
 
-**Status: Step 13 — connections.** A person signs in with a password at `/auth/login`, or with
+**Status: Step 14 — introspection and revocation.** A person signs in with a password at `/auth/login`, or with
 Google or GitHub once their credentials are configured (`CLAVIA_GOOGLE_CLIENT_ID` / `_SECRET`,
 `CLAVIA_GITHUB_CLIENT_ID` / `_SECRET`; register
 `https://auth.{domain}/auth/social/{provider}/callback` at the provider) — followed, once they
@@ -54,6 +54,10 @@ The dashboard (`frontend/`, React) is registered by `clavia seed-dev` as a publi
 also writes its build configuration to `frontend/.env.local`. Run it with
 `cd frontend && npm install && npm run dev`; Caddy serves it at
 `https://management.{domain}/dashboard/`.
+
+An API checks a token presented to it at `/oauth2/introspect` (RFC 7662), through a machine
+client holding a grant on it; a client gives a token back at `/oauth2/revoke` (RFC 7009) —
+a refresh token takes the whole chain with it.
 
 A client registered for the `refresh_token` grant (beside `authorization_code`) gets a
 refresh token with the code flow's tokens. Every refresh returns a new pair and spends the

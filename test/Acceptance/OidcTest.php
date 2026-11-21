@@ -89,7 +89,7 @@ final class OidcTest extends AcceptanceTestCase
 
         // Nothing is advertised that does not exist yet.
         self::assertArrayNotHasKey('prompt_values_supported', $document);
-        self::assertArrayNotHasKey('introspection_endpoint', $document);
+        self::assertArrayNotHasKey('device_authorization_endpoint', $document);
         self::assertNotContains('sid', $claims);
     }
 
@@ -120,7 +120,7 @@ final class OidcTest extends AcceptanceTestCase
                 $advertised[$field] = $url;
             }
         }
-        self::assertCount(5, $advertised);
+        self::assertCount(7, $advertised);
 
         foreach ($advertised as $field => $url) {
             self::assertStringStartsWith(self::ISSUER . '/', $url, $field);

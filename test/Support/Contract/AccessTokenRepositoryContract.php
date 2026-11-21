@@ -120,6 +120,22 @@ trait AccessTokenRepositoryContract
     }
 
     #[Test]
+    public function oneTokenIsRevokedAloneAndOnce(): void
+    {
+        $code = $this->aStoredCode('code-1');
+        $target = $this->aToken('token-1', $code);
+        $this->tokens()->add($target);
+        $this->tokens()->add($this->aToken('token-2', $code));
+        $first = new DateTimeImmutable('2026-01-15T10:05:00Z');
+
+        self::assertSame(1, $this->tokens()->revoke($target->id, $first));
+        self::assertSame(0, $this->tokens()->revoke($target->id, new DateTimeImmutable('2026-01-15T10:06:00Z')));
+
+        self::assertEquals($first, $this->tokens()->findByDigest(Digest::of('token-1'))?->revokedAt());
+        self::assertFalse($this->tokens()->findByDigest(Digest::of('token-2'))?->isRevoked());
+    }
+
+    #[Test]
     public function revokingARefreshFamilyRevokesTheTokensThatCameWithOrFromIt(): void
     {
         $code = $this->aStoredCode('code-1');

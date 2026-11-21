@@ -29,16 +29,17 @@ and multi-tenancy.
 
 ## Current state
 
-**Steps 0 to 13 are done: the foundations, Authorization Code + PKCE, the login page with
+**Steps 0 to 14 are done: the foundations, Authorization Code + PKCE, the login page with
 browser sessions, OpenID Connect (ID tokens, discovery, JWKS, userinfo), Client
 Credentials for machine clients holding a grant on an API, the Management API with
 audiences in the user's flow, two-factor authentication (TOTP and recovery codes),
 signing in with Google or GitHub, RP-Initiated Logout, roles (RBAC), rotating refresh
 tokens, application ownership with the consent screen, and connections — pools of accounts,
 the social providers and operator-registered OpenID Connect providers, enabled per
-application; the dashboard is in `frontend/`.**
+application — and token introspection and revocation; the dashboard is in `frontend/`.**
 The application answers `GET /healthz`,
-`GET|POST /oauth2/authorize`, `POST /oauth2/token`, `GET /.well-known/openid-configuration`,
+`GET|POST /oauth2/authorize`, `POST /oauth2/token`, `POST /oauth2/introspect`, `POST /oauth2/revoke`,
+`GET /.well-known/openid-configuration`,
 `GET /.well-known/oauth-authorization-server`, `GET /oidc/jwks.json`, `GET|POST /oidc/userinfo`,
 `GET|POST /oidc/logout`,
 `GET|POST /auth/login`, `GET|POST /auth/mfa`, `GET|POST /auth/mfa/enroll`,
@@ -317,6 +318,15 @@ What exists:
     clients and `allow_skipping_consent` on APIs in the Management API;
     `clients:create-m2m --third-party`. The dashboard shows ownership, the API switch and a
     user's authorized applications again.
+- **Introspection and revocation** (Step 14):
+  - `Application\OAuth2\TokenManagement\{IntrospectToken,TokenIntrospection,RevokeToken,
+    IssuedTokens,PresentedToken,TokenTypeHint}`; `ErrorCode::UnsupportedTokenType`;
+    `AccessTokenRepository::revoke()`. Each use case names the client authentication methods
+    it accepts (`AUTH_METHODS`), which discovery advertises.
+  - `Adapter\Primary\Http\OAuth2\{IntrospectionHandler,RevocationHandler}`,
+    `OAuth2Responder::done()`; `introspection_endpoint`, `revocation_endpoint` and their
+    `…_auth_methods_supported` in both metadata documents.
+  - The dashboard hands its refresh token back at sign-out (a beacon to `/oauth2/revoke`).
 - **Connections** (Step 13):
   - `Domain\Connection\{ConnectionName,ConnectionStrategy,Connection,OidcSettings,
     ConnectionRepository,BuiltInConnection}` (`ProviderName` became `ConnectionName`;
@@ -780,6 +790,18 @@ Conventions established in Step 12:
 - **A handle is the only thing a page's URL or form carries**, for consent as for sign-in; a
   handle that is unknown, spent, expired, someone else's or names something deleted is the
   same "expired" page. Showing the screen leaves it; deciding claims it (`GETDEL`).
+
+Conventions established in Step 14:
+
+- **Introspection answers only a client that proves itself with a secret**, and only about a
+  token it has a stake in: its own, or one issued for an API it holds a client grant on.
+  Everything else — unknown, expired, revoked, spent, a deactivated account's, someone
+  else's — is the same `{"active": false}`.
+- **Revocation is giving back what one holds**: any client, a public one by its id, may
+  revoke a token issued to it; another client's is `invalid_grant`, an unknown one a quiet
+  `200`. A refresh token takes its family — refresh and access tokens — along; an access
+  token goes alone.
+- **The hint says where to look first, never where to look only.**
 
 Conventions established in Step 13:
 
@@ -1485,9 +1507,11 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
   `ConnectionRepositoryContract` and the per-pool cases of the user, client and identity
   contracts against the fakes and PostgreSQL; `RedisJwksCacheTest`.
 
-#### [ ] Step 14 — Introspection and revocation
+#### [x] Step 14 — Introspection and revocation
 - RFC 7662 / RFC 7009, per-endpoint client-auth methods, permission rules, family revocation.
-- Tests: `test_introspection_revocation` (17).
+- Tests: `test_introspection_revocation` (17) — ported as `IntrospectionRevocationTest`
+  (18 cases, with a deactivated account's token); `PresentedTokenTest` (the request and the
+  hint), the single revocation case of `AccessTokenRepositoryContract`.
 
 #### [ ] Step 15 — Device authorization
 - RFC 8628: `/oauth2/device/code`, the device grant, polling (`slow_down`, `expired_token`),

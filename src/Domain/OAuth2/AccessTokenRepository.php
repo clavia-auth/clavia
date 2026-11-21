@@ -24,6 +24,13 @@ interface AccessTokenRepository
     public function findByDigest(Digest $digest): ?AccessToken;
 
     /**
+     * Revoke one token, unless it is revoked already: the first instant stands.
+     *
+     * @return int 1 when it was revoked now, 0 otherwise.
+     */
+    public function revoke(AccessTokenId $id, DateTimeImmutable $now): int;
+
+    /**
      * Revoke every token minted from one authorization code that is not revoked already.
      *
      * What a replayed code obliges the server to do (RFC 6749 §4.1.2): a code seen twice

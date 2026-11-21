@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace ClaviaTest\Support\Fake;
 
 use Clavia\Domain\OAuth2\AccessToken;
+use Clavia\Domain\OAuth2\AccessTokenId;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\AuthorizationCodeId;
 use Clavia\Domain\OAuth2\RefreshTokenId;
@@ -36,6 +37,12 @@ final class InMemoryAccessTokenRepository implements AccessTokenRepository
     public function findByDigest(Digest $digest): ?AccessToken
     {
         return $this->tokens[$digest->toString()] ?? null;
+    }
+
+    #[\Override]
+    public function revoke(AccessTokenId $id, DateTimeImmutable $now): int
+    {
+        return $this->revokeWhere(static fn (AccessToken $token): bool => $token->id->equals($id), $now);
     }
 
     #[\Override]
