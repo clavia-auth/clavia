@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace ClaviaTest\Unit\Application\OAuth2;
 
 use Clavia\Application\Authentication\EndUser;
+use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\OAuth2\Authorize\AuthorizationOutcome;
 use Clavia\Application\OAuth2\Authorize\AuthorizationRequest;
 use Clavia\Application\OAuth2\Authorize\Authorize;
@@ -24,6 +25,7 @@ use Clavia\Application\Port\NonceRegistry;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\Session;
 use Clavia\Domain\Client\ClientId;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Consent\UserConsent;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\OAuth2\ErrorCode;
@@ -37,9 +39,11 @@ use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\ScopeSet;
 use Clavia\Domain\Shared\SecretGenerator;
 use ClaviaTest\Support\Clients;
+use ClaviaTest\Support\Fake\FakeIdentityProviders;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryAuthorizationCodeRepository;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
+use ClaviaTest\Support\Fake\InMemoryConnectionRepository;
 use ClaviaTest\Support\Fake\InMemoryConsentRepository;
 use ClaviaTest\Support\Fake\InMemoryConsentStateStore;
 use ClaviaTest\Support\Fake\InMemoryLoginStateStore;
@@ -64,6 +68,7 @@ final class AuthorizeTest extends TestCase
     private InMemoryRoleRepository $roles;
     private InMemoryConsentRepository $consents;
     private InMemoryConsentStateStore $consentStates;
+    private InMemoryConnectionRepository $connections;
     private Authorize $authorize;
     private UserId $userId;
 
@@ -80,6 +85,7 @@ final class AuthorizeTest extends TestCase
         $this->roles = new InMemoryRoleRepository($this->resourceServers);
         $this->consents = new InMemoryConsentRepository();
         $this->consentStates = new InMemoryConsentStateStore($clock);
+        $this->connections = new InMemoryConnectionRepository($this->clients);
         $this->userId = UserId::generate(new SeededRandomSource(2));
         $this->authorize = new Authorize(
             $this->clients,
@@ -90,6 +96,7 @@ final class AuthorizeTest extends TestCase
             $this->roles,
             $this->consents,
             $this->consentStates,
+            new ConnectionAccess($this->connections, new FakeIdentityProviders()),
             new SecretGenerator($random),
             $random,
             $clock,
@@ -317,6 +324,7 @@ final class AuthorizeTest extends TestCase
         $session = Session::establish(
             $this->userId,
             [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
             'the-sid',
             new DateTimeImmutable('2026-01-15T09:00:00Z'),
             86_400,
@@ -390,6 +398,7 @@ final class AuthorizeTest extends TestCase
             $this->roles,
             $this->consents,
             $this->consentStates,
+            new ConnectionAccess($this->connections, new FakeIdentityProviders()),
             new SecretGenerator($random),
             $random,
             new FrozenClock(),
@@ -593,11 +602,66 @@ final class AuthorizeTest extends TestCase
         self::assertSame(0, $this->loginStates->count());
     }
 
+    // ── Connections ─────────────────────────────────────────────────────────────
+
+    public function testASessionThroughAConnectionTheApplicationDoesNotEnableCountsForNothing(): void
+    {
+        $this->clients->save(
+            Clients::public('spa')->withConnections([ConnectionName::fromString('google')]),
+        );
+
+        $outcome = ($this->authorize)(new AuthorizationRequest(
+            $this->valid(),
+            self::ENDPOINT,
+            new EndUser($this->userId, $this->sessionThrough(ConnectionName::defaultPool())),
+        ));
+
+        self::assertInstanceOf(LoginRequired::class, $outcome);
+        self::assertSame([], $this->codes->all());
+    }
+
+    public function testASessionThroughAConnectionSwitchedOffSinceCountsForNothing(): void
+    {
+        $pool = $this->connections->find(ConnectionName::defaultPool());
+        self::assertNotNull($pool);
+        $this->connections->save($pool->switched(false, null, null));
+
+        $outcome = ($this->authorize)(new AuthorizationRequest(
+            $this->valid(['prompt' => 'none']),
+            self::ENDPOINT,
+            new EndUser($this->userId, $this->sessionThrough(ConnectionName::defaultPool())),
+        ));
+
+        self::assertInstanceOf(RequestRefused::class, $outcome);
+        self::assertSame(ErrorCode::LoginRequired, $outcome->error->error);
+    }
+
+    public function testASessionThroughAConnectionTheApplicationEnablesIsUsed(): void
+    {
+        $outcome = ($this->authorize)(new AuthorizationRequest(
+            $this->valid(),
+            self::ENDPOINT,
+            new EndUser($this->userId, $this->sessionThrough(ConnectionName::defaultPool())),
+        ));
+
+        self::assertInstanceOf(CodeIssued::class, $outcome);
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────────────
 
+    private function sessionThrough(ConnectionName $connection): Session
+    {
+        return Session::establish(
+            $this->userId,
+            [AuthenticationMethod::Password],
+            $connection,
+            'the-sid',
+            new DateTimeImmutable('2026-01-15T09:00:00Z'),
+            86_400,
+        );
+    }
+
     /**
-     * A complete, valid request with some parameters replaced; null removes one.
-     *
      * @param array<string, string|null> $overrides
      */
     private function valid(array $overrides = []): RequestParameters

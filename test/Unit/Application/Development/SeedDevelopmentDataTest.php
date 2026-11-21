@@ -15,6 +15,7 @@ use Clavia\Application\Development\SeedDevelopmentData;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\ResponseType;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Oidc\SigningAlgorithm;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\SecretGenerator;
@@ -48,7 +49,7 @@ final class SeedDevelopmentDataTest extends TestCase
     {
         $seeded = $this->seeder()('dev@clavia.test', 'devpassword', 'http://localhost:3000/callback');
 
-        $user = $this->users->findByEmail('dev@clavia.test');
+        $user = $this->users->findByEmail(ConnectionName::defaultPool(), 'dev@clavia.test');
         self::assertTrue($seeded->userCreated);
         self::assertSame('dev@clavia.test', $seeded->userEmail);
         self::assertNotNull($user);
@@ -77,14 +78,15 @@ final class SeedDevelopmentDataTest extends TestCase
     public function testRunningItAgainCreatesNothingAndChangesNothing(): void
     {
         $first = $this->seeder()('dev@clavia.test', 'devpassword', 'http://localhost:3000/callback');
-        $hash = $this->users->findByEmail('dev@clavia.test')?->passwordHash();
+        $hash = $this->users->findByEmail(ConnectionName::defaultPool(), 'dev@clavia.test')?->passwordHash();
 
         $second = $this->seeder()('dev@clavia.test', 'another-password', 'http://localhost:9999/elsewhere');
 
         self::assertFalse($second->userCreated);
         self::assertFalse($second->clientCreated);
         self::assertTrue($second->clientId->equals($first->clientId));
-        self::assertSame($hash, $this->users->findByEmail('dev@clavia.test')?->passwordHash());
+        $again = $this->users->findByEmail(ConnectionName::defaultPool(), 'dev@clavia.test');
+        self::assertSame($hash, $again?->passwordHash());
         self::assertFalse($this->clients->find($first->clientId)?->hasRedirectUri('http://localhost:9999/elsewhere'));
     }
 
@@ -94,7 +96,7 @@ final class SeedDevelopmentDataTest extends TestCase
             $this->seeder(isDevelopment: false)('dev@clavia.test', 'devpassword', 'http://localhost:3000/callback');
             self::fail('Development data was seeded.');
         } catch (LogicException) {
-            self::assertNull($this->users->findByEmail('dev@clavia.test'));
+            self::assertNull($this->users->findByEmail(ConnectionName::defaultPool(), 'dev@clavia.test'));
             self::assertNull($this->clients->findByName(SeedDevelopmentData::CLIENT_NAME));
         }
     }
@@ -105,7 +107,7 @@ final class SeedDevelopmentDataTest extends TestCase
             $this->seeder()('dev@clavia.test', 'devpassword', 'not a url');
             self::fail('The redirect URI was accepted.');
         } catch (InvalidValue) {
-            self::assertNull($this->users->findByEmail('dev@clavia.test'));
+            self::assertNull($this->users->findByEmail(ConnectionName::defaultPool(), 'dev@clavia.test'));
         }
     }
 

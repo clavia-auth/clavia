@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Management\Clients;
 
+use Clavia\Application\Management\NotFound;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
@@ -36,11 +37,16 @@ final readonly class RegisterClient
         private PasswordHasher $hasher,
         private SecretGenerator $secrets,
         private Clock $clock,
+        private ClientConnections $connections,
     ) {
     }
 
     /**
+     * A first-party application that names no connections gets every one there is; a
+     * third-party one cannot name any.
+     *
      * @throws InvalidValue
+     * @throws NotFound     When a connection named does not exist.
      */
     public function __invoke(NewClient $new): ClientWithSecret
     {
@@ -64,6 +70,11 @@ final readonly class RegisterClient
             RegistrationValues::responseTypes($new->responseTypes),
             $this->clock->now(),
             RegistrationValues::redirectUris($new->postLogoutRedirectUris),
+            match (true) {
+                $new->connections !== null => $this->connections->existing($new->connections),
+                $new->firstParty => $this->connections->every(),
+                default => [],
+            },
         );
         $this->clients->save($client);
 

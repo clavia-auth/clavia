@@ -14,6 +14,7 @@ namespace Clavia\Application\Authentication;
 use Clavia\Application\Port\SessionStore;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\Session;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\SecretGenerator;
@@ -50,16 +51,28 @@ final readonly class Sessions
      * victim signs in.
      *
      * @param list<AuthenticationMethod> $methods
-     * @param string|null                $replacing The identifier the browser presented, if any.
+     * @param ConnectionName             $connection What the person signed in through.
+     * @param string|null                $replacing  The identifier the browser presented, if any.
      *
      * @return non-empty-string The new identifier: the only copy outside the browser's cookie.
      */
-    public function establish(UserId $userId, array $methods, #[\SensitiveParameter] ?string $replacing): string
-    {
+    public function establish(
+        UserId $userId,
+        array $methods,
+        ConnectionName $connection,
+        #[\SensitiveParameter] ?string $replacing,
+    ): string {
         $this->end($replacing);
 
         $now = $this->clock->now();
-        $session = Session::establish($userId, $methods, $this->secrets->token(), $now, $this->absoluteLifetime);
+        $session = Session::establish(
+            $userId,
+            $methods,
+            $connection,
+            $this->secrets->token(),
+            $now,
+            $this->absoluteLifetime,
+        );
         $sessionId = $this->secrets->token();
 
         $this->store->save($sessionId, $session, $session->idleWindowAt($now, $this->idleLifetime));

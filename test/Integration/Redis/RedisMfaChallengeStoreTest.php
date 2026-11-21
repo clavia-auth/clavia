@@ -17,6 +17,7 @@ use Clavia\Adapter\Secondary\Redis\RedisMfaChallengeStore;
 use Clavia\Application\Port\MfaChallengeStore;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\MfaChallenge;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
 use ClaviaTest\Support\Contract\MfaChallengeStoreContract;
 use ClaviaTest\Support\IntegrationTestCase;
@@ -91,6 +92,7 @@ final class RedisMfaChallengeStoreTest extends IntegrationTestCase
             '/',
             null,
             [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
         );
     }
 }

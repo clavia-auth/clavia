@@ -13,6 +13,7 @@ namespace ClaviaTest\Unit\Application\Authentication;
 
 use Clavia\Application\Authentication\Sessions;
 use Clavia\Domain\Authentication\AuthenticationMethod;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\SecretGenerator;
 use ClaviaTest\Support\Fake\FrozenClock;
@@ -47,7 +48,12 @@ final class SessionsTest extends TestCase
 
     public function testAnEstablishedSessionIsFoundByTheIdentifierItWasHandedOutWith(): void
     {
-        $sessionId = $this->sessions->establish($this->userId, [AuthenticationMethod::Password], null);
+        $sessionId = $this->sessions->establish(
+            $this->userId,
+            [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
+            null,
+        );
 
         $session = $this->sessions->resolve($sessionId);
 
@@ -62,9 +68,19 @@ final class SessionsTest extends TestCase
 
     public function testEstablishingEndsTheSessionTheBrowserHeld(): void
     {
-        $first = $this->sessions->establish($this->userId, [AuthenticationMethod::Password], null);
+        $first = $this->sessions->establish(
+            $this->userId,
+            [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
+            null,
+        );
 
-        $second = $this->sessions->establish($this->userId, [AuthenticationMethod::Password], $first);
+        $second = $this->sessions->establish(
+            $this->userId,
+            [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
+            $first,
+        );
 
         self::assertNotSame($first, $second);
         self::assertNull($this->sessions->resolve($first));
@@ -74,7 +90,12 @@ final class SessionsTest extends TestCase
 
     public function testEachSessionHasItsOwnSid(): void
     {
-        $establish = fn (): string => $this->sessions->establish($this->userId, [AuthenticationMethod::Password], null);
+        $establish = fn (): string => $this->sessions->establish(
+            $this->userId,
+            [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
+            null,
+        );
 
         $first = $this->sessions->resolve($establish());
         $second = $this->sessions->resolve($establish());
@@ -84,7 +105,12 @@ final class SessionsTest extends TestCase
 
     public function testUsingASessionStartsItsIdleWindowOver(): void
     {
-        $sessionId = $this->sessions->establish($this->userId, [AuthenticationMethod::Password], null);
+        $sessionId = $this->sessions->establish(
+            $this->userId,
+            [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
+            null,
+        );
 
         $this->clock->advance(self::IDLE - 1);
         self::assertNotNull($this->sessions->resolve($sessionId));
@@ -95,7 +121,12 @@ final class SessionsTest extends TestCase
 
     public function testASessionLeftIdleTooLongIsGone(): void
     {
-        $sessionId = $this->sessions->establish($this->userId, [AuthenticationMethod::Password], null);
+        $sessionId = $this->sessions->establish(
+            $this->userId,
+            [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
+            null,
+        );
 
         $this->clock->advance(self::IDLE);
 
@@ -104,7 +135,12 @@ final class SessionsTest extends TestCase
 
     public function testUseNeverCarriesASessionPastItsAbsoluteLifetime(): void
     {
-        $sessionId = $this->sessions->establish($this->userId, [AuthenticationMethod::Password], null);
+        $sessionId = $this->sessions->establish(
+            $this->userId,
+            [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
+            null,
+        );
 
         for ($elapsed = 0; $elapsed < self::ABSOLUTE - self::IDLE; $elapsed += 1800) {
             $this->clock->advance(1800);
@@ -123,7 +159,12 @@ final class SessionsTest extends TestCase
     public function testASessionFoundPastItsCeilingIsDeletedRatherThanRenewed(): void
     {
         // A store that outlived the ceiling — a clock change, a restored dump.
-        $sessionId = $this->sessions->establish($this->userId, [AuthenticationMethod::Password], null);
+        $sessionId = $this->sessions->establish(
+            $this->userId,
+            [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
+            null,
+        );
         $session = $this->store->find($sessionId);
         self::assertNotNull($session);
         $this->store->save($sessionId, $session, 10 * self::ABSOLUTE);
@@ -136,7 +177,12 @@ final class SessionsTest extends TestCase
 
     public function testEndingASessionReturnsWhatItWas(): void
     {
-        $sessionId = $this->sessions->establish($this->userId, [AuthenticationMethod::Password], null);
+        $sessionId = $this->sessions->establish(
+            $this->userId,
+            [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
+            null,
+        );
 
         $ended = $this->sessions->end($sessionId);
 

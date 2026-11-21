@@ -14,8 +14,9 @@ namespace ClaviaTest\Support\Contract;
 use Clavia\Application\Port\ExternalSignInStore;
 use Clavia\Domain\Authentication\PendingExternalSignIn;
 use Clavia\Domain\Client\ClientId;
-use Clavia\Domain\Identity\ProviderName;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\OAuth2\CodeVerifier;
+use Clavia\Domain\Oidc\Nonce;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use PHPUnit\Framework\Attributes\Test;
 
@@ -32,11 +33,12 @@ trait ExternalSignInStoreContract
     {
         $verifier = CodeVerifier::generate(new SeededRandomSource(1));
         $this->pendingSignIns()->open('state-1', new PendingExternalSignIn(
-            ProviderName::fromString('google'),
+            ConnectionName::fromString('google'),
             $verifier,
             '/oauth2/authorize?client_id=spa&state=é%20x',
             ClientId::fromString('spa'),
             'login-handle',
+            Nonce::fromString('nonce-1'),
         ));
 
         $pending = $this->pendingSignIns()->claim('state-1');
@@ -47,6 +49,7 @@ trait ExternalSignInStoreContract
         self::assertSame('/oauth2/authorize?client_id=spa&state=é%20x', $pending->nextUrl);
         self::assertSame('spa', $pending->clientId?->value);
         self::assertSame('login-handle', $pending->loginState);
+        self::assertSame('nonce-1', $pending->nonce->value);
     }
 
     #[Test]
@@ -83,11 +86,12 @@ trait ExternalSignInStoreContract
     private function aPendingSignIn(): PendingExternalSignIn
     {
         return new PendingExternalSignIn(
-            ProviderName::fromString('github'),
+            ConnectionName::fromString('github'),
             CodeVerifier::generate(new SeededRandomSource(2)),
             '/auth/login',
             null,
             null,
+            Nonce::fromString('nonce-1'),
         );
     }
 }

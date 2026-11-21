@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Application\Authentication\External;
 
 use Clavia\Application\Port\TransactionManager;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\AssertedIdentity;
 use Clavia\Domain\Identity\ExternalIdentity;
 use Clavia\Domain\Identity\ExternalIdentityRepository;
@@ -35,10 +36,14 @@ use Clavia\Domain\Shared\RandomSource;
  *    Creating an account from it would also squat the address, keeping its real owner
  *    from ever registering it.
  * 3. **A verified address matching exactly one account links to it**, when the deployment
- *    allows it (`CLAVIA_SOCIAL_AUTO_LINK`); that account's address becomes verified,
- *    since the provider just proved it. Addresses are compared ignoring case, and two
- *    accounts matching is no answer: nothing is linked.
- * 4. **Otherwise a new account is created**: password-less, its address verified.
+ *    allows it (`CLAVIA_SOCIAL_AUTO_LINK`) — an account in a pool the application signs
+ *    people in from, or one this provider created earlier. Pools the application does not
+ *    enable are not searched: a session for it could never come from them, so an account
+ *    there is not this person here. That account's address becomes verified, since the
+ *    provider just proved it. Addresses are compared ignoring case, and two accounts
+ *    matching is no answer: nothing is linked.
+ * 4. **Otherwise a new account is created**: password-less, its address verified, and
+ *    belonging to the provider's connection.
  *
  * A first sign-in racing with itself is settled by the storage's uniqueness: the loser
  * finds what the winner linked or created, and resolves again.
@@ -55,17 +60,23 @@ final readonly class ResolveExternalAccount
     ) {
     }
 
-    public function __invoke(AssertedIdentity $asserted): User|ExternalSignInFailure
+    /**
+     * @param list<ConnectionName> $pools The pools the application may sign people in from.
+     */
+    public function __invoke(AssertedIdentity $asserted, array $pools): User|ExternalSignInFailure
     {
         try {
-            return $this->resolve($asserted);
+            return $this->resolve($asserted, $pools);
         } catch (AlreadyExists) {
             // Another request linked this subject, or registered this address, first.
-            return $this->resolve($asserted);
+            return $this->resolve($asserted, $pools);
         }
     }
 
-    private function resolve(AssertedIdentity $asserted): User|ExternalSignInFailure
+    /**
+     * @param list<ConnectionName> $pools
+     */
+    private function resolve(AssertedIdentity $asserted, array $pools): User|ExternalSignInFailure
     {
         $linked = $this->identities->find($asserted->provider, $asserted->subject);
         if ($linked !== null) {
@@ -79,7 +90,7 @@ final readonly class ResolveExternalAccount
             return ExternalSignInFailure::NoVerifiedEmail;
         }
 
-        $matches = $this->users->matchingEmail($email);
+        $matches = $this->users->matchingEmail($email, [...$pools, $asserted->provider]);
         if (count($matches) > 1 || ($matches !== [] && ! $this->autoLink)) {
             return ExternalSignInFailure::AddressAlreadyUsed;
         }
@@ -89,7 +100,8 @@ final readonly class ResolveExternalAccount
 
         return $this->transactions->transactional(function () use ($asserted, $email, $matches): User {
             $now = $this->clock->now();
-            $user = $matches[0] ?? User::registerFromProvider(UserId::generate($this->random), $email, $now);
+            $user = $matches[0]
+                ?? User::registerFromProvider(UserId::generate($this->random), $email, $asserted->provider, $now);
             if (! $user->isEmailVerified()) {
                 $user->recordEmailVerification(true, $now);
             }

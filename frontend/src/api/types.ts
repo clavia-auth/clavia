@@ -23,6 +23,8 @@ export interface Problem {
 
 export interface User {
   id: string;
+  /** The pool the account belongs to, or the external connection that created it. */
+  connection: string;
   email: string;
   email_verified: boolean;
   is_active: boolean;
@@ -63,6 +65,11 @@ export interface Client {
    * Fixed at registration.
    */
   is_first_party: boolean;
+  /**
+   * The connections its users may sign in through, by name. Always empty for a
+   * third-party application: it gets the domain connections.
+   */
+  connections: string[];
   created_at: string;
 }
 
@@ -120,4 +127,39 @@ export interface UserConsent {
 /** An effective permission of a user, and every role that grants it. */
 export interface UserPermission extends RolePermission {
   roles: { id: string; name: string }[];
+}
+
+/**
+ * `database` is a pool of accounts with passwords; `social` a provider the code
+ * implements (Google, GitHub); `oidc` any OpenID Connect provider an operator registered.
+ */
+export type ConnectionStrategy = "database" | "social" | "oidc";
+
+/** A way to sign in. */
+export interface Connection {
+  name: string;
+  display_name: string;
+  strategy: ConnectionStrategy;
+  /** The global switch: off means off for every application. */
+  is_enabled: boolean;
+  /** Open to every third-party application, which gets no other kind. */
+  is_domain_connection: boolean;
+  /** Whether it could work were it switched on: credentials or provider settings are there. */
+  configured: boolean;
+  /** Switched on and configured: offered wherever an application enables it. */
+  usable: boolean;
+  /** OIDC connections only; the client secret is never sent back. */
+  oidc_issuer: string | null;
+  oidc_client_id: string | null;
+  oidc_scope: string | null;
+  created_at: string;
+}
+
+/** An account at an external provider, linked to a user. */
+export interface Identity {
+  connection: string;
+  subject: string;
+  /** The address the provider reported when it was linked. */
+  email: string | null;
+  linked_at: string;
 }

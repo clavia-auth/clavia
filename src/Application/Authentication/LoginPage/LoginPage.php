@@ -11,8 +11,6 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Authentication\LoginPage;
 
-use Clavia\Application\Authentication\External\ExternalProviderOption;
-
 /**
  * The facts the login page is rendered from.
  */
@@ -23,13 +21,12 @@ final readonly class LoginPage
      *                                  authorization request to return to; null shows the form.
      * @param list<string> $formOrigins Where a successful sign-in may end: the origins of the
      *                                  application's redirect URIs. Empty when no application is in play.
-     * @param list<ExternalProviderOption> $providers The external providers the form offers next to the
-     *                                  password, in order.
+     * @param SignInMethods $methods    What the form offers.
      */
     public function __construct(
         public ?string $signedInAs,
         public array $formOrigins,
-        public array $providers = [],
+        public SignInMethods $methods,
     ) {
     }
 }

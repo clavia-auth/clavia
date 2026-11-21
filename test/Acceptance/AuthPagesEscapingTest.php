@@ -19,6 +19,7 @@ use Clavia\Adapter\Primary\Http\Oidc\EndSessionHandler;
 use Clavia\Adapter\Primary\Http\Shared\ErrorPage;
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
 use Clavia\Application\Authentication\External\ExternalProviderOption;
+use Clavia\Application\Authentication\LoginPage\SignInMethods;
 use Clavia\Application\Authentication\Mfa\MfaStatus;
 use Clavia\Application\Authentication\Mfa\TotpEnrollment;
 use Clavia\Application\OAuth2\Consent\ConsentedApi;
@@ -62,7 +63,7 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
             LoginPages::form(
                 self::HOSTILE,
                 [],
-                [new ExternalProviderOption(self::HOSTILE, self::HOSTILE)],
+                new SignInMethods(true, [new ExternalProviderOption(self::HOSTILE, self::HOSTILE)]),
                 self::HOSTILE,
                 self::HOSTILE,
                 401,
@@ -74,7 +75,7 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
             title: self::HOSTILE,
             heading: self::HOSTILE,
             returnTo: self::HOSTILE,
-            variables: ['loginState' => '', 'email' => '', 'signedInAs' => null, 'providers' => []],
+            variables: ['loginState' => '', 'email' => '', 'signedInAs' => null, 'password' => true, 'providers' => []],
             error: self::HOSTILE,
         )];
         yield 'the second step: error' => [MfaPages::challenge([], self::HOSTILE, 401)];

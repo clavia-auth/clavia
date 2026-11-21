@@ -12,10 +12,11 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Secondary\IdentityProvider;
 
 use Clavia\Application\Port\IdentityProvider;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\AssertedIdentity;
-use Clavia\Domain\Identity\ProviderName;
 use Clavia\Domain\OAuth2\CodeChallenge;
 use Clavia\Domain\OAuth2\CodeVerifier;
+use Clavia\Domain\Oidc\Nonce;
 use Clavia\Domain\Shared\InvalidValue;
 
 /**
@@ -23,7 +24,8 @@ use Clavia\Domain\Shared\InvalidValue;
  * the subject and whose `email_verified` is Google's own statement about the address.
  *
  * Userinfo is called over TLS with the access token just issued, so its answer is
- * Google's without verifying an ID token's signature.
+ * Google's without verifying an ID token's signature — and no `nonce` is needed to bind
+ * one to this sign-in.
  */
 final readonly class GoogleIdentityProvider implements IdentityProvider
 {
@@ -60,20 +62,18 @@ final readonly class GoogleIdentityProvider implements IdentityProvider
     }
 
     #[\Override]
-    public function name(): ProviderName
+    public function name(): ConnectionName
     {
-        return ProviderName::fromString(self::NAME);
+        return ConnectionName::fromString(self::NAME);
     }
 
     #[\Override]
-    public function label(): string
-    {
-        return 'Google';
-    }
-
-    #[\Override]
-    public function authorizationUrl(string $redirectUri, string $state, CodeChallenge $challenge): string
-    {
+    public function authorizationUrl(
+        string $redirectUri,
+        string $state,
+        CodeChallenge $challenge,
+        Nonce $nonce,
+    ): string {
         return $this->exchange->authorizationUrl($redirectUri, $state, $challenge);
     }
 
@@ -82,6 +82,7 @@ final readonly class GoogleIdentityProvider implements IdentityProvider
         #[\SensitiveParameter] string $code,
         string $redirectUri,
         CodeVerifier $verifier,
+        Nonce $nonce,
     ): AssertedIdentity {
         $token = $this->exchange->accessToken($code, $redirectUri, $verifier);
         $claims = $this->http->getWithToken(self::NAME, self::USERINFO_ENDPOINT, $token);

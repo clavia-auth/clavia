@@ -14,6 +14,7 @@ namespace ClaviaTest\Unit\Application\Authentication;
 use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Authentication\SignOut;
 use Clavia\Domain\Authentication\AuthenticationMethod;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\SecretGenerator;
 use ClaviaTest\Support\Clients;
@@ -50,6 +51,7 @@ final class SignOutTest extends TestCase
         $sessionId = $this->sessions->establish(
             UserId::generate(new SeededRandomSource(2)),
             [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
             null,
         );
 

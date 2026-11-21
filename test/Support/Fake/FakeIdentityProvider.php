@@ -13,10 +13,11 @@ namespace ClaviaTest\Support\Fake;
 
 use Clavia\Application\Port\IdentityProvider;
 use Clavia\Application\Port\IdentityProviderFailed;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\AssertedIdentity;
-use Clavia\Domain\Identity\ProviderName;
 use Clavia\Domain\OAuth2\CodeChallenge;
 use Clavia\Domain\OAuth2\CodeVerifier;
+use Clavia\Domain\Oidc\Nonce;
 
 /**
  * An external provider that says whatever the test tells it to, and remembers how it
@@ -34,34 +35,31 @@ final class FakeIdentityProvider implements IdentityProvider
 
     public bool $fails = false;
 
-    /** @var list<array{code: string, redirectUri: string, verifier: string}> */
+    /** @var list<array{code: string, redirectUri: string, verifier: string, nonce: string}> */
     public array $exchanges = [];
 
-    public function __construct(
-        private readonly string $name = 'idp',
-        private readonly string $label = 'Example IdP',
-    ) {
+    public function __construct(private readonly string $name = 'google')
+    {
     }
 
     #[\Override]
-    public function name(): ProviderName
+    public function name(): ConnectionName
     {
-        return ProviderName::fromString($this->name);
+        return ConnectionName::fromString($this->name);
     }
 
     #[\Override]
-    public function label(): string
-    {
-        return $this->label;
-    }
-
-    #[\Override]
-    public function authorizationUrl(string $redirectUri, string $state, CodeChallenge $challenge): string
-    {
+    public function authorizationUrl(
+        string $redirectUri,
+        string $state,
+        CodeChallenge $challenge,
+        Nonce $nonce,
+    ): string {
         return self::AUTHORIZATION_ENDPOINT . '?' . http_build_query([
             'redirect_uri' => $redirectUri,
             'state' => $state,
             'code_challenge' => $challenge->value,
+            'nonce' => $nonce->value,
         ], '', '&', PHP_QUERY_RFC3986);
     }
 
@@ -70,8 +68,14 @@ final class FakeIdentityProvider implements IdentityProvider
         #[\SensitiveParameter] string $code,
         string $redirectUri,
         CodeVerifier $verifier,
+        Nonce $nonce,
     ): AssertedIdentity {
-        $this->exchanges[] = ['code' => $code, 'redirectUri' => $redirectUri, 'verifier' => $verifier->value];
+        $this->exchanges[] = [
+            'code' => $code,
+            'redirectUri' => $redirectUri,
+            'verifier' => $verifier->value,
+            'nonce' => $nonce->value,
+        ];
         if ($this->fails || $this->subject === null) {
             throw new IdentityProviderFailed('The fake provider was told to fail.');
         }

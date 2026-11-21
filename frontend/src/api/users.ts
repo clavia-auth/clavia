@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, query } from "./client";
-import type { Page, Role, User, UserConsent, UserPermission } from "./types";
+import type { Identity, Page, Role, User, UserConsent, UserPermission } from "./types";
 
 export interface UserListParams {
   page?: number;
@@ -10,6 +10,8 @@ export interface UserListParams {
 }
 
 export interface UserCreate {
+  /** The pool it is created in; the default pool, `password`, when omitted. */
+  connection?: string;
   email: string;
   password: string;
   email_verified?: boolean;
@@ -125,5 +127,22 @@ export function useWithdrawUserConsent(id: string) {
     mutationFn: (clientId: string) =>
       api<void>(`/users/${id}/consents/${encodeURIComponent(clientId)}`, { method: "DELETE" }),
     onSuccess: () => client.invalidateQueries({ queryKey: [...keys.one(id), "consents"] }),
+  });
+}
+
+export function useUserIdentities(id: string) {
+  return useQuery({
+    queryKey: [...keys.one(id), "identities"],
+    queryFn: () => api<Identity[]>(`/users/${id}/identities`),
+  });
+}
+
+/** Detach every identity the user holds through one connection. Refused when it is the only way in. */
+export function useUnlinkUserIdentity(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (connection: string) =>
+      api<void>(`/users/${id}/identities/${encodeURIComponent(connection)}`, { method: "DELETE" }),
+    onSuccess: () => client.invalidateQueries({ queryKey: [...keys.one(id), "identities"] }),
   });
 }

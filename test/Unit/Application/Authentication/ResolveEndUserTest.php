@@ -15,6 +15,7 @@ use Clavia\Application\Authentication\DevelopmentAutoLogin;
 use Clavia\Application\Authentication\ResolveEndUser;
 use Clavia\Application\Authentication\Sessions;
 use Clavia\Domain\Authentication\AuthenticationMethod;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\SecretGenerator;
@@ -53,7 +54,12 @@ final class ResolveEndUserTest extends TestCase
 
     public function testTheSessionSaysWhoItIs(): void
     {
-        $sessionId = $this->sessions->establish($this->user->id, [AuthenticationMethod::Password], null);
+        $sessionId = $this->sessions->establish(
+            $this->user->id,
+            [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
+            null,
+        );
 
         $endUser = $this->resolver()($sessionId);
 
@@ -70,7 +76,12 @@ final class ResolveEndUserTest extends TestCase
 
     public function testAnAccountDeactivatedSinceSignInIsNobody(): void
     {
-        $sessionId = $this->sessions->establish($this->user->id, [AuthenticationMethod::Password], null);
+        $sessionId = $this->sessions->establish(
+            $this->user->id,
+            [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
+            null,
+        );
         $this->user->deactivate($this->clock->now());
         $this->users->save($this->user);
 
@@ -79,7 +90,12 @@ final class ResolveEndUserTest extends TestCase
 
     public function testTheDevelopmentAutoLoginIsOnlyConsultedWithoutASignedInUser(): void
     {
-        $sessionId = $this->sessions->establish($this->user->id, [AuthenticationMethod::Password], null);
+        $sessionId = $this->sessions->establish(
+            $this->user->id,
+            [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
+            null,
+        );
         $resolve = $this->resolver('dev@clavia.test');
 
         self::assertTrue($resolve($sessionId)?->userId->equals($this->user->id));

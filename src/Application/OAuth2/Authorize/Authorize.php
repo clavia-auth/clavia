@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Application\OAuth2\Authorize;
 
 use Clavia\Application\Authentication\EndUser;
+use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\OAuth2\RequestParameters;
 use Clavia\Application\Port\ConsentStateStore;
 use Clavia\Application\Port\LoginStateStore;
@@ -57,7 +58,9 @@ use Clavia\Domain\Shared\SecretGenerator;
  *    (§4.1.2.1), `state` included.
  * 3. **Only then, the user.** Nobody is ever shown a login page for a request that
  *    would be refused anyway: an endpoint that asks for credentials on the strength of
- *    attacker-supplied parameters is a phishing surface.
+ *    attacker-supplied parameters is a phishing surface. A session established through
+ *    a connection the application does not enable counts for nothing here: the person
+ *    signs in again, through one it does.
  * 4. **Then their consent**, when {@see ConsentPolicy} says the request has to be put to
  *    them: the request goes on hold, and the browser to the consent screen.
  *
@@ -82,6 +85,7 @@ final readonly class Authorize
         private RoleRepository $roles,
         private ConsentRepository $consents,
         private ConsentStateStore $consentStates,
+        private ConnectionAccess $connections,
         private SecretGenerator $secrets,
         private RandomSource $random,
         private Clock $clock,
@@ -115,6 +119,10 @@ final readonly class Authorize
         }
 
         $endUser = $request->endUser;
+        $session = $endUser?->session;
+        if ($session !== null && ! $this->connections->allows($client, $session->connection)) {
+            $endUser = null;
+        }
         if ($endUser === null) {
             if ($prompt->forbidsInteraction()) {
                 return new RequestRefused(

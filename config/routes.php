@@ -18,8 +18,11 @@ use Clavia\Adapter\Primary\Http\Auth\LogoutHandler;
 use Clavia\Adapter\Primary\Http\Auth\MfaChallengeHandler;
 use Clavia\Adapter\Primary\Http\Auth\MfaSettingsHandler;
 use Clavia\Adapter\Primary\Http\Auth\ThemeHandler;
+use Clavia\Adapter\Primary\Http\Management\ClientConnectionsHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientsHandler;
+use Clavia\Adapter\Primary\Http\Management\ConnectionHandler;
+use Clavia\Adapter\Primary\Http\Management\ConnectionsHandler;
 use Clavia\Adapter\Primary\Http\Management\ManagementApiMiddleware;
 use Clavia\Adapter\Primary\Http\Management\ResourceServerHandler;
 use Clavia\Adapter\Primary\Http\Management\ResourceServersHandler;
@@ -29,6 +32,7 @@ use Clavia\Adapter\Primary\Http\Management\RoleUsersHandler;
 use Clavia\Adapter\Primary\Http\Management\RotateClientSecretHandler;
 use Clavia\Adapter\Primary\Http\Management\UserConsentsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserHandler;
+use Clavia\Adapter\Primary\Http\Management\UserIdentitiesHandler;
 use Clavia\Adapter\Primary\Http\Management\UserMfaHandler;
 use Clavia\Adapter\Primary\Http\Management\UserPermissionsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserRolesHandler;
@@ -120,6 +124,16 @@ return static function (Application $app): void {
         $management(UserConsentsHandler::class),
         'api.user.consent',
     );
+    $app->get(
+        '/api/v1/users/{user_id}/identities',
+        $management(UserIdentitiesHandler::class),
+        'api.user.identities',
+    );
+    $app->delete(
+        '/api/v1/users/{user_id}/identities/{connection}',
+        $management(UserIdentitiesHandler::class),
+        'api.user.identity',
+    );
     $app->route('/api/v1/clients', $management(ClientsHandler::class), ['GET', 'POST'], 'api.clients');
     $app->route(
         '/api/v1/clients/{client_id}',
@@ -131,6 +145,18 @@ return static function (Application $app): void {
         '/api/v1/clients/{client_id}/rotate-secret',
         $management(RotateClientSecretHandler::class),
         'api.client.rotate-secret',
+    );
+    $app->put(
+        '/api/v1/clients/{client_id}/connections',
+        $management(ClientConnectionsHandler::class),
+        'api.client.connections',
+    );
+    $app->route('/api/v1/connections', $management(ConnectionsHandler::class), ['GET', 'POST'], 'api.connections');
+    $app->route(
+        '/api/v1/connections/{name}',
+        $management(ConnectionHandler::class),
+        ['GET', 'PATCH', 'DELETE'],
+        'api.connection',
     );
     $app->route(
         '/api/v1/resource-servers',

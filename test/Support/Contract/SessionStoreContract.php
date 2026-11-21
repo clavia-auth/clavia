@@ -14,6 +14,7 @@ namespace ClaviaTest\Support\Contract;
 use Clavia\Application\Port\SessionStore;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\Session;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use DateTimeImmutable;
@@ -83,6 +84,7 @@ trait SessionStoreContract
         $replacement = Session::establish(
             UserId::generate(new SeededRandomSource(9)),
             [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
             'another-sid',
             new DateTimeImmutable('2026-01-16T10:00:00Z'),
             3600,
@@ -98,6 +100,7 @@ trait SessionStoreContract
         return Session::establish(
             UserId::generate(new SeededRandomSource(1)),
             [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
             'the-sid',
             new DateTimeImmutable('2026-01-15T10:00:00.123456Z'),
             604800,

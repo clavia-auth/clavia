@@ -6,7 +6,7 @@ Auth0: OAuth2 flows, interactive login with MFA, and a Management API.
 This is the PHP 8.5 implementation. It is being ported feature by feature from the Python
 reference implementation; `CLAUDE.md` holds the migration plan and the current state.
 
-**Status: Step 12 — application ownership and consent.** A person signs in with a password at `/auth/login`, or with
+**Status: Step 13 — connections.** A person signs in with a password at `/auth/login`, or with
 Google or GitHub once their credentials are configured (`CLAVIA_GOOGLE_CLIENT_ID` / `_SECRET`,
 `CLAVIA_GITHUB_CLIENT_ID` / `_SECRET`; register
 `https://auth.{domain}/auth/social/{provider}/callback` at the provider) — followed, once they
@@ -36,6 +36,19 @@ somebody holding nothing is refused. Roles are managed under `/api/v1/roles`; gi
 needs `update:roles`. The first holder is made at the shell: `clavia roles:create
 Administrator` (every Management API permission by default), then `clavia roles:assign
 Administrator you@example.com`. `clavia seed-dev` does both for the development user.
+
+A connection is a way to sign in: a pool of accounts with passwords (`password`, the default
+pool, and any other an operator creates), Google, GitHub, or any OpenID Connect provider
+registered under `/api/v1/connections` — discovered from its issuer, its client secret stored
+encrypted, its ID tokens verified against its published keys. Every account belongs to one
+connection, and the same address in two pools is two accounts. A first-party application
+signs people in through the connections it enables (`PUT /api/v1/clients/{client_id}/connections`;
+a new one gets every connection), a third-party one through the domain connections; its login
+page offers only those, and a session established through any other does not count for it.
+The URLs an operator registers are fetched over https only, never at this server's own
+network (`CLAVIA_OUTBOUND_ALLOW_PRIVATE_ADDRESSES` waives that in development). The accounts
+an external connection linked to a user are listed and unlinked under
+`/api/v1/users/{user_id}/identities`.
 
 The dashboard (`frontend/`, React) is registered by `clavia seed-dev` as a public client, which
 also writes its build configuration to `frontend/.env.local`. Run it with

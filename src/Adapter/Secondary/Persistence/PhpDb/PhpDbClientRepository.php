@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Secondary\Persistence\PhpDb;
 
+use Clavia\Application\Port\TransactionManager;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\ClientId;
@@ -18,20 +19,25 @@ use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\ResponseType;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Shared\Page;
 use Clavia\Domain\Shared\PageRequest;
 use Clavia\Domain\Shared\Url;
 
 /**
- * Clients in the `oauth2_clients` table. The three lists are `jsonb` arrays of strings.
+ * Clients in the `oauth2_clients` table — the lists of URIs and types as `jsonb` arrays of
+ * strings — and the connections each enables in `client_connections`, reconciled with
+ * the client in one transaction.
  */
 final readonly class PhpDbClientRepository implements ClientRepository
 {
     private const string COLUMNS = 'client_id, client_secret_hash, name, client_type, redirect_uris, '
         . 'grant_types, response_types, token_endpoint_auth_method, created_at, post_logout_redirect_uris';
 
-    public function __construct(private Database $database)
-    {
+    public function __construct(
+        private Database $database,
+        private TransactionManager $transactions,
+    ) {
     }
 
     #[\Override]
@@ -104,6 +110,14 @@ final readonly class PhpDbClientRepository implements ClientRepository
     #[\Override]
     public function save(Client $client): void
     {
+        $this->transactions->transactional(function () use ($client): void {
+            $this->write($client);
+            $this->reconcileConnections($client);
+        });
+    }
+
+    private function write(Client $client): void
+    {
         $this->database->execute(
             <<<'SQL'
                 INSERT INTO oauth2_clients (
@@ -146,6 +160,48 @@ final readonly class PhpDbClientRepository implements ClientRepository
         );
     }
 
+    /** Delete what it no longer enables, insert what it newly does: one statement. */
+    private function reconcileConnections(Client $client): void
+    {
+        $this->database->execute(
+            <<<'SQL'
+                WITH wanted AS (
+                    SELECT jsonb_array_elements_text(CAST(:connections AS jsonb)) AS name
+                ), dropped AS (
+                    DELETE FROM client_connections
+                    WHERE client_id = :client_id AND connection_name NOT IN (SELECT name FROM wanted)
+                )
+                INSERT INTO client_connections (client_id, connection_name)
+                SELECT :client_id, name FROM wanted
+                ON CONFLICT DO NOTHING
+                SQL,
+            [
+                'client_id' => $client->id->value,
+                'connections' => Jsonb::encode(array_map(
+                    static fn (ConnectionName $connection): string => $connection->value,
+                    $client->connections,
+                )),
+            ],
+        );
+    }
+
+    /**
+     * @return list<ConnectionName>
+     */
+    private function connectionsOf(string $clientId): array
+    {
+        /** @var list<array{connection_name: string}> $rows */
+        $rows = $this->database->fetchAll(
+            'SELECT connection_name FROM client_connections WHERE client_id = :client_id ORDER BY connection_name',
+            ['client_id' => $clientId],
+        );
+
+        return array_map(
+            static fn (array $row): ConnectionName => ConnectionName::fromString($row['connection_name']),
+            $rows,
+        );
+    }
+
     /**
      * @param array<string, mixed> $row
      */
@@ -168,6 +224,7 @@ final readonly class PhpDbClientRepository implements ClientRepository
             array_map(ResponseType::from(...), Jsonb::decodeStrings($row['response_types'])),
             Timestamp::fromDatabase($row['created_at']),
             array_map(Url::fromString(...), Jsonb::decodeStrings($row['post_logout_redirect_uris'])),
+            $this->connectionsOf($row['client_id']),
         );
     }
 }

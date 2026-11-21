@@ -70,6 +70,7 @@ final class InMemoryMfaChallengeStore implements MfaChallengeStore
             $challenge->nextUrl,
             $challenge->clientId,
             $challenge->firstFactor,
+            $challenge->connection,
             $attempts,
         );
 

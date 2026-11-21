@@ -13,6 +13,7 @@ namespace ClaviaTest\Unit\Application\Management;
 
 use Clavia\Application\Management\Caller\ManagementCaller;
 use Clavia\Application\Management\Clients\ClientChanges;
+use Clavia\Application\Management\Clients\ClientConnections;
 use Clavia\Application\Management\Clients\ClientWithSecret;
 use Clavia\Application\Management\Clients\DeleteClient;
 use Clavia\Application\Management\Clients\NewClient;
@@ -26,12 +27,14 @@ use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\GrantType;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\ScopeSet;
 use Clavia\Domain\Shared\SecretGenerator;
 use ClaviaTest\Support\Fake\FakePasswordHasher;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
+use ClaviaTest\Support\Fake\InMemoryConnectionRepository;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -44,6 +47,7 @@ final class ClientsTest extends TestCase
     private InMemoryClientRepository $clients;
     private FakePasswordHasher $hasher;
     private SecretGenerator $secrets;
+    private InMemoryConnectionRepository $connections;
 
     #[\Override]
     protected function setUp(): void
@@ -51,6 +55,7 @@ final class ClientsTest extends TestCase
         $this->clients = new InMemoryClientRepository();
         $this->hasher = new FakePasswordHasher();
         $this->secrets = new SecretGenerator(new SeededRandomSource(1));
+        $this->connections = new InMemoryConnectionRepository($this->clients);
     }
 
     public function testAConfidentialClientGetsASecretShownOnceAndStoredHashed(): void
@@ -190,8 +195,89 @@ final class ClientsTest extends TestCase
         self::assertSame([GrantType::ClientCredentials], $client->grantTypes);
     }
 
+    public function testAFirstPartyClientNamingNoConnectionsGetsEveryOne(): void
+    {
+        $client = $this->register(new NewClient('SPA', redirectUris: ['https://app.example/cb']))->client;
+
+        self::assertSame(['github', 'google', 'password'], self::names($client->connections));
+    }
+
+    public function testTheConnectionsNamedAreTheOnesEnabled(): void
+    {
+        $client = $this->register(new NewClient(
+            'SPA',
+            redirectUris: ['https://app.example/cb'],
+            connections: ['password', 'google', 'password'],
+        ))->client;
+
+        self::assertSame(['google', 'password'], self::names($client->connections));
+    }
+
+    public function testAnUnknownConnectionIsNotFound(): void
+    {
+        $this->expectException(NotFound::class);
+
+        $this->register(new NewClient('SPA', redirectUris: ['https://app.example/cb'], connections: ['gitlab']));
+    }
+
+    public function testAThirdPartyClientGetsNoListAndCannotNameOne(): void
+    {
+        $theirs = $this->register(new NewClient(
+            'Theirs',
+            'confidential',
+            grantTypes: ['client_credentials'],
+            firstParty: false,
+        ))->client;
+        self::assertSame([], $theirs->connections);
+
+        $this->expectException(InvalidValue::class);
+
+        $this->register(new NewClient(
+            'Theirs',
+            'confidential',
+            grantTypes: ['client_credentials'],
+            firstParty: false,
+            connections: ['password'],
+        ));
+    }
+
+    public function testTheConnectionsOfAClientAreReplacedWhole(): void
+    {
+        $client = $this->register(new NewClient('SPA', redirectUris: ['https://app.example/cb']))->client;
+        $replace = new ClientConnections($this->clients, $this->connections);
+
+        $updated = $replace($client->id, ['github']);
+
+        self::assertSame(['github'], self::names($updated->connections));
+        self::assertSame(['github'], self::names($this->clients->find($client->id)?->connections ?? []));
+        self::assertSame([], self::names($replace($client->id, [])->connections));
+    }
+
+    public function testReplacingTheConnectionsOfAnUnknownClientIsNotFound(): void
+    {
+        $this->expectException(NotFound::class);
+
+        new ClientConnections($this->clients, $this->connections)(ClientId::fromString('nobody'), []);
+    }
+
+    /**
+     * @param list<ConnectionName> $connections
+     *
+     * @return list<string>
+     */
+    private static function names(array $connections): array
+    {
+        return array_map(static fn (ConnectionName $name): string => $name->value, $connections);
+    }
+
     private function register(NewClient $new): ClientWithSecret
     {
-        return new RegisterClient($this->clients, $this->hasher, $this->secrets, new FrozenClock())($new);
+        return new RegisterClient(
+            $this->clients,
+            $this->hasher,
+            $this->secrets,
+            new FrozenClock(),
+            new ClientConnections($this->clients, $this->connections),
+        )($new);
     }
 }

@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Support\Fake;
 
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
@@ -34,19 +35,23 @@ final class InMemoryUserRepository implements UserRepository
     }
 
     #[\Override]
-    public function findByEmail(string $email): ?User
+    public function findByEmail(ConnectionName $connection, string $email): ?User
     {
-        $match = array_find($this->users, static fn (User $user): bool => $user->email === $email);
+        $match = array_find(
+            $this->users,
+            static fn (User $user): bool => $user->connection->equals($connection) && $user->email === $email,
+        );
 
         return $match === null ? null : clone $match;
     }
 
     #[\Override]
-    public function matchingEmail(string $email): array
+    public function matchingEmail(string $email, array $connections): array
     {
         $matches = array_filter(
             $this->users,
-            static fn (User $user): bool => mb_strtolower($user->email) === mb_strtolower($email),
+            static fn (User $user): bool => mb_strtolower($user->email) === mb_strtolower($email)
+                && array_any($connections, static fn (ConnectionName $in): bool => $in->equals($user->connection)),
         );
         usort($matches, static fn (User $a, User $b): int => $a->createdAt <=> $b->createdAt);
 
@@ -54,11 +59,24 @@ final class InMemoryUserRepository implements UserRepository
     }
 
     #[\Override]
+    public function countIn(ConnectionName $connection): int
+    {
+        return count(array_filter(
+            $this->users,
+            static fn (User $user): bool => $user->connection->equals($connection),
+        ));
+    }
+
+    #[\Override]
     public function save(User $user): void
     {
-        $other = $this->findByEmail($user->email);
+        $other = $this->findByEmail($user->connection, $user->email);
         if ($other !== null && ! $other->id->equals($user->id)) {
-            throw new AlreadyExists(sprintf('Another account uses the address %s.', $user->email));
+            throw new AlreadyExists(sprintf(
+                "Another account in '%s' uses the address %s.",
+                $user->connection->value,
+                $user->email,
+            ));
         }
 
         $this->users[$user->id->value] = clone $user;

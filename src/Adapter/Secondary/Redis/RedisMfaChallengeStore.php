@@ -15,6 +15,7 @@ use Clavia\Application\Port\MfaChallengeStore;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\MfaChallenge;
 use Clavia\Domain\Client\ClientId;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\InvalidValue;
 use JsonException;
@@ -67,6 +68,7 @@ final readonly class RedisMfaChallengeStore implements MfaChallengeStore
                 array_map(static fn (AuthenticationMethod $method): string => $method->value, $challenge->firstFactor),
                 JSON_THROW_ON_ERROR,
             ),
+            'connection' => $challenge->connection->value,
             'attempts' => (string) $challenge->attempts,
         ]);
         $client->expire($key, $lifetimeSeconds);
@@ -89,7 +91,7 @@ final readonly class RedisMfaChallengeStore implements MfaChallengeStore
         try {
             /** @var mixed $methods */
             $methods = json_decode($fields['amr'] ?? '', true, flags: JSON_THROW_ON_ERROR);
-            if (! is_array($methods) || ! isset($fields['user_id'], $fields['next_url'])) {
+            if (! is_array($methods) || ! isset($fields['user_id'], $fields['next_url'], $fields['connection'])) {
                 return null;
             }
 
@@ -103,6 +105,7 @@ final readonly class RedisMfaChallengeStore implements MfaChallengeStore
                     ),
                     $methods,
                 )),
+                ConnectionName::fromString($fields['connection']),
                 max(0, (int) ($fields['attempts'] ?? '0')),
             );
         } catch (JsonException | InvalidValue | ValueError) {

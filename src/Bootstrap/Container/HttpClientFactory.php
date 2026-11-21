@@ -11,7 +11,10 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Adapter\Secondary\Http\OutboundUrlPolicy;
+use Clavia\Adapter\Secondary\Http\PinCheckedAddresses;
 use GuzzleHttp\Client;
+use GuzzleHttp\HandlerStack;
 use GuzzleHttp\RequestOptions;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Client\ClientInterface;
@@ -24,6 +27,10 @@ use Psr\Http\Client\ClientInterface;
  * that cannot connect in a few seconds, or finish in ten, fails like any other refusal.
  * Redirects are not followed — an endpoint that answers with one is misconfigured, and
  * following it would send a client secret wherever the redirect pointed.
+ *
+ * Every request passes the outbound policy and goes to the addresses it checked
+ * ({@see PinCheckedAddresses}): the server fetches URLs an operator typed in, and the
+ * guard against aiming it at its own network must hold at the moment of the fetch.
  */
 final class HttpClientFactory
 {
@@ -33,7 +40,13 @@ final class HttpClientFactory
 
     public function __invoke(ContainerInterface $container): ClientInterface
     {
+        /** @var OutboundUrlPolicy $policy */
+        $policy = $container->get(OutboundUrlPolicy::class);
+        $handlers = HandlerStack::create();
+        $handlers->push(new PinCheckedAddresses($policy), 'pin-checked-addresses');
+
         return new Client([
+            'handler' => $handlers,
             RequestOptions::CONNECT_TIMEOUT => self::CONNECT_TIMEOUT,
             RequestOptions::TIMEOUT => self::TIMEOUT,
             RequestOptions::ALLOW_REDIRECTS => false,

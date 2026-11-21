@@ -80,6 +80,23 @@ final class TestStorage
             self::database()->executeScript('TRUNCATE ' . implode(', ', $names) . ' RESTART IDENTITY CASCADE');
         }
 
+        self::seedBuiltInConnections();
+
         self::redis()->flushDB();
+    }
+
+    /**
+     * Put back the connections `0019_connections.sql` seeds, which the truncation took:
+     * every account belongs to one, and a deployment always has them. Kept in step with
+     * that migration by hand.
+     */
+    private static function seedBuiltInConnections(): void
+    {
+        self::database()->executeScript(
+            'INSERT INTO connections (name, display_name, strategy, is_enabled, is_domain_connection, created_at)'
+            . " VALUES ('password', 'Username-Password', 'database', true, true, now()),"
+            . " ('google', 'Google', 'social', true, false, now()),"
+            . " ('github', 'GitHub', 'social', true, false, now())",
+        );
     }
 }

@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Domain\Authentication;
 
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\InvalidValue;
 use DateTimeImmutable;
@@ -23,6 +24,10 @@ use DateTimeImmutable;
  * The **idle** one is a sliding window renewed on every use, so ordinary inactivity
  * ends the session; it is the storage's time-to-live, computed by {@see idleWindowAt()}
  * so that it never reaches past the absolute ceiling.
+ *
+ * It records the connection the person signed in through — a pool, or an external
+ * provider: an application that does not enable that connection does not accept the
+ * session, and its person signs in again through one it does.
  *
  * The identifier the browser holds is not part of this object: it is a secret, stored
  * only as a digest, and handed out once when the session is established.
@@ -41,6 +46,7 @@ final readonly class Session
         public DateTimeImmutable $expiresAt,
         public array $methods,
         public string $sid,
+        public ConnectionName $connection,
     ) {
     }
 
@@ -54,6 +60,7 @@ final readonly class Session
     public static function establish(
         UserId $userId,
         array $methods,
+        ConnectionName $connection,
         string $sid,
         DateTimeImmutable $now,
         int $absoluteLifetime,
@@ -64,6 +71,7 @@ final readonly class Session
             $now->modify(sprintf('+%d seconds', $absoluteLifetime)),
             $methods,
             $sid,
+            $connection,
         );
     }
 
@@ -78,6 +86,7 @@ final readonly class Session
         DateTimeImmutable $expiresAt,
         array $methods,
         string $sid,
+        ConnectionName $connection,
     ): self {
         if ($expiresAt <= $authenticatedAt) {
             throw new InvalidValue('A session must end after it begins.');
@@ -93,7 +102,7 @@ final readonly class Session
 
         $methods = array_values(array_unique($methods, SORT_REGULAR));
 
-        return new self($userId, $authenticatedAt, $expiresAt, $methods, $sid);
+        return new self($userId, $authenticatedAt, $expiresAt, $methods, $sid, $connection);
     }
 
     public function isExpiredAt(DateTimeImmutable $now): bool

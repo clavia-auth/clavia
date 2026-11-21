@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Application\Management\Clients\ClientConnections;
 use Clavia\Application\Management\Clients\RegisterClient;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Domain\Client\ClientRepository;
@@ -30,7 +31,9 @@ final class RegisterClientFactory
         $secrets = $container->get(SecretGenerator::class);
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
+        /** @var ClientConnections $connections */
+        $connections = $container->get(ClientConnections::class);
 
-        return new RegisterClient($clients, $hasher, $secrets, $clock);
+        return new RegisterClient($clients, $hasher, $secrets, $clock, $connections);
     }
 }

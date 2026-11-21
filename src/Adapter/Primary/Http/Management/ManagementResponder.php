@@ -44,7 +44,7 @@ final readonly class ManagementResponder
      * A JSON array: a collection small enough by nature to be sent whole, such as the
      * roles of one account.
      *
-     * @param list<array<string, mixed>> $items
+     * @param list<array<string, mixed>|string> $items
      */
     public function jsonList(array $items): ResponseInterface
     {

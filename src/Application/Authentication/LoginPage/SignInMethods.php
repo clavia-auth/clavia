@@ -1,0 +1,37 @@
+<?php
+
+/**
+ * This file is part of Clavia, an open-source OAuth 2.1 / OpenID Connect authorization server.
+ *
+ * @license   BSD-3-Clause — see the LICENSE file distributed with this source code.
+ * @copyright Copyright (c) 2026 Phayne Limited. (https://phayne.io)
+ */
+
+declare(strict_types=1);
+
+namespace Clavia\Application\Authentication\LoginPage;
+
+use Clavia\Application\Authentication\External\ExternalProviderOption;
+
+/**
+ * The ways the login page offers to sign in, for the application it is shown for.
+ */
+final readonly class SignInMethods
+{
+    /**
+     * @param bool                         $password  Whether the password form is shown: the application
+     *                                                signs people in from at least one pool.
+     * @param list<ExternalProviderOption> $providers The external connections, in order.
+     */
+    public function __construct(
+        public bool $password,
+        public array $providers,
+    ) {
+    }
+
+    /** Whether there is no way in at all — the page says so instead of showing an empty form. */
+    public function isEmpty(): bool
+    {
+        return ! $this->password && $this->providers === [];
+    }
+}

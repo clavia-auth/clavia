@@ -17,26 +17,33 @@ use Clavia\Application\Authentication\External\ExternalCallback;
 use Clavia\Application\Authentication\External\ExternalSignInFailure;
 use Clavia\Application\Authentication\External\ExternalSignInRefused;
 use Clavia\Application\Authentication\External\ExternalSignInStarted;
+use Clavia\Application\Authentication\External\ExternalSignInUnavailable;
 use Clavia\Application\Authentication\External\ResolveExternalAccount;
 use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Authentication\SignIn\CompleteFirstFactor;
 use Clavia\Application\Authentication\SignIn\SecondFactorRequired;
 use Clavia\Application\Authentication\SignIn\SignedIn;
+use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\LoginState;
 use Clavia\Domain\Authentication\Mfa\MfaFactor;
 use Clavia\Domain\Authentication\Mfa\Totp;
 use Clavia\Domain\Authentication\Mfa\TotpSecret;
 use Clavia\Domain\Client\ClientId;
+use Clavia\Domain\Connection\Connection;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\AssertedIdentity;
 use Clavia\Domain\Identity\ExternalIdentity;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\OAuth2\CodeChallenge;
 use Clavia\Domain\Shared\SecretGenerator;
+use ClaviaTest\Support\Clients;
 use ClaviaTest\Support\Fake\FakeIdentityProvider;
 use ClaviaTest\Support\Fake\FakeIdentityProviders;
 use ClaviaTest\Support\Fake\FrozenClock;
+use ClaviaTest\Support\Fake\InMemoryClientRepository;
+use ClaviaTest\Support\Fake\InMemoryConnectionRepository;
 use ClaviaTest\Support\Fake\InMemoryExternalIdentityRepository;
 use ClaviaTest\Support\Fake\InMemoryExternalSignInStore;
 use ClaviaTest\Support\Fake\InMemoryLoginStateStore;
@@ -55,7 +62,7 @@ use PHPUnit\Framework\TestCase;
 final class ExternalSignInTest extends TestCase
 {
     private const string ISSUER = 'https://auth.clavia.test';
-    private const string CALLBACK = 'https://auth.clavia.test/auth/social/idp/callback';
+    private const string CALLBACK = 'https://auth.clavia.test/auth/social/google/callback';
 
     private FrozenClock $clock;
     private FakeIdentityProvider $provider;
@@ -66,7 +73,8 @@ final class ExternalSignInTest extends TestCase
     private InMemoryMfaFactorRepository $factors;
     private InMemorySessionStore $sessionStore;
     private Sessions $sessions;
-    private BeginExternalSignIn $begin;
+    private InMemoryClientRepository $clients;
+    private InMemoryConnectionRepository $connections;
     private bool $autoLink = true;
 
     #[\Override]
@@ -87,21 +95,39 @@ final class ExternalSignInTest extends TestCase
             28800,
             604800,
         );
-        $this->begin = new BeginExternalSignIn(
-            new FakeIdentityProviders($this->provider),
-            $this->pending,
-            $this->loginStates,
-            new SecretGenerator(new SeededRandomSource(2)),
-            new SeededRandomSource(3),
-            self::ISSUER,
-        );
+        $this->clients = new InMemoryClientRepository();
+        $this->connections = new InMemoryConnectionRepository($this->clients);
+        $this->clients->save(Clients::public('spa'));
     }
 
     // ── Starting ─────────────────────────────────────────────────────────────────
 
     public function testAnUnknownProviderStartsNothing(): void
     {
-        self::assertNull(($this->begin)('gitlab', null));
+        self::assertNull($this->begin()('gitlab', null));
+        self::assertNull($this->begin()('Not A Name', null));
+        self::assertNull($this->begin()(ConnectionName::DEFAULT_POOL, null), 'A pool has no provider.');
+        self::assertNull($this->begin()('github', null), 'No provider is configured for it.');
+        self::assertSame(0, $this->pending->count());
+    }
+
+    public function testAConnectionSwitchedOffStartsNothing(): void
+    {
+        $this->switchOff('google');
+
+        self::assertNull($this->begin()('google', null));
+        self::assertSame(0, $this->pending->count());
+    }
+
+    public function testAnApplicationThatDoesNotEnableTheConnectionIsToldSoAndNothingStarts(): void
+    {
+        $this->clients->save(Clients::public('spa')->withConnections([ConnectionName::defaultPool()]));
+        $this->loginStates->put('login', self::pendingRequest());
+
+        $outcome = $this->begin()('google', 'login');
+
+        self::assertInstanceOf(ExternalSignInUnavailable::class, $outcome);
+        self::assertSame('Google', $outcome->providerLabel);
         self::assertSame(0, $this->pending->count());
     }
 
@@ -115,7 +141,9 @@ final class ExternalSignInTest extends TestCase
         $pending = $this->pending->claim($started->handle);
         self::assertNotNull($pending);
         self::assertSame(CodeChallenge::forVerifier($pending->codeVerifier)->value, $query['code_challenge']);
-        self::assertSame('idp', $pending->provider->value);
+        self::assertSame($pending->nonce->value, $query['nonce']);
+        self::assertNotSame($started->handle, $pending->nonce->value);
+        self::assertSame('google', $pending->provider->value);
         self::assertSame('/auth/login', $pending->nextUrl);
     }
 
@@ -144,9 +172,10 @@ final class ExternalSignInTest extends TestCase
         self::assertInstanceOf(SignedIn::class, $outcome);
         $session = $this->sessions->resolve($outcome->sessionId);
         self::assertSame([AuthenticationMethod::External], $session?->methods);
-        $user = $this->users->findByEmail('ada@example.com');
+        $user = $this->users->findByEmail(ConnectionName::fromString('google'), 'ada@example.com');
         self::assertNotNull($user);
         self::assertTrue($session?->userId->equals($user->id));
+        self::assertSame('google', $session?->connection->value);
         self::assertNull($user->passwordHash());
         self::assertTrue($user->isEmailVerified());
         self::assertSame(
@@ -154,6 +183,16 @@ final class ExternalSignInTest extends TestCase
             array_map(static fn (array $exchange): array => array_slice($exchange, 0, 2), $this->provider->exchanges),
         );
         self::assertSame(0, $this->pending->count());
+    }
+
+    public function testTheNonceSentOutIsTheOneTheProviderIsAskedToFind(): void
+    {
+        $started = $this->start();
+        parse_str((string) parse_url($started->authorizationUrl, PHP_URL_QUERY), $query);
+
+        $this->comeBack($started);
+
+        self::assertSame($query['nonce'], $this->provider->exchanges[0]['nonce']);
     }
 
     public function testTheSignInReturnsToTheRequestAndSpendsTheLoginPagesHandle(): void
@@ -215,12 +254,12 @@ final class ExternalSignInTest extends TestCase
 
         self::assertSame(ExternalSignInFailure::Expired, $this->refusal($this->comeBack($started)));
 
-        $other = new FakeIdentityProvider('other', 'Other');
+        $other = new FakeIdentityProvider('github');
         $elsewhere = $this->start();
         self::assertSame(
             ExternalSignInFailure::Expired,
             $this->refusal($this->complete(new FakeIdentityProviders($this->provider, $other))(
-                new ExternalCallback('other', 'the-code', $elsewhere->handle, false, $elsewhere->handle, null),
+                new ExternalCallback('github', 'the-code', $elsewhere->handle, false, $elsewhere->handle, null),
             )),
         );
     }
@@ -249,7 +288,26 @@ final class ExternalSignInTest extends TestCase
         $outcome = $this->comeBack($this->start());
 
         self::assertInstanceOf(ExternalSignInRefused::class, $outcome);
-        self::assertSame('Example IdP', $outcome->providerLabel);
+        self::assertSame('Google', $outcome->providerLabel);
+    }
+
+    public function testAConnectionTheApplicationStoppedEnablingMeanwhileIsRefusedBeforeTheExchange(): void
+    {
+        $this->loginStates->put('login', self::pendingRequest());
+        $started = $this->start('login');
+        $this->clients->save(Clients::public('spa')->withConnections([ConnectionName::defaultPool()]));
+
+        self::assertSame(ExternalSignInFailure::NotAvailable, $this->refusal($this->comeBack($started)));
+        self::assertSame([], $this->provider->exchanges);
+    }
+
+    public function testAConnectionSwitchedOffMeanwhileIsNothingAtTheCallback(): void
+    {
+        $started = $this->start();
+        $this->switchOff('google');
+
+        self::assertNull($this->comeBack($started));
+        self::assertSame([], $this->provider->exchanges);
     }
 
     // ── Which account ────────────────────────────────────────────────────────────
@@ -263,7 +321,7 @@ final class ExternalSignInTest extends TestCase
 
         self::assertTrue($again->equals($first));
         self::assertSame('ada@example.com', $this->users->find($first)?->email);
-        self::assertNull($this->users->findByEmail('ada.new@example.com'));
+        self::assertNull($this->users->findByEmail(ConnectionName::fromString('google'), 'ada.new@example.com'));
         self::assertCount(1, $this->identities->all());
     }
 
@@ -302,7 +360,7 @@ final class ExternalSignInTest extends TestCase
         self::assertSame(ExternalSignInFailure::NoVerifiedEmail, $this->refusal($this->comeBack($this->start())));
 
         self::assertSame([], $this->identities->all());
-        self::assertCount(1, $this->users->matchingEmail('ada@example.com'));
+        self::assertCount(1, $this->users->matchingEmail('ada@example.com', [ConnectionName::defaultPool()]));
     }
 
     public function testLinkingByAddressCanBeSwitchedOff(): void
@@ -321,6 +379,29 @@ final class ExternalSignInTest extends TestCase
 
         self::assertSame(ExternalSignInFailure::AddressAlreadyUsed, $this->refusal($this->comeBack($this->start())));
         self::assertSame([], $this->identities->all());
+    }
+
+    public function testOnlyAnAccountInAPoolTheApplicationUsesIsLinkedByAddress(): void
+    {
+        $staff = ConnectionName::fromString('staff');
+        $this->connections->add(Connection::pool($staff, 'Staff', true, false, $this->clock->now()));
+        $employee = $this->existingUser('ada@example.com', pool: $staff);
+        $this->loginStates->put('login', self::pendingRequest());
+
+        $customer = $this->signedInUser($this->comeBack($this->start('login')));
+
+        self::assertFalse($customer->equals($employee->id), 'The staff pool is not this application\'s.');
+        self::assertSame('google', $this->users->find($customer)?->connection->value);
+
+        $this->clients->save(Clients::public('spa')->withConnections([ConnectionName::fromString('google'), $staff]));
+        $this->provider->subject = 'subject-2';
+        $this->loginStates->put('login', self::pendingRequest());
+
+        self::assertSame(
+            ExternalSignInFailure::AddressAlreadyUsed,
+            $this->refusal($this->comeBack($this->start('login'))),
+            'Now two accounts hold the address: the staff one and the one Google created.',
+        );
     }
 
     public function testADeactivatedAccountIsNotSignedIntoEitherWay(): void
@@ -344,10 +425,35 @@ final class ExternalSignInTest extends TestCase
 
     private function start(?string $loginState = null): ExternalSignInStarted
     {
-        $started = ($this->begin)('idp', $loginState);
-        self::assertNotNull($started);
+        $started = $this->begin()('google', $loginState);
+        self::assertInstanceOf(ExternalSignInStarted::class, $started);
 
         return $started;
+    }
+
+    private function begin(): BeginExternalSignIn
+    {
+        return new BeginExternalSignIn(
+            $this->access(new FakeIdentityProviders($this->provider)),
+            $this->clients,
+            $this->pending,
+            $this->loginStates,
+            new SecretGenerator(new SeededRandomSource(2)),
+            new SeededRandomSource(3),
+            self::ISSUER,
+        );
+    }
+
+    private function access(FakeIdentityProviders $providers): ConnectionAccess
+    {
+        return new ConnectionAccess($this->connections, $providers);
+    }
+
+    private function switchOff(string $name): void
+    {
+        $connection = $this->connections->find(ConnectionName::fromString($name));
+        self::assertNotNull($connection);
+        $this->connections->save($connection->switched(false, null, null));
     }
 
     private function comeBack(
@@ -358,7 +464,7 @@ final class ExternalSignInTest extends TestCase
         ?string $browserState = 'from-start',
     ): SignedIn|SecondFactorRequired|ExternalSignInRefused|null {
         return $this->complete()(new ExternalCallback(
-            'idp',
+            'google',
             $code,
             $state === 'from-start' ? $started->handle : $state,
             $errorReported,
@@ -370,7 +476,8 @@ final class ExternalSignInTest extends TestCase
     private function complete(?FakeIdentityProviders $providers = null): CompleteExternalSignIn
     {
         return new CompleteExternalSignIn(
-            $providers ?? new FakeIdentityProviders($this->provider),
+            $this->access($providers ?? new FakeIdentityProviders($this->provider)),
+            $this->clients,
             $this->pending,
             new ResolveExternalAccount(
                 $this->users,
@@ -408,13 +515,14 @@ final class ExternalSignInTest extends TestCase
         return $session->userId;
     }
 
-    private function existingUser(string $email, bool $verified = true): User
+    private function existingUser(string $email, bool $verified = true, ?ConnectionName $pool = null): User
     {
         $user = User::register(
-            UserId::generate(new SeededRandomSource(crc32($email))),
+            UserId::generate(new SeededRandomSource(crc32($email . ($pool?->value ?? '')))),
             $email,
             '$hash$',
             $this->clock->now(),
+            $pool,
         );
         $user->recordEmailVerification($verified, $this->clock->now());
         $this->users->save($user);

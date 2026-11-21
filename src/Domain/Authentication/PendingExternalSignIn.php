@@ -12,8 +12,9 @@ declare(strict_types=1);
 namespace Clavia\Domain\Authentication;
 
 use Clavia\Domain\Client\ClientId;
-use Clavia\Domain\Identity\ProviderName;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\OAuth2\CodeVerifier;
+use Clavia\Domain\Oidc\Nonce;
 
 /**
  * A sign-in sent out to an external provider and not back yet.
@@ -21,7 +22,8 @@ use Clavia\Domain\OAuth2\CodeVerifier;
  * Clavia is the OAuth 2.0 client here, and holds itself to what it demands of its own
  * clients: the browser carries an opaque `state` handle — in the provider's redirect
  * and in a cookie — while what the handle stands for stays server-side: where to go
- * afterwards, and the PKCE verifier (RFC 7636) that only this server may present.
+ * afterwards, the PKCE verifier (RFC 7636) that only this server may present, and the
+ * `nonce` an ID token must carry back to count as minted for this sign-in.
  */
 final readonly class PendingExternalSignIn
 {
@@ -37,11 +39,12 @@ final readonly class PendingExternalSignIn
      * @param string|null   $loginState The login page's handle, forgotten once the sign-in completes.
      */
     public function __construct(
-        public ProviderName $provider,
+        public ConnectionName $provider,
         public CodeVerifier $codeVerifier,
         public string $nextUrl,
         public ?ClientId $clientId,
         public ?string $loginState,
+        public Nonce $nonce,
     ) {
     }
 }

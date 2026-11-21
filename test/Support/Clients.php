@@ -16,12 +16,18 @@ use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\GrantType;
+use Clavia\Domain\Client\Ownership;
 use Clavia\Domain\Client\ResponseType;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Shared\Url;
 use DateTimeImmutable;
 
 /**
  * Ready-made client registrations for unit tests, so a test states only what it is about.
+ *
+ * A first-party one enables the built-in connections — the default pool, Google and
+ * GitHub — as every first-party client did when connections came in; a third-party one
+ * lists none, as it must.
  */
 final class Clients
 {
@@ -29,6 +35,14 @@ final class Clients
 
     private function __construct()
     {
+    }
+
+    /** @return list<ConnectionName> */
+    public static function builtInConnections(string $id): array
+    {
+        return ClientId::fromString($id)->ownership() === Ownership::ThirdParty
+            ? []
+            : array_map(ConnectionName::fromString(...), ['github', 'google', ConnectionName::DEFAULT_POOL]);
     }
 
     /**
@@ -54,6 +68,8 @@ final class Clients
             $grantTypes,
             $responseTypes,
             new DateTimeImmutable('2026-01-15T09:00:00Z'),
+            [],
+            self::builtInConnections($id),
         );
     }
 
@@ -77,6 +93,8 @@ final class Clients
             [GrantType::AuthorizationCode],
             [ResponseType::Code],
             new DateTimeImmutable('2026-01-15T09:00:00Z'),
+            [],
+            self::builtInConnections($id),
         );
     }
 }

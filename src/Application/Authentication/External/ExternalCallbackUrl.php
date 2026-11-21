@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Authentication\External;
 
-use Clavia\Domain\Identity\ProviderName;
+use Clavia\Domain\Connection\ConnectionName;
 
 /**
  * The redirect URI Clavia registers at an external provider — and sends, identically,
@@ -26,7 +26,7 @@ final class ExternalCallbackUrl
     {
     }
 
-    public static function for(string $issuer, ProviderName $provider): string
+    public static function for(string $issuer, ConnectionName $provider): string
     {
         return rtrim($issuer, '/') . sprintf(self::PATH, $provider->value);
     }

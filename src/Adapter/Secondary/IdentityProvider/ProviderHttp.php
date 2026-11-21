@@ -64,6 +64,22 @@ final readonly class ProviderHttp
     }
 
     /**
+     * A plain GET of a public JSON document: a provider's JWKS.
+     *
+     * @return array<array-key, mixed> The decoded JSON object or array.
+     *
+     * @throws IdentityProviderFailed
+     */
+    public function get(string $provider, string $url): array
+    {
+        $request = $this->requests->createRequest('GET', $url)
+            ->withHeader('User-Agent', self::USER_AGENT)
+            ->withHeader('Accept', 'application/json');
+
+        return $this->send($provider, $request);
+    }
+
+    /**
      * GET with a bearer token (RFC 6750 §2.1).
      *
      * @return array<array-key, mixed> The decoded JSON object or array.

@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Domain\Identity;
 
+use Clavia\Domain\Connection\ConnectionName;
 use DateTimeImmutable;
 
 /**
@@ -30,7 +31,7 @@ final readonly class ExternalIdentity
      *                                  Informational — shown to operators — and never looked up.
      */
     private function __construct(
-        public ProviderName $provider,
+        public ConnectionName $provider,
         public string $subject,
         public UserId $userId,
         public ?string $email,
@@ -47,7 +48,7 @@ final readonly class ExternalIdentity
      * @param non-empty-string $subject
      */
     public static function reconstitute(
-        ProviderName $provider,
+        ConnectionName $provider,
         string $subject,
         UserId $userId,
         ?string $email,

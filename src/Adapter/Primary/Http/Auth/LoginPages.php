@@ -13,6 +13,7 @@ namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
 use Clavia\Application\Authentication\External\ExternalProviderOption;
+use Clavia\Application\Authentication\LoginPage\SignInMethods;
 
 /**
  * The view models of the login page, shared by the handler that shows it and the one
@@ -24,6 +25,8 @@ final class LoginPages
 
     public const string EXPIRED_FORM = 'Your session expired. Please try again.';
 
+    public const string PASSWORD_UNAVAILABLE = 'Password sign-in is not available for this application.';
+
     private function __construct()
     {
     }
@@ -31,13 +34,14 @@ final class LoginPages
     /**
      * The sign-in form.
      *
-     * @param list<string>                 $formOrigins
-     * @param list<ExternalProviderOption> $providers   Offered as links below the form.
+     * @param list<string> $formOrigins
+     * @param SignInMethods $methods    The password form when it is offered, the external connections
+     *                                  as links below it.
      */
     public static function form(
         ?string $loginState,
         array $formOrigins,
-        array $providers = [],
+        SignInMethods $methods,
         ?string $email = null,
         ?string $error = null,
         int $status = 200,
@@ -51,6 +55,7 @@ final class LoginPages
                 'loginState' => $loginState ?? '',
                 'email' => $email ?? '',
                 'signedInAs' => null,
+                'password' => $methods->password,
                 'providers' => array_map(
                     static fn (ExternalProviderOption $provider): array => [
                         'label' => $provider->label,
@@ -60,7 +65,7 @@ final class LoginPages
                                 : '?' . http_build_query(['state' => $loginState], '', '&', PHP_QUERY_RFC3986)
                         ),
                     ],
-                    $providers,
+                    $methods->providers,
                 ),
             ],
             error: $error,
@@ -79,7 +84,13 @@ final class LoginPages
             title: 'Signed in',
             heading: 'You are signed in',
             returnTo: self::address(null),
-            variables: ['loginState' => '', 'email' => '', 'signedInAs' => $email, 'providers' => []],
+            variables: [
+                'loginState' => '',
+                'email' => '',
+                'signedInAs' => $email,
+                'password' => false,
+                'providers' => [],
+            ],
         );
     }
 

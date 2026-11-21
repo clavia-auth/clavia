@@ -13,8 +13,9 @@ namespace ClaviaTest\Unit\Support;
 
 use Clavia\Application\Port\ExternalSignInStore;
 use Clavia\Domain\Authentication\PendingExternalSignIn;
-use Clavia\Domain\Identity\ProviderName;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\OAuth2\CodeVerifier;
+use Clavia\Domain\Oidc\Nonce;
 use ClaviaTest\Support\Contract\ExternalSignInStoreContract;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryExternalSignInStore;
@@ -45,11 +46,12 @@ final class InMemoryExternalSignInStoreTest extends TestCase
     {
         foreach (['early' => PendingExternalSignIn::LIFETIME_SECONDS - 1, 'late' => 1] as $handle => $wait) {
             $this->store->open($handle, new PendingExternalSignIn(
-                ProviderName::fromString('google'),
+                ConnectionName::fromString('google'),
                 CodeVerifier::generate(new SeededRandomSource()),
                 '/',
                 null,
                 null,
+                Nonce::fromString('nonce-1'),
             ));
         }
 

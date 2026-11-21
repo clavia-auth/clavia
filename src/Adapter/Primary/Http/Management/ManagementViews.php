@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Management;
 
 use Clavia\Application\Management\Clients\ClientWithSecret;
+use Clavia\Application\Management\Connections\DescribedConnection;
 use Clavia\Application\Management\Roles\DescribedPermission;
 use Clavia\Application\Management\Roles\DescribedRole;
 use Clavia\Application\Management\Roles\EffectivePermission;
@@ -20,6 +21,8 @@ use Clavia\Application\Management\Users\ManagedUser;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\ResponseType;
+use Clavia\Domain\Connection\ConnectionName;
+use Clavia\Domain\Identity\ExternalIdentity;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Rbac\Role;
 use Clavia\Domain\ResourceServer\Permission;
@@ -32,7 +35,7 @@ use DateTimeZone;
 /**
  * The JSON shape of each resource, as `docs/openapi/management-api.yaml` describes it
  * (`User`, `Client`, `ClientWithSecret`, `ResourceServer`, `Role`, `RoleWithPermissions`,
- * `EffectivePermission`, `UserConsent`, the `…Page` envelopes).
+ * `EffectivePermission`, `UserConsent`, `Connection`, `Identity`, the `…Page` envelopes).
  *
  * What is left out is left out on purpose: a password hash or a client secret hash is
  * never part of a resource, and a client secret appears only in {@see self::clientWithSecret()}.
@@ -71,6 +74,7 @@ final class ManagementViews
 
         return [
             'id' => $user->id->value,
+            'connection' => $user->connection->value,
             'email' => $user->email,
             'email_verified' => $user->isEmailVerified(),
             'is_active' => $user->isActive(),
@@ -108,6 +112,10 @@ final class ManagementViews
                 $client->postLogoutRedirectUris,
             ),
             'is_first_party' => $client->isFirstParty(),
+            'connections' => array_map(
+                static fn (ConnectionName $connection): string => $connection->value,
+                $client->connections,
+            ),
             'created_at' => self::instant($client->createdAt),
         ];
     }
@@ -195,6 +203,42 @@ final class ManagementViews
             'scopes' => $scopes,
             'granted_at' => self::instant($described->consent->grantedAt),
             'updated_at' => self::instant($described->consent->updatedAt),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public static function connection(DescribedConnection $described): array
+    {
+        $connection = $described->connection;
+
+        return [
+            'name' => $connection->name->value,
+            'display_name' => $connection->displayName,
+            'strategy' => $connection->strategy->value,
+            'is_enabled' => $connection->isEnabled,
+            'is_domain_connection' => $connection->isDomainConnection,
+            'configured' => $described->configured,
+            'usable' => $described->usable,
+            // The secret is never part of it: stored encrypted, sent only to the provider.
+            'oidc_issuer' => $connection->oidc?->issuer->value,
+            'oidc_client_id' => $connection->oidc?->clientId,
+            'oidc_scope' => $connection->oidc?->scope->toString(),
+            'created_at' => self::instant($connection->createdAt),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public static function identity(ExternalIdentity $identity): array
+    {
+        return [
+            'connection' => $identity->provider->value,
+            'subject' => $identity->subject,
+            'email' => $identity->email,
+            'linked_at' => self::instant($identity->linkedAt),
         ];
     }
 

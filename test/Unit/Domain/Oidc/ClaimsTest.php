@@ -15,6 +15,7 @@ use Clavia\Domain\Authentication\AuthenticationContext;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\Session;
 use Clavia\Domain\Client\ClientId;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\Profile;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
@@ -83,6 +84,7 @@ final class ClaimsTest extends TestCase
         $session = Session::establish(
             $this->user->id,
             [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
             'sid-value',
             new DateTimeImmutable('2026-01-15T09:30:00Z'),
             86_400,

@@ -25,6 +25,7 @@ use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\ResponseType;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Oidc\SigningAlgorithm;
 use Clavia\Domain\Shared\InvalidValue;
@@ -189,7 +190,12 @@ final class EndSessionTest extends TestCase
 
     private function session(): string
     {
-        return $this->sessions->establish($this->userId, [AuthenticationMethod::Password], null);
+        return $this->sessions->establish(
+            $this->userId,
+            [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
+            null,
+        );
     }
 
     /**

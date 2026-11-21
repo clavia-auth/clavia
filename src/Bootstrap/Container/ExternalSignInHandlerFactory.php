@@ -16,6 +16,7 @@ use Clavia\Adapter\Primary\Http\Auth\AuthPageResponder;
 use Clavia\Adapter\Primary\Http\Auth\ExternalSignInHandler;
 use Clavia\Adapter\Primary\Http\Shared\ErrorResponder;
 use Clavia\Application\Authentication\External\BeginExternalSignIn;
+use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
 use Psr\Container\ContainerInterface;
 
 final class ExternalSignInHandlerFactory
@@ -24,6 +25,8 @@ final class ExternalSignInHandlerFactory
     {
         /** @var BeginExternalSignIn $begin */
         $begin = $container->get(BeginExternalSignIn::class);
+        /** @var DescribeLoginPage $describe */
+        $describe = $container->get(DescribeLoginPage::class);
         /** @var AuthPageResponder $responder */
         $responder = $container->get(AuthPageResponder::class);
         /** @var ErrorResponder $errors */
@@ -31,6 +34,6 @@ final class ExternalSignInHandlerFactory
         /** @var AuthCookies $cookies */
         $cookies = $container->get(AuthCookies::class);
 
-        return new ExternalSignInHandler($begin, $responder, $errors, $cookies);
+        return new ExternalSignInHandler($begin, $describe, $responder, $errors, $cookies);
     }
 }

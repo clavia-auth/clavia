@@ -14,6 +14,7 @@ namespace ClaviaTest\Unit\Support;
 use Clavia\Application\Port\MfaChallengeStore;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\MfaChallenge;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
 use ClaviaTest\Support\Contract\MfaChallengeStoreContract;
 use ClaviaTest\Support\Fake\FrozenClock;
@@ -47,6 +48,7 @@ final class InMemoryMfaChallengeStoreTest extends TestCase
             '/',
             null,
             [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
         ), 300);
 
         $this->clock->advance(299);

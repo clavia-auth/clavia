@@ -11,19 +11,21 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Port;
 
+use Clavia\Domain\Connection\Connection;
+
 /**
- * The external providers this deployment can sign people in through: those configured
- * with both halves of their credentials. An unconfigured provider is not there at all —
- * a button that fails is worse than no button.
+ * The providers behind external connections, as this deployment can build them.
  */
 interface IdentityProviders
 {
-    public function find(string $name): ?IdentityProvider;
-
     /**
-     * In the order the login page offers them.
+     * The provider behind `$connection`, or null when it cannot work: a database
+     * connection (there is no provider), a social connection the code does not implement or
+     * the deployment has no credentials for, an OIDC connection whose secret cannot be
+     * decrypted. A button that fails is worse than no button.
      *
-     * @return list<IdentityProvider>
+     * Whether the connection is switched on is not asked here: see
+     * {@see \Clavia\Application\Connection\ConnectionAccess}.
      */
-    public function all(): array;
+    public function for(Connection $connection): ?IdentityProvider;
 }

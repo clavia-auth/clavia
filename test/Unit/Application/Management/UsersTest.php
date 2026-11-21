@@ -18,8 +18,10 @@ use Clavia\Application\Management\NotFound;
 use Clavia\Application\Management\Users\CreateUser;
 use Clavia\Application\Management\Users\DeleteUser;
 use Clavia\Application\Management\Users\NewUser;
+use Clavia\Application\Management\Users\ReadIdentities;
 use Clavia\Application\Management\Users\ReadUsers;
 use Clavia\Application\Management\Users\ResetUserMfa;
+use Clavia\Application\Management\Users\UnlinkIdentity;
 use Clavia\Application\Management\Users\UpdateUser;
 use Clavia\Application\Management\Users\UserChanges;
 use Clavia\Domain\Authentication\Mfa\MfaFactor;
@@ -27,6 +29,10 @@ use Clavia\Domain\Authentication\Mfa\RecoveryCode;
 use Clavia\Domain\Authentication\Mfa\Totp;
 use Clavia\Domain\Authentication\Mfa\TotpSecret;
 use Clavia\Domain\Client\ClientId;
+use Clavia\Domain\Connection\Connection;
+use Clavia\Domain\Connection\ConnectionName;
+use Clavia\Domain\Identity\AssertedIdentity;
+use Clavia\Domain\Identity\ExternalIdentity;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\AlreadyExists;
@@ -35,6 +41,8 @@ use Clavia\Domain\Shared\PageRequest;
 use Clavia\Domain\Shared\ScopeSet;
 use ClaviaTest\Support\Fake\FakePasswordHasher;
 use ClaviaTest\Support\Fake\FrozenClock;
+use ClaviaTest\Support\Fake\InMemoryConnectionRepository;
+use ClaviaTest\Support\Fake\InMemoryExternalIdentityRepository;
 use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
 use ClaviaTest\Support\Fake\InMemoryRecoveryCodeRepository;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
@@ -53,6 +61,8 @@ final class UsersTest extends TestCase
     private InMemoryTransactionManager $transactions;
     private InMemoryMfaFactorRepository $factors;
     private InMemoryRecoveryCodeRepository $recoveryCodes;
+    private InMemoryConnectionRepository $connections;
+    private InMemoryExternalIdentityRepository $identities;
 
     #[\Override]
     protected function setUp(): void
@@ -63,6 +73,8 @@ final class UsersTest extends TestCase
         $this->transactions = new InMemoryTransactionManager();
         $this->factors = new InMemoryMfaFactorRepository($this->transactions);
         $this->recoveryCodes = new InMemoryRecoveryCodeRepository();
+        $this->connections = new InMemoryConnectionRepository();
+        $this->identities = new InMemoryExternalIdentityRepository();
     }
 
     public function testACreatedUserHasAHashedPasswordAndTheStandingAsked(): void
@@ -223,11 +235,127 @@ final class UsersTest extends TestCase
         self::assertNull($this->users->find($user->id));
     }
 
+    // ── Connections ──────────────────────────────────────────────────────────────
+
+    public function testAUserIsCreatedInTheDefaultPoolUnlessAnotherIsNamed(): void
+    {
+        $this->connections->add(Connection::pool(
+            ConnectionName::fromString('staff'),
+            'Staff',
+            true,
+            false,
+            $this->clock->now(),
+        ));
+
+        $customer = $this->create(new NewUser('ada@example.com', 'a-good-password'));
+        $employee = $this->create(new NewUser('ada@example.com', 'a-good-password', connection: 'staff'));
+
+        self::assertSame('password', $customer->connection->value);
+        self::assertSame('staff', $employee->connection->value);
+        self::assertFalse($customer->id->equals($employee->id), 'One address, one account per pool.');
+    }
+
+    public function testAUserIsNotCreatedThroughAProviderOrAnUnknownConnection(): void
+    {
+        try {
+            $this->create(new NewUser('ada@example.com', 'a-good-password', connection: 'google'));
+            self::fail('An account was created in a social connection.');
+        } catch (InvalidValue $refused) {
+            self::assertStringContainsString("'google' is not one", $refused->getMessage());
+        }
+
+        $this->expectException(NotFound::class);
+
+        $this->create(new NewUser('ada@example.com', 'a-good-password', connection: 'staff'));
+    }
+
+    public function testTheIdentitiesLinkedToAUserAreListed(): void
+    {
+        $user = $this->create(new NewUser('ada@example.com', 'a-good-password'));
+        $this->link($user, 'google', 'g-1');
+        $this->link($user, 'github', '42');
+
+        self::assertSame(
+            ['github', 'google'],
+            array_map(
+                static fn (ExternalIdentity $identity): string => $identity->provider->value,
+                new ReadIdentities($this->users, $this->identities)($user->id),
+            ),
+        );
+
+        $this->expectException(NotFound::class);
+
+        new ReadIdentities($this->users, $this->identities)(UserId::generate(new SeededRandomSource(77)));
+    }
+
+    public function testAnIdentityIsUnlinkedWhenTheAccountKeepsAnotherWayIn(): void
+    {
+        $user = $this->create(new NewUser('ada@example.com', 'a-good-password'));
+        $this->link($user, 'google', 'g-1');
+
+        $this->unlink()($user->id, 'google');
+
+        self::assertSame([], $this->identities->ofUser($user->id));
+    }
+
+    public function testTheOnlyWayIntoAnAccountIsNotUnlinked(): void
+    {
+        $user = User::registerFromProvider(
+            UserId::generate(new SeededRandomSource(31)),
+            'ada@example.com',
+            ConnectionName::fromString('google'),
+            $this->clock->now(),
+        );
+        $this->users->save($user);
+        $this->link($user, 'google', 'g-1');
+        $this->link($user, 'google', 'g-2');
+
+        try {
+            $this->unlink()($user->id, 'google');
+            self::fail('The only way into the account was unlinked.');
+        } catch (Conflict) {
+            self::assertCount(2, $this->identities->ofUser($user->id));
+        }
+
+        // With a second provider linked, the first can go.
+        $this->link($user, 'github', '42');
+        $this->unlink()($user->id, 'google');
+        self::assertCount(1, $this->identities->ofUser($user->id));
+    }
+
+    public function testUnlinkingWhatIsNotLinkedIsNotFound(): void
+    {
+        $user = $this->create(new NewUser('ada@example.com', 'a-good-password'));
+
+        foreach (['google', 'gitlab'] as $connection) {
+            try {
+                $this->unlink()($user->id, $connection);
+                self::fail(sprintf("Unlinking '%s' was not refused.", $connection));
+            } catch (NotFound) {
+                self::assertSame([], $this->identities->ofUser($user->id));
+            }
+        }
+    }
+
+    private function unlink(): UnlinkIdentity
+    {
+        return new UnlinkIdentity($this->users, $this->identities, $this->connections, $this->transactions);
+    }
+
+    private function link(User $user, string $connection, string $subject): void
+    {
+        $this->identities->add(ExternalIdentity::link(
+            AssertedIdentity::of(ConnectionName::fromString($connection), $subject, null, false),
+            $user->id,
+            $this->clock->now(),
+        ));
+    }
+
     private function create(NewUser $new): User
     {
         $random = new SeededRandomSource($this->users->page(PageRequest::of())->total + 1);
 
-        $created = new CreateUser($this->users, $this->hasher, $random, $this->clock)($new);
+        $created = new CreateUser($this->users, $this->hasher, $random, $this->clock, $this->connections)($new);
         self::assertFalse($created->mfaEnrolled);
 
         return $created->user;

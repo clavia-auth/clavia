@@ -19,6 +19,7 @@ use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\ResponseType;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
@@ -54,7 +55,7 @@ trait OAuth2Fixtures
         /** @var UserRepository $users */
         $users = $this->container()->get(UserRepository::class);
 
-        $existing = $users->findByEmail(self::TEST_USER_EMAIL);
+        $existing = $users->findByEmail(ConnectionName::defaultPool(), self::TEST_USER_EMAIL);
         if ($existing !== null) {
             return $existing;
         }
@@ -237,8 +238,16 @@ trait OAuth2Fixtures
         return $rows[0];
     }
 
+    /**
+     * Store it, enabling the built-in connections for a first-party client that lists none
+     * — as the migration did for every first-party client when connections came in.
+     */
     private function register(Client $client): Client
     {
+        if ($client->isFirstParty() && $client->connections === []) {
+            $client = $client->withConnections(Clients::builtInConnections($client->id->value));
+        }
+
         /** @var ClientRepository $clients */
         $clients = $this->container()->get(ClientRepository::class);
         $clients->save($client);

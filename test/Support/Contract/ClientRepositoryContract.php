@@ -18,6 +18,7 @@ use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\ResponseType;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Shared\PageRequest;
 use Clavia\Domain\Shared\Url;
 use DateTimeImmutable;
@@ -206,6 +207,32 @@ trait ClientRepositoryContract
 
         self::assertNull($this->clients()->find(ClientId::fromString('doomed')));
         self::assertNotNull($this->clients()->find(ClientId::fromString('kept')));
+    }
+
+    #[Test]
+    public function theConnectionsAClientEnablesAreStoredAndReplacedWhole(): void
+    {
+        $client = $this->aPublicClient('spa', 'SPA')->withConnections(
+            [ConnectionName::fromString('google'), ConnectionName::defaultPool()],
+        );
+        $this->clients()->save($client);
+
+        self::assertSame(['google', 'password'], $this->enabledFor('spa'));
+
+        $this->clients()->save($client->withConnections([ConnectionName::fromString('github')]));
+        self::assertSame(['github'], $this->enabledFor('spa'));
+
+        $this->clients()->save($client->withConnections([]));
+        self::assertSame([], $this->enabledFor('spa'));
+    }
+
+    /** @return list<string> */
+    private function enabledFor(string $id): array
+    {
+        return array_map(
+            static fn (ConnectionName $name): string => $name->value,
+            $this->clients()->find(ClientId::fromString($id))?->connections ?? [],
+        );
     }
 
     private function aPublicClient(string $id, string $name, string $createdAt = '2026-01-15T10:00:00Z'): Client

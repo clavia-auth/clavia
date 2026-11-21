@@ -11,11 +11,17 @@ declare(strict_types=1);
 
 namespace Clavia\Domain\Identity;
 
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Shared\InvalidValue;
 use DateTimeImmutable;
 
 /**
  * An end user: a resource owner (RFC 6749 §1.1), and the subject of ID tokens.
+ *
+ * Every account belongs to exactly one connection, for good: the pool it was created in,
+ * or the external connection that created it. The same address may exist in two pools
+ * as two accounts — a customer and an employee — so an address names an account only
+ * within its connection.
  */
 final class User
 {
@@ -34,14 +40,17 @@ final class User
         private Profile $profile,
         public readonly DateTimeImmutable $createdAt,
         private DateTimeImmutable $updatedAt,
+        public readonly ConnectionName $connection,
     ) {
     }
 
     /**
      * Create an account.
      *
-     * @param string      $passwordHash A hash from the password hasher, never a password; null for an
-     *                                  account that only ever signs in some other way.
+     * @param string              $passwordHash A hash from the password hasher, never a password; null
+     *                                          for an account that only ever signs in some other way.
+     * @param ConnectionName|null $pool         The database connection it belongs to; null for the
+     *                                          default pool.
      *
      * @throws InvalidValue When the email address cannot be one.
      */
@@ -50,6 +59,7 @@ final class User
         string $email,
         #[\SensitiveParameter] ?string $passwordHash,
         DateTimeImmutable $now,
+        ?ConnectionName $pool = null,
     ): self {
         return new self(
             $id,
@@ -60,19 +70,35 @@ final class User
             Profile::empty(),
             $now,
             $now,
+            $pool ?? ConnectionName::defaultPool(),
         );
     }
 
     /**
-     * Create an account for a person an external provider vouched for: no password, and
-     * the address verified, because the provider just reported it as verified — an
-     * account is never created from an address the provider does not vouch for.
+     * Create an account for a person an external provider vouched for: no password, the
+     * address verified, because the provider just reported it as verified — an account is
+     * never created from an address the provider does not vouch for — and belonging to the
+     * connection that signed them in.
      *
      * @throws InvalidValue When the email address cannot be one.
      */
-    public static function registerFromProvider(UserId $id, string $verifiedEmail, DateTimeImmutable $now): self
-    {
-        return new self($id, self::email($verifiedEmail), null, true, true, Profile::empty(), $now, $now);
+    public static function registerFromProvider(
+        UserId $id,
+        string $verifiedEmail,
+        ConnectionName $connection,
+        DateTimeImmutable $now,
+    ): self {
+        return new self(
+            $id,
+            self::email($verifiedEmail),
+            null,
+            true,
+            true,
+            Profile::empty(),
+            $now,
+            $now,
+            $connection,
+        );
     }
 
     /**
@@ -89,6 +115,7 @@ final class User
         Profile $profile,
         DateTimeImmutable $createdAt,
         DateTimeImmutable $updatedAt,
+        ConnectionName $connection,
     ): self {
         return new self(
             $id,
@@ -99,6 +126,7 @@ final class User
             $profile,
             $createdAt,
             $updatedAt,
+            $connection,
         );
     }
 

@@ -14,8 +14,7 @@ export const RESOURCE_ACTIONS = {
   clients: ACTIONS,
   resource_servers: ACTIONS,
   roles: ACTIONS,
-  // `connections` joins when the server defines it (Step 13): it refuses a scope it does
-  // not define, so asking for it now would fail every sign-in with `invalid_scope`.
+  connections: ACTIONS,
 } as const satisfies Record<string, readonly (typeof ACTIONS)[number][]>;
 
 export const RESOURCES = Object.keys(RESOURCE_ACTIONS) as (keyof typeof RESOURCE_ACTIONS)[];

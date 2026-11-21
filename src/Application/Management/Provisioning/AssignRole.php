@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Application\Management\Provisioning;
 
 use Clavia\Application\Management\NotFound;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\Rbac\Role;
 use Clavia\Domain\Rbac\RoleRepository;
@@ -42,7 +43,7 @@ final readonly class AssignRole
     public function __invoke(string $roleName, string $email): array
     {
         $role = $this->roles->findByName($roleName) ?? throw NotFound::of('role');
-        $user = $this->users->findByEmail($email) ?? throw NotFound::of('user');
+        $user = $this->users->findByEmail(ConnectionName::defaultPool(), $email) ?? throw NotFound::of('user');
 
         $this->roles->assign($role->id, $user->id, $this->clock->now());
 

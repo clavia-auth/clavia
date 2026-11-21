@@ -15,6 +15,7 @@ use Clavia\Adapter\Primary\Http\Shared\RequestCookies;
 use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
 use Clavia\Application\Authentication\SignIn\PasswordSignIn;
+use Clavia\Application\Authentication\SignIn\PasswordSignInUnavailable;
 use Clavia\Application\Authentication\SignIn\SecondFactorRequired;
 use Clavia\Application\Authentication\SignIn\SignedIn;
 use Clavia\Application\Authentication\SignIn\SignInWithPassword;
@@ -33,8 +34,9 @@ use Psr\Http\Server\RequestHandlerInterface;
  * challenge cookie instead of a session ({@see MfaChallengeHandler}).
  *
  * A failure re-renders the form with the same `state`, so the person is not sent back
- * to the application to start over: `400` when the CSRF check fails, `401` when the
- * credentials do — one message for every reason, see {@see LoginPages}.
+ * to the application to start over: `400` when the CSRF check fails or the application
+ * lets nobody in with a password, `401` when the credentials do — one message for every
+ * reason, see {@see LoginPages}.
  */
 final readonly class LoginHandler implements RequestHandlerInterface
 {
@@ -73,6 +75,9 @@ final readonly class LoginHandler implements RequestHandlerInterface
                 [$this->cookies->mfaChallenge($outcome->challenge)],
             );
         }
+        if ($outcome instanceof PasswordSignInUnavailable) {
+            return $this->refuse($request, $loginState, $email, LoginPages::PASSWORD_UNAVAILABLE, 400);
+        }
         if (! $outcome instanceof SignedIn) {
             return $this->refuse($request, $loginState, $email, LoginPages::INVALID_CREDENTIALS, 401);
         }
@@ -95,7 +100,7 @@ final readonly class LoginHandler implements RequestHandlerInterface
 
         return $this->responder->page(
             $request,
-            LoginPages::form($loginState, $origins, $this->describe->providers(), $email, $error, $status),
+            LoginPages::form($loginState, $origins, $this->describe->methods($loginState), $email, $error, $status),
         );
     }
 }

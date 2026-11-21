@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Domain\Client;
 
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\Url;
 use DateTimeImmutable;
@@ -26,6 +27,9 @@ use DateTimeImmutable;
  *
  * Who runs it ({@see Ownership}) is read from its id: a third-party application is
  * registered under a `tpc_` id, and that never changes.
+ *
+ * A first-party application lists the connections its users may sign in through. A
+ * third-party one lists none: it gets the domain connections, and those only.
  */
 final readonly class Client
 {
@@ -37,6 +41,7 @@ final readonly class Client
      * @param list<GrantType>       $grantTypes
      * @param list<ResponseType>    $responseTypes
      * @param list<Url>             $postLogoutRedirectUris
+     * @param list<ConnectionName>  $connections            Unique, sorted by name.
      */
     private function __construct(
         public ClientId $id,
@@ -49,6 +54,7 @@ final readonly class Client
         public array $responseTypes,
         public DateTimeImmutable $createdAt,
         public array $postLogoutRedirectUris,
+        public array $connections,
     ) {
     }
 
@@ -62,8 +68,10 @@ final readonly class Client
      * @param list<ResponseType> $responseTypes What it may ask of the authorization endpoint.
      * @param list<Url>          $postLogoutRedirectUris Where a sign-out it starts may send the browser back
      *                                                  (RP-Initiated Logout 1.0 §3.1), matched exactly.
+     * @param list<ConnectionName> $connections         The connections its users may sign in through.
      *
-     * @throws InvalidValue When the registration contradicts itself.
+     * @throws InvalidValue When the registration contradicts itself, or a third-party client would
+     *                      list connections.
      */
     public static function register(
         ClientId $id,
@@ -76,8 +84,16 @@ final readonly class Client
         array $responseTypes,
         DateTimeImmutable $createdAt,
         array $postLogoutRedirectUris = [],
+        array $connections = [],
     ): self {
         $secretHash = $secretHash === '' ? null : $secretHash;
+
+        if ($connections !== [] && $id->ownership() === Ownership::ThirdParty) {
+            throw new InvalidValue(
+                'A third-party application lists no connections: it signs people in through the domain '
+                . 'connections.',
+            );
+        }
 
         if (strlen($name) > self::MAX_NAME_LENGTH) {
             throw new InvalidValue('A client name is at most 120 bytes.');
@@ -143,6 +159,40 @@ final readonly class Client
             array_values(array_unique($responseTypes, SORT_REGULAR)),
             $createdAt,
             $postLogoutRedirectUris,
+            self::sorted($connections),
+        );
+    }
+
+    /**
+     * The same client, its users signing in through exactly `$connections`.
+     *
+     * @param list<ConnectionName> $connections
+     *
+     * @throws InvalidValue When the client is third-party.
+     */
+    public function withConnections(array $connections): self
+    {
+        return self::register(
+            $this->id,
+            $this->name,
+            $this->type,
+            $this->authMethod,
+            $this->secretHash,
+            $this->redirectUris,
+            $this->grantTypes,
+            $this->responseTypes,
+            $this->createdAt,
+            $this->postLogoutRedirectUris,
+            $connections,
+        );
+    }
+
+    /** Whether it lists `$connection` among those its users may sign in through. */
+    public function enables(ConnectionName $connection): bool
+    {
+        return array_any(
+            $this->connections,
+            static fn (ConnectionName $enabled): bool => $enabled->equals($connection),
         );
     }
 
@@ -180,6 +230,7 @@ final readonly class Client
             $responseTypes,
             $this->createdAt,
             $postLogoutRedirectUris ?? $this->postLogoutRedirectUris,
+            $this->connections,
         );
     }
 
@@ -207,6 +258,7 @@ final readonly class Client
             $this->responseTypes,
             $this->createdAt,
             $this->postLogoutRedirectUris,
+            $this->connections,
         );
     }
 
@@ -280,6 +332,22 @@ final readonly class Client
     public function isFirstParty(): bool
     {
         return $this->ownership() === Ownership::FirstParty;
+    }
+
+    /**
+     * @param list<ConnectionName> $connections
+     *
+     * @return list<ConnectionName>
+     */
+    private static function sorted(array $connections): array
+    {
+        $byName = [];
+        foreach ($connections as $connection) {
+            $byName[$connection->value] = $connection;
+        }
+        ksort($byName, SORT_STRING);
+
+        return array_values($byName);
     }
 
     /**

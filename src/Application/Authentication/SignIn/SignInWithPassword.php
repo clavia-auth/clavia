@@ -12,10 +12,14 @@ declare(strict_types=1);
 namespace Clavia\Application\Authentication\SignIn;
 
 use Clavia\Application\Authentication\LoginThrottle;
+use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\LocalPath;
+use Clavia\Domain\Authentication\LoginState;
+use Clavia\Domain\Client\ClientRepository;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserRepository;
 
@@ -24,11 +28,17 @@ use Clavia\Domain\Identity\UserRepository;
  * or, when the account has a confirmed second factor, a challenge for it instead: a
  * correct password alone is then not a sign-in ({@see CompleteFirstFactor}).
  *
+ * Accounts are looked for in the pools the application signs people in from, and only
+ * there. One that enables no pool cannot be signed in to with a password at all
+ * ({@see PasswordSignInUnavailable}), decided before the password is looked at. Several
+ * pools may hold the same address — a customer and an employee — and they are different
+ * accounts: the one whose password verifies is the one signing in.
+ *
  * Every failure takes the same time and gives the same answer. When no account could
  * match, a verification is still simulated, so how fast the server answers does not
- * say whether an address has an account. A throttled subject is refused without the
- * password being looked at — that is the point of the throttle — and refused the same
- * way.
+ * say whether an address has an account — nor in how many pools. A throttled subject is
+ * refused without the password being looked at — that is the point of the throttle — and
+ * refused the same way.
  */
 final readonly class SignInWithPassword
 {
@@ -37,22 +47,29 @@ final readonly class SignInWithPassword
         private PasswordHasher $hasher,
         private LoginThrottle $throttle,
         private LoginStateStore $loginStates,
+        private ClientRepository $clients,
+        private ConnectionAccess $access,
         private CompleteFirstFactor $completeFirstFactor,
     ) {
     }
 
     public function __invoke(PasswordSignIn $attempt): SignInOutcome
     {
-        $user = $this->authenticate($attempt);
+        $pending = $this->pending($attempt->loginState);
+        $clientId = $pending?->clientId;
+        $client = $clientId === null ? null : $this->clients->find($clientId);
+        $pools = $this->access->pools($client);
+        if ($pools === []) {
+            return new PasswordSignInUnavailable();
+        }
+
+        $user = $this->authenticate($attempt, $pools);
         if ($user === null) {
             return new CredentialsRejected();
         }
 
         // The handle has done its job once the person is authenticated: forgotten now
         // rather than left to expire, in the same single-use spirit as a spent code.
-        $pending = $attempt->loginState === null || $attempt->loginState === ''
-            ? null
-            : $this->loginStates->get($attempt->loginState);
         if ($attempt->loginState !== null && $attempt->loginState !== '') {
             $this->loginStates->forget($attempt->loginState);
         }
@@ -63,13 +80,24 @@ final readonly class SignInWithPassword
         return ($this->completeFirstFactor)(
             $user->id,
             [AuthenticationMethod::Password],
+            // The pool the account lives in, not "a password": an application that enables
+            // another pool must not accept the session.
+            $user->connection,
             $nextUrl,
             $pending?->clientId,
             $attempt->currentSessionId,
         );
     }
 
-    private function authenticate(PasswordSignIn $attempt): ?User
+    private function pending(#[\SensitiveParameter] ?string $loginState): ?LoginState
+    {
+        return $loginState === null || $loginState === '' ? null : $this->loginStates->get($loginState);
+    }
+
+    /**
+     * @param non-empty-list<ConnectionName> $pools
+     */
+    private function authenticate(PasswordSignIn $attempt, array $pools): ?User
     {
         if ($this->throttle->isThrottled($attempt->email, $attempt->clientAddress)) {
             $this->hasher->simulateVerification($attempt->password);
@@ -77,24 +105,34 @@ final readonly class SignInWithPassword
             return null;
         }
 
-        $user = $attempt->email === '' ? null : $this->users->findByEmail($attempt->email);
-        $hash = $user?->passwordHash();
+        $candidates = [];
+        if ($attempt->email !== '') {
+            foreach ($pools as $pool) {
+                $user = $this->users->findByEmail($pool, $attempt->email);
+                if ($user !== null && $user->isActive() && $user->passwordHash() !== null) {
+                    $candidates[] = $user;
+                }
+            }
+        }
 
-        if ($user === null || $hash === null || ! $user->isActive()) {
+        if ($candidates === []) {
             $this->hasher->simulateVerification($attempt->password);
             $this->throttle->recordFailure($attempt->email, $attempt->clientAddress);
 
             return null;
         }
 
-        if (! $this->hasher->verify($attempt->password, $hash)) {
-            $this->throttle->recordFailure($attempt->email, $attempt->clientAddress);
+        foreach ($candidates as $candidate) {
+            if ($this->hasher->verify($attempt->password, (string) $candidate->passwordHash())) {
+                $this->throttle->reset($attempt->email, $attempt->clientAddress);
 
-            return null;
+                return $candidate;
+            }
         }
 
-        $this->throttle->reset($attempt->email, $attempt->clientAddress);
+        // A wrong password against every candidate is one failure.
+        $this->throttle->recordFailure($attempt->email, $attempt->clientAddress);
 
-        return $user;
+        return null;
     }
 }

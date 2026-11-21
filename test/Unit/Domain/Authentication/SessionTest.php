@@ -13,6 +13,7 @@ namespace ClaviaTest\Unit\Domain\Authentication;
 
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\Session;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\InvalidValue;
 use ClaviaTest\Support\Fake\SeededRandomSource;
@@ -69,6 +70,7 @@ final class SessionTest extends TestCase
         $session = Session::establish(
             UserId::generate(new SeededRandomSource(1)),
             [AuthenticationMethod::Password, AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
             'the-sid',
             new DateTimeImmutable('2026-01-15T10:00:00Z'),
             self::WEEK,
@@ -84,6 +86,7 @@ final class SessionTest extends TestCase
         Session::establish(
             UserId::generate(new SeededRandomSource(1)),
             [],
+            ConnectionName::defaultPool(),
             'the-sid',
             new DateTimeImmutable('2026-01-15T10:00:00Z'),
             self::WEEK,
@@ -100,6 +103,7 @@ final class SessionTest extends TestCase
             new DateTimeImmutable('2026-01-22T10:00:00Z'),
             [AuthenticationMethod::Password],
             '',
+            ConnectionName::defaultPool(),
         );
     }
 
@@ -113,6 +117,7 @@ final class SessionTest extends TestCase
             new DateTimeImmutable('2026-01-15T10:00:00Z'),
             [AuthenticationMethod::Password],
             'the-sid',
+            ConnectionName::defaultPool(),
         );
     }
 
@@ -127,6 +132,7 @@ final class SessionTest extends TestCase
         return Session::establish(
             UserId::generate(new SeededRandomSource(1)),
             [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
             'the-sid',
             new DateTimeImmutable($at),
             self::WEEK,

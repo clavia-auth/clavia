@@ -19,6 +19,7 @@ use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\Ownership;
 use Clavia\Domain\Client\ResponseType;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\SecretGenerator;
@@ -80,6 +81,9 @@ final readonly class SeedDashboardClient
                 [ResponseType::Code],
                 $this->clock->now(),
                 [$signedOut],
+                // Operators sign in to it with a password; other connections are enabled
+                // through the API.
+                [ConnectionName::defaultPool()],
             )
             : $existing->reconfigure(
                 self::CLIENT_NAME,

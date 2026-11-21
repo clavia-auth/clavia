@@ -11,19 +11,39 @@ declare(strict_types=1);
 
 namespace Clavia\Domain\Identity;
 
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Shared\AlreadyExists;
 
 /**
- * Identities linked to accounts, keyed `(provider, subject)`.
+ * Identities linked to accounts, keyed `(provider, subject)` — the provider being the
+ * external connection they signed in through. Deleting the account takes them along;
+ * the connection cannot be deleted while one is linked through it.
  */
 interface ExternalIdentityRepository
 {
     /** The identity the provider's subject is linked as, if any. */
-    public function find(ProviderName $provider, string $subject): ?ExternalIdentity;
+    public function find(ConnectionName $provider, string $subject): ?ExternalIdentity;
 
     /**
      * @throws AlreadyExists When the provider's subject is already linked — to this account or
      *                       another: a subject belongs to one account.
      */
     public function add(ExternalIdentity $identity): void;
+
+    /**
+     * The identities linked to the account, by provider, then subject.
+     *
+     * @return list<ExternalIdentity>
+     */
+    public function ofUser(UserId $userId): array;
+
+    /**
+     * Detach every identity the account holds through the provider.
+     *
+     * @return int How many were detached.
+     */
+    public function unlink(UserId $userId, ConnectionName $provider): int;
+
+    /** How many identities are linked through the provider. */
+    public function countThrough(ConnectionName $provider): int;
 }

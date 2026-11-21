@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Authentication;
 
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserRepository;
 use LogicException;
 
@@ -53,7 +54,7 @@ final readonly class DevelopmentAutoLogin
             throw new LogicException('Development auto-login reached in a non-development environment.');
         }
 
-        $user = $this->users->findByEmail($this->email);
+        $user = $this->users->findByEmail(ConnectionName::defaultPool(), $this->email);
 
         return $user !== null && $user->isActive() ? new EndUser($user->id) : null;
     }

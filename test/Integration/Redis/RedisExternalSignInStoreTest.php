@@ -16,8 +16,9 @@ use Clavia\Adapter\Secondary\Redis\RedisConnection;
 use Clavia\Adapter\Secondary\Redis\RedisExternalSignInStore;
 use Clavia\Application\Port\ExternalSignInStore;
 use Clavia\Domain\Authentication\PendingExternalSignIn;
-use Clavia\Domain\Identity\ProviderName;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\OAuth2\CodeVerifier;
+use Clavia\Domain\Oidc\Nonce;
 use ClaviaTest\Support\Contract\ExternalSignInStoreContract;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use ClaviaTest\Support\IntegrationTestCase;
@@ -68,11 +69,12 @@ final class RedisExternalSignInStoreTest extends IntegrationTestCase
     private function pending(): PendingExternalSignIn
     {
         return new PendingExternalSignIn(
-            ProviderName::fromString('google'),
+            ConnectionName::fromString('google'),
             CodeVerifier::generate(new SeededRandomSource()),
             '/',
             null,
             null,
+            Nonce::fromString('nonce-1'),
         );
     }
 }

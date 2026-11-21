@@ -19,6 +19,7 @@
     ],
     "require": {
         "php": "~8.5.0",
+        "ext-curl": "*",
         "ext-openssl": "*",
         "ext-pdo": "*",
         "ext-pdo_pgsql": "*",

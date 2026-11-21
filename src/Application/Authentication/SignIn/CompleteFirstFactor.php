@@ -17,6 +17,7 @@ use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\MfaChallenge;
 use Clavia\Domain\Client\ClientId;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\SecretGenerator;
 
@@ -44,11 +45,14 @@ final readonly class CompleteFirstFactor
 
     /**
      * @param list<AuthenticationMethod> $firstFactor How the person was authenticated so far.
+     * @param ConnectionName             $connection  What the person signed in through: their account's pool,
+     *                                                or the external connection that vouched for them.
      * @param string|null                $replacing   The session identifier the browser presented, if any.
      */
     public function __invoke(
         UserId $userId,
         array $firstFactor,
+        ConnectionName $connection,
         string $nextUrl,
         ?ClientId $clientId,
         #[\SensitiveParameter] ?string $replacing,
@@ -57,13 +61,13 @@ final readonly class CompleteFirstFactor
             $handle = $this->secrets->token();
             $this->challenges->open(
                 $handle,
-                new MfaChallenge($userId, $nextUrl, $clientId, $firstFactor),
+                new MfaChallenge($userId, $nextUrl, $clientId, $firstFactor, $connection),
                 $this->challengeLifetimeSeconds,
             );
 
             return new SecondFactorRequired($handle);
         }
 
-        return new SignedIn($this->sessions->establish($userId, $firstFactor, $replacing), $nextUrl);
+        return new SignedIn($this->sessions->establish($userId, $firstFactor, $connection, $replacing), $nextUrl);
     }
 }

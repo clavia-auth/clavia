@@ -11,6 +11,9 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Support\Contract;
 
+use Clavia\Domain\Connection\Connection;
+use Clavia\Domain\Connection\ConnectionName;
+use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Identity\Profile;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
@@ -28,6 +31,8 @@ trait UserRepositoryContract
 {
     abstract protected function users(): UserRepository;
 
+    abstract protected function connections(): ConnectionRepository;
+
     #[Test]
     public function aSavedUserIsFoundByIdAndByEmail(): void
     {
@@ -35,7 +40,7 @@ trait UserRepositoryContract
         $this->users()->save($user);
 
         $byId = $this->users()->find($user->id);
-        $byEmail = $this->users()->findByEmail('jane@example.com');
+        $byEmail = $this->users()->findByEmail(ConnectionName::defaultPool(), 'jane@example.com');
 
         self::assertNotNull($byId);
         self::assertNotNull($byEmail);
@@ -84,7 +89,7 @@ trait UserRepositoryContract
     public function anUnknownUserIsNull(): void
     {
         self::assertNull($this->users()->find(UserId::generate(new SeededRandomSource(99))));
-        self::assertNull($this->users()->findByEmail('nobody@example.com'));
+        self::assertNull($this->users()->findByEmail(ConnectionName::defaultPool(), 'nobody@example.com'));
     }
 
     #[Test]
@@ -92,9 +97,9 @@ trait UserRepositoryContract
     {
         $this->users()->save($this->aUser('jane@example.com'));
 
-        self::assertNull($this->users()->findByEmail('Jane@example.com'));
-        self::assertNull($this->users()->findByEmail('jane@example.com '));
-        self::assertNull($this->users()->findByEmail('%'));
+        self::assertNull($this->users()->findByEmail(ConnectionName::defaultPool(), 'Jane@example.com'));
+        self::assertNull($this->users()->findByEmail(ConnectionName::defaultPool(), 'jane@example.com '));
+        self::assertNull($this->users()->findByEmail(ConnectionName::defaultPool(), '%'));
     }
 
     #[Test]
@@ -186,7 +191,7 @@ trait UserRepositoryContract
         $this->users()->delete($user->id);
 
         self::assertNull($this->users()->find($user->id));
-        self::assertNull($this->users()->findByEmail('jane@example.com'));
+        self::assertNull($this->users()->findByEmail(ConnectionName::defaultPool(), 'jane@example.com'));
     }
 
     #[Test]
@@ -198,14 +203,86 @@ trait UserRepositoryContract
 
         $matches = array_map(
             static fn (User $user): string => $user->email,
-            $this->users()->matchingEmail('ADA@example.COM'),
+            $this->users()->matchingEmail('ADA@example.COM', [ConnectionName::defaultPool()]),
         );
         sort($matches);
 
         self::assertSame(['Ada@Example.com', 'ada@example.com'], $matches);
-        self::assertSame([], $this->users()->matchingEmail('ada@example.co'));
-        self::assertSame([], $this->users()->matchingEmail('%@example.com'));
-        self::assertNull($this->users()->findByEmail('ADA@example.com'));
+        self::assertSame([], $this->users()->matchingEmail('ada@example.co', [ConnectionName::defaultPool()]));
+        self::assertSame([], $this->users()->matchingEmail('%@example.com', [ConnectionName::defaultPool()]));
+        self::assertNull($this->users()->findByEmail(ConnectionName::defaultPool(), 'ADA@example.com'));
+    }
+
+    #[Test]
+    public function anAddressIsOneAccountPerPool(): void
+    {
+        $staff = ConnectionName::fromString('staff');
+        $this->connections()->add(
+            Connection::pool($staff, 'Staff', true, false, new DateTimeImmutable('2026-01-15T10:00:00Z')),
+        );
+        $customer = $this->aUser('jane@example.com');
+        $employee = User::register(
+            UserId::generate(new SeededRandomSource(99)),
+            'jane@example.com',
+            '$hash$',
+            new DateTimeImmutable('2026-01-16T10:00:00Z'),
+            $staff,
+        );
+        $this->users()->save($customer);
+        $this->users()->save($employee);
+
+        self::assertSame('password', $this->users()->find($customer->id)?->connection->value);
+        self::assertSame('staff', $this->users()->find($employee->id)?->connection->value);
+        self::assertTrue(
+            $this->users()->findByEmail($staff, 'jane@example.com')?->id->equals($employee->id),
+        );
+        self::assertTrue(
+            $this->users()->findByEmail(ConnectionName::defaultPool(), 'jane@example.com')?->id->equals($customer->id),
+        );
+        self::assertCount(1, $this->users()->matchingEmail('jane@example.com', [$staff]));
+        self::assertSame(
+            [$customer->id->value, $employee->id->value],
+            array_map(
+                static fn (User $user): string => $user->id->value,
+                $this->users()->matchingEmail('JANE@example.com', [ConnectionName::defaultPool(), $staff]),
+            ),
+        );
+        self::assertSame([], $this->users()->matchingEmail('jane@example.com', []));
+        self::assertSame(1, $this->users()->countIn($staff));
+        self::assertSame(0, $this->users()->countIn(ConnectionName::fromString('google')));
+    }
+
+    #[Test]
+    public function anAccountAProviderCreatedBelongsToItsConnection(): void
+    {
+        $google = ConnectionName::fromString('google');
+        $user = User::registerFromProvider(
+            UserId::generate(new SeededRandomSource(7)),
+            'ada@example.com',
+            $google,
+            new DateTimeImmutable('2026-01-15T10:00:00Z'),
+        );
+        $this->users()->save($user);
+
+        $read = $this->users()->find($user->id);
+
+        self::assertNotNull($read);
+        self::assertSame('google', $read->connection->value);
+        self::assertNull($read->passwordHash());
+        self::assertNull($this->users()->findByEmail(ConnectionName::defaultPool(), 'ada@example.com'));
+        self::assertSame(1, $this->users()->countIn($google));
+    }
+
+    #[Test]
+    public function aChangedAddressIsStored(): void
+    {
+        $user = $this->aUser('jane@example.com');
+        $this->users()->save($user);
+        $user->changeEmail('janet@example.com', new DateTimeImmutable('2026-01-16T10:00:00Z'));
+        $this->users()->save($user);
+
+        self::assertSame('janet@example.com', $this->users()->find($user->id)?->email);
+        self::assertNull($this->users()->findByEmail(ConnectionName::defaultPool(), 'jane@example.com'));
     }
 
     private function aUser(string $email): User

@@ -29,12 +29,14 @@ and multi-tenancy.
 
 ## Current state
 
-**Steps 0 to 12 are done: the foundations, Authorization Code + PKCE, the login page with
+**Steps 0 to 13 are done: the foundations, Authorization Code + PKCE, the login page with
 browser sessions, OpenID Connect (ID tokens, discovery, JWKS, userinfo), Client
 Credentials for machine clients holding a grant on an API, the Management API with
 audiences in the user's flow, two-factor authentication (TOTP and recovery codes),
 signing in with Google or GitHub, RP-Initiated Logout, roles (RBAC), rotating refresh
-tokens, and application ownership with the consent screen; the dashboard is in `frontend/`.**
+tokens, application ownership with the consent screen, and connections — pools of accounts,
+the social providers and operator-registered OpenID Connect providers, enabled per
+application; the dashboard is in `frontend/`.**
 The application answers `GET /healthz`,
 `GET|POST /oauth2/authorize`, `POST /oauth2/token`, `GET /.well-known/openid-configuration`,
 `GET /.well-known/oauth-authorization-server`, `GET /oidc/jwks.json`, `GET|POST /oidc/userinfo`,
@@ -43,9 +45,10 @@ The application answers `GET /healthz`,
 `POST /auth/mfa/enroll/confirm`, `POST /auth/mfa/disable`, `GET /auth/social/{provider}` and
 its `/callback`, `GET|POST /auth/consent`, `POST /auth/logout`,
 `POST /auth/theme` and the Management API under `/api/v1/` (users with their second factor,
-roles, effective permissions and consents, clients with secret rotation, resource servers,
-roles and their holders): a person can sign in with a
-password or through Google or GitHub — and, once they have turned it on, a code from their authenticator app or a
+roles, effective permissions, consents and linked identities, clients with secret rotation
+and their connections, resource servers, roles and their holders, connections): a person can
+sign in with a password in one of the pools an application enables, or through Google, GitHub
+or an OpenID Connect provider an operator registered — and, once they have turned it on, a code from their authenticator app or a
 recovery code — complete the flow in a browser, naming an API in `audience` if the client
 wants its permissions — on an API that enforces roles, only what their roles grant there —
 and the client gets an RS256 ID token it can verify against the published
@@ -314,6 +317,42 @@ What exists:
     clients and `allow_skipping_consent` on APIs in the Management API;
     `clients:create-m2m --third-party`. The dashboard shows ownership, the API switch and a
     user's authorized applications again.
+- **Connections** (Step 13):
+  - `Domain\Connection\{ConnectionName,ConnectionStrategy,Connection,OidcSettings,
+    ConnectionRepository,BuiltInConnection}` (`ProviderName` became `ConnectionName`;
+    `ConnectionName::defaultPool()` is `password`). `User::$connection`, set by `register(…,
+    $pool)` and `registerFromProvider(…, $connection)`; `UserRepository::findByEmail($pool,
+    …)`, `matchingEmail($email, $connections)`, `countIn()`. `Session::$connection` and
+    `MfaChallenge::$connection`; `PendingExternalSignIn::$nonce`. `Client::$connections`,
+    `withConnections()`, `enables()` (refused for a third party).
+    `ExternalIdentityRepository::ofUser()`, `unlink()`, `countThrough()`.
+  - `Application\Connection\{ConnectionAccess,UsableConnection}`: the one place the global
+    switch, "can it work" and the application's list (or, for a third party, the domain flag)
+    are combined — `available()`, `allows()`, `pools()`, `external()`.
+    `Port\IdentityProviders::for(Connection)`, `IdentityProvider::name()` and its `Nonce`
+    arguments; `Port\{OidcDiscovery,DiscoveredProvider,DiscoveryFailed}`.
+  - `SignInWithPassword` looks in the application's pools only (`PasswordSignInUnavailable`
+    when it has none); `BeginExternalSignIn` answers `ExternalSignInUnavailable` for a
+    connection the application does not enable, and sends a nonce; `CompleteExternalSignIn`
+    checks again (`ExternalSignInFailure::NotAvailable`); `ResolveExternalAccount` links by
+    address within the application's pools and the connection itself; a new account belongs
+    to the connection that made it. `Authorize` treats a session established through a
+    connection the client does not allow as nobody signed in. `DescribeLoginPage` describes
+    `SignInMethods` (the password form, the provider links).
+  - `Management\Connections\{ReadConnections,DescribedConnection,NewConnection,
+    CreateConnection,UpdateConnection,DeleteConnection,OidcConfiguration}`,
+    `Management\Clients\ClientConnections`, `Management\Users\{ReadIdentities,UnlinkIdentity}`;
+    `read|create|update|delete:connections`.
+  - `Adapter\Secondary\Http\{OutboundUrlPolicy,OutboundUrlRefused,PinCheckedAddresses}`;
+    `IdentityProvider\{ConnectionIdentityProviders,OidcIdentityProvider,IdTokenVerifier,
+    JwksCache,HttpOidcDiscovery}`, `Redis\RedisJwksCache`, `PhpDb\PhpDbConnectionRepository`.
+    Migration `0019_connections` (`connections`, `client_connections`, `users.connection` with
+    `uq_users_connection_email`, the foreign key from `external_identities.provider`).
+    `PhpDbUserRepository::save()` now stores a changed address, which it silently kept before.
+  - `Management\{ConnectionsHandler,ConnectionHandler,ClientConnectionsHandler,
+    UserIdentitiesHandler}`; `templates/auth/login.phtml` shows only the methods available.
+    The dashboard has a Connections page, a client's connections, a user's pool and
+    linked identities.
 - **Error pages for browsers** (after Step 3): `Adapter\Primary\Http\Shared\ClientPreference`
   (`Accept` negotiation), `ErrorResponder` + `ErrorPage`, `PageRenderer` + `HtmlPage` (the
   layout, headers and CSP every server-rendered page shares). 404, 405, 500 and the
@@ -742,6 +781,27 @@ Conventions established in Step 12:
   handle that is unknown, spent, expired, someone else's or names something deleted is the
   same "expired" page. Showing the screen leaves it; deciding claims it (`GETDEL`).
 
+Conventions established in Step 13:
+
+- **Every account belongs to one connection**, and an address is unique within it: the same
+  address in two pools is two accounts. Accounts are created in a pool; an external
+  connection's are made by signing in through it.
+- **What an application may use is `ConnectionAccess`'s answer, and nobody else's.** The
+  login page, the password post, the provider link, the callback and the authorization
+  endpoint all ask it, so hiding and refusing cannot disagree. No application in play means
+  every usable connection; a first-party application goes by its own list; a third-party
+  one gets the domain connections.
+- **A session remembers its connection**, and counts only for an application that allows it
+  — checked at every authorization request, so taking a connection away takes effect at once.
+- **The code's connections are switched, never created or deleted**: the default pool and
+  the social providers (`BuiltInConnection`, 409). A connection anything depends on — an
+  account, a linked identity — is not deleted either; deleting one stops every application
+  enabling it.
+- **The server fetches an operator's URLs on https only, and never at its own network**:
+  `OutboundUrlPolicy` checks the issuer, the endpoints its document names, and every request
+  again when it is made, at the addresses it checked. An ID token is believed only once its
+  signature, issuer, audience, expiry and nonce check out.
+
 **Known defect in the database library, worked around.** At the pinned commit,
 `php-db/phpdb-pgsql` runs `SELECT LASTVAL()` after every statement to fetch a "last generated
 value". In a session that has not used a sequence that query fails; the library swallows the
@@ -945,7 +1005,7 @@ test/
 | `pydantic-settings` | A typed, validated `Settings` object built once in the composition root | Same `CLAVIA_*` names and the same validators (e.g. console mail refused outside development). |
 | Jinja2 | laminas-view PHP templates (layout, pages, partials) behind Mezzio's `TemplateRendererInterface` | No Twig. Escaping is explicit (`escapeHtml`/`escapeHtmlAttr`) and tested. Still **no JavaScript** on the auth origin. |
 | `BackgroundTask` (back-channel logout) | `DeferredTasks` port; FPM adapter runs after `fastcgi_finish_request()` | Must work without a queue; keep the port so a queue adapter can replace it. |
-| `httpx` + `MockTransport` | Guzzle, injected as a PSR-18 `ClientInterface`; `FakeHttpClient` in tests | `OutboundUrlPolicy` (SSRF guard, Step 13) must pin the resolved address it validated. |
+| `httpx` + `MockTransport` | Guzzle, injected as a PSR-18 `ClientInterface`; `FakeHttpClient` in tests | `OutboundUrlPolicy` (SSRF guard, Step 13) checks every outbound URL, and `PinCheckedAddresses` makes the request to the addresses it checked (`CURLOPT_RESOLVE`). |
 | `cryptography` | `ext-openssl`: RSASSA-PKCS1-v1_5/SHA-256, AES-256-GCM with AAD | JWS assembled by hand, as in Python. |
 | `pwdlib[bcrypt]` | `password_hash(PASSWORD_BCRYPT)` behind `PasswordHasher` | |
 | `joserfc` | `web-token/jwt-library` — **verification and JWK handling only** (`JoseSignatureVerifier`) | Never used to sign. |
@@ -1349,9 +1409,8 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
   `SocialLoginTest` (18 cases); unit tests for the domain values, both adapters against a fake
   wire, and the use cases; `ExternalIdentityRepositoryContract` and
   `ExternalSignInStoreContract` run against the fakes, PostgreSQL and Redis.
-- Left for Step 13: operator-registered OIDC providers (discovery, ID-token verification,
-  nonce), the providers as connections a client enables (the identity's provider becomes a
-  foreign key), the pools an address is looked for in, and unlinking identities.
+- Step 13 then made the providers connections a client enables, added operator-registered
+  OIDC providers and pools, and unlinking.
 
 #### [x] Step 9 — RP-Initiated Logout and the dashboard  ← first usable milestone
 - `GET|POST /oidc/logout` (OpenID Connect RP-Initiated Logout 1.0): `id_token_hint` verified
@@ -1412,12 +1471,19 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
   `ConsentScreenTest`, the consent cases of `AuthorizeTest`, `ConsentRepositoryContract`
   and `ConsentStateStoreContract` against the fakes, PostgreSQL and Redis.
 
-#### [ ] Step 13 — Connections
+#### [x] Step 13 — Connections
 - Database pools, built-in social, operator-registered OIDC connections (discovery, nonce + PKCE,
   ID-token verification, JWKS cache), per-application enablement, `OutboundUrlPolicy`.
 - `/api/v1/connections/*`, `PUT /clients/{id}/connections`, identity unlinking.
 - Python: `auth/connections.py`, `api/connections.py`, `social/providers.py`,
-  `db/models/connection.py`. Tests: `test_connections` (29), `test_oidc_connection` (16).
+  `db/models/connection.py`. Tests: `test_connections` (29) — ported as `ConnectionsTest`
+  (29 cases); `test_oidc_connection` (16) — ported as `OidcConnectionTest` (14 tests, 25 cases
+  with their data sets); `ConnectionTest`, `ConnectionAccessTest`, `OutboundUrlPolicyTest`,
+  `PinCheckedAddressesTest`, `HttpOidcDiscoveryTest`, `OidcIdentityProviderTest` (the ID-token
+  checks), the connection cases of `AuthorizeTest`, `SignInWithPasswordTest`,
+  `ExternalSignInTest`, `DescribeLoginPageTest`, `ClientsTest` and `UsersTest`;
+  `ConnectionRepositoryContract` and the per-pool cases of the user, client and identity
+  contracts against the fakes and PostgreSQL; `RedisJwksCacheTest`.
 
 #### [ ] Step 14 — Introspection and revocation
 - RFC 7662 / RFC 7009, per-endpoint client-auth methods, permission rules, family revocation.

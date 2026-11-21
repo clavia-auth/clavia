@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Domain\Identity;
 
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\Profile;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
@@ -78,7 +79,17 @@ final class UserTest extends TestCase
 
         $this->expectException(InvalidValue::class);
 
-        User::reconstitute($this->id(), 'not an address', null, false, true, Profile::empty(), $at, $at);
+        User::reconstitute(
+            $this->id(),
+            'not an address',
+            null,
+            false,
+            true,
+            Profile::empty(),
+            $at,
+            $at,
+            ConnectionName::defaultPool(),
+        );
     }
 
     public function testDeactivatingAndReactivatingRecordsWhen(): void

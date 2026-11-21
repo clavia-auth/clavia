@@ -16,22 +16,30 @@ use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Authentication\SignIn\CompleteFirstFactor;
 use Clavia\Application\Authentication\SignIn\CredentialsRejected;
 use Clavia\Application\Authentication\SignIn\PasswordSignIn;
+use Clavia\Application\Authentication\SignIn\PasswordSignInUnavailable;
 use Clavia\Application\Authentication\SignIn\SecondFactorRequired;
 use Clavia\Application\Authentication\SignIn\SignedIn;
 use Clavia\Application\Authentication\SignIn\SignInOutcome;
 use Clavia\Application\Authentication\SignIn\SignInWithPassword;
+use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\LoginState;
 use Clavia\Domain\Authentication\Mfa\MfaFactor;
 use Clavia\Domain\Authentication\Mfa\Totp;
 use Clavia\Domain\Authentication\Mfa\TotpSecret;
 use Clavia\Domain\Client\ClientId;
+use Clavia\Domain\Connection\Connection;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\SecretGenerator;
+use ClaviaTest\Support\Clients;
+use ClaviaTest\Support\Fake\FakeIdentityProviders;
 use ClaviaTest\Support\Fake\FakePasswordHasher;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryAttemptCounter;
+use ClaviaTest\Support\Fake\InMemoryClientRepository;
+use ClaviaTest\Support\Fake\InMemoryConnectionRepository;
 use ClaviaTest\Support\Fake\InMemoryLoginStateStore;
 use ClaviaTest\Support\Fake\InMemoryMfaChallengeStore;
 use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
@@ -58,6 +66,8 @@ final class SignInWithPasswordTest extends TestCase
     private InMemoryMfaFactorRepository $factors;
     private InMemoryMfaChallengeStore $challenges;
     private User $user;
+    private InMemoryClientRepository $clients;
+    private InMemoryConnectionRepository $connections;
 
     #[\Override]
     protected function setUp(): void
@@ -77,11 +87,16 @@ final class SignInWithPasswordTest extends TestCase
         );
         $this->factors = new InMemoryMfaFactorRepository(new InMemoryTransactionManager());
         $this->challenges = new InMemoryMfaChallengeStore($this->clock);
+        $this->clients = new InMemoryClientRepository();
+        $this->connections = new InMemoryConnectionRepository($this->clients);
+        $this->clients->save(Clients::public('spa'));
         $this->signIn = new SignInWithPassword(
             $this->users,
             $this->hasher,
             new LoginThrottle($this->counter, 3, 900),
             $this->loginStates,
+            $this->clients,
+            new ConnectionAccess($this->connections, new FakeIdentityProviders()),
             new CompleteFirstFactor(
                 $this->sessions,
                 $this->factors,
@@ -109,6 +124,7 @@ final class SignInWithPasswordTest extends TestCase
         self::assertNotNull($session);
         self::assertTrue($session->userId->equals($this->user->id));
         self::assertSame([AuthenticationMethod::Password], $session->methods);
+        self::assertSame('password', $session->connection->value);
         self::assertSame('/auth/login', $outcome->nextUrl);
     }
 
@@ -283,6 +299,100 @@ final class SignInWithPasswordTest extends TestCase
 
         self::assertSame(0, $this->counter->count('account:' . self::EMAIL));
         self::assertSame(0, $this->counter->count('address:' . self::ADDRESS));
+    }
+
+    // ── Connections ──────────────────────────────────────────────────────────────
+
+    public function testAnAccountInAPoolTheApplicationEnablesSignsInAndTheSessionNamesThatPool(): void
+    {
+        $staff = $this->staffPool();
+        $employee = $this->registerIn($staff, self::EMAIL, 'staff-password');
+        $this->clients->save(Clients::public('spa')->withConnections([$staff]));
+        $this->loginStates->put('handle', self::pendingRequest());
+
+        $outcome = $this->attempt(password: 'staff-password', loginState: 'handle');
+
+        self::assertInstanceOf(SignedIn::class, $outcome);
+        $session = $this->sessions->resolve($outcome->sessionId);
+        self::assertTrue($session?->userId->equals($employee->id));
+        self::assertSame('staff', $session?->connection->value);
+    }
+
+    public function testAnAccountInAPoolTheApplicationDoesNotUseIsNotEvenTried(): void
+    {
+        $this->registerIn($this->staffPool(), 'staff@example.com', 'staff-password');
+        $this->loginStates->put('handle', self::pendingRequest());
+
+        self::assertInstanceOf(
+            CredentialsRejected::class,
+            $this->attempt(email: 'staff@example.com', password: 'staff-password', loginState: 'handle'),
+        );
+    }
+
+    public function testTheSameAddressInTwoPoolsSignsInToTheOneWhosePasswordMatches(): void
+    {
+        $staff = $this->staffPool();
+        $employee = $this->registerIn($staff, self::EMAIL, 'staff-password');
+        $this->clients->save(Clients::public('spa')->withConnections([ConnectionName::defaultPool(), $staff]));
+        $this->loginStates->put('handle', self::pendingRequest());
+        $this->loginStates->put('again', self::pendingRequest());
+
+        $asEmployee = $this->attempt(password: 'staff-password', loginState: 'handle');
+        $asCustomer = $this->attempt(loginState: 'again');
+
+        self::assertInstanceOf(SignedIn::class, $asEmployee);
+        self::assertInstanceOf(SignedIn::class, $asCustomer);
+        self::assertTrue($this->sessions->resolve($asEmployee->sessionId)?->userId->equals($employee->id));
+        self::assertTrue($this->sessions->resolve($asCustomer->sessionId)?->userId->equals($this->user->id));
+    }
+
+    public function testAnApplicationWithNoPoolCannotTakeAPasswordAtAll(): void
+    {
+        $this->clients->save(Clients::public('spa')->withConnections([ConnectionName::fromString('google')]));
+        $pool = $this->connections->find(ConnectionName::defaultPool());
+        self::assertNotNull($pool);
+        $this->connections->save($pool->switched(null, false, null));
+        $this->loginStates->put('handle', self::pendingRequest());
+
+        self::assertInstanceOf(PasswordSignInUnavailable::class, $this->attempt(loginState: 'handle'));
+        self::assertSame(0, $this->counter->count('account:' . self::EMAIL), 'Nothing was attempted.');
+        self::assertNotNull($this->loginStates->get('handle'));
+    }
+
+    public function testASwitchedOffPoolTakesNoPasswordEvenWithoutAnApplication(): void
+    {
+        $pool = $this->connections->find(ConnectionName::defaultPool());
+        self::assertNotNull($pool);
+        $this->connections->save($pool->switched(false, null, null));
+
+        self::assertInstanceOf(PasswordSignInUnavailable::class, $this->attempt());
+    }
+
+    private function staffPool(): ConnectionName
+    {
+        $staff = ConnectionName::fromString('staff');
+        $this->connections->add(Connection::pool($staff, 'Staff', true, false, $this->clock->now()));
+
+        return $staff;
+    }
+
+    private function registerIn(ConnectionName $pool, string $email, string $password): User
+    {
+        $user = User::register(
+            UserId::generate(new SeededRandomSource(crc32($email . $pool->value))),
+            $email,
+            $this->hasher->hash($password),
+            $this->clock->now(),
+            $pool,
+        );
+        $this->users->save($user);
+
+        return $user;
+    }
+
+    private static function pendingRequest(): LoginState
+    {
+        return new LoginState('/oauth2/authorize?client_id=spa', ClientId::fromString('spa'));
     }
 
     private function attempt(

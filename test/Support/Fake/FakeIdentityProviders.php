@@ -13,9 +13,11 @@ namespace ClaviaTest\Support\Fake;
 
 use Clavia\Application\Port\IdentityProvider;
 use Clavia\Application\Port\IdentityProviders;
+use Clavia\Domain\Connection\Connection;
 
 /**
- * The providers a test configured, in the order given.
+ * The providers a test configured, found by the name of their connection: a connection
+ * with none configured has no working provider, as one without credentials would.
  */
 final readonly class FakeIdentityProviders implements IdentityProviders
 {
@@ -28,17 +30,15 @@ final readonly class FakeIdentityProviders implements IdentityProviders
     }
 
     #[\Override]
-    public function find(string $name): ?IdentityProvider
+    public function for(Connection $connection): ?IdentityProvider
     {
+        if (! $connection->isExternal()) {
+            return null;
+        }
+
         return array_find(
             $this->providers,
-            static fn (IdentityProvider $provider): bool => $provider->name()->value === $name,
+            static fn (IdentityProvider $provider): bool => $provider->name()->equals($connection->name),
         );
-    }
-
-    #[\Override]
-    public function all(): array
-    {
-        return $this->providers;
     }
 }

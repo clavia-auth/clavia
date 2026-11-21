@@ -12,10 +12,11 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Secondary\IdentityProvider;
 
 use Clavia\Application\Port\IdentityProvider;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\AssertedIdentity;
-use Clavia\Domain\Identity\ProviderName;
 use Clavia\Domain\OAuth2\CodeChallenge;
 use Clavia\Domain\OAuth2\CodeVerifier;
+use Clavia\Domain\Oidc\Nonce;
 use Clavia\Domain\Shared\InvalidValue;
 
 /**
@@ -66,20 +67,18 @@ final readonly class GitHubIdentityProvider implements IdentityProvider
     }
 
     #[\Override]
-    public function name(): ProviderName
+    public function name(): ConnectionName
     {
-        return ProviderName::fromString(self::NAME);
+        return ConnectionName::fromString(self::NAME);
     }
 
     #[\Override]
-    public function label(): string
-    {
-        return 'GitHub';
-    }
-
-    #[\Override]
-    public function authorizationUrl(string $redirectUri, string $state, CodeChallenge $challenge): string
-    {
+    public function authorizationUrl(
+        string $redirectUri,
+        string $state,
+        CodeChallenge $challenge,
+        Nonce $nonce,
+    ): string {
         return $this->exchange->authorizationUrl($redirectUri, $state, $challenge);
     }
 
@@ -88,6 +87,7 @@ final readonly class GitHubIdentityProvider implements IdentityProvider
         #[\SensitiveParameter] string $code,
         string $redirectUri,
         CodeVerifier $verifier,
+        Nonce $nonce,
     ): AssertedIdentity {
         $token = $this->exchange->accessToken($code, $redirectUri, $verifier);
 

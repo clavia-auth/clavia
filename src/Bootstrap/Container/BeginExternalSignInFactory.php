@@ -12,10 +12,11 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Authentication\External\BeginExternalSignIn;
+use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\Port\ExternalSignInStore;
-use Clavia\Application\Port\IdentityProviders;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Configuration\Settings;
+use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Shared\RandomSource;
 use Clavia\Domain\Shared\SecretGenerator;
 use Psr\Container\ContainerInterface;
@@ -24,8 +25,10 @@ final class BeginExternalSignInFactory
 {
     public function __invoke(ContainerInterface $container): BeginExternalSignIn
     {
-        /** @var IdentityProviders $providers */
-        $providers = $container->get(IdentityProviders::class);
+        /** @var ConnectionAccess $access */
+        $access = $container->get(ConnectionAccess::class);
+        /** @var ClientRepository $clients */
+        $clients = $container->get(ClientRepository::class);
         /** @var ExternalSignInStore $pending */
         $pending = $container->get(ExternalSignInStore::class);
         /** @var LoginStateStore $loginStates */
@@ -37,6 +40,14 @@ final class BeginExternalSignInFactory
         /** @var Settings $settings */
         $settings = $container->get(Settings::class);
 
-        return new BeginExternalSignIn($providers, $pending, $loginStates, $secrets, $random, $settings->issuer());
+        return new BeginExternalSignIn(
+            $access,
+            $clients,
+            $pending,
+            $loginStates,
+            $secrets,
+            $random,
+            $settings->issuer(),
+        );
     }
 }

@@ -38,8 +38,11 @@ use Clavia\Adapter\Primary\Http\Auth\LogoutHandler;
 use Clavia\Adapter\Primary\Http\Auth\MfaChallengeHandler;
 use Clavia\Adapter\Primary\Http\Auth\MfaSettingsHandler;
 use Clavia\Adapter\Primary\Http\Auth\ThemeHandler;
+use Clavia\Adapter\Primary\Http\Management\ClientConnectionsHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientsHandler;
+use Clavia\Adapter\Primary\Http\Management\ConnectionHandler;
+use Clavia\Adapter\Primary\Http\Management\ConnectionsHandler;
 use Clavia\Adapter\Primary\Http\Management\ManagementApiMiddleware;
 use Clavia\Adapter\Primary\Http\Management\ManagementContract;
 use Clavia\Adapter\Primary\Http\Management\ManagementResponder;
@@ -51,6 +54,7 @@ use Clavia\Adapter\Primary\Http\Management\RoleUsersHandler;
 use Clavia\Adapter\Primary\Http\Management\RotateClientSecretHandler;
 use Clavia\Adapter\Primary\Http\Management\UserConsentsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserHandler;
+use Clavia\Adapter\Primary\Http\Management\UserIdentitiesHandler;
 use Clavia\Adapter\Primary\Http\Management\UserMfaHandler;
 use Clavia\Adapter\Primary\Http\Management\UserPermissionsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserRolesHandler;
@@ -69,6 +73,9 @@ use Clavia\Adapter\Primary\Http\Shared\MethodNotAllowedMiddleware;
 use Clavia\Adapter\Primary\Http\Shared\NotFoundHandler;
 use Clavia\Adapter\Primary\Http\Shared\PageRenderer;
 use Clavia\Adapter\Secondary\Crypto\BcryptPasswordHasher;
+use Clavia\Adapter\Secondary\Http\OutboundUrlPolicy;
+use Clavia\Adapter\Secondary\IdentityProvider\IdTokenVerifier;
+use Clavia\Adapter\Secondary\IdentityProvider\JwksCache;
 use Clavia\Adapter\Secondary\IdentityProvider\ProviderHttp;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use Clavia\Adapter\Secondary\Redis\RedisConnection;
@@ -96,16 +103,23 @@ use Clavia\Application\Authentication\SignIn\CompleteFirstFactor;
 use Clavia\Application\Authentication\SignIn\SignInWithPassword;
 use Clavia\Application\Authentication\SignOut;
 use Clavia\Application\Clients\RegisterMachineClient;
+use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\Development\BuildAuthorizationUrl;
 use Clavia\Application\Development\SeedDashboardClient;
 use Clavia\Application\Development\SeedDevelopmentData;
 use Clavia\Application\Development\SeedManagementAccess;
 use Clavia\Application\Management\Caller\AuthenticateManagementCaller;
+use Clavia\Application\Management\Clients\ClientConnections;
 use Clavia\Application\Management\Clients\DeleteClient;
 use Clavia\Application\Management\Clients\ReadClients;
 use Clavia\Application\Management\Clients\RegisterClient;
 use Clavia\Application\Management\Clients\RotateClientSecret;
 use Clavia\Application\Management\Clients\UpdateClient;
+use Clavia\Application\Management\Connections\CreateConnection;
+use Clavia\Application\Management\Connections\DeleteConnection;
+use Clavia\Application\Management\Connections\OidcConfiguration;
+use Clavia\Application\Management\Connections\ReadConnections;
+use Clavia\Application\Management\Connections\UpdateConnection;
 use Clavia\Application\Management\Provisioning\AssignRole;
 use Clavia\Application\Management\Provisioning\EnsureRole;
 use Clavia\Application\Management\Provisioning\GrantClientAccess;
@@ -125,8 +139,10 @@ use Clavia\Application\Management\Roles\UpdateRole;
 use Clavia\Application\Management\Users\CreateUser;
 use Clavia\Application\Management\Users\DeleteUser;
 use Clavia\Application\Management\Users\ReadConsents;
+use Clavia\Application\Management\Users\ReadIdentities;
 use Clavia\Application\Management\Users\ReadUsers;
 use Clavia\Application\Management\Users\ResetUserMfa;
+use Clavia\Application\Management\Users\UnlinkIdentity;
 use Clavia\Application\Management\Users\UpdateUser;
 use Clavia\Application\Management\Users\WithdrawConsent;
 use Clavia\Application\OAuth2\Authorize\Authorize;
@@ -155,6 +171,7 @@ use Clavia\Application\Port\IdentityProviders;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Application\Port\MfaChallengeStore;
 use Clavia\Application\Port\NonceRegistry;
+use Clavia\Application\Port\OidcDiscovery;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Application\Port\SchemaMigrator;
 use Clavia\Application\Port\SecretCipher;
@@ -168,6 +185,7 @@ use Clavia\Configuration\Settings;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
 use Clavia\Domain\Client\ClientRepository;
+use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Consent\ConsentRepository;
 use Clavia\Domain\Identity\ExternalIdentityRepository;
 use Clavia\Domain\Identity\UserRepository;
@@ -306,6 +324,11 @@ final class ConfigProvider
                     ExternalSignInCallbackHandler::class => Container\ExternalSignInCallbackHandlerFactory::class,
                     ClientInterface::class => Container\HttpClientFactory::class,
                     IdentityProviders::class => Container\IdentityProvidersFactory::class,
+                    IdTokenVerifier::class => Container\IdTokenVerifierFactory::class,
+                    JwksCache::class => Container\JwksCacheFactory::class,
+                    OutboundUrlPolicy::class => Container\OutboundUrlPolicyFactory::class,
+                    OidcDiscovery::class => Container\OidcDiscoveryFactory::class,
+                    ConnectionAccess::class => Container\ConnectionAccessFactory::class,
                     MfaFactorRepository::class => Container\MfaFactorRepositoryFactory::class,
                     RecoveryCodeRepository::class => Container\RecoveryCodeRepositoryFactory::class,
                     MfaChallengeStore::class => Container\MfaChallengeStoreFactory::class,
@@ -329,6 +352,12 @@ final class ConfigProvider
                     DeleteUser::class => Container\DeleteUserFactory::class,
                     ReadClients::class => Container\ReadClientsFactory::class,
                     RegisterClient::class => Container\RegisterClientFactory::class,
+                    ClientConnections::class => Container\ClientConnectionsFactory::class,
+                    ReadConnections::class => Container\ReadConnectionsFactory::class,
+                    OidcConfiguration::class => Container\OidcConfigurationFactory::class,
+                    CreateConnection::class => Container\CreateConnectionFactory::class,
+                    UpdateConnection::class => Container\UpdateConnectionFactory::class,
+                    DeleteConnection::class => Container\DeleteConnectionFactory::class,
                     UpdateClient::class => Container\UpdateClientFactory::class,
                     RotateClientSecret::class => Container\RotateClientSecretFactory::class,
                     DeleteClient::class => Container\DeleteClientFactory::class,
@@ -348,6 +377,8 @@ final class ConfigProvider
                     ReadRoleHolders::class => Container\ReadRoleHoldersFactory::class,
                     ReadEffectivePermissions::class => Container\ReadEffectivePermissionsFactory::class,
                     ReadConsents::class => Container\ReadConsentsFactory::class,
+                    ReadIdentities::class => Container\ReadIdentitiesFactory::class,
+                    UnlinkIdentity::class => Container\UnlinkIdentityFactory::class,
                     WithdrawConsent::class => Container\WithdrawConsentFactory::class,
                     EnsureRole::class => Container\EnsureRoleFactory::class,
                     AssignRole::class => Container\AssignRoleFactory::class,
@@ -360,6 +391,7 @@ final class ConfigProvider
                     SecretCipher::class => Container\SecretCipherFactory::class,
                     UserRepository::class => Container\UserRepositoryFactory::class,
                     ClientRepository::class => Container\ClientRepositoryFactory::class,
+                    ConnectionRepository::class => Container\ConnectionRepositoryFactory::class,
                     AuthorizationCodeRepository::class => Container\AuthorizationCodeRepositoryFactory::class,
                     AccessTokenRepository::class => Container\AccessTokenRepositoryFactory::class,
                     RefreshTokenRepository::class => Container\RefreshTokenRepositoryFactory::class,
@@ -411,6 +443,10 @@ final class ConfigProvider
                     UserRolesHandler::class => Container\UserRolesHandlerFactory::class,
                     UserPermissionsHandler::class => Container\UserPermissionsHandlerFactory::class,
                     UserConsentsHandler::class => Container\UserConsentsHandlerFactory::class,
+                    UserIdentitiesHandler::class => Container\UserIdentitiesHandlerFactory::class,
+                    ConnectionsHandler::class => Container\ConnectionsHandlerFactory::class,
+                    ConnectionHandler::class => Container\ConnectionHandlerFactory::class,
+                    ClientConnectionsHandler::class => Container\ClientConnectionsHandlerFactory::class,
 
                     // Primary adapter: CLI
                     ConsoleApplication::class => Container\ConsoleApplicationFactory::class,

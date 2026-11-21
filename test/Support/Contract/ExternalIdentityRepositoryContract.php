@@ -11,10 +11,10 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Support\Contract;
 
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\AssertedIdentity;
 use Clavia\Domain\Identity\ExternalIdentity;
 use Clavia\Domain\Identity\ExternalIdentityRepository;
-use Clavia\Domain\Identity\ProviderName;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
@@ -42,7 +42,7 @@ trait ExternalIdentityRepositoryContract
             new DateTimeImmutable('2026-01-15T10:00:00.123456Z'),
         ));
 
-        $identity = $this->identities()->find(ProviderName::fromString('google'), 'g-123');
+        $identity = $this->identities()->find(ConnectionName::fromString('google'), 'g-123');
 
         self::assertNotNull($identity);
         self::assertSame('google', $identity->provider->value);
@@ -61,10 +61,10 @@ trait ExternalIdentityRepositoryContract
             new DateTimeImmutable(),
         ));
 
-        self::assertNull($this->identities()->find(ProviderName::fromString('github'), 'g-123'));
-        self::assertNull($this->identities()->find(ProviderName::fromString('google'), 'G-123'));
-        self::assertNull($this->identities()->find(ProviderName::fromString('google'), 'g-12'));
-        self::assertNull($this->identities()->find(ProviderName::fromString('google'), 'g-123')?->email);
+        self::assertNull($this->identities()->find(ConnectionName::fromString('github'), 'g-123'));
+        self::assertNull($this->identities()->find(ConnectionName::fromString('google'), 'G-123'));
+        self::assertNull($this->identities()->find(ConnectionName::fromString('google'), 'g-12'));
+        self::assertNull($this->identities()->find(ConnectionName::fromString('google'), 'g-123')?->email);
     }
 
     #[Test]
@@ -97,14 +97,44 @@ trait ExternalIdentityRepositoryContract
 
         foreach ([['google', 'g-1'], ['google', 'g-2'], ['github', '42']] as [$provider, $subject]) {
             self::assertTrue(
-                $this->identities()->find(ProviderName::fromString($provider), $subject)?->userId->equals($userId),
+                $this->identities()->find(ConnectionName::fromString($provider), $subject)?->userId->equals($userId),
             );
         }
     }
 
+    #[Test]
+    public function theIdentitiesOfAnAccountAreListedUnlinkedAndCountedByConnection(): void
+    {
+        $ada = $this->accountFor('ada@example.com');
+        $bob = $this->accountFor('bob@example.com');
+        $now = new DateTimeImmutable('2026-01-15T10:00:00Z');
+        $links = [['google', 'g-2', $ada], ['github', '42', $ada], ['google', 'g-1', $ada], ['google', 'g-3', $bob]];
+        foreach ($links as [$provider, $subject, $owner]) {
+            $this->identities()->add(ExternalIdentity::link($this->asserted($provider, $subject, null), $owner, $now));
+        }
+
+        self::assertSame(
+            ['github:42', 'google:g-1', 'google:g-2'],
+            array_map(
+                static fn (ExternalIdentity $identity): string => $identity->provider->value . ':' . $identity->subject,
+                $this->identities()->ofUser($ada),
+            ),
+        );
+        self::assertSame(3, $this->identities()->countThrough(ConnectionName::fromString('google')));
+
+        self::assertSame(2, $this->identities()->unlink($ada, ConnectionName::fromString('google')));
+        self::assertSame(0, $this->identities()->unlink($ada, ConnectionName::fromString('google')));
+
+        self::assertCount(1, $this->identities()->ofUser($ada));
+        self::assertNull($this->identities()->find(ConnectionName::fromString('google'), 'g-1'));
+        self::assertNotNull($this->identities()->find(ConnectionName::fromString('google'), 'g-3'));
+        self::assertSame(1, $this->identities()->countThrough(ConnectionName::fromString('google')));
+        self::assertSame([], $this->identities()->ofUser(UserId::generate(new SeededRandomSource(5))));
+    }
+
     private function asserted(string $provider, string $subject, ?string $email): AssertedIdentity
     {
-        return AssertedIdentity::of(ProviderName::fromString($provider), $subject, $email, true);
+        return AssertedIdentity::of(ConnectionName::fromString($provider), $subject, $email, true);
     }
 
     private function accountFor(string $email): UserId

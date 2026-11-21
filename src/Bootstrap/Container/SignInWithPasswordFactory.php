@@ -14,8 +14,10 @@ namespace Clavia\Bootstrap\Container;
 use Clavia\Application\Authentication\LoginThrottle;
 use Clavia\Application\Authentication\SignIn\CompleteFirstFactor;
 use Clavia\Application\Authentication\SignIn\SignInWithPassword;
+use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Application\Port\PasswordHasher;
+use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Identity\UserRepository;
 use Psr\Container\ContainerInterface;
 
@@ -31,9 +33,21 @@ final class SignInWithPasswordFactory
         $throttle = $container->get(LoginThrottle::class);
         /** @var LoginStateStore $loginStates */
         $loginStates = $container->get(LoginStateStore::class);
+        /** @var ClientRepository $clients */
+        $clients = $container->get(ClientRepository::class);
+        /** @var ConnectionAccess $access */
+        $access = $container->get(ConnectionAccess::class);
         /** @var CompleteFirstFactor $completeFirstFactor */
         $completeFirstFactor = $container->get(CompleteFirstFactor::class);
 
-        return new SignInWithPassword($users, $hasher, $throttle, $loginStates, $completeFirstFactor);
+        return new SignInWithPassword(
+            $users,
+            $hasher,
+            $throttle,
+            $loginStates,
+            $clients,
+            $access,
+            $completeFirstFactor,
+        );
     }
 }

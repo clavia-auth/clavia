@@ -17,6 +17,7 @@ use Clavia\Adapter\Primary\Http\Shared\BearerCredentials;
 use Clavia\Application\Management\Caller\AuthenticateManagementCaller;
 use Clavia\Application\Management\Conflict;
 use Clavia\Application\Management\NotFound;
+use Clavia\Domain\Connection\BuiltInConnection;
 use Clavia\Domain\OAuth2\BearerTokenError;
 use Clavia\Domain\ResourceServer\SystemApiProtected;
 use Clavia\Domain\Shared\AlreadyExists;
@@ -92,7 +93,7 @@ final readonly class ManagementApiMiddleware implements MiddlewareInterface
             return $handler->handle(new ManagementRequest($caller, $validated, $body)->attachTo($request));
         } catch (NotFound $refusal) {
             return $this->responder->problem(new Problem(404, $refusal->getMessage()));
-        } catch (Conflict | AlreadyExists | SystemApiProtected $refusal) {
+        } catch (Conflict | AlreadyExists | SystemApiProtected | BuiltInConnection $refusal) {
             return $this->responder->problem(new Problem(409, $refusal->getMessage()));
         } catch (InvalidValue $refusal) {
             return $this->responder->problem(new Problem(422, $refusal->getMessage()));

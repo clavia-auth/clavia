@@ -54,6 +54,7 @@ final readonly class UsersHandler implements RequestHandlerInterface
             $body->bool('email_verified') ?? false,
             $body->bool('is_active') ?? true,
             UserFields::profile($body),
+            $body->string('connection'),
         ));
 
         return $this->responder->created(ManagementViews::user($user), '/api/v1/users/' . $user->user->id->value);

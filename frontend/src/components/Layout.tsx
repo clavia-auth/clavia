@@ -9,6 +9,7 @@ const NAV = [
   { to: "/clients", label: "Applications" },
   { to: "/apis", label: "APIs" },
   { to: "/roles", label: "Roles" },
+  { to: "/connections", label: "Connections" },
 ] as const;
 
 export function Layout() {

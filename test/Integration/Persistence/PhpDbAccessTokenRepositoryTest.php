@@ -103,7 +103,7 @@ final class PhpDbAccessTokenRepositoryTest extends IntegrationTestCase
         $userId = UserId::generate(new SeededRandomSource(7));
         $at = new DateTimeImmutable('2026-01-15T10:00:00Z');
 
-        $clients = new PhpDbClientRepository($database);
+        $clients = new PhpDbClientRepository($database, new PhpDbTransactionManager($database));
         if ($clients->find($clientId) === null) {
             $clients->save(Client::register(
                 $clientId,

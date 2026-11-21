@@ -15,6 +15,7 @@ use Clavia\Application\Oidc\Keys\GenerateSigningKey;
 use Clavia\Application\Oidc\Keys\PublishSigningKeys;
 use Clavia\Application\Oidc\Keys\RotateSigningKey;
 use Clavia\Application\Port\SecretCipher;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\Profile;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\Shared\Base64Url;
@@ -602,7 +603,7 @@ final class OidcTest extends AcceptanceTestCase
     private function setProfile(Profile $profile): void
     {
         $users = $this->container()->get(UserRepository::class);
-        $user = $users->findByEmail(self::TEST_USER_EMAIL);
+        $user = $users->findByEmail(ConnectionName::defaultPool(), self::TEST_USER_EMAIL);
         self::assertNotNull($user);
 
         $user->changeProfile($profile, new DateTimeImmutable());

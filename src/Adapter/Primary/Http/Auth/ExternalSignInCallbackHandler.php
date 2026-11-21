@@ -63,7 +63,7 @@ final readonly class ExternalSignInCallbackHandler implements RequestHandlerInte
                 ->page($request, LoginPages::form(
                     null,
                     [],
-                    $this->describe->providers(),
+                    $this->describe->methods(null),
                     null,
                     ExternalSignInMessages::for($outcome),
                     400,

@@ -131,6 +131,23 @@ knows what changes.
 | Refusing at the consent screen | `303` to the application | `302`, with `iss` (RFC 9207) like every authorization response | One way an authorization response travels. |
 | Withdrawing a consent | `DELETE …/consents/{client_id}`, `update:users` | The same | — |
 
+## Connections
+
+| Area | Python | PHP | Why |
+|---|---|---|---|
+| A user's linked identities | Embedded in `GET /api/v1/users/{id}` as `identities`, each with `provider` | Their own list, `GET /api/v1/users/{id}/identities`, each with `connection`; the user carries `connection` only | Like an account's roles and consents: the user resource keeps a fixed shape, and the word is the one the rest of the API uses. |
+| Unlinking | `DELETE …/identities/{provider}` | `DELETE …/identities/{connection}`, detaching every identity the account holds through it; `409` when that would leave no way in, `404` when none is linked | The same rule, said of the connection. |
+| Connection names | `^[a-z0-9][a-z0-9-]{1,62}$` | `^[a-z][a-z0-9-]{0,31}$` | The name is permanent and part of the callback URL registered at a provider; it starts with a letter, like every other slug here, and stays short enough to read in a log line. |
+| The passwordless connection (`email`) | Built in | Not yet: it arrives with passwordless sign-in (Step 16) | A connection the code cannot serve is not listed. |
+| The default pool (`password`) | Deletable once empty | Built in like the social connections: switched off, never deleted (`409`) | It is where accounts land when nothing else is said, and what existing accounts were moved into. |
+| OIDC scope | `oidc_scopes` | `oidc_scope`, one space-separated string that must include `openid` | The OAuth 2.0 spelling and shape (RFC 6749 §3.3), as everywhere else in the API. |
+| ID tokens from an OIDC connection | Verified by `joserfc` | RS256, PS256 or ES256 only; `iss`, `aud` (and `azp` with several audiences), `exp` with 60 s of leeway, `nonce`. The provider's JWKS is cached for an hour in Redis by `jwks_uri`; a token signed with a key the cache does not hold costs one fresh fetch | Only asymmetric algorithms, so `none` and HS256-with-the-public-key find nothing to verify with; a rotation at the provider is one fetch, not an outage. |
+| Outbound requests | Checked before the request | Checked, then made to the addresses the check saw (`CURLOPT_RESOLVE`): every outbound request, the social providers' included | A name resolved again by the client can answer differently (DNS rebinding); the check must hold at the moment of the fetch. `ext-curl` is required. |
+| Domain connections | Open to every third-party application | The same — and a first-party application goes by its own list alone | Opening a connection to strangers must not force it on the operator's own applications. |
+| `GET /api/v1/connections` | A JSON array | The same (`ManagementResponder::jsonList()`) | A deployment has a handful of ways to sign in: a collection small by nature is an array, as an account's roles are. |
+| Existing applications when connections came in | Every first-party application enables every connection | The same (migration `0019`); a third-party one lists none | Nothing that worked stops working. |
+| Development seeds | — | The development client and the dashboard enable the default pool only | The dashboard is for operators, who sign in with a password; a provider that is not configured is not offered anyway. |
+
 ## Roles
 
 | Area | Python | PHP | Why |

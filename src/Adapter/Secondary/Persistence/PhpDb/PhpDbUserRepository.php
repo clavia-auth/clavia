@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Secondary\Persistence\PhpDb;
 
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\Profile;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
@@ -21,12 +22,12 @@ use Clavia\Domain\Shared\PageRequest;
 use Throwable;
 
 /**
- * Users in the `users` table.
+ * Users in the `users` table, each in its `connection`; an address is unique within one.
  */
 final readonly class PhpDbUserRepository implements UserRepository
 {
-    private const string COLUMNS = 'id, email, password_hash, email_verified, is_active, name, given_name, '
-        . 'family_name, nickname, picture, locale, created_at, updated_at';
+    private const string COLUMNS = 'id, connection, email, password_hash, email_verified, is_active, name, '
+        . 'given_name, family_name, nickname, picture, locale, created_at, updated_at';
 
     public function __construct(private Database $database)
     {
@@ -44,25 +45,48 @@ final readonly class PhpDbUserRepository implements UserRepository
     }
 
     #[\Override]
-    public function findByEmail(string $email): ?User
+    public function findByEmail(ConnectionName $connection, string $email): ?User
     {
         $row = $this->database->fetchOne(
-            'SELECT ' . self::COLUMNS . ' FROM users WHERE email = :email',
-            ['email' => $email],
+            'SELECT ' . self::COLUMNS . ' FROM users WHERE connection = :connection AND email = :email',
+            ['connection' => $connection->value, 'email' => $email],
         );
 
         return $row === null ? null : $this->hydrate($row);
     }
 
     #[\Override]
-    public function matchingEmail(string $email): array
+    public function matchingEmail(string $email, array $connections): array
     {
+        if ($connections === []) {
+            return [];
+        }
+        $parameters = ['email' => $email];
+        $placeholders = [];
+        foreach ($connections as $index => $connection) {
+            $placeholders[] = ':connection_' . $index;
+            $parameters['connection_' . $index] = $connection->value;
+        }
+
         $rows = $this->database->fetchAll(
-            'SELECT ' . self::COLUMNS . ' FROM users WHERE lower(email) = lower(:email) ORDER BY created_at, id',
-            ['email' => $email],
+            'SELECT ' . self::COLUMNS . ' FROM users WHERE lower(email) = lower(:email)'
+            . ' AND connection IN (' . implode(', ', $placeholders) . ') ORDER BY created_at, id',
+            $parameters,
         );
 
         return array_map($this->hydrate(...), $rows);
+    }
+
+    #[\Override]
+    public function countIn(ConnectionName $connection): int
+    {
+        /** @var int|string $count */
+        $count = $this->database->fetchValue(
+            'SELECT count(*) FROM users WHERE connection = :connection',
+            ['connection' => $connection->value],
+        );
+
+        return (int) $count;
     }
 
     #[\Override]
@@ -71,8 +95,12 @@ final readonly class PhpDbUserRepository implements UserRepository
         try {
             $this->write($user);
         } catch (Throwable $failure) {
-            throw Constraint::isUniqueViolation($failure, 'uq_users_email')
-                ? new AlreadyExists(sprintf('Another account uses the address %s.', $user->email), 0, $failure)
+            throw Constraint::isUniqueViolation($failure, 'uq_users_connection_email')
+                ? new AlreadyExists(
+                    sprintf("Another account in '%s' uses the address %s.", $user->connection->value, $user->email),
+                    0,
+                    $failure,
+                )
                 : $failure;
         }
     }
@@ -103,13 +131,14 @@ final readonly class PhpDbUserRepository implements UserRepository
         $this->database->execute(
             <<<'SQL'
                 INSERT INTO users (
-                    id, email, password_hash, email_verified, is_active, name, given_name, family_name,
-                    nickname, picture, locale, created_at, updated_at
+                    id, connection, email, password_hash, email_verified, is_active, name, given_name,
+                    family_name, nickname, picture, locale, created_at, updated_at
                 ) VALUES (
-                    :id, :email, :password_hash, :email_verified, :is_active, :name, :given_name, :family_name,
-                    :nickname, :picture, :locale, :created_at, :updated_at
+                    :id, :connection, :email, :password_hash, :email_verified, :is_active, :name, :given_name,
+                    :family_name, :nickname, :picture, :locale, :created_at, :updated_at
                 )
                 ON CONFLICT (id) DO UPDATE SET
+                    email = EXCLUDED.email,
                     password_hash = EXCLUDED.password_hash,
                     email_verified = EXCLUDED.email_verified,
                     is_active = EXCLUDED.is_active,
@@ -123,6 +152,7 @@ final readonly class PhpDbUserRepository implements UserRepository
                 SQL,
             [
                 'id' => $user->id->value,
+                'connection' => $user->connection->value,
                 'email' => $user->email,
                 'password_hash' => $user->passwordHash(),
                 'email_verified' => $user->isEmailVerified(),
@@ -145,7 +175,8 @@ final readonly class PhpDbUserRepository implements UserRepository
     private function hydrate(array $row): User
     {
         /**
-         * @var array{id: string, email: string, password_hash: string|null, email_verified: bool,
+         * @var array{id: string, connection: string, email: string, password_hash: string|null,
+         *            email_verified: bool,
          *            is_active: bool, name: string|null, given_name: string|null, family_name: string|null,
          *            nickname: string|null, picture: string|null, locale: string|null, created_at: string,
          *            updated_at: string} $row
@@ -166,6 +197,7 @@ final readonly class PhpDbUserRepository implements UserRepository
             ),
             Timestamp::fromDatabase($row['created_at']),
             Timestamp::fromDatabase($row['updated_at']),
+            ConnectionName::fromString($row['connection']),
         );
     }
 }

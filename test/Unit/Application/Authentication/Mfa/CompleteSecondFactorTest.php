@@ -27,6 +27,7 @@ use Clavia\Domain\Authentication\Mfa\RecoveryCode;
 use Clavia\Domain\Authentication\Mfa\Totp;
 use Clavia\Domain\Authentication\Mfa\TotpSecret;
 use Clavia\Domain\Authentication\MfaChallenge;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\SecretGenerator;
@@ -124,6 +125,7 @@ final class CompleteSecondFactorTest extends TestCase
             '/oauth2/authorize?client_id=spa',
             null,
             [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
         ), 300);
     }
 
@@ -165,7 +167,12 @@ final class CompleteSecondFactorTest extends TestCase
 
     public function testTheSessionReplacesTheOneTheBrowserHeld(): void
     {
-        $previous = $this->sessions->establish($this->user->id, [AuthenticationMethod::Password], null);
+        $previous = $this->sessions->establish(
+            $this->user->id,
+            [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
+            null,
+        );
 
         $outcome = $this->attempt($this->currentCode(), $previous);
 
@@ -287,6 +294,7 @@ final class CompleteSecondFactorTest extends TestCase
             '/',
             null,
             [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
         ), 300);
     }
 }

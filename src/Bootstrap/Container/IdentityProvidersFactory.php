@@ -11,17 +11,21 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
-use Clavia\Adapter\Secondary\IdentityProvider\ConfiguredIdentityProviders;
+use Clavia\Adapter\Secondary\Http\OutboundUrlPolicy;
+use Clavia\Adapter\Secondary\IdentityProvider\ConnectionIdentityProviders;
 use Clavia\Adapter\Secondary\IdentityProvider\GitHubIdentityProvider;
 use Clavia\Adapter\Secondary\IdentityProvider\GoogleIdentityProvider;
+use Clavia\Adapter\Secondary\IdentityProvider\IdTokenVerifier;
 use Clavia\Adapter\Secondary\IdentityProvider\ProviderHttp;
 use Clavia\Application\Port\IdentityProviders;
+use Clavia\Application\Port\SecretCipher;
 use Clavia\Configuration\Settings;
 use Psr\Container\ContainerInterface;
+use Psr\Log\LoggerInterface;
 
 /**
- * The external providers this deployment offers: each one whose client id and secret
- * are both set, in a fixed order — Google, then GitHub.
+ * The providers behind the external connections: the social ones whose client id and
+ * secret are both set, and whatever OpenID Connect providers operators registered.
  */
 final class IdentityProvidersFactory
 {
@@ -50,7 +54,16 @@ final class IdentityProvidersFactory
             );
         }
 
-        return new ConfiguredIdentityProviders($providers);
+        /** @var SecretCipher $cipher */
+        $cipher = $container->get(SecretCipher::class);
+        /** @var IdTokenVerifier $idTokens */
+        $idTokens = $container->get(IdTokenVerifier::class);
+        /** @var OutboundUrlPolicy $outbound */
+        $outbound = $container->get(OutboundUrlPolicy::class);
+        /** @var LoggerInterface $logger */
+        $logger = $container->get(LoggerInterface::class);
+
+        return new ConnectionIdentityProviders($providers, $cipher, $http(), $idTokens, $outbound, $logger);
     }
 
     /**

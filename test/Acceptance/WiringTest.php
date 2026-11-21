@@ -12,7 +12,6 @@ declare(strict_types=1);
 namespace ClaviaTest\Acceptance;
 
 use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
-use Clavia\Application\Port\IdentityProvider;
 use Clavia\Application\Port\IdentityProviders;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Application\Port\SchemaMigrator;
@@ -22,10 +21,14 @@ use Clavia\Application\Port\TransactionManager;
 use Clavia\Bootstrap\ConfigProvider;
 use Clavia\Bootstrap\Container\HttpClientFactory;
 use Clavia\Configuration\InvalidSettings;
+use Clavia\Domain\Connection\Connection;
+use Clavia\Domain\Connection\ConnectionName;
+use Clavia\Domain\Connection\ConnectionStrategy;
 use Clavia\Domain\Oidc\SigningAlgorithm;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\RandomSource;
 use ClaviaTest\Support\AcceptanceTestCase;
+use DateTimeImmutable;
 use GuzzleHttp\Client;
 use GuzzleHttp\RequestOptions;
 use Laminas\ServiceManager\Exception\ServiceNotCreatedException;
@@ -147,12 +150,11 @@ final class WiringTest extends AcceptanceTestCase
             'CLAVIA_GITHUB_CLIENT_ID' => 'id',
         ]);
 
+        /** @var IdentityProviders $providers */
         $providers = $this->container()->get(IdentityProviders::class);
 
-        self::assertSame(['google'], array_map(
-            static fn (IdentityProvider $provider): string => $provider->name()->value,
-            $providers->all(),
-        ));
+        self::assertSame('google', $providers->for(self::social('google'))?->name()->value);
+        self::assertNull($providers->for(self::social('github')));
     }
 
     public function testHealthzNeedsNeitherPostgresNorRedis(): void
@@ -163,5 +165,18 @@ final class WiringTest extends AcceptanceTestCase
         ]);
 
         self::assertSame(200, $this->get('/healthz')->getStatusCode());
+    }
+
+    private static function social(string $name): Connection
+    {
+        return Connection::reconstitute(
+            ConnectionName::fromString($name),
+            ucfirst($name),
+            ConnectionStrategy::Social,
+            true,
+            false,
+            null,
+            new DateTimeImmutable('2026-01-01T00:00:00Z'),
+        );
     }
 }

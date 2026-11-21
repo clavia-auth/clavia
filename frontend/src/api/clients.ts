@@ -19,10 +19,15 @@ export interface ClientCreate {
   post_logout_redirect_uris?: string[];
   /** False registers a third-party application (id `tpc_…`). Omitted means first-party. */
   is_first_party?: boolean;
+  /** Connection names; omitted, a first-party application gets every one. Refused for a third party. */
+  connections?: string[];
 }
 
-/** The type and the ownership are identity, not configuration: both are fixed at registration. */
-export type ClientUpdate = Partial<Omit<ClientCreate, "client_type" | "is_first_party">>;
+/**
+ * The type and the ownership are identity, not configuration: both are fixed at
+ * registration. The connections are replaced on their own, with {@link useSetClientConnections}.
+ */
+export type ClientUpdate = Partial<Omit<ClientCreate, "client_type" | "is_first_party" | "connections">>;
 
 const keys = {
   all: ["clients"] as const,
@@ -73,5 +78,15 @@ export function useDeleteClient() {
   return useMutation({
     mutationFn: (id: string) => api<void>(`/clients/${id}`, { method: "DELETE" }),
     onSuccess: () => client.invalidateQueries({ queryKey: keys.all }),
+  });
+}
+
+/** Replace, as a whole, the connections an application's users may sign in through. */
+export function useSetClientConnections(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (connections: string[]) =>
+      api<string[]>(`/clients/${id}/connections`, { method: "PUT", body: JSON.stringify({ connections }) }),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.one(id) }),
   });
 }

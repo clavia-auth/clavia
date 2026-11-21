@@ -37,4 +37,10 @@ enum ExternalSignInFailure
 
     /** The account the identity signs in as is deactivated. */
     case AccountDisabled;
+
+    /**
+     * The application the sign-in is for does not let its users in through this
+     * connection — it stopped while the person was at the provider, or never did.
+     */
+    case NotAvailable;
 }

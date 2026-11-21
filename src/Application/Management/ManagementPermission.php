@@ -20,8 +20,7 @@ namespace Clavia\Application\Management;
  * requires — the OpenAPI document names them, and a test keeps the two identical. That
  * is what stops an operation from demanding a permission nobody can be granted.
  *
- * `read` covers listing and fetching one: they disclose the same facts. Resources that
- * do not exist yet (connections) have no permission yet either.
+ * `read` covers listing and fetching one: they disclose the same facts.
  *
  * `update:roles` is the one to guard most carefully: it can attach any permission on any
  * API to a role and give that role to anyone, the caller included. Giving somebody a role
@@ -46,6 +45,10 @@ enum ManagementPermission: string
     case CreateRoles = 'create:roles';
     case UpdateRoles = 'update:roles';
     case DeleteRoles = 'delete:roles';
+    case ReadConnections = 'read:connections';
+    case CreateConnections = 'create:connections';
+    case UpdateConnections = 'update:connections';
+    case DeleteConnections = 'delete:connections';
 
     /** A sentence for the permission, shown wherever one is assigned. */
     public function description(): string
@@ -61,6 +64,7 @@ enum ManagementPermission: string
             'users' => 'end users',
             'clients' => 'client applications',
             'roles' => 'roles and who holds them',
+            'connections' => 'the ways users sign in',
             default => 'APIs',
         };
     }

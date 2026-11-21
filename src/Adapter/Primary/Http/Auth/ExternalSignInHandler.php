@@ -14,6 +14,8 @@ namespace Clavia\Adapter\Primary\Http\Auth;
 use Clavia\Adapter\Primary\Http\Shared\ErrorResponder;
 use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\Authentication\External\BeginExternalSignIn;
+use Clavia\Application\Authentication\External\ExternalSignInUnavailable;
+use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
@@ -25,12 +27,15 @@ use Psr\Http\Server\RequestHandlerInterface;
  * nothing but a short-lived pending entry: there is no form to protect. `state` in the
  * query is the login page's handle, carried so the sign-in comes back to the same
  * authorization request. An unknown provider and an unconfigured one are the same 404:
- * a deployment without GitHub does not advertise a half-built integration.
+ * a deployment without GitHub does not advertise a half-built integration. A connection
+ * the application does not enable is refused on the login page (400): refused, not
+ * merely hidden.
  */
 final readonly class ExternalSignInHandler implements RequestHandlerInterface
 {
     public function __construct(
         private BeginExternalSignIn $begin,
+        private DescribeLoginPage $describe,
         private AuthPageResponder $responder,
         private ErrorResponder $errors,
         private AuthCookies $cookies,
@@ -40,12 +45,20 @@ final readonly class ExternalSignInHandler implements RequestHandlerInterface
     #[\Override]
     public function handle(ServerRequestInterface $request): ResponseInterface
     {
-        $started = ($this->begin)(
-            self::provider($request),
-            RequestParameterReader::query($request)->get('state'),
-        );
+        $loginState = RequestParameterReader::query($request)->get('state');
+        $started = ($this->begin)(self::provider($request), $loginState);
         if ($started === null) {
             return $this->errors->notFound($request);
+        }
+        if ($started instanceof ExternalSignInUnavailable) {
+            return $this->responder->page($request, LoginPages::form(
+                $loginState,
+                $this->describe->formOrigins($loginState),
+                $this->describe->methods($loginState),
+                null,
+                ExternalSignInMessages::notAvailable($started->providerLabel),
+                400,
+            ));
         }
 
         return $this->responder->redirect(

@@ -27,6 +27,8 @@ final readonly class NewClient
      *                                    application: its id starts with `tpc_`, every scope it asks for
      *                                    goes to the consent screen, and it never reaches a system API.
      *                                    Fixed for good.
+     * @param list<string>|null $connections The connections its users may sign in through; null for every
+     *                                       one there is, or none for a third-party application.
      */
     public function __construct(
         public string $name = '',
@@ -37,6 +39,7 @@ final readonly class NewClient
         public array $responseTypes = [],
         public array $postLogoutRedirectUris = [],
         public bool $firstParty = true,
+        public ?array $connections = null,
     ) {
     }
 }

@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
 import { z } from "zod";
 
+import { useConnections } from "../api/connections";
 import { useCreateUser, useUsers } from "../api/users";
 import {
   Dialog,
@@ -17,6 +18,7 @@ import {
 } from "../components/ui";
 
 const createSchema = z.object({
+  connection: z.string().min(1, "Pick the pool the account belongs to."),
   email: z.email("Enter a valid email address."),
   password: z.string().min(8, "At least 8 characters."),
   name: z.string().max(255),
@@ -59,6 +61,7 @@ export function UsersPage() {
             <thead className="text-left text-xs uppercase tracking-wide text-muted">
               <tr>
                 <th className="px-4 py-2 font-medium">Email</th>
+                <th className="px-4 py-2 font-medium">Connection</th>
                 <th className="px-4 py-2 font-medium">Status</th>
                 <th className="px-4 py-2 font-medium">Sign-in</th>
                 <th className="px-4 py-2 font-medium">Created</th>
@@ -73,6 +76,7 @@ export function UsersPage() {
                     </Link>
                     {user.name && <div className="text-xs text-muted">{user.name}</div>}
                   </td>
+                  <td className="px-4 py-3 font-mono text-xs text-muted">{user.connection}</td>
                   <td className="px-4 py-3">
                     {user.is_active ? <span className="badge-ok">Active</span> : <span className="badge-muted">Disabled</span>}
                   </td>
@@ -98,9 +102,12 @@ export function UsersPage() {
 function CreateUserDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate();
   const create = useCreateUser();
+  const connections = useConnections();
+  // Accounts are created in a pool; an external connection's are made by signing in through it.
+  const pools = connections.data?.filter((connection) => connection.strategy === "database") ?? [];
   const form = useForm<CreateForm>({
     resolver: zodResolver(createSchema),
-    defaultValues: { email: "", password: "", name: "" },
+    defaultValues: { connection: "password", email: "", password: "", name: "" },
   });
 
   const submit = form.handleSubmit(async ({ name, ...values }) => {
@@ -114,6 +121,21 @@ function CreateUserDialog({ open, onClose }: { open: boolean; onClose: () => voi
   return (
     <Dialog open={open} onClose={onClose} title="New user">
       <form onSubmit={submit} className="space-y-4">
+        {pools.length > 1 && (
+          <Field
+            label="Connection"
+            hint="The pool the account lives in. The same address may have an account in each."
+            error={form.formState.errors.connection?.message}
+          >
+            <select className="input" {...form.register("connection")}>
+              {pools.map((pool) => (
+                <option key={pool.name} value={pool.name}>
+                  {pool.display_name} ({pool.name})
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
         <Field label="Email" error={form.formState.errors.email?.message}>
           <input className="input" type="email" autoComplete="off" {...form.register("email")} />
         </Field>

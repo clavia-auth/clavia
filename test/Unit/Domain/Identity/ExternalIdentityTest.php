@@ -11,9 +11,9 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Domain\Identity;
 
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\AssertedIdentity;
 use Clavia\Domain\Identity\ExternalIdentity;
-use Clavia\Domain\Identity\ProviderName;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\InvalidValue;
@@ -31,7 +31,7 @@ final class ExternalIdentityTest extends TestCase
             $this->expectException(InvalidValue::class);
         }
 
-        self::assertSame($name, ProviderName::fromString($name)->value);
+        self::assertSame($name, ConnectionName::fromString($name)->value);
     }
 
     /** @return iterable<string, array{string, bool}> */
@@ -50,7 +50,7 @@ final class ExternalIdentityTest extends TestCase
 
     public function testAnAddressCountsOnlyWhenTheProviderVouchesForIt(): void
     {
-        $google = ProviderName::fromString('google');
+        $google = ConnectionName::fromString('google');
 
         $trimmed = AssertedIdentity::of($google, 's', ' ada@example.com ', true);
         self::assertSame('ada@example.com', $trimmed->verifiedEmail());
@@ -66,7 +66,7 @@ final class ExternalIdentityTest extends TestCase
     {
         $this->expectException(InvalidValue::class);
 
-        AssertedIdentity::of(ProviderName::fromString('google'), $subject, null, false);
+        AssertedIdentity::of(ConnectionName::fromString('google'), $subject, null, false);
     }
 
     /** @return iterable<string, array{string}> */
@@ -84,7 +84,7 @@ final class ExternalIdentityTest extends TestCase
         $now = new DateTimeImmutable('2026-01-15T10:00:00Z');
 
         $identity = ExternalIdentity::link(
-            AssertedIdentity::of(ProviderName::fromString('github'), '4242', 'me@example.com', true),
+            AssertedIdentity::of(ConnectionName::fromString('github'), '4242', 'me@example.com', true),
             $userId,
             $now,
         );
@@ -101,6 +101,7 @@ final class ExternalIdentityTest extends TestCase
         $user = User::registerFromProvider(
             UserId::generate(new SeededRandomSource()),
             'ada@example.com',
+            ConnectionName::fromString('google'),
             new DateTimeImmutable(),
         );
 
@@ -112,6 +113,7 @@ final class ExternalIdentityTest extends TestCase
         User::registerFromProvider(
             UserId::generate(new SeededRandomSource()),
             'not an address',
+            ConnectionName::fromString('google'),
             new DateTimeImmutable(),
         );
     }

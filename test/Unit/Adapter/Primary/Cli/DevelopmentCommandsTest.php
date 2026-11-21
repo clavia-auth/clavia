@@ -22,6 +22,7 @@ use Clavia\Application\Management\Provisioning\AssignRole;
 use Clavia\Application\Management\Provisioning\EnsureRole;
 use Clavia\Application\Management\Provisioning\GrantClientAccess;
 use Clavia\Application\Management\Provisioning\RegisterManagementApi;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\OAuth2\CodeChallenge;
 use Clavia\Domain\OAuth2\CodeVerifier;
 use Clavia\Domain\Oidc\SigningAlgorithm;
@@ -75,7 +76,7 @@ final class DevelopmentCommandsTest extends TestCase
         self::assertNotNull($machine);
         self::assertNotNull($dashboard);
         self::assertTrue($client->hasRedirectUri('http://localhost:3000/callback'));
-        self::assertNotNull($this->users->findByEmail('dev@clavia.test'));
+        self::assertNotNull($this->users->findByEmail(ConnectionName::defaultPool(), 'dev@clavia.test'));
         self::assertSame(
             "Created user dev@clavia.test\n"
             . "Created public client {$client->id->value}\n"
@@ -107,7 +108,7 @@ final class DevelopmentCommandsTest extends TestCase
             '--redirect-uri' => 'https://app.example/cb',
         ]);
 
-        $user = $this->users->findByEmail('jane@example.com');
+        $user = $this->users->findByEmail(ConnectionName::defaultPool(), 'jane@example.com');
         self::assertSame(Command::SUCCESS, $exit);
         self::assertTrue($this->hasher->verify('hunter2hunter2', (string) $user?->passwordHash()));
         self::assertTrue(
@@ -185,7 +186,7 @@ final class DevelopmentCommandsTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->execute([]));
         self::assertStringContainsString('outside a development deployment', $tester->getDisplay(true));
-        self::assertNull($this->users->findByEmail('dev@clavia.test'));
+        self::assertNull($this->users->findByEmail(ConnectionName::defaultPool(), 'dev@clavia.test'));
     }
 
     public function testSeedReportsAnInvalidOptionInsteadOfATrace(): void

@@ -18,6 +18,7 @@ use Clavia\Domain\Authentication\Mfa\MfaFactor;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Mfa\Totp;
 use Clavia\Domain\Authentication\Mfa\TotpSecret;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\Shared\RandomSource;
@@ -87,7 +88,8 @@ final class SocialLoginTest extends AcceptanceTestCase
         self::assertStringContainsString('href="/auth/social/google"', $page);
         self::assertStringContainsString('Continue with Google', $page);
         self::assertStringContainsString('Continue with GitHub', $page);
-        self::assertLessThan(strpos($page, 'Continue with GitHub'), strpos($page, 'Continue with Google'));
+        // By connection name.
+        self::assertLessThan(strpos($page, 'Continue with Google'), strpos($page, 'Continue with GitHub'));
     }
 
     public function testStartingSendsStatePkceAndAPairingCookie(): void
@@ -132,6 +134,8 @@ final class SocialLoginTest extends AcceptanceTestCase
         self::assertSame('ada@clavia.dev', $user->email);
         self::assertTrue($user->isEmailVerified());
         self::assertNull($user->passwordHash());
+        self::assertSame('google', $user->connection->value, 'The account belongs to the connection that made it.');
+        self::assertSame('google', $session->connection->value);
         self::assertSame([['google', 'g-123']], $this->identities());
         // The code was exchanged server side, with the secret and the PKCE verifier.
         $exchange = FakeHttpClient::form($this->wire->requests[0]);
@@ -366,7 +370,7 @@ final class SocialLoginTest extends AcceptanceTestCase
 
         self::assertSame(303, $response->getStatusCode(), (string) $response->getBody());
         self::assertSame([['github', '4242']], $this->identities());
-        self::assertNotNull($this->users()->findByEmail('me@clavia.dev'));
+        self::assertNotNull($this->users()->findByEmail(ConnectionName::fromString('github'), 'me@clavia.dev'));
     }
 
     // ------------------------------------------------------------------

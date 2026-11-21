@@ -22,6 +22,7 @@ use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\Ownership;
 use Clavia\Domain\Client\ResponseType;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
@@ -95,7 +96,7 @@ final readonly class SeedDevelopmentData
     ): SeededDevelopmentData {
         $now = $this->clock->now();
 
-        $user = $this->users->findByEmail($email);
+        $user = $this->users->findByEmail(ConnectionName::defaultPool(), $email);
         $userCreated = $user === null;
         if ($user === null) {
             $this->users->save(User::register(
@@ -120,6 +121,9 @@ final readonly class SeedDevelopmentData
                 [GrantType::AuthorizationCode],
                 [ResponseType::Code],
                 $now,
+                [],
+                // The development user's pool; other connections are enabled through the API.
+                [ConnectionName::defaultPool()],
             );
             $this->clients->save($client);
         }

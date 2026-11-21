@@ -11,17 +11,30 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Adapter\Secondary\IdentityProvider;
 
-use Clavia\Adapter\Secondary\IdentityProvider\ConfiguredIdentityProviders;
+use Clavia\Adapter\Secondary\Http\OutboundUrlPolicy;
+use Clavia\Adapter\Secondary\IdentityProvider\ConnectionIdentityProviders;
 use Clavia\Adapter\Secondary\IdentityProvider\GitHubIdentityProvider;
 use Clavia\Adapter\Secondary\IdentityProvider\GoogleIdentityProvider;
+use Clavia\Adapter\Secondary\IdentityProvider\IdTokenVerifier;
+use Clavia\Adapter\Secondary\IdentityProvider\OidcIdentityProvider;
 use Clavia\Adapter\Secondary\IdentityProvider\ProviderHttp;
 use Clavia\Application\Port\IdentityProvider;
 use Clavia\Application\Port\IdentityProviderFailed;
+use Clavia\Domain\Connection\Connection;
+use Clavia\Domain\Connection\ConnectionName;
+use Clavia\Domain\Connection\ConnectionStrategy;
+use Clavia\Domain\Connection\OidcSettings;
 use Clavia\Domain\OAuth2\CodeChallenge;
 use Clavia\Domain\OAuth2\CodeVerifier;
+use Clavia\Domain\Oidc\Nonce;
+use Clavia\Domain\Shared\ScopeSet;
 use ClaviaTest\Support\Fake\FakeHttpClient;
+use ClaviaTest\Support\Fake\FakeSecretCipher;
+use ClaviaTest\Support\Fake\FrozenClock;
+use ClaviaTest\Support\Fake\InMemoryJwksCache;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use ClaviaTest\Support\RecordingLogger;
+use DateTimeImmutable;
 use GuzzleHttp\Exception\ConnectException;
 use Laminas\Diactoros\RequestFactory;
 use Laminas\Diactoros\Response\HtmlResponse;
@@ -43,6 +56,7 @@ final class IdentityProvidersTest extends TestCase
     private FakeHttpClient $http;
     private RecordingLogger $logger;
     private CodeVerifier $verifier;
+    private Nonce $nonce;
 
     #[\Override]
     protected function setUp(): void
@@ -50,13 +64,14 @@ final class IdentityProvidersTest extends TestCase
         $this->http = new FakeHttpClient();
         $this->logger = new RecordingLogger();
         $this->verifier = CodeVerifier::generate(new SeededRandomSource());
+        $this->nonce = Nonce::fromString('the-nonce');
     }
 
-    public function testTheAuthorizationUrlCarriesTheCodeFlowWithPkce(): void
+    public function testTheAuthorizationUrlCarriesTheCodeFlowWithPkceAndNoNonce(): void
     {
         $challenge = CodeChallenge::forVerifier($this->verifier);
 
-        $url = $this->google()->authorizationUrl(self::REDIRECT_URI, 'the-state', $challenge);
+        $url = $this->google()->authorizationUrl(self::REDIRECT_URI, 'the-state', $challenge, $this->nonce);
 
         self::assertStringStartsWith(GoogleIdentityProvider::AUTHORIZATION_ENDPOINT . '?', $url);
         parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
@@ -81,7 +96,7 @@ final class IdentityProvidersTest extends TestCase
                     : new JsonResponse([], 401),
         ]));
 
-        $identity = $this->google()->identify('the-code', self::REDIRECT_URI, $this->verifier);
+        $identity = $this->google()->identify('the-code', self::REDIRECT_URI, $this->verifier, $this->nonce);
 
         self::assertSame('google', $identity->provider->value);
         self::assertSame('g-123', $identity->subject);
@@ -109,7 +124,9 @@ final class IdentityProvidersTest extends TestCase
             ),
         ]));
 
-        self::assertNull($this->google()->identify('c', self::REDIRECT_URI, $this->verifier)->verifiedEmail());
+        $identity = $this->google()->identify('c', self::REDIRECT_URI, $this->verifier, $this->nonce);
+
+        self::assertNull($identity->verifiedEmail());
     }
 
     public function testGitHubUsesTheNumericIdAndThePrimaryVerifiedAddress(): void
@@ -123,7 +140,7 @@ final class IdentityProvidersTest extends TestCase
             ]),
         ]));
 
-        $identity = $this->github()->identify('c', self::REDIRECT_URI, $this->verifier);
+        $identity = $this->github()->identify('c', self::REDIRECT_URI, $this->verifier, $this->nonce);
 
         self::assertSame('4242', $identity->subject);
         self::assertSame('me@example.com', $identity->verifiedEmail());
@@ -144,7 +161,7 @@ final class IdentityProvidersTest extends TestCase
             ),
         ]));
 
-        $identity = $this->github()->identify('c', self::REDIRECT_URI, $this->verifier);
+        $identity = $this->github()->identify('c', self::REDIRECT_URI, $this->verifier, $this->nonce);
 
         self::assertNull($identity->email);
         self::assertNull($identity->verifiedEmail());
@@ -159,7 +176,7 @@ final class IdentityProvidersTest extends TestCase
         $this->http->answerWith($answer);
 
         try {
-            $this->github()->identify('c', self::REDIRECT_URI, $this->verifier);
+            $this->github()->identify('c', self::REDIRECT_URI, $this->verifier, $this->nonce);
             self::fail('An unusable answer was used.');
         } catch (IdentityProviderFailed) {
             self::assertTrue($this->logger->hasRecordContaining($logged), $logged);
@@ -207,20 +224,92 @@ final class IdentityProvidersTest extends TestCase
 
         $this->expectException(IdentityProviderFailed::class);
 
-        $this->google()->identify('c', self::REDIRECT_URI, $this->verifier);
+        $this->google()->identify('c', self::REDIRECT_URI, $this->verifier, $this->nonce);
     }
 
-    public function testOnlyConfiguredProvidersAreOfferedInTheOrderGiven(): void
+    public function testASocialConnectionHasAProviderOnlyWhenTheDeploymentConfiguredIt(): void
     {
-        $providers = new ConfiguredIdentityProviders([$this->github(), $this->google()]);
+        $providers = $this->connectionProviders([$this->google()]);
 
-        self::assertSame(
-            ['github', 'google'],
-            array_map(static fn (IdentityProvider $provider): string => $provider->name()->value, $providers->all()),
+        self::assertInstanceOf(GoogleIdentityProvider::class, $providers->for($this->social('google')));
+        self::assertNull($providers->for($this->social('github')));
+        self::assertNull($providers->for(Connection::pool(
+            ConnectionName::defaultPool(),
+            'Username-Password',
+            true,
+            true,
+            new DateTimeImmutable('2026-01-01T00:00:00Z'),
+        )));
+    }
+
+    public function testAnOidcConnectionGetsItsProviderWithTheDecryptedSecret(): void
+    {
+        $cipher = new FakeSecretCipher();
+        $connection = $this->oidc($cipher->encrypt('the-secret', 'connection:acme'));
+
+        $provider = $this->connectionProviders([], $cipher)->for($connection);
+
+        self::assertInstanceOf(OidcIdentityProvider::class, $provider);
+        self::assertSame('acme', $provider->name()->value);
+    }
+
+    public function testAnOidcConnectionWhoseSecretCannotBeDecryptedHasNoProviderAndIsLogged(): void
+    {
+        $cipher = new FakeSecretCipher();
+        // Sealed for another connection: the context does not match.
+        $connection = $this->oidc($cipher->encrypt('the-secret', 'connection:other'));
+
+        self::assertNull($this->connectionProviders([], $cipher)->for($connection));
+        self::assertTrue($this->logger->hasRecordContaining('cannot be decrypted'));
+        self::assertFalse($this->logger->hasRecordContaining('the-secret'));
+    }
+
+    private function social(string $name): Connection
+    {
+        return Connection::reconstitute(
+            ConnectionName::fromString($name),
+            ucfirst($name),
+            ConnectionStrategy::Social,
+            true,
+            false,
+            null,
+            new DateTimeImmutable('2026-01-01T00:00:00Z'),
         );
-        self::assertSame('Google', $providers->find('google')?->label());
-        self::assertNull($providers->find('gitlab'));
-        self::assertSame([], new ConfiguredIdentityProviders([])->all());
+    }
+
+    private function oidc(string $sealedSecret): Connection
+    {
+        return Connection::openIdProvider(
+            ConnectionName::fromString('acme'),
+            'Acme',
+            OidcSettings::of(
+                'https://idp.example',
+                'clavia',
+                $sealedSecret,
+                ScopeSet::fromString('openid email'),
+                'https://idp.example/authorize',
+                'https://idp.example/token',
+                'https://idp.example/jwks',
+            ),
+            true,
+            false,
+            new DateTimeImmutable('2026-01-01T00:00:00Z'),
+        );
+    }
+
+    /**
+     * @param list<IdentityProvider> $social
+     */
+    private function connectionProviders(array $social, ?FakeSecretCipher $cipher = null): ConnectionIdentityProviders
+    {
+        return new ConnectionIdentityProviders(
+            $social,
+            $cipher ?? new FakeSecretCipher(),
+            $this->providerHttp(),
+            new IdTokenVerifier($this->providerHttp(), new InMemoryJwksCache(), new FrozenClock()),
+            new OutboundUrlPolicy(false, static fn (): array => ['93.184.216.34']),
+            $this->logger,
+        );
     }
 
     private function google(): GoogleIdentityProvider

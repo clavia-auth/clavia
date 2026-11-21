@@ -13,14 +13,19 @@ namespace Clavia\Application\Authentication\LoginPage;
 
 use Clavia\Application\Authentication\External\ExternalProviderOption;
 use Clavia\Application\Authentication\ResolveEndUser;
-use Clavia\Application\Port\IdentityProvider;
-use Clavia\Application\Port\IdentityProviders;
+use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\Port\LoginStateStore;
+use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Identity\UserRepository;
 
 /**
  * What the login page has to show, and where its form may lead.
+ *
+ * It offers exactly the connections the application behind the handle may use
+ * ({@see ConnectionAccess}): a password form when it signs people in from a pool, a link
+ * for each external connection. No handle — a page reached directly — offers every
+ * usable one.
  */
 final readonly class DescribeLoginPage
 {
@@ -29,7 +34,7 @@ final readonly class DescribeLoginPage
         private ClientRepository $clients,
         private ResolveEndUser $resolveEndUser,
         private UserRepository $users,
-        private IdentityProviders $providers,
+        private ConnectionAccess $access,
     ) {
     }
 
@@ -48,24 +53,36 @@ final readonly class DescribeLoginPage
             $endUser = ($this->resolveEndUser)($sessionId);
             $user = $endUser === null ? null : $this->users->find($endUser->userId);
 
-            return new LoginPage($user?->email, [], $user === null ? $this->providers() : []);
+            return new LoginPage(
+                $user?->email,
+                [],
+                $user === null ? $this->methods(null) : new SignInMethods(false, []),
+            );
         }
 
-        return new LoginPage(null, $this->formOrigins($loginState), $this->providers());
+        return new LoginPage(null, $this->formOrigins($loginState), $this->methods($loginState));
     }
 
     /**
-     * The external providers the form offers — every configured one.
-     *
-     * @return list<ExternalProviderOption>
+     * The ways in the form offers for the handle's application — or every usable one
+     * without a handle.
      */
-    public function providers(): array
+    public function methods(#[\SensitiveParameter] ?string $loginState): SignInMethods
     {
-        return array_map(
-            static fn (IdentityProvider $provider): ExternalProviderOption
-                => new ExternalProviderOption($provider->name()->value, $provider->label()),
-            $this->providers->all(),
-        );
+        $password = false;
+        $providers = [];
+        foreach ($this->access->available($this->client($loginState)) as $usable) {
+            if ($usable->provider === null) {
+                $password = true;
+            } else {
+                $providers[] = new ExternalProviderOption(
+                    $usable->connection->name->value,
+                    $usable->connection->displayName,
+                );
+            }
+        }
+
+        return new SignInMethods($password, $providers);
     }
 
     /**
@@ -77,13 +94,18 @@ final readonly class DescribeLoginPage
      */
     public function formOrigins(#[\SensitiveParameter] ?string $loginState): array
     {
+        return $this->client($loginState)?->redirectOrigins() ?? [];
+    }
+
+    /** The application behind a login page's handle, if the handle names one. */
+    private function client(#[\SensitiveParameter] ?string $loginState): ?Client
+    {
         if ($loginState === null || $loginState === '') {
-            return [];
+            return null;
         }
 
         $clientId = $this->loginStates->get($loginState)?->clientId;
-        $client = $clientId === null ? null : $this->clients->find($clientId);
 
-        return $client?->redirectOrigins() ?? [];
+        return $clientId === null ? null : $this->clients->find($clientId);
     }
 }

@@ -14,18 +14,21 @@ namespace Clavia\Bootstrap\Container;
 use Clavia\Application\Authentication\External\CompleteExternalSignIn;
 use Clavia\Application\Authentication\External\ResolveExternalAccount;
 use Clavia\Application\Authentication\SignIn\CompleteFirstFactor;
+use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\Port\ExternalSignInStore;
-use Clavia\Application\Port\IdentityProviders;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Configuration\Settings;
+use Clavia\Domain\Client\ClientRepository;
 use Psr\Container\ContainerInterface;
 
 final class CompleteExternalSignInFactory
 {
     public function __invoke(ContainerInterface $container): CompleteExternalSignIn
     {
-        /** @var IdentityProviders $providers */
-        $providers = $container->get(IdentityProviders::class);
+        /** @var ConnectionAccess $access */
+        $access = $container->get(ConnectionAccess::class);
+        /** @var ClientRepository $clients */
+        $clients = $container->get(ClientRepository::class);
         /** @var ExternalSignInStore $pending */
         $pending = $container->get(ExternalSignInStore::class);
         /** @var ResolveExternalAccount $resolveAccount */
@@ -38,7 +41,8 @@ final class CompleteExternalSignInFactory
         $settings = $container->get(Settings::class);
 
         return new CompleteExternalSignIn(
-            $providers,
+            $access,
+            $clients,
             $pending,
             $resolveAccount,
             $loginStates,

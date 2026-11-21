@@ -18,6 +18,7 @@ final readonly class NewUser
 {
     /**
      * @param array<'name'|'given_name'|'family_name'|'nickname'|'picture'|'locale', string> $profile
+     * @param string|null $connection The pool it is created in; null for the default one.
      */
     public function __construct(
         public string $email,
@@ -25,6 +26,7 @@ final readonly class NewUser
         public bool $emailVerified = false,
         public bool $isActive = true,
         public array $profile = [],
+        public ?string $connection = null,
     ) {
     }
 }

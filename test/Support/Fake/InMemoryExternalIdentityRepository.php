@@ -11,9 +11,10 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Support\Fake;
 
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\ExternalIdentity;
 use Clavia\Domain\Identity\ExternalIdentityRepository;
-use Clavia\Domain\Identity\ProviderName;
+use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\AlreadyExists;
 
 /**
@@ -25,7 +26,7 @@ final class InMemoryExternalIdentityRepository implements ExternalIdentityReposi
     private array $identities = [];
 
     #[\Override]
-    public function find(ProviderName $provider, string $subject): ?ExternalIdentity
+    public function find(ConnectionName $provider, string $subject): ?ExternalIdentity
     {
         return $this->identities[self::key($provider->value, $subject)] ?? null;
     }
@@ -38,6 +39,45 @@ final class InMemoryExternalIdentityRepository implements ExternalIdentityReposi
             throw new AlreadyExists('This identity is already linked to an account.');
         }
         $this->identities[$key] = $identity;
+    }
+
+    #[\Override]
+    public function ofUser(UserId $userId): array
+    {
+        $identities = array_values(array_filter(
+            $this->identities,
+            static fn (ExternalIdentity $identity): bool => $identity->userId->equals($userId),
+        ));
+        usort(
+            $identities,
+            static fn (ExternalIdentity $a, ExternalIdentity $b): int
+                => [$a->provider->value, $a->subject] <=> [$b->provider->value, $b->subject],
+        );
+
+        return $identities;
+    }
+
+    #[\Override]
+    public function unlink(UserId $userId, ConnectionName $provider): int
+    {
+        $unlinked = 0;
+        foreach ($this->identities as $key => $identity) {
+            if ($identity->userId->equals($userId) && $identity->provider->equals($provider)) {
+                unset($this->identities[$key]);
+                $unlinked++;
+            }
+        }
+
+        return $unlinked;
+    }
+
+    #[\Override]
+    public function countThrough(ConnectionName $provider): int
+    {
+        return count(array_filter(
+            $this->identities,
+            static fn (ExternalIdentity $identity): bool => $identity->provider->equals($provider),
+        ));
     }
 
     /** @return list<ExternalIdentity> */

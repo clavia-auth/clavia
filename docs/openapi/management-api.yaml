@@ -43,6 +43,10 @@ tags:
     description: |
       Named sets of permissions, across APIs, that users are given. On an API that enforces
       roles, a person's token carries only what their roles grant there.
+  - name: connections
+    description: |
+      The ways people sign in — pools of accounts with passwords, social providers, OpenID
+      Connect providers — and which applications may use each.
 
 paths:
   /api/v1/users:
@@ -99,6 +103,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
         '415':
@@ -277,6 +283,65 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/users/{user_id}/identities:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [users, connections]
+      operationId: listUserIdentities
+      summary: The accounts at external providers linked to this one.
+      security:
+        - managementToken: [read:users]
+      responses:
+        '200':
+          description: The identities, by connection, then subject.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Identity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/users/{user_id}/identities/{connection}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+      - $ref: '#/components/parameters/IdentityConnection'
+    delete:
+      tags: [users, connections]
+      operationId: unlinkUserIdentity
+      summary: Detach the account's identity at an external provider.
+      description: |
+        Signing in through that provider again makes a new account, or links by address as
+        a first sign-in would. Refused (409) when it is the account's only way in: no
+        password it could use and nothing else linked.
+      security:
+        - managementToken: [update:users]
+      responses:
+        '204':
+          description: Unlinked.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
 
@@ -548,6 +613,204 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/clients/{client_id}/connections:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    put:
+      tags: [clients, connections]
+      operationId: setClientConnections
+      summary: Replace the connections an application's users may sign in through.
+      description: |
+        Takes effect at the next sign-in: a session established through a connection the
+        application stops enabling no longer counts for it. A third-party application
+        cannot be given a list (422): it uses the domain connections.
+        An unknown connection is a 404, and nothing changes.
+      security:
+        - managementToken: [update:clients]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectionNames'
+      responses:
+        '200':
+          description: The connections it enables now, by name.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ConnectionName'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/connections:
+    get:
+      tags: [connections]
+      operationId: listConnections
+      summary: Every connection, by name, with whether it can work.
+      security:
+        - managementToken: [read:connections]
+      responses:
+        '200':
+          description: The connections. Few by nature, so not paged.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Connection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    post:
+      tags: [connections]
+      operationId: createConnection
+      summary: Create a pool of accounts, or register an OpenID Connect provider.
+      description: |
+        The name is permanent: accounts, sessions and identities record it, and for an OIDC
+        connection it is part of the callback URL registered at the provider,
+        `https://auth.{domain}/auth/social/{name}/callback`. A provider is discovered now —
+        an issuer that does not answer, or names endpoints this server must not fetch, is
+        refused (422) — and its client secret is stored encrypted and never returned.
+        Social connections are built in: switched, not created.
+      security:
+        - managementToken: [create:connections]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectionCreate'
+      responses:
+        '201':
+          description: The connection.
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Connection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/connections/{name}:
+    parameters:
+      - $ref: '#/components/parameters/ConnectionNameParameter'
+    get:
+      tags: [connections]
+      operationId: getConnection
+      summary: Read one connection.
+      security:
+        - managementToken: [read:connections]
+      responses:
+        '200':
+          description: The connection.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Connection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    patch:
+      tags: [connections]
+      operationId: updateConnection
+      summary: Switch a connection, open it to third parties, rename it, or change its provider settings.
+      description: |
+        Switching one off takes effect at the next sign-in: sessions established through it
+        stand until they end. A social connection the deployment has no credentials for can
+        be switched on — the intent is recorded — but stays unusable until it is configured.
+        Changed OIDC settings are discovered again; a new secret replaces the old one.
+      security:
+        - managementToken: [update:connections]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectionUpdate'
+      responses:
+        '200':
+          description: The connection, as updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Connection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    delete:
+      tags: [connections]
+      operationId: deleteConnection
+      summary: Delete a pool or an OpenID Connect provider nothing depends on.
+      description: |
+        Refused (409) while accounts belong to it or identities are linked through it, and
+        for a built-in connection — the social ones and the default pool — which is
+        switched off instead. Applications that enabled it stop listing it.
+      security:
+        - managementToken: [delete:connections]
+      responses:
+        '204':
+          description: Deleted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
 
@@ -957,6 +1220,10 @@ components:
             create:roles: Create roles and who holds them
             update:roles: Modify roles and who holds them
             delete:roles: Delete roles and who holds them
+            read:connections: View connections
+            create:connections: Create pools and OpenID Connect providers
+            update:connections: Switch, rename and reconfigure connections
+            delete:connections: Delete pools and OpenID Connect providers nothing depends on
 
   headers:
     Location:
@@ -1018,6 +1285,19 @@ components:
       schema:
         type: string
         pattern: '^rol_[A-Za-z0-9]{16}$'
+    ConnectionNameParameter:
+      name: name
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/ConnectionName'
+    IdentityConnection:
+      name: connection
+      in: path
+      required: true
+      description: The external connection the identity was linked through.
+      schema:
+        $ref: '#/components/schemas/ConnectionName'
 
   responses:
     BadRequest:
@@ -1215,13 +1495,19 @@ components:
     User:
       type: object
       additionalProperties: false
-      required: [id, email, email_verified, is_active, has_password, mfa_enrolled, name, given_name,
-        family_name, nickname, picture, locale, created_at, updated_at]
+      required: [id, connection, email, email_verified, is_active, has_password, mfa_enrolled, name,
+        given_name, family_name, nickname, picture, locale, created_at, updated_at]
       properties:
         id:
           type: string
           format: uuid
           description: The OIDC `sub`. Stable and opaque.
+        connection:
+          type: string
+          pattern: '^[a-z][a-z0-9-]{0,31}$'
+          description: |
+            The pool the account was created in, or the external connection that created it.
+            Fixed for good. The same address may exist in two pools as two accounts.
         email:
           type: string
         email_verified:
@@ -1267,6 +1553,12 @@ components:
       additionalProperties: false
       required: [email, password]
       properties:
+        connection:
+          type: string
+          pattern: '^[a-z][a-z0-9-]{0,31}$'
+          description: |
+            The pool to create it in; the default pool, `password`, when omitted. An external
+            connection's accounts are made by signing in through it (422).
         email:
           type: string
           minLength: 3
@@ -1366,7 +1658,7 @@ components:
       type: object
       additionalProperties: false
       required: [client_id, name, client_type, token_endpoint_auth_method, redirect_uris, grant_types,
-        response_types, post_logout_redirect_uris, is_first_party, created_at]
+        response_types, post_logout_redirect_uris, is_first_party, connections, created_at]
       properties:
         client_id:
           type: string
@@ -1394,6 +1686,13 @@ components:
             type: string
         is_first_party:
           $ref: '#/components/schemas/IsFirstParty'
+        connections:
+          type: array
+          description: |
+            The connections its users may sign in through, by name. Always empty for a
+            third-party application: it uses the domain connections.
+          items:
+            $ref: '#/components/schemas/ConnectionName'
         created_at:
           type: string
           format: date-time
@@ -1411,7 +1710,7 @@ components:
       type: object
       additionalProperties: false
       required: [client_id, name, client_type, token_endpoint_auth_method, redirect_uris, grant_types,
-        response_types, post_logout_redirect_uris, is_first_party, created_at, client_secret]
+        response_types, post_logout_redirect_uris, is_first_party, connections, created_at, client_secret]
       properties:
         client_id:
           type: string
@@ -1439,6 +1738,13 @@ components:
             type: string
         is_first_party:
           $ref: '#/components/schemas/IsFirstParty'
+        connections:
+          type: array
+          description: |
+            The connections its users may sign in through, by name. Always empty for a
+            third-party application: it uses the domain connections.
+          items:
+            $ref: '#/components/schemas/ConnectionName'
         created_at:
           type: string
           format: date-time
@@ -1486,6 +1792,15 @@ components:
           description: |
             `false` registers a third-party application: its id starts with `tpc_`. See
             `IsFirstParty`. Fixed for good: there is no such field on an update.
+        connections:
+          type: array
+          maxItems: 64
+          description: |
+            The connections its users may sign in through. Every connection there is when
+            omitted, for a first-party application; a third-party one cannot have a list (422).
+            An unknown name is a 404. Changed afterwards with `PUT …/connections`.
+          items:
+            $ref: '#/components/schemas/ConnectionName'
       description: |
         `client_type` defaults to `public`; `token_endpoint_auth_method` to `none` for a
         public client and `client_secret_basic` for a confidential one.
@@ -1640,6 +1955,155 @@ components:
           type: boolean
         allow_skipping_consent:
           type: boolean
+
+    ConnectionName:
+      type: string
+      pattern: '^[a-z][a-z0-9-]{0,31}$'
+      description: Lower-case letters, digits and dashes, starting with a letter; at most 32.
+
+    ConnectionNames:
+      type: object
+      additionalProperties: false
+      required: [connections]
+      properties:
+        connections:
+          type: array
+          maxItems: 64
+          items:
+            $ref: '#/components/schemas/ConnectionName'
+
+    ConnectionStrategy:
+      type: string
+      enum: [database, social, oidc]
+      description: |
+        `database`: a pool of accounts with passwords, held here. `social`: a provider the
+        code implements (Google, GitHub), credentials from the deployment's settings.
+        `oidc`: any OpenID Connect provider, registered from its issuer.
+
+    Connection:
+      type: object
+      additionalProperties: false
+      required: [name, display_name, strategy, is_enabled, is_domain_connection, configured, usable,
+        oidc_issuer, oidc_client_id, oidc_scope, created_at]
+      properties:
+        name:
+          $ref: '#/components/schemas/ConnectionName'
+        display_name:
+          type: string
+        strategy:
+          $ref: '#/components/schemas/ConnectionStrategy'
+        is_enabled:
+          type: boolean
+          description: The global switch. Off means off for every application.
+        is_domain_connection:
+          type: boolean
+          description: |
+            A domain connection: open to every third-party application, which gets no other
+            kind. A first-party application goes by its own list.
+        configured:
+          type: boolean
+          description: |
+            Whether it could work if switched on: always for a pool; for a social connection,
+            when the deployment set its credentials; for an OIDC one, when its secret decrypts.
+        usable:
+          type: boolean
+          description: Switched on and configured — what the login page actually offers.
+        oidc_issuer:
+          type: string
+          nullable: true
+        oidc_client_id:
+          type: string
+          nullable: true
+        oidc_scope:
+          type: string
+          nullable: true
+          description: What is asked of the provider. The client secret is never returned.
+        created_at:
+          type: string
+          format: date-time
+
+    ConnectionDisplayName:
+      type: string
+      minLength: 1
+      maxLength: 120
+
+    ConnectionCreate:
+      type: object
+      additionalProperties: false
+      required: [name, display_name, strategy]
+      properties:
+        name:
+          $ref: '#/components/schemas/ConnectionName'
+        display_name:
+          $ref: '#/components/schemas/ConnectionDisplayName'
+        strategy:
+          $ref: '#/components/schemas/ConnectionStrategy'
+        is_enabled:
+          type: boolean
+          default: true
+        is_domain_connection:
+          type: boolean
+          default: false
+        oidc_issuer:
+          type: string
+          maxLength: 2048
+          description: An `oidc` connection's issuer, https. Required for one, refused for any other.
+        oidc_client_id:
+          type: string
+          minLength: 1
+          maxLength: 255
+        oidc_client_secret:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        oidc_scope:
+          type: string
+          maxLength: 512
+          description: Must include `openid`; `openid profile email` when omitted.
+
+    ConnectionUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        display_name:
+          $ref: '#/components/schemas/ConnectionDisplayName'
+        is_enabled:
+          type: boolean
+        is_domain_connection:
+          type: boolean
+        oidc_issuer:
+          type: string
+          maxLength: 2048
+        oidc_client_id:
+          type: string
+          minLength: 1
+          maxLength: 255
+        oidc_client_secret:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        oidc_scope:
+          type: string
+          maxLength: 512
+
+    Identity:
+      type: object
+      additionalProperties: false
+      required: [connection, subject, email, linked_at]
+      properties:
+        connection:
+          $ref: '#/components/schemas/ConnectionName'
+        subject:
+          type: string
+          description: The provider's identifier for the person — what the link is keyed on.
+        email:
+          type: string
+          nullable: true
+          description: What the provider reported when the link was made. Informational.
+        linked_at:
+          type: string
+          format: date-time
 
     UserConsent:
       type: object

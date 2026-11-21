@@ -121,6 +121,7 @@ final readonly class CompleteSecondFactor
         $sessionId = $this->sessions->establish(
             $challenge->userId,
             AuthenticationMethod::combined($challenge->firstFactor, $secondFactor),
+            $challenge->connection,
             $attempt->currentSessionId,
         );
 

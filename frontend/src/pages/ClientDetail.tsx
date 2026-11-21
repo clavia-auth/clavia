@@ -4,7 +4,14 @@ import { useForm } from "react-hook-form";
 import { useNavigate, useParams } from "react-router";
 import { z } from "zod";
 
-import { useClient, useDeleteClient, useRotateClientSecret, useUpdateClient } from "../api/clients";
+import {
+  useClient,
+  useDeleteClient,
+  useRotateClientSecret,
+  useSetClientConnections,
+  useUpdateClient,
+} from "../api/clients";
+import { useConnections } from "../api/connections";
 import type { AuthMethod, Client, GrantType } from "../api/types";
 import { BackLink, ErrorNote, Field, KeyValue, PageHeader, SecretReveal, formatDate } from "../components/ui";
 
@@ -185,6 +192,56 @@ function ClientDetail({ client }: { client: Client }) {
           <ErrorNote error={rotate.error ?? remove.error} />
         </aside>
       </div>
+
+      <ConnectionsPanel client={client} />
     </>
+  );
+}
+
+/** Which ways to sign in this application may use. */
+function ConnectionsPanel({ client }: { client: Client }) {
+  const all = useConnections();
+  const set = useSetClientConnections(client.client_id);
+  const enabled = new Set(client.connections);
+
+  return (
+    <section className="card mt-6 p-6">
+      <h2 className="mb-1 text-sm font-semibold">Connections</h2>
+      <p className="mb-3 text-xs text-muted">
+        {client.is_first_party
+          ? "Its login page offers only these, and a session signed in through any other does not count for it. Takes effect at the next sign-in."
+          : "A third-party application gets the domain connections and cannot choose its own. Open a connection to third parties on the Connections page."}
+      </p>
+      <ErrorNote error={all.error ?? set.error} />
+      <div className="grid gap-1 sm:grid-cols-2">
+        {all.data?.map((connection) => {
+          const applies = client.is_first_party ? enabled.has(connection.name) : connection.is_domain_connection;
+          return (
+            <label key={connection.name} className="flex items-start gap-2 rounded-md px-2 py-1 text-sm hover:bg-field">
+              <input
+                type="checkbox"
+                className="mt-0.5 accent-accent"
+                checked={applies}
+                disabled={!client.is_first_party || set.isPending}
+                onChange={(event) => {
+                  const next = new Set(enabled);
+                  if (event.target.checked) next.add(connection.name);
+                  else next.delete(connection.name);
+                  void set.mutateAsync([...next]);
+                }}
+              />
+              <span>
+                <span className="font-medium">{connection.display_name}</span>
+                <span className="block text-xs text-muted">
+                  {connection.name}
+                  {!connection.usable && " · not usable until switched on and configured"}
+                  {connection.is_domain_connection && " · open to third parties"}
+                </span>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </section>
   );
 }

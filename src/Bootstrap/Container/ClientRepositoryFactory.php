@@ -13,6 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientRepository;
+use Clavia\Application\Port\TransactionManager;
 use Psr\Container\ContainerInterface;
 
 final class ClientRepositoryFactory
@@ -22,6 +23,9 @@ final class ClientRepositoryFactory
         /** @var Database $database */
         $database = $container->get(Database::class);
 
-        return new PhpDbClientRepository($database);
+        /** @var TransactionManager $transactions */
+        $transactions = $container->get(TransactionManager::class);
+
+        return new PhpDbClientRepository($database, $transactions);
     }
 }

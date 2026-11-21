@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Domain\Authentication;
 
 use Clavia\Domain\Client\ClientId;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
 
 /**
@@ -20,14 +21,16 @@ use Clavia\Domain\Identity\UserId;
  * A correct password is not a session once a second factor is enrolled. What the browser
  * holds instead, for a few minutes, is a handle to this: proof the first factor passed,
  * which authenticates nothing on its own. It carries what finishing needs — who is
- * signing in, where to go afterwards and for which application, how the first factor was
- * satisfied — and how many wrong second-factor answers it has already taken.
+ * signing in, where to go afterwards and for which application, how and through which
+ * connection the first factor was satisfied — and how many wrong second-factor answers it
+ * has already taken.
  */
 final readonly class MfaChallenge
 {
     /**
      * @param string                     $nextUrl     A local path, already validated by {@see LocalPath}.
      * @param list<AuthenticationMethod> $firstFactor
+     * @param ConnectionName             $connection  What the session will record it was signed in through.
      * @param non-negative-int           $attempts    Wrong answers so far.
      */
     public function __construct(
@@ -35,6 +38,7 @@ final readonly class MfaChallenge
         public string $nextUrl,
         public ?ClientId $clientId,
         public array $firstFactor,
+        public ConnectionName $connection,
         public int $attempts = 0,
     ) {
     }

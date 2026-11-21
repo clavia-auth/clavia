@@ -84,6 +84,7 @@ final class RedisAuthenticationStoresTest extends IntegrationTestCase
             'expires_at' => '2026-01-22T10:00:00.000000+00:00',
             'amr' => ['pwd'],
             'sid' => 'the-sid',
+            'connection' => 'password',
         ];
         $variants = [
             'valid' => $valid,
@@ -96,6 +97,8 @@ final class RedisAuthenticationStoresTest extends IntegrationTestCase
             'ends-before-it-begins' => ['expires_at' => '2026-01-14T10:00:00.000000+00:00'] + $valid,
             'no-sid' => ['sid' => ''] + $valid,
             'amr-not-a-list' => ['amr' => ['a' => 'pwd']] + $valid,
+            'no-connection' => array_diff_key($valid, ['connection' => true]),
+            'bad-connection' => ['connection' => 'Not A Name'] + $valid,
         ];
         foreach ($variants as $name => $value) {
             $this->redis()->set(

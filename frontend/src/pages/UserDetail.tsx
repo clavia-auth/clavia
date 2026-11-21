@@ -9,9 +9,11 @@ import {
   useDeleteUser,
   useResetUserMfa,
   useSetUserRoles,
+  useUnlinkUserIdentity,
   useUpdateUser,
   useUser,
   useUserConsents,
+  useUserIdentities,
   useUserPermissions,
   useUserRoles,
   useWithdrawUserConsent,
@@ -149,17 +151,56 @@ function UserDetail({ user }: { user: User }) {
           <h2 className="mb-3 text-sm font-semibold">Sign-in</h2>
           <KeyValue
             items={[
-              ["Password", user.has_password ? "Set" : "None (Google or GitHub only)"],
+              ["Connection", <code className="font-mono text-xs">{user.connection}</code>],
+              ["Password", user.has_password ? "Set" : "None (signs in through a provider)"],
               ["Second factor", user.mfa_enrolled ? <span className="badge-gold">Enrolled</span> : "Off"],
               ["Subject", <code className="font-mono text-xs">{user.id}</code>],
             ]}
           />
           <ErrorNote error={resetMfa.error ?? remove.error} />
+          <IdentitiesList user={user} />
         </aside>
       </div>
 
       <RolesPanel user={user} />
       <ConsentsPanel user={user} />
+    </>
+  );
+}
+
+/** The accounts at external providers linked to this user, and the way to detach one. */
+function IdentitiesList({ user }: { user: User }) {
+  const identities = useUserIdentities(user.id);
+  const unlink = useUnlinkUserIdentity(user.id);
+
+  return (
+    <>
+      <h3 className="mt-5 mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Linked identities</h3>
+      <ErrorNote error={identities.error ?? unlink.error} />
+      {identities.data?.length === 0 && <p className="text-sm text-muted">None.</p>}
+      <ul className="space-y-2 text-sm">
+        {identities.data?.map((identity) => (
+          <li key={`${identity.connection}:${identity.subject}`} className="flex items-start justify-between gap-2">
+            <div>
+              <div className="font-medium">{identity.connection}</div>
+              <div className="font-mono text-xs text-muted">{identity.subject}</div>
+              {identity.email && <div className="text-xs text-muted">{identity.email}</div>}
+            </div>
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={unlink.isPending}
+              onClick={() => {
+                if (confirm(`Unlink every ${identity.connection} account from ${user.email}?`)) {
+                  void unlink.mutateAsync(identity.connection);
+                }
+              }}
+            >
+              Unlink
+            </button>
+          </li>
+        ))}
+      </ul>
     </>
   );
 }

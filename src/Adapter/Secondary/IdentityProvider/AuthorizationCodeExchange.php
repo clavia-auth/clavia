@@ -14,6 +14,7 @@ namespace Clavia\Adapter\Secondary\IdentityProvider;
 use Clavia\Application\Port\IdentityProviderFailed;
 use Clavia\Domain\OAuth2\CodeChallenge;
 use Clavia\Domain\OAuth2\CodeVerifier;
+use Clavia\Domain\Oidc\Nonce;
 
 /**
  * The provider-independent half of the authorization code grant, client side (RFC 6749
@@ -38,9 +39,16 @@ final readonly class AuthorizationCodeExchange
     ) {
     }
 
-    public function authorizationUrl(string $redirectUri, string $state, CodeChallenge $challenge): string
-    {
-        return $this->authorizationEndpoint . '?' . http_build_query([
+    /**
+     * @param Nonce|null $nonce Sent to a provider that issues ID tokens, which must carry it back.
+     */
+    public function authorizationUrl(
+        string $redirectUri,
+        string $state,
+        CodeChallenge $challenge,
+        ?Nonce $nonce = null,
+    ): string {
+        $parameters = [
             'response_type' => 'code',
             'client_id' => $this->clientId,
             'redirect_uri' => $redirectUri,
@@ -48,7 +56,13 @@ final readonly class AuthorizationCodeExchange
             'state' => $state,
             'code_challenge' => $challenge->value,
             'code_challenge_method' => 'S256',
-        ], '', '&', PHP_QUERY_RFC3986);
+        ];
+        if ($nonce !== null) {
+            $parameters['nonce'] = $nonce->value;
+        }
+        $separator = str_contains($this->authorizationEndpoint, '?') ? '&' : '?';
+
+        return $this->authorizationEndpoint . $separator . http_build_query($parameters, '', '&', PHP_QUERY_RFC3986);
     }
 
     /**
@@ -61,14 +75,7 @@ final readonly class AuthorizationCodeExchange
         string $redirectUri,
         CodeVerifier $verifier,
     ): string {
-        $answer = $this->http->postForm($this->provider, $this->tokenEndpoint, [
-            'grant_type' => 'authorization_code',
-            'code' => $code,
-            'redirect_uri' => $redirectUri,
-            'client_id' => $this->clientId,
-            'client_secret' => $this->clientSecret,
-            'code_verifier' => $verifier->value,
-        ]);
+        $answer = $this->tokenResponse($code, $redirectUri, $verifier);
 
         // GitHub reports a refused code with 200 and an `error` member.
         $token = $answer['access_token'] ?? null;
@@ -77,5 +84,27 @@ final readonly class AuthorizationCodeExchange
         }
 
         return $token;
+    }
+
+    /**
+     * The token endpoint's whole answer, for a provider that also returns an ID token.
+     *
+     * @return array<array-key, mixed>
+     *
+     * @throws IdentityProviderFailed
+     */
+    public function tokenResponse(
+        #[\SensitiveParameter] string $code,
+        string $redirectUri,
+        CodeVerifier $verifier,
+    ): array {
+        return $this->http->postForm($this->provider, $this->tokenEndpoint, [
+            'grant_type' => 'authorization_code',
+            'code' => $code,
+            'redirect_uri' => $redirectUri,
+            'client_id' => $this->clientId,
+            'client_secret' => $this->clientSecret,
+            'code_verifier' => $verifier->value,
+        ]);
     }
 }

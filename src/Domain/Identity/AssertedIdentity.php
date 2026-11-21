@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Domain\Identity;
 
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Shared\InvalidValue;
 
 /**
@@ -30,7 +31,7 @@ final readonly class AssertedIdentity
      * @param non-empty-string $subject
      */
     private function __construct(
-        public ProviderName $provider,
+        public ConnectionName $provider,
         public string $subject,
         public ?string $email,
         public bool $emailVerified,
@@ -40,7 +41,7 @@ final readonly class AssertedIdentity
     /**
      * @throws InvalidValue When the subject is empty, too long or holds control characters.
      */
-    public static function of(ProviderName $provider, string $subject, ?string $email, bool $emailVerified): self
+    public static function of(ConnectionName $provider, string $subject, ?string $email, bool $emailVerified): self
     {
         $usable = $subject !== ''
             && strlen($subject) <= self::MAX_SUBJECT_LENGTH

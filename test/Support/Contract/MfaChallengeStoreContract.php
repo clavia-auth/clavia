@@ -15,6 +15,7 @@ use Clavia\Application\Port\MfaChallengeStore;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\MfaChallenge;
 use Clavia\Domain\Client\ClientId;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
 use PHPUnit\Framework\Attributes\Test;
 
@@ -101,6 +102,7 @@ trait MfaChallengeStoreContract
             '/oauth2/authorize?client_id=spa&state=é%20x',
             $clientId,
             [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
         );
     }
 }

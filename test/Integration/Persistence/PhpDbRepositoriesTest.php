@@ -15,6 +15,7 @@ use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbAuthorizationCodeRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientGrantRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbConnectionRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbConsentRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbExternalIdentityRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbMfaFactorRepository;
@@ -33,6 +34,7 @@ use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\ResponseType;
+use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Consent\ConsentRepository;
 use Clavia\Domain\Identity\ExternalIdentityRepository;
 use Clavia\Domain\Identity\User;
@@ -50,6 +52,7 @@ use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\Url;
 use ClaviaTest\Support\Contract\AuthorizationCodeRepositoryContract;
 use ClaviaTest\Support\Contract\ClientRepositoryContract;
+use ClaviaTest\Support\Contract\ConnectionRepositoryContract;
 use ClaviaTest\Support\Contract\ConsentRepositoryContract;
 use ClaviaTest\Support\Contract\ExternalIdentityRepositoryContract;
 use ClaviaTest\Support\Contract\MfaRepositoriesContract;
@@ -78,6 +81,13 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
     use ExternalIdentityRepositoryContract;
     use RoleRepositoryContract;
     use ConsentRepositoryContract;
+    use ConnectionRepositoryContract;
+
+    #[\Override]
+    protected function connections(): ConnectionRepository
+    {
+        return new PhpDbConnectionRepository(TestStorage::database());
+    }
 
     #[\Override]
     protected function consents(): ConsentRepository
@@ -121,7 +131,10 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
     #[\Override]
     protected function clients(): ClientRepository
     {
-        return new PhpDbClientRepository(TestStorage::database());
+        return new PhpDbClientRepository(
+            TestStorage::database(),
+            new PhpDbTransactionManager(TestStorage::database()),
+        );
     }
 
     #[\Override]
@@ -234,7 +247,7 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
         return [$clientId, $userId];
     }
 
-    public function testTwoAccountsCannotShareAnEmail(): void
+    public function testTwoAccountsInOnePoolCannotShareAnEmail(): void
     {
         $this->users()->save($this->aUser('jane@example.com'));
         $twin = User::register(
@@ -248,7 +261,7 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
             $this->users()->save($twin);
             self::fail('The second account was accepted.');
         } catch (Throwable $refused) {
-            self::assertStringContainsString('uq_users_email', $this->messages($refused));
+            self::assertStringContainsString('uq_users_connection_email', $this->messages($refused));
         }
     }
 

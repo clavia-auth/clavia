@@ -56,7 +56,7 @@ final class ManagementContractTest extends TestCase
 
     public function testAPathOrMethodTheDocumentDoesNotDescribeIsNoOperation(): void
     {
-        self::assertNull(self::contract()->operationFor(self::request('GET', '/api/v1/connections')));
+        self::assertNull(self::contract()->operationFor(self::request('GET', '/api/v1/logs')));
         self::assertNull(self::contract()->operationFor(self::request('PUT', '/api/v1/users')));
         self::assertNull(
             self::contract()->operationFor(self::request('DELETE', '/api/v1/roles/rol_aaaaaaaaaaaaaaaa/users')),

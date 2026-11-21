@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\OAuth2\Authorize\Authorize;
 use Clavia\Application\Port\ConsentStateStore;
 use Clavia\Application\Port\LoginStateStore;
@@ -47,6 +48,8 @@ final class AuthorizeFactory
         $consents = $container->get(ConsentRepository::class);
         /** @var ConsentStateStore $consentStates */
         $consentStates = $container->get(ConsentStateStore::class);
+        /** @var ConnectionAccess $connections */
+        $connections = $container->get(ConnectionAccess::class);
         /** @var SecretGenerator $secrets */
         $secrets = $container->get(SecretGenerator::class);
         /** @var RandomSource $random */
@@ -72,6 +75,7 @@ final class AuthorizeFactory
             $roles,
             $consents,
             $consentStates,
+            $connections,
             $secrets,
             $random,
             $clock,

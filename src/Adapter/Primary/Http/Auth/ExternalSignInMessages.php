@@ -27,6 +27,11 @@ final class ExternalSignInMessages
     {
     }
 
+    public static function notAvailable(string $provider): string
+    {
+        return sprintf('Sign-in with %s is not available for this application.', $provider);
+    }
+
     public static function for(ExternalSignInRefused $refused): string
     {
         $provider = $refused->providerLabel;
@@ -44,6 +49,7 @@ final class ExternalSignInMessages
             ExternalSignInFailure::AddressAlreadyUsed => 'An account with this email address already exists. '
                 . 'Sign in with your password to continue.',
             ExternalSignInFailure::AccountDisabled => 'This account is disabled.',
+            ExternalSignInFailure::NotAvailable => self::notAvailable($provider),
         };
     }
 }

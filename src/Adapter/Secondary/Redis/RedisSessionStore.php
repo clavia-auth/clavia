@@ -14,6 +14,7 @@ namespace Clavia\Adapter\Secondary\Redis;
 use Clavia\Application\Port\SessionStore;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\Session;
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\InvalidValue;
 use DateTimeImmutable;
@@ -52,6 +53,7 @@ final readonly class RedisSessionStore implements SessionStore
                     $session->methods,
                 ),
                 'sid' => $session->sid,
+                'connection' => $session->connection->value,
             ], JSON_THROW_ON_ERROR),
         );
     }
@@ -107,10 +109,12 @@ final readonly class RedisSessionStore implements SessionStore
             $amr = $data['amr'] ?? null;
             /** @var mixed $sid */
             $sid = $data['sid'] ?? null;
+            /** @var mixed $connection */
+            $connection = $data['connection'] ?? null;
 
             if (
                 ! is_string($userId) || ! is_string($authenticatedAt) || ! is_string($expiresAt)
-                || ! is_array($amr) || ! array_is_list($amr) || ! is_string($sid)
+                || ! is_array($amr) || ! array_is_list($amr) || ! is_string($sid) || ! is_string($connection)
             ) {
                 return null;
             }
@@ -125,6 +129,7 @@ final readonly class RedisSessionStore implements SessionStore
                     $amr,
                 ),
                 $sid,
+                ConnectionName::fromString($connection),
             );
         } catch (JsonException | InvalidValue | ValueError | Exception) {
             return null;

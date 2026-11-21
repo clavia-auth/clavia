@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Domain\Identity;
 
+use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Shared\AlreadyExists;
 use Clavia\Domain\Shared\Page;
 use Clavia\Domain\Shared\PageRequest;
@@ -22,22 +23,27 @@ interface UserRepository
 {
     public function find(UserId $id): ?User;
 
-    /** Look an account up by the exact address it was registered with. */
-    public function findByEmail(string $email): ?User;
+    /** Look an account up by the exact address it was registered with, in its connection. */
+    public function findByEmail(ConnectionName $connection, string $email): ?User;
 
     /**
-     * Every account whose address equals `$email` ignoring case — usually none or one.
-     * Addresses are unique as written, so two accounts can differ only by case; a caller
-     * linking by address treats more than one as no answer.
+     * Every account in one of `$connections` whose address equals `$email` ignoring case,
+     * oldest first. Several are normal — the same address in two pools is two accounts —
+     * and a caller linking by address treats more than one as no answer.
+     *
+     * @param list<ConnectionName> $connections
      *
      * @return list<User>
      */
-    public function matchingEmail(string $email): array;
+    public function matchingEmail(string $email, array $connections): array;
+
+    /** How many accounts belong to the connection. */
+    public function countIn(ConnectionName $connection): int;
 
     /**
      * Insert the account, or update it when it already exists.
      *
-     * @throws AlreadyExists When another account uses the address.
+     * @throws AlreadyExists When another account in its connection uses the address.
      */
     public function save(User $user): void;
 
