@@ -105,4 +105,14 @@ final class OAuth2Error extends DomainException
     {
         return new self(ErrorCode::UnsupportedTokenType, $description);
     }
+
+    public static function requestNotSupported(string $description): self
+    {
+        return new self(ErrorCode::RequestNotSupported, $description);
+    }
+
+    public static function requestUriNotSupported(string $description): self
+    {
+        return new self(ErrorCode::RequestUriNotSupported, $description);
+    }
 }

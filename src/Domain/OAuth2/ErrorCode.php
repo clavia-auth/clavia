@@ -76,4 +76,10 @@ enum ErrorCode: string
 
     /** RFC 7009 §2.2.1: a `token_type_hint` naming a kind of token the server does not keep. */
     case UnsupportedTokenType = 'unsupported_token_type';
+
+    /** OpenID Connect Core §6.1: a request object passed by value, which this server does not take. */
+    case RequestNotSupported = 'request_not_supported';
+
+    /** OpenID Connect Core §6.2: a request object passed by reference, which this server does not take. */
+    case RequestUriNotSupported = 'request_uri_not_supported';
 }

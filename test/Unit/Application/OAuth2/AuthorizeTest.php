@@ -507,7 +507,7 @@ final class AuthorizeTest extends TestCase
     {
         $this->clients->save(Clients::public('tpc_partner'));
 
-        $outcome = $this->authorizeAsUser($this->valid(['client_id' => 'tpc_partner', 'prompt' => 'consent login']));
+        $outcome = $this->authorizeAsUser($this->valid(['client_id' => 'tpc_partner', 'prompt' => 'consent']));
 
         self::assertInstanceOf(ConsentRequired::class, $outcome);
         $held = $this->consentStates->find($outcome->consentState);
@@ -519,9 +519,9 @@ final class AuthorizeTest extends TestCase
         self::assertSame('openid', $held->scope->toString());
         self::assertNull($held->resourceServerId);
         // Back to the same request — without the `consent` it prompted for, or it would
-        // ask forever; other values stay.
+        // ask forever.
         self::assertSame(
-            self::ENDPOINT . '?' . $this->valid(['client_id' => 'tpc_partner', 'prompt' => 'login'])->toQueryString(),
+            self::ENDPOINT . '?' . $this->valid(['client_id' => 'tpc_partner'])->toQueryString(),
             $held->resumeAt,
         );
         self::assertSame([], $this->codes->all());
@@ -575,6 +575,48 @@ final class AuthorizeTest extends TestCase
         self::assertInstanceOf(RequestRefused::class, $outcome);
         self::assertSame(ErrorCode::LoginRequired, $outcome->error->error);
         self::assertSame(0, $this->loginStates->count());
+    }
+
+    public function testPromptLoginSendsASignedInPersonToSignInAgainOnce(): void
+    {
+        $outcome = $this->authorizeAsUser($this->valid(['prompt' => 'login consent']));
+
+        self::assertInstanceOf(LoginRequired::class, $outcome);
+        $parked = $this->loginStates->get($outcome->loginState);
+        self::assertNotNull($parked);
+        // The sign-in is what `login` asked for: the request it resumes asks no more, and
+        // keeps what else it asked.
+        self::assertSame(
+            self::ENDPOINT . '?' . $this->valid(['prompt' => 'consent'])->toQueryString(),
+            $parked->nextUrl,
+        );
+    }
+
+    public function testMaxAgeZeroIsDroppedFromTheResumedRequest(): void
+    {
+        $outcome = $this->authorizeAsUser($this->valid(['max_age' => '0']));
+
+        self::assertInstanceOf(LoginRequired::class, $outcome);
+        $parked = $this->loginStates->get($outcome->loginState);
+        self::assertNotNull($parked);
+        self::assertSame(self::ENDPOINT . '?' . $this->valid()->toQueryString(), $parked->nextUrl);
+    }
+
+    public function testRequestObjectsAreRefusedBeforeTheOtherParametersAreLookedAt(): void
+    {
+        // The parameters a request object carries need not be beside it.
+        $byValue = $this->authorizeAsUser(RequestParameters::fromMap([
+            'client_id' => 'spa',
+            'redirect_uri' => Clients::REDIRECT_URI,
+            'request' => 'e30',
+        ]));
+        $byReference = $this->authorizeAsUser($this->valid(['request_uri' => 'https://client.test/r']));
+
+        self::assertInstanceOf(RequestRefused::class, $byValue);
+        self::assertSame(ErrorCode::RequestNotSupported, $byValue->error->error);
+        self::assertInstanceOf(RequestRefused::class, $byReference);
+        self::assertSame(ErrorCode::RequestUriNotSupported, $byReference->error->error);
+        self::assertSame([], $this->codes->all());
     }
 
     public function testPromptNoneWithAnotherValueIsRefused(): void

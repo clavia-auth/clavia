@@ -29,7 +29,7 @@ and multi-tenancy.
 
 ## Current state
 
-**Steps 0 to 17 are done: the foundations, Authorization Code + PKCE, the login page with
+**Steps 0 to 18 are done: the foundations, Authorization Code + PKCE, the login page with
 browser sessions, OpenID Connect (ID tokens, discovery, JWKS, userinfo), Client
 Credentials for machine clients holding a grant on an API, the Management API with
 audiences in the user's flow, two-factor authentication (TOTP and recovery codes),
@@ -37,7 +37,8 @@ signing in with Google or GitHub, RP-Initiated Logout, roles (RBAC), rotating re
 tokens, application ownership with the consent screen, and connections — pools of accounts,
 the social providers and operator-registered OpenID Connect providers, enabled per
 application — token introspection and revocation, device authorization, passwordless sign-in by email, and
-back-channel logout with session management; the dashboard is in `frontend/`.**
+back-channel logout with session management, and the authentication-request parameters
+(`prompt`, `max_age`, request objects refused); the dashboard is in `frontend/`.**
 The application answers `GET /healthz`,
 `GET|POST /oauth2/authorize`, `POST /oauth2/token`, `POST /oauth2/introspect`, `POST /oauth2/revoke`,
 `POST /oauth2/device/code`, `GET|POST /auth/device`,
@@ -303,7 +304,7 @@ What exists:
     `ResourceServer::$allowSkippingConsent` and `allowingConsentSkip()` (refused off for a
     system API: `SystemApiProtected::consent()`).
   - `Domain\Consent\{UserConsent,ConsentRepository,ConsentPolicy,PendingConsent}`;
-    `Domain\OAuth2\Prompt` (`none`, `consent`); `ErrorCode::LoginRequired|ConsentRequired`.
+    `Domain\OAuth2\Prompt` (every value since Step 18); `ErrorCode::LoginRequired|ConsentRequired`.
   - `Authorize` refuses a third-party application a system API (`access_denied`, before
     sign-in), answers `prompt=none` with `login_required`/`consent_required`, and puts a
     request needing consent on hold (`ConsentRequired`). `AuthorizationRequest::resumption()`
@@ -1649,10 +1650,19 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
   of `SessionStoreContract` against the fake and Redis, the back-channel cases of
   `ClientsTest`, `ClientRepositoryContract` and `AuthorizeTest`.
 
-#### [ ] Step 18 — Authentication-request parameters and complete metadata
+#### [x] Step 18 — Authentication-request parameters and complete metadata
 - `prompt`, `max_age`, `request`/`request_uri` refusal; discovery states every non-default
   field; a test fetches every endpoint the document advertises.
 - Python: `oauth2/prompt.py`. Tests: `test_authorize_prompt` (15).
+- Done: `Domain\OAuth2\Prompt` knows `login` and `select_account` (`demandsSignIn()`,
+  `SUPPORTED`, variadic `without()`); `Domain\OAuth2\MaxAge` (`fromParameter`, `isZero`,
+  `isExceededBy` — an unknown sign-in time is too old); `ErrorCode::RequestNotSupported|
+  RequestUriNotSupported`. `Authorize` refuses request objects first (after the client and
+  redirect URI), then decides once whether the person must be seen again; the request the
+  login page resumes drops `login`/`select_account` and a zero `max_age`, keeps a positive
+  one. Discovery: `prompt_values_supported`.
+- Tests: `AuthorizePromptTest` (18 acceptance cases), `MaxAgeTest`, the `login`/`max_age`/
+  request-object cases of `AuthorizeTest` and `PromptTest`, `OidcTest` (the prompt values).
 
 #### [ ] Step 19 — Remote signing backends
 - `aws-kms`, `gcp-kms`, `azure-key-vault` and custom-class adapters behind `TokenSigner`

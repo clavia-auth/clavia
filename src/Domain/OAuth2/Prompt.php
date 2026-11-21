@@ -15,22 +15,32 @@ namespace Clavia\Domain\OAuth2;
  * The `prompt` of an authorization request (OpenID Connect Core §3.1.2.1): what the
  * client wants this server to show, or not show, to the person.
  *
- * A space-separated list of case-sensitive values. Two are acted on:
+ * A space-separated list of case-sensitive values, every one of §3.1.2.1 acted on:
  *
- * - `consent` — ask for consent even when it was given before or would not be needed.
  * - `none` — show nothing at all. When somebody would have to sign in, the answer is
  *   `login_required`; when they would have to consent, `consent_required` (§3.1.2.6).
  *   Asking for nothing *and* something is a contradiction: `none` with any other value is
  *   `invalid_request`.
+ * - `login` — sign in again, whatever session there is.
+ * - `select_account` — let the person choose an account. There is no account chooser
+ *   here, so it is honoured the one way that lets somebody pick another account: by
+ *   signing in again, like `login`.
+ * - `consent` — ask for consent even when it was given before or would not be needed.
  *
- * `login` and `select_account` are not acted on yet (see `docs/DEVIATIONS.md`), and are
- * not advertised in discovery; a value this server does not know is ignored.
+ * A value this server does not know is ignored.
  */
 final readonly class Prompt
 {
     public const string NONE = 'none';
 
+    public const string LOGIN = 'login';
+
+    public const string SELECT_ACCOUNT = 'select_account';
+
     public const string CONSENT = 'consent';
+
+    /** What discovery advertises as `prompt_values_supported`. */
+    public const array SUPPORTED = [self::NONE, self::LOGIN, self::CONSENT, self::SELECT_ACCOUNT];
 
     /**
      * @param list<non-empty-string> $values Each once, in the order given.
@@ -65,6 +75,12 @@ final readonly class Prompt
         return in_array(self::NONE, $this->values, true);
     }
 
+    /** Whether the client asked for a fresh sign-in, whatever session there is. */
+    public function demandsSignIn(): bool
+    {
+        return in_array(self::LOGIN, $this->values, true) || in_array(self::SELECT_ACCOUNT, $this->values, true);
+    }
+
     /** Whether the client asked for the consent screen whatever was agreed before. */
     public function demandsConsent(): bool
     {
@@ -72,14 +88,17 @@ final readonly class Prompt
     }
 
     /**
-     * The parameter without `$value` — for the request a page sends the browser back to,
+     * The parameter without these values — for the request a page sends the browser back to,
      * once what that value asked for has happened: a request that still said
      * `prompt=consent` after consent was given would ask again, forever. Null when nothing
      * is left.
      */
-    public function without(string $value): ?string
+    public function without(string ...$value): ?string
     {
-        $rest = array_values(array_filter($this->values, static fn (string $kept): bool => $kept !== $value));
+        $rest = array_values(array_filter(
+            $this->values,
+            static fn (string $kept): bool => ! in_array($kept, $value, true),
+        ));
 
         return $rest === [] ? null : implode(' ', $rest);
     }

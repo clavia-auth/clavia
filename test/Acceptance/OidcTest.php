@@ -94,9 +94,11 @@ final class OidcTest extends AcceptanceTestCase
         self::assertTrue($document['backchannel_logout_supported']);
         self::assertTrue($document['backchannel_logout_session_supported']);
 
-        // Nothing is advertised that does not exist yet.
-        self::assertArrayNotHasKey('prompt_values_supported', $document);
+        self::assertSame(['none', 'login', 'consent', 'select_account'], $document['prompt_values_supported']);
+
+        // Nothing is advertised that does not exist.
         self::assertArrayNotHasKey('frontchannel_logout_supported', $document);
+        self::assertArrayNotHasKey('display_values_supported', $document);
     }
 
     public function testRfc8414MetadataIsTheSameDocument(): void

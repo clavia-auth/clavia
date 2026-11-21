@@ -53,4 +53,16 @@ final class PromptTest extends TestCase
         self::assertNull(Prompt::fromParameter('consent consent')->without('consent'));
         self::assertSame('login', Prompt::fromParameter('login')->without('consent'));
     }
+
+    public function testLoginAndSelectAccountBothAskForAFreshSignIn(): void
+    {
+        self::assertTrue(Prompt::fromParameter('login')->demandsSignIn());
+        self::assertTrue(Prompt::fromParameter('select_account consent')->demandsSignIn());
+        self::assertFalse(Prompt::fromParameter('consent')->demandsSignIn());
+        self::assertFalse(Prompt::fromParameter('none')->demandsSignIn());
+        self::assertSame(
+            'consent',
+            Prompt::fromParameter('login consent select_account')->without(Prompt::LOGIN, Prompt::SELECT_ACCOUNT),
+        );
+    }
 }

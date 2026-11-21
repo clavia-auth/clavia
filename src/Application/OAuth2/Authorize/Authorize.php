@@ -31,6 +31,7 @@ use Clavia\Domain\OAuth2\AuthorizationCode;
 use Clavia\Domain\OAuth2\AuthorizationCodeId;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
 use Clavia\Domain\OAuth2\CodeChallenge;
+use Clavia\Domain\OAuth2\MaxAge;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use Clavia\Domain\OAuth2\Prompt;
 use Clavia\Domain\Oidc\Nonce;
@@ -55,12 +56,15 @@ use Clavia\Domain\Shared\SecretGenerator;
  *    unregistered URI — even to report a problem — would make this endpoint an open
  *    redirector and hand codes to whoever supplied the URI.
  * 2. **Everything else about the request, reported to the client by redirect**
- *    (§4.1.2.1), `state` included.
+ *    (§4.1.2.1), `state` included. A request object — `request` or `request_uri` — is
+ *    refused first (OIDC Core §6.1, §6.2): honouring the plain parameters of a request
+ *    whose signed half may say something else would be worse than refusing it.
  * 3. **Only then, the user.** Nobody is ever shown a login page for a request that
  *    would be refused anyway: an endpoint that asks for credentials on the strength of
  *    attacker-supplied parameters is a phishing surface. A session established through
  *    a connection the application does not enable counts for nothing here: the person
- *    signs in again, through one it does.
+ *    signs in again, through one it does. So does somebody the client asked to see
+ *    again: `prompt=login` or `select_account`, or a sign-in older than `max_age`.
  * 4. **Then their consent**, when {@see ConsentPolicy} says the request has to be put to
  *    them: the request goes on hold, and the browser to the consent screen.
  *
@@ -109,10 +113,12 @@ final readonly class Authorize
         $state = $parameters->isRepeated('state') ? null : $parameters->get('state');
 
         try {
+            self::refuseRequestObjects($parameters);
             [$scope, $target] = $this->validate($parameters, $client);
             $challenge = $this->challenge($parameters);
             $nonce = $this->nonce($parameters, $client, $scope);
             $prompt = Prompt::fromParameter($parameters->get('prompt'));
+            $maxAge = MaxAge::fromParameter($parameters->get('max_age'));
         } catch (OAuth2Error $refusal) {
             return new RequestRefused($redirectUri, $refusal, $state);
         }
@@ -122,17 +128,27 @@ final readonly class Authorize
         if ($session !== null && ! $this->connections->allows($client, $session->connection)) {
             $endUser = null;
         }
+        if ($endUser !== null && $this->mustBeSeenAgain($endUser, $prompt, $maxAge)) {
+            $endUser = null;
+        }
         if ($endUser === null) {
             if ($prompt->forbidsInteraction()) {
                 return new RequestRefused(
                     $redirectUri,
-                    OAuth2Error::loginRequired("Nobody is signed in, and 'prompt=none' forbids asking."),
+                    OAuth2Error::loginRequired("The person must sign in, and 'prompt=none' forbids asking."),
                     $state,
                 );
             }
 
+            // The sign-in about to happen satisfies `login`, `select_account` and
+            // `max_age=0`; the request the browser returns to must not ask for them again,
+            // or it would ask forever. Every other value stays.
+            $resumed = $parameters->with('prompt', $prompt->without(Prompt::LOGIN, Prompt::SELECT_ACCOUNT));
+            if ($maxAge?->isZero() === true) {
+                $resumed = $resumed->with('max_age', null);
+            }
             $handle = $this->secrets->token();
-            $this->loginStates->put($handle, new LoginState($request->resumption($parameters), $client->id));
+            $this->loginStates->put($handle, new LoginState($request->resumption($resumed), $client->id));
 
             return new LoginRequired($handle);
         }
@@ -194,6 +210,33 @@ final readonly class Authorize
         }
 
         return new CodeIssued($redirectUri, $code, $state);
+    }
+
+    /**
+     * Whether the person behind the request has to sign in again although they are
+     * signed in: the client asked to see them (`prompt=login`, `select_account`), or their
+     * sign-in is older than `max_age` — or of an unknown time, which no `max_age` accepts.
+     */
+    private function mustBeSeenAgain(EndUser $endUser, Prompt $prompt, ?MaxAge $maxAge): bool
+    {
+        return $prompt->demandsSignIn()
+            || ($maxAge?->isExceededBy($endUser->session?->authenticatedAt, $this->clock->now()) ?? false);
+    }
+
+    /**
+     * OIDC Core §6: this server takes no request object, by value or by reference, and
+     * says so with the errors defined for that.
+     *
+     * @throws OAuth2Error
+     */
+    private static function refuseRequestObjects(RequestParameters $parameters): void
+    {
+        if ($parameters->get('request') !== null) {
+            throw OAuth2Error::requestNotSupported('Request objects are not supported: send the parameters as such.');
+        }
+        if ($parameters->get('request_uri') !== null) {
+            throw OAuth2Error::requestUriNotSupported('Request objects by reference are not supported.');
+        }
     }
 
     /**

@@ -17,6 +17,7 @@ use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\ResponseType;
 use Clavia\Domain\OAuth2\CodeChallenge;
+use Clavia\Domain\OAuth2\Prompt;
 use Clavia\Domain\Oidc\SigningAlgorithm;
 use Clavia\Domain\Shared\ScopeSet;
 
@@ -112,6 +113,8 @@ final readonly class ProviderMetadata
             'device_authorization_endpoint' => $this->issuer . self::DEVICE_AUTHORIZATION_ENDPOINT,
             'claim_types_supported' => ['normal'],
             'claims_supported' => self::CLAIMS,
+            // OIDC Core §3.1.2.1; Discovery has no default for it, so it is always stated.
+            'prompt_values_supported' => Prompt::SUPPORTED,
             'claims_parameter_supported' => false,
             'request_parameter_supported' => false,
             // The default is true.
