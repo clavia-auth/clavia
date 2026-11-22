@@ -29,6 +29,7 @@ final readonly class LoginPageHandler implements RequestHandlerInterface
 {
     public function __construct(
         private DescribeLoginPage $describe,
+        private LoginForm $loginForm,
         private AuthPageResponder $responder,
         private AuthCookies $cookies,
     ) {
@@ -40,11 +41,8 @@ final readonly class LoginPageHandler implements RequestHandlerInterface
         $loginState = RequestParameterReader::query($request)->get('state');
         $page = ($this->describe)($loginState, RequestCookies::first($request, $this->cookies->sessionCookieName));
 
-        return $this->responder->page(
-            $request,
-            $page->signedInAs !== null
-                ? LoginPages::signedIn($page->signedInAs)
-                : LoginPages::form($loginState, $page->formOrigins, $page->methods),
-        );
+        return $page->signedInAs !== null
+            ? $this->responder->page($request, LoginPages::signedIn($page->signedInAs))
+            : $this->loginForm->render($request, $loginState);
     }
 }

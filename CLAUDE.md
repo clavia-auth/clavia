@@ -374,6 +374,16 @@ applies however the person signed in.
   are one outcome (`CredentialsRejected`), one message, one status. `simulateVerification()`
   spends the same time when no hash is checked. Throttling counts per account and per client
   address (`REMOTE_ADDR` only).
+- **Passkey** (`BeginPasskeySignIn`, `SignInWithPasskey`, design in `docs/design/passkeys.md`
+  §6.2): the login page offers one in the address field's autofill and behind a button, wherever
+  the application lets anybody in. No address is typed: the passkey names its owner by the user
+  handle. The ceremony is bound to the page's login state (or, on a page reached directly, to its
+  own handle), user verification is required, and the throttle counts per client address, since
+  there is no account to count against first. The account must be active and its connection one
+  the application allows. Every refusal is `CredentialsRejected`, a wrong password's answer. With
+  `CLAVIA_PASSKEY_SATISFIES_MFA` (on by default) a verified passkey is multi-factor by itself
+  (`amr` `hwk` or `swk`, then `mfa`); off, the second factor follows. The last passkey of a pool
+  account with no password and no linked identity cannot be removed: it is the only way in.
 - **Second factor** (`CompleteSecondFactor`, `CompletePasskeySecondFactor`): asked of an account
   with a confirmed authenticator app or a passkey. The challenge lives in Redis behind the
   `clavia_mfa` cookie (`Path=/auth`). A TOTP code (RFC 6238: SHA-1, six digits, thirty seconds,
@@ -648,7 +658,9 @@ These follow from the RFCs and from mistakes already made once. Breaking one is 
 - **Passkeys**: the relying party id is the sign-in host, or a parent of it within the root
   domain, and the origin is matched exactly. A ceremony is single-use (`GETDEL`), short-lived,
   bound to its purpose and context (the account, or a login state's digest), and claimed before
-  it is checked. Registration needs user verification. Adding, renaming or removing a passkey
+  it is checked. Registration and signing in need user verification; a second factor needs only
+  presence. `UsePasskey` is the one place a passkey answers a ceremony: found, verified, its
+  counter grown, its use a conditional write. Adding, renaming or removing a passkey
   needs a sign-in within `CLAVIA_PASSKEY_REAUTH_WINDOW`; past it the person signs in again.
   Failures are one answer to the person; the log keeps the reason.
 - A post-sign-in target never travels in a URL. It is held server-side behind an opaque handle,

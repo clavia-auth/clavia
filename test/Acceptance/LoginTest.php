@@ -49,19 +49,36 @@ final class LoginTest extends AcceptanceTestCase
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
     }
 
-    public function testLoginPageForbidsScript(): void
+    public function testTheLoginPageRunsOnlyThisServersPasskeyModule(): void
     {
         $response = $this->get('/auth/login');
 
         $policy = $response->getHeaderLine('Content-Security-Policy');
         self::assertStringContainsString("default-src 'none'", $policy);
-        self::assertStringNotContainsString('script-src', $policy);
+        // The passkey module, under Trusted Types with no policy: no inline script, no eval, no
+        // other origin (docs/design/passkeys.md §8).
+        self::assertStringContainsString("script-src 'self';", $policy);
+        self::assertStringNotContainsString('unsafe', $policy);
+        self::assertStringContainsString("require-trusted-types-for 'script'; trusted-types 'none'", $policy);
         self::assertStringContainsString("form-action 'self'", $policy);
         self::assertStringContainsString("frame-ancestors 'none'", $policy);
-        self::assertStringNotContainsString('<script', strtolower((string) $response->getBody()));
+        $body = strtolower((string) $response->getBody());
+        self::assertSame(1, substr_count($body, '<script'), 'The module and nothing else.');
+        self::assertSame(1, preg_match('#<script type="module" src="([^"]+)"></script>#', $body, $module));
+        self::assertSame('/auth/static/passkeys.js', html_entity_decode($module[1], ENT_QUOTES | ENT_HTML5));
         self::assertStringNotContainsString(' style=', (string) $response->getBody());
         self::assertSame('DENY', $response->getHeaderLine('X-Frame-Options'));
         self::assertSame('nosniff', $response->getHeaderLine('X-Content-Type-Options'));
+    }
+
+    public function testWithPasskeysOffTheLoginPageRunsNoScriptAtAll(): void
+    {
+        $this->boot(['CLAVIA_PASSKEYS_ENABLED' => 'false']);
+
+        $response = $this->get('/auth/login');
+
+        self::assertStringNotContainsString('script-src', $response->getHeaderLine('Content-Security-Policy'));
+        self::assertStringNotContainsString('<script', strtolower((string) $response->getBody()));
     }
 
     public function testThemeToggleSetsACookieAndReturnsToThePage(): void

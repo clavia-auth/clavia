@@ -435,6 +435,7 @@ final class SettingsTest extends TestCase
         self::assertSame(300, $settings->webauthnCeremonyLifetime);
         self::assertSame(10, $settings->passkeyMaxPerUser);
         self::assertSame(600, $settings->passkeyReauthWindow);
+        self::assertTrue($settings->passkeySatisfiesMfa);
     }
 
     public function testTheRelyingPartyFollowsAnExplicitIssuerPortIncluded(): void

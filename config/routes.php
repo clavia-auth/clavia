@@ -19,6 +19,7 @@ use Clavia\Adapter\Primary\Http\Auth\LogoutHandler;
 use Clavia\Adapter\Primary\Http\Auth\MfaChallengeHandler;
 use Clavia\Adapter\Primary\Http\Auth\MfaSettingsHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasskeysHandler;
+use Clavia\Adapter\Primary\Http\Auth\PasskeySignInHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordForgotHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessCodeHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessLinkHandler;
@@ -104,6 +105,8 @@ return static function (Application $app, ContainerInterface $container): void {
     $app->route('/auth/mfa', MfaChallengeHandler::class, ['GET', 'POST'], 'auth.mfa');
     if ($settings->passkeysEnabled) {
         $app->post('/auth/mfa/passkey', MfaChallengeHandler::class, 'auth.mfa.passkey');
+        // Signing in with a passkey, from the login page's autofill or its button.
+        $app->post('/auth/passkey', PasskeySignInHandler::class, 'auth.passkey');
     }
     $app->route('/auth/mfa/enroll', MfaSettingsHandler::class, ['GET', 'POST'], 'auth.mfa.enroll');
     $app->post('/auth/mfa/enroll/confirm', MfaSettingsHandler::class, 'auth.mfa.enroll.confirm');

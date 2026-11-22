@@ -275,12 +275,14 @@ final class PasskeyRegistrationTest extends AcceptanceTestCase
     {
         $user = $this->user();
         $this->submitLogin();
+        // The login page opened a sign-in ceremony of its own: whatever the cookie holds now.
+        $before = $this->cookie(self::CEREMONY_COOKIE);
 
         $begin = $this->post('/auth/passkeys/new', []);
 
         self::assertSame(303, $begin->getStatusCode());
         self::assertSame('/auth/passkeys', $begin->getHeaderLine('Location'));
-        self::assertNull($this->cookie(self::CEREMONY_COOKIE));
+        self::assertSame($before, $this->cookie(self::CEREMONY_COOKIE), 'No registration ceremony was opened.');
         self::assertSame([], $this->passkeysOf($user));
     }
 

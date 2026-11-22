@@ -23,4 +23,7 @@ enum PasskeyChange
 
     /** The new name cannot be a passkey's name. */
     case InvalidName;
+
+    /** It is the account's last way in: no password, no other provider, no other passkey. */
+    case LastWayIn;
 }

@@ -35,12 +35,14 @@ use Clavia\Adapter\Primary\Http\Auth\ConsentHandler;
 use Clavia\Adapter\Primary\Http\Auth\DeviceHandler;
 use Clavia\Adapter\Primary\Http\Auth\ExternalSignInCallbackHandler;
 use Clavia\Adapter\Primary\Http\Auth\ExternalSignInHandler;
+use Clavia\Adapter\Primary\Http\Auth\LoginForm;
 use Clavia\Adapter\Primary\Http\Auth\LoginHandler;
 use Clavia\Adapter\Primary\Http\Auth\LoginPageHandler;
 use Clavia\Adapter\Primary\Http\Auth\LogoutHandler;
 use Clavia\Adapter\Primary\Http\Auth\MfaChallengeHandler;
 use Clavia\Adapter\Primary\Http\Auth\MfaSettingsHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasskeysHandler;
+use Clavia\Adapter\Primary\Http\Auth\PasskeySignInHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordForgotHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessCodeHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessLinkHandler;
@@ -141,6 +143,7 @@ use Clavia\Application\Authentication\Passkey\DescribePasskeys;
 use Clavia\Application\Authentication\Passkey\RecentSignIn;
 use Clavia\Application\Authentication\Passkey\RemovePasskey;
 use Clavia\Application\Authentication\Passkey\RenamePasskey;
+use Clavia\Application\Authentication\Passkey\UsePasskey;
 use Clavia\Application\Authentication\Passwordless\AnswerPasswordlessCode;
 use Clavia\Application\Authentication\Passwordless\DescribePasswordlessChallenge;
 use Clavia\Application\Authentication\Passwordless\FinishPasswordlessSignIn;
@@ -150,7 +153,9 @@ use Clavia\Application\Authentication\Passwordless\StartPasswordlessSignIn;
 use Clavia\Application\Authentication\RequireSignIn;
 use Clavia\Application\Authentication\ResolveEndUser;
 use Clavia\Application\Authentication\Sessions;
+use Clavia\Application\Authentication\SignIn\BeginPasskeySignIn;
 use Clavia\Application\Authentication\SignIn\CompleteFirstFactor;
+use Clavia\Application\Authentication\SignIn\SignInWithPasskey;
 use Clavia\Application\Authentication\SignIn\SignInWithPassword;
 use Clavia\Application\Authentication\SignOut;
 use Clavia\Application\Authentication\SignOutEverywhere;
@@ -492,6 +497,11 @@ final class ConfigProvider
                     MfaSettingsHandler::class => Container\MfaSettingsHandlerFactory::class,
                     PasskeysHandler::class => Container\PasskeysHandlerFactory::class,
                     BeginPasskeySecondFactor::class => Container\BeginPasskeySecondFactorFactory::class,
+                    UsePasskey::class => Container\UsePasskeyFactory::class,
+                    BeginPasskeySignIn::class => Container\BeginPasskeySignInFactory::class,
+                    SignInWithPasskey::class => Container\SignInWithPasskeyFactory::class,
+                    LoginForm::class => Container\LoginFormFactory::class,
+                    PasskeySignInHandler::class => Container\PasskeySignInHandlerFactory::class,
                     CompletePasskeySecondFactor::class => Container\CompletePasskeySecondFactorFactory::class,
                     BeginPasskeyRegistration::class => Container\BeginPasskeyRegistrationFactory::class,
                     CompletePasskeyRegistration::class => Container\CompletePasskeyRegistrationFactory::class,

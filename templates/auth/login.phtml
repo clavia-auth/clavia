@@ -31,10 +31,18 @@
 <?php elseif (! $password && ! $emailSignIn && $providers === []): ?>
     <p class="hint">No sign-in method is available for this application. Go back to it and contact its administrator.</p>
 <?php else: ?>
+<?php if ($passkeyOptions !== null): ?>
+    <form method="post" action="/auth/passkey" data-webauthn-get="<?= $this->escapeHtmlAttr($passkeyOptions) ?>" data-webauthn-conditional>
+<?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => $loginState]) ?>
+      <input type="hidden" name="credential" value="">
+      <p class="hint" data-webauthn-failed hidden>Your browser did not use the passkey. Try again, or sign in another way.</p>
+      <button type="submit" data-webauthn-start hidden>Sign in with a passkey</button>
+    </form>
+<?php endif ?>
 <?php if ($password): ?>
     <form method="post" action="/auth/login" autocomplete="on" novalidate>
 <?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => $loginState]) ?>
-<?= $this->partial('partial::field', ['name' => 'email', 'label' => 'Email', 'type' => 'email', 'autocomplete' => 'username', 'value' => $email, 'autofocus' => true]) ?>
+<?= $this->partial('partial::field', ['name' => 'email', 'label' => 'Email', 'type' => 'email', 'autocomplete' => $passkeyOptions !== null ? 'username webauthn' : 'username', 'value' => $email, 'autofocus' => true]) ?>
 <?= $this->partial('partial::field', ['name' => 'password', 'label' => 'Password', 'type' => 'password', 'autocomplete' => 'current-password', 'value' => '', 'autofocus' => false]) ?>
 
       <button type="submit">Sign in</button>

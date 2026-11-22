@@ -265,6 +265,12 @@ final readonly class Settings
          */
         #[Range(min: 60, max: 86400)]
         public int $passkeyReauthWindow = 600,
+        /**
+         * Whether signing in with a passkey whose authenticator verified the person (a biometric or
+         * a PIN) is multi-factor by itself: possession and inherence or knowledge. On, a second
+         * factor after it would be redundant; off, it follows as after a password.
+         */
+        public bool $passkeySatisfiesMfa = true,
         // ------------------------------------------------------------------
         // OAuth2
         // ------------------------------------------------------------------

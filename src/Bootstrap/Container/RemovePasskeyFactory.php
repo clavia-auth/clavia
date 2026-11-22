@@ -15,6 +15,9 @@ use Clavia\Application\Authentication\Passkey\RecentSignIn;
 use Clavia\Application\Authentication\Passkey\RemovePasskey;
 use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
+use Clavia\Domain\Connection\ConnectionRepository;
+use Clavia\Domain\Identity\ExternalIdentityRepository;
+use Clavia\Domain\Identity\UserRepository;
 use Psr\Container\ContainerInterface;
 
 final class RemovePasskeyFactory
@@ -23,11 +26,17 @@ final class RemovePasskeyFactory
     {
         /** @var PasskeyRepository $passkeys */
         $passkeys = $container->get(PasskeyRepository::class);
+        /** @var UserRepository $users */
+        $users = $container->get(UserRepository::class);
+        /** @var ConnectionRepository $connections */
+        $connections = $container->get(ConnectionRepository::class);
+        /** @var ExternalIdentityRepository $identities */
+        $identities = $container->get(ExternalIdentityRepository::class);
         /** @var DomainEvents $events */
         $events = $container->get(DomainEvents::class);
         /** @var RecentSignIn $recentSignIn */
         $recentSignIn = $container->get(RecentSignIn::class);
 
-        return new RemovePasskey($passkeys, $events, $recentSignIn);
+        return new RemovePasskey($passkeys, $users, $connections, $identities, $events, $recentSignIn);
     }
 }

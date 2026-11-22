@@ -28,6 +28,8 @@ final readonly class SignInMethods
      *                                                opens a pool to sign-ups.
      * @param bool                         $passwordReset Whether "Forgot your password?" is offered: the
      *                                                password form is, and mail can be sent.
+     * @param bool                         $passkey   Whether "Sign in with a passkey" is offered: passkeys are
+     *                                                on, and the application lets people in at all.
      */
     public function __construct(
         public bool $password,
@@ -35,6 +37,7 @@ final readonly class SignInMethods
         public array $providers,
         public bool $signUp = false,
         public bool $passwordReset = false,
+        public bool $passkey = false,
     ) {
     }
 

@@ -32,6 +32,9 @@ enum SignInRefusal: string
     /** A passkey Clavia does not know, or one of another account. */
     case UnknownPasskey = 'unknown_passkey';
 
+    /** A passkey signing someone in did not verify. */
+    case InvalidPasskey = 'invalid_passkey';
+
     /** A passkey's signature counter did not grow: its authenticator may be cloned. */
     case PasskeyCounterRegressed = 'passkey_counter_regressed';
 

@@ -62,6 +62,31 @@ final readonly class LoginThrottle
     }
 
     /**
+     * Whether the client address alone is throttled: for a sign-in that names no account before
+     * it is checked, such as a passkey's, where counting against an empty address would make one
+     * counter of every visitor.
+     */
+    public function isAddressThrottled(string $clientAddress): bool
+    {
+        return $this->counter->count(self::address($clientAddress)) >= $this->maxAttempts;
+    }
+
+    public function recordAddressFailure(string $clientAddress): void
+    {
+        $this->counter->increment(self::address($clientAddress), $this->windowSeconds);
+    }
+
+    public function resetAddress(string $clientAddress): void
+    {
+        $this->counter->reset(self::address($clientAddress));
+    }
+
+    private static function address(string $clientAddress): string
+    {
+        return 'address:' . $clientAddress;
+    }
+
+    /**
      * The account counter ignores case: `Jane@Example.com` and `jane@example.com` are
      * one target for whoever is guessing, whatever the account lookup makes of them.
      *
@@ -69,6 +94,6 @@ final readonly class LoginThrottle
      */
     private function subjects(string $email, string $clientAddress): array
     {
-        return ['account:' . mb_strtolower($email), 'address:' . $clientAddress];
+        return ['account:' . mb_strtolower($email), self::address($clientAddress)];
     }
 }
