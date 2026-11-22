@@ -44,6 +44,7 @@ use Clavia\Adapter\Primary\Http\Management\UserConsentsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserHandler;
 use Clavia\Adapter\Primary\Http\Management\UserIdentitiesHandler;
 use Clavia\Adapter\Primary\Http\Management\UserMfaHandler;
+use Clavia\Adapter\Primary\Http\Management\UserPasskeysHandler;
 use Clavia\Adapter\Primary\Http\Management\UserPasswordLinkHandler;
 use Clavia\Adapter\Primary\Http\Management\UserPermissionsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserRolesHandler;
@@ -202,6 +203,12 @@ return static function (Application $app, ContainerInterface $container): void {
         '/api/v1/users/{user_id}/identities/{connection}',
         $management(UserIdentitiesHandler::class),
         'api.user.identity',
+    );
+    $app->get('/api/v1/users/{user_id}/passkeys', $management(UserPasskeysHandler::class), 'api.user.passkeys');
+    $app->delete(
+        '/api/v1/users/{user_id}/passkeys/{passkey_id}',
+        $management(UserPasskeysHandler::class),
+        'api.user.passkey',
     );
     $app->route('/api/v1/clients', $management(ClientsHandler::class), ['GET', 'POST'], 'api.clients');
     $app->route(

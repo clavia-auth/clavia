@@ -105,4 +105,18 @@ final class InMemoryPasskeyRepository implements PasskeyRepository
     {
         return count($this->ofUser($userId));
     }
+
+    #[\Override]
+    public function countsAmong(array $userIds): array
+    {
+        $counts = [];
+        foreach ($userIds as $userId) {
+            $count = $this->countOf($userId);
+            if ($count > 0) {
+                $counts[$userId->value] = $count;
+            }
+        }
+
+        return $counts;
+    }
 }

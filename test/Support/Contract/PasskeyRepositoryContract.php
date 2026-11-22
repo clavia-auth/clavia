@@ -151,6 +151,24 @@ trait PasskeyRepositoryContract
     }
 
     #[Test]
+    public function passkeysAreCountedForSeveralAccountsAtOnce(): void
+    {
+        $ada = $this->passkeyOwner('ada@example.com');
+        $bob = $this->passkeyOwner('bob@example.com');
+        $eve = $this->passkeyOwner('eve@example.com');
+        $this->passkeys()->save($this->passkeyFor($ada, 'a1', idSeed: 1));
+        $this->passkeys()->save($this->passkeyFor($ada, 'a2', idSeed: 2));
+        $this->passkeys()->save($this->passkeyFor($bob, 'b1', idSeed: 3));
+
+        $counts = $this->passkeys()->countsAmong([$ada, $bob, $eve]);
+
+        self::assertSame(2, $counts[$ada->value] ?? null);
+        self::assertSame(1, $counts[$bob->value] ?? null);
+        self::assertArrayNotHasKey($eve->value, $counts);
+        self::assertSame([], $this->passkeys()->countsAmong([]));
+    }
+
+    #[Test]
     public function aRenameIsKeptAndTheCounterIsNotMovedBySaving(): void
     {
         $passkey = $this->passkeyFor($this->passkeyOwner('ada@example.com'), 'first', signCount: 5);

@@ -13,6 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Management\Users\ReadUsers;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
+use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
 use Clavia\Domain\Identity\UserRepository;
 use Psr\Container\ContainerInterface;
 
@@ -25,6 +26,9 @@ final class ReadUsersFactory
         /** @var MfaFactorRepository $factors */
         $factors = $container->get(MfaFactorRepository::class);
 
-        return new ReadUsers($users, $factors);
+        /** @var PasskeyRepository $passkeys */
+        $passkeys = $container->get(PasskeyRepository::class);
+
+        return new ReadUsers($users, $factors, $passkeys);
     }
 }

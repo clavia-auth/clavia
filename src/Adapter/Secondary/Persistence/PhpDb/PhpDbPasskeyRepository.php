@@ -164,7 +164,35 @@ final readonly class PhpDbPasskeyRepository implements PasskeyRepository
             ['user_id' => $userId->value],
         );
 
-        return (int) $count;
+        return max(0, (int) $count);
+    }
+
+    #[\Override]
+    public function countsAmong(array $userIds): array
+    {
+        if ($userIds === []) {
+            return [];
+        }
+        $parameters = [];
+        foreach ($userIds as $index => $userId) {
+            $parameters['user_' . $index] = $userId->value;
+        }
+        /** @var list<array{user_id: string, passkeys: int|string}> $rows */
+        $rows = $this->database->fetchAll(
+            'SELECT user_id, count(*) AS passkeys FROM passkeys WHERE user_id IN ('
+            . implode(', ', array_map(static fn (string $name): string => ':' . $name, array_keys($parameters)))
+            . ') GROUP BY user_id',
+            $parameters,
+        );
+
+        $counts = [];
+        foreach ($rows as $row) {
+            $count = (int) $row['passkeys'];
+            assert($count > 0);
+            $counts[$row['user_id']] = $count;
+        }
+
+        return $counts;
     }
 
     /**

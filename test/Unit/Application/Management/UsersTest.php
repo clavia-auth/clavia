@@ -21,15 +21,24 @@ use Clavia\Application\Management\Users\CreateUser;
 use Clavia\Application\Management\Users\DeleteUser;
 use Clavia\Application\Management\Users\NewUser;
 use Clavia\Application\Management\Users\ReadIdentities;
+use Clavia\Application\Management\Users\ReadUserPasskeys;
 use Clavia\Application\Management\Users\ReadUsers;
+use Clavia\Application\Management\Users\RemoveUserPasskey;
 use Clavia\Application\Management\Users\ResetUserMfa;
 use Clavia\Application\Management\Users\UnlinkIdentity;
 use Clavia\Application\Management\Users\UpdateUser;
 use Clavia\Application\Management\Users\UserChanges;
+use Clavia\Domain\Authentication\Event\PasskeyRemoved;
 use Clavia\Domain\Authentication\Mfa\MfaFactor;
 use Clavia\Domain\Authentication\Mfa\RecoveryCode;
 use Clavia\Domain\Authentication\Mfa\Totp;
 use Clavia\Domain\Authentication\Mfa\TotpSecret;
+use Clavia\Domain\Authentication\Passkey\CoseAlgorithm;
+use Clavia\Domain\Authentication\Passkey\CosePublicKey;
+use Clavia\Domain\Authentication\Passkey\CredentialId;
+use Clavia\Domain\Authentication\Passkey\Passkey;
+use Clavia\Domain\Authentication\Passkey\PasskeyId;
+use Clavia\Domain\Authentication\Passkey\PasskeyName;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Connection\Connection;
 use Clavia\Domain\Connection\ConnectionName;
@@ -68,6 +77,7 @@ final class UsersTest extends TestCase
     private FrozenClock $clock;
     private InMemoryTransactionManager $transactions;
     private InMemoryMfaFactorRepository $factors;
+    private InMemoryPasskeyRepository $passkeys;
     private InMemoryRecoveryCodeRepository $recoveryCodes;
     private InMemoryConnectionRepository $connections;
     private InMemoryExternalIdentityRepository $identities;
@@ -82,6 +92,7 @@ final class UsersTest extends TestCase
         $this->clock = new FrozenClock();
         $this->transactions = new InMemoryTransactionManager();
         $this->factors = new InMemoryMfaFactorRepository($this->transactions);
+        $this->passkeys = new InMemoryPasskeyRepository();
         $this->recoveryCodes = new InMemoryRecoveryCodeRepository();
         $this->connections = new InMemoryConnectionRepository();
         $this->identities = new InMemoryExternalIdentityRepository();
@@ -197,7 +208,7 @@ final class UsersTest extends TestCase
         $pending = $this->create(new NewUser('bob@example.com', 'a-good-password'));
         $this->enrol($enrolled);
         $this->factors->save(MfaFactor::stage($pending->id, 'sealed', $this->clock->now()));
-        $read = new ReadUsers($this->users, $this->factors);
+        $read = new ReadUsers($this->users, $this->factors, $this->passkeys);
 
         self::assertTrue($read->one($enrolled->id)->mfaEnrolled);
         self::assertFalse($read->one($pending->id)->mfaEnrolled);
@@ -233,7 +244,7 @@ final class UsersTest extends TestCase
 
         self::assertNull($this->factors->find($user->id));
         self::assertSame(0, $this->recoveryCodes->unusedCount($user->id));
-        self::assertFalse(new ReadUsers($this->users, $this->factors)->one($user->id)->mfaEnrolled);
+        self::assertFalse(new ReadUsers($this->users, $this->factors, $this->passkeys)->one($user->id)->mfaEnrolled);
     }
 
     public function testResettingTheSecondFactorOfAnUnknownUserIsNotFound(): void
@@ -257,7 +268,7 @@ final class UsersTest extends TestCase
     {
         $this->expectException(NotFound::class);
 
-        new ReadUsers($this->users, $this->factors)->one(UserId::generate(new SeededRandomSource(9)));
+        new ReadUsers($this->users, $this->factors, $this->passkeys)->one(UserId::generate(new SeededRandomSource(9)));
     }
 
     public function testDeletingRemovesTheUserButNotTheOneTheCallerActsAs(): void
@@ -378,6 +389,75 @@ final class UsersTest extends TestCase
         }
     }
 
+    public function testAPasskeyEnrolsTheAccountAndIsCounted(): void
+    {
+        $user = $this->create(new NewUser('ada@example.com', 'a-good-password'));
+        $read = new ReadUsers($this->users, $this->factors, $this->passkeys);
+        self::assertFalse($read->one($user->id)->mfaEnrolled);
+
+        $this->passkeys->save($this->passkeyOf($user->id, 'one'));
+        $this->passkeys->save($this->passkeyOf($user->id, 'two'));
+
+        self::assertTrue($read->one($user->id)->mfaEnrolled);
+        self::assertSame(2, $read->one($user->id)->passkeyCount);
+        self::assertSame(2, $read->describeAll([$user])[0]->passkeyCount);
+        self::assertTrue($read->describeAll([$user])[0]->mfaEnrolled);
+    }
+
+    public function testAnOperatorListsAndRemovesAPasskeyOfThatAccountOnly(): void
+    {
+        $ada = $this->create(new NewUser('ada@example.com', 'a-good-password'));
+        $bob = $this->create(new NewUser('bob@example.com', 'a-good-password'));
+        $adas = $this->passkeyOf($ada->id, 'ada');
+        $bobs = $this->passkeyOf($bob->id, 'bob');
+        $this->passkeys->save($adas);
+        $this->passkeys->save($bobs);
+        $events = new InMemoryDomainEvents();
+        $remove = new RemoveUserPasskey($this->users, $this->passkeys, $events);
+
+        self::assertCount(1, new ReadUserPasskeys($this->users, $this->passkeys)($ada->id));
+        foreach ([$bobs->id->value, 'not-an-id', '00000000-0000-4000-8000-000000000000'] as $id) {
+            try {
+                $remove($ada->id, $id);
+                self::fail('Removed ' . $id . ' through the wrong account.');
+            } catch (NotFound) {
+                self::assertCount(1, $this->passkeys->ofUser($bob->id));
+            }
+        }
+
+        $remove($ada->id, $adas->id->value);
+
+        self::assertSame([], $this->passkeys->ofUser($ada->id));
+        $removed = $events->ofType(PasskeyRemoved::class);
+        self::assertCount(1, $removed);
+        self::assertFalse($removed[0]->byTheirOwner);
+    }
+
+    public function testThePasskeysOfAnUnknownAccountAreNotFound(): void
+    {
+        $this->expectException(NotFound::class);
+
+        new ReadUserPasskeys($this->users, $this->passkeys)(UserId::generate(new SeededRandomSource(9)));
+    }
+
+    private function passkeyOf(UserId $owner, string $seed): Passkey
+    {
+        return Passkey::register(
+            PasskeyId::generate(new SeededRandomSource(crc32($seed))),
+            $owner,
+            CredentialId::fromBytes(hash('sha256', $seed, true)),
+            CosePublicKey::fromBytes('k'),
+            CoseAlgorithm::EdDSA,
+            0,
+            [],
+            null,
+            false,
+            false,
+            PasskeyName::fromString($seed),
+            $this->clock->now(),
+        );
+    }
+
     private function unlink(): UnlinkIdentity
     {
         return new UnlinkIdentity(
@@ -423,6 +503,7 @@ final class UsersTest extends TestCase
             $this->hasher,
             $this->clock,
             $this->factors,
+            $this->passkeys,
             $this->signOut,
             new InMemoryDomainEvents(),
         );
