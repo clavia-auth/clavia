@@ -40,6 +40,7 @@ use Clavia\Adapter\Primary\Http\Auth\LoginPageHandler;
 use Clavia\Adapter\Primary\Http\Auth\LogoutHandler;
 use Clavia\Adapter\Primary\Http\Auth\MfaChallengeHandler;
 use Clavia\Adapter\Primary\Http\Auth\MfaSettingsHandler;
+use Clavia\Adapter\Primary\Http\Auth\PasskeysHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordForgotHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessCodeHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessLinkHandler;
@@ -131,6 +132,12 @@ use Clavia\Application\Authentication\Mfa\DescribeSecondFactorPage;
 use Clavia\Application\Authentication\Mfa\DisableMfa;
 use Clavia\Application\Authentication\Mfa\ResumeTotpEnrollment;
 use Clavia\Application\Authentication\Mfa\TotpSeeds;
+use Clavia\Application\Authentication\Passkey\BeginPasskeyRegistration;
+use Clavia\Application\Authentication\Passkey\CompletePasskeyRegistration;
+use Clavia\Application\Authentication\Passkey\DescribePasskeys;
+use Clavia\Application\Authentication\Passkey\RecentSignIn;
+use Clavia\Application\Authentication\Passkey\RemovePasskey;
+use Clavia\Application\Authentication\Passkey\RenamePasskey;
 use Clavia\Application\Authentication\Passwordless\AnswerPasswordlessCode;
 use Clavia\Application\Authentication\Passwordless\DescribePasswordlessChallenge;
 use Clavia\Application\Authentication\Passwordless\FinishPasswordlessSignIn;
@@ -254,6 +261,7 @@ use Clavia\Domain\Audit\AuditLog;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
+use Clavia\Domain\Authentication\Passkey\RelyingParty;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Consent\ConsentRepository;
@@ -477,6 +485,14 @@ final class ConfigProvider
                     MfaChallengeHandler::class => Container\MfaChallengeHandlerFactory::class,
                     ConsentHandler::class => Container\ConsentHandlerFactory::class,
                     MfaSettingsHandler::class => Container\MfaSettingsHandlerFactory::class,
+                    PasskeysHandler::class => Container\PasskeysHandlerFactory::class,
+                    BeginPasskeyRegistration::class => Container\BeginPasskeyRegistrationFactory::class,
+                    CompletePasskeyRegistration::class => Container\CompletePasskeyRegistrationFactory::class,
+                    DescribePasskeys::class => Container\DescribePasskeysFactory::class,
+                    RenamePasskey::class => Container\RenamePasskeyFactory::class,
+                    RemovePasskey::class => Container\RemovePasskeyFactory::class,
+                    RecentSignIn::class => Container\RecentSignInFactory::class,
+                    RelyingParty::class => Container\RelyingPartyFactory::class,
                     UserMfaHandler::class => Container\UserMfaHandlerFactory::class,
                     UserPasswordLinkHandler::class => Container\UserPasswordLinkHandlerFactory::class,
                     ReadUsers::class => Container\ReadUsersFactory::class,

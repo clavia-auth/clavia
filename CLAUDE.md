@@ -229,8 +229,9 @@ Clavia never hard-codes a domain. `CLAVIA_ROOT_DOMAIN` names it, and every host 
 it. Two hosts must exist wherever Clavia runs, and their separation is a security property:
 
 - **`auth.{domain}`**: OAuth 2.1, OpenID Connect and the sign-in pages. The session cookie is
-  host-only (no `Domain` attribute), and no JavaScript runs on this origin. Credentials are
-  typed and tokens minted here, and nothing else shares it.
+  host-only (no `Domain` attribute), and no script runs on this origin but the one module a page
+  that needs it loads (passkeys). Credentials are typed and tokens minted here, and nothing else
+  shares it.
 - **`management.{domain}`**: the Management API at `/api/v1/*`, and the dashboard at
   `/dashboard`. Keeping it apart means an XSS on the sign-in UI cannot reach the administrative
   session, and the reverse.
@@ -414,6 +415,15 @@ applies however the person signed in.
   chooses one), a reset when it has one, refused for a deactivated account or one outside a pool. The caller is
   authenticated, so unlike the public form it is told how it went: `202`, `429` when the send
   limit is reached, `503` when no mail can be sent.
+
+- **Passkeys** (`Passkey\*`, design in `docs/design/passkeys.md`; phase 1, a second factor, in
+  progress). The account page `/auth/passkeys` lists them; `POST /auth/passkeys/new` opens a
+  registration ceremony (`BeginPasskeyRegistration`) and shows the page that runs `passkeys.js`,
+  whose form posts the browser's `toJSON()` to `POST /auth/passkeys`
+  (`CompletePasskeyRegistration`): claimed, verified (`PasskeyVerifier`), saved and announced in one
+  transaction. The first passkey of an account with no authenticator app and no recovery codes
+  brings a set, shown once. Rename and remove are `POST /auth/passkeys/{id}/name|remove`. With
+  `CLAVIA_PASSKEYS_ENABLED=false`, or an issuer that is not https, the routes do not exist.
 
 **Sessions** have one door per operation. `Sessions::establish()` is the only way a browser
 becomes authenticated, and it always rotates the identifier. `resolve()` is the only way to read
@@ -621,7 +631,18 @@ These follow from the RFCs and from mistakes already made once. Breaking one is 
 **Browser**
 
 - The sign-in pages share an origin with `/oauth2/authorize`; the session cookie has no
-  `Domain`; there is no JavaScript on that origin.
+  `Domain`. No page runs script, except one that names its module (`HtmlPage::$script`, a file
+  under `/auth/static`): that page alone allows `script-src 'self'`, with Trusted Types and no
+  policy, so no inline script, no `eval`, no other origin, and no HTML written from a string. Data
+  for the module travels in escaped `data-` attributes. The module decides nothing: the server
+  builds every option and checks every answer. `Permissions-Policy` confines WebAuthn to this
+  origin.
+- **Passkeys**: the relying party id is the sign-in host, or a parent of it within the root
+  domain, and the origin is matched exactly. A ceremony is single-use (`GETDEL`), short-lived,
+  bound to its purpose and context (the account, or a login state's digest), and claimed before
+  it is checked. Registration needs user verification. Adding, renaming or removing a passkey
+  needs a sign-in within `CLAVIA_PASSKEY_REAUTH_WINDOW`; past it the person signs in again.
+  Failures are one answer to the person; the log keeps the reason.
 - A post-sign-in target never travels in a URL. It is held server-side behind an opaque handle,
   and whatever it resolves to is re-validated before becoming a `Location` (`LocalPath`, or for
   sign-out an https URL on an origin some client registered). Rejected, never repaired.
@@ -721,11 +742,13 @@ someone else's or names something deleted gives the same "expired" page.
   authorization-endpoint error that cannot be redirected is a plain 400, never a challenge.
 - **Protected resources** read tokens with `BearerCredentials` and refuse with
   `BearerChallenger` (RFC 6750 status, challenge and error document; never cacheable).
-- **Pages** are server-rendered laminas-view templates (`templates/`), with no JavaScript. A
+- **Pages** are server-rendered laminas-view templates (`templates/`), with no script but a page's
+  own module where it needs one (`public/auth/static/passkeys.js`: no build step, no dependency). A
   handler builds an `HtmlPage` view model; templates print and loop; a repeated block becomes a
   partial (`layout::page`, `auth::login`, `error::page`, `partial::field`). `PageRenderer` adds
   the layout and the headers every page carries (`no-store`, `X-Frame-Options: DENY`, `nosniff`,
-  `Referrer-Policy: same-origin`, the per-page CSP); `AuthPageResponder` adds the CSRF token.
+  `Referrer-Policy: same-origin`, `Permissions-Policy`, the per-page CSP); `AuthPageResponder` adds
+  the CSRF token.
   One stylesheet (`public/auth/static/auth.css`), light and dark through custom properties; the
   theme toggle is a POST setting a cookie.
 - **Every printed value is escaped** with `escapeHtml()` or `escapeHtmlAttr()`: laminas-view does

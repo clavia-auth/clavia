@@ -391,3 +391,26 @@ input[type="text"] {
   color: var(--accent-text);
   background: var(--accent);
 }
+
+/* ---- Passkeys ---- */
+
+[hidden] { display: none !important; }
+
+.passkeys {
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: .5rem;
+}
+
+.passkeys li {
+  display: grid;
+  gap: .35rem;
+  padding: .65rem .75rem;
+  background: var(--field);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.passkeys form { margin: 0; }

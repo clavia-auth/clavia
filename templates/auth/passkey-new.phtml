@@ -1,0 +1,30 @@
+<?php
+/**
+ * The page where the browser makes a passkey: the only page of this origin that runs script.
+ *
+ * The options are data, in an escaped attribute; `passkeys.js` reads them, asks the browser for a
+ * passkey, and posts the answer in the `credential` field. Without a browser that can make one,
+ * the button stays hidden and the page says so.
+ *
+ * Variables (set by Clavia\Adapter\Primary\Http\Auth\PasskeyPages):
+ * @var Laminas\View\Renderer\PhpRenderer $this
+ * @var string $csrfToken
+ * @var string $email
+ * @var string $options The creation options, as JSON.
+ */
+?>
+<?php $this->placeholder('subtitle')->captureStart() ?>
+      <p class="subtitle"><?= $this->escapeHtml($email) ?></p>
+<?php $this->placeholder('subtitle')->captureEnd() ?>
+    <form method="post" action="/auth/passkeys" data-webauthn-create="<?= $this->escapeHtmlAttr($options) ?>">
+<?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => '']) ?>
+      <input type="hidden" name="credential" value="">
+      <label for="name">Name it <span class="hint">(optional)</span></label>
+      <input id="name" name="name" type="text" maxlength="64" autocomplete="off" placeholder="Work laptop">
+      <p class="hint" data-webauthn-unsupported>This browser cannot make a passkey.</p>
+      <p class="hint" data-webauthn-failed hidden>Your browser did not make the passkey. Try again.</p>
+      <button type="submit" data-webauthn-start hidden>Create passkey</button>
+    </form>
+    <form method="get" action="/auth/passkeys">
+      <button type="submit" class="secondary">Cancel</button>
+    </form>

@@ -34,6 +34,9 @@ use Clavia\Domain\Authentication\PendingExternalSignIn;
  *   sent out to an external provider. The provider echoes the same value; the cookie is
  *   what proves the browser coming back is the one that left. `SameSite=Lax` still sends
  *   it on the provider's top-level redirect back.
+ * - **WebAuthn ceremony** (`clavia_webauthn`, path `/auth`): the handle of a passkey ceremony in
+ *   progress. The response is checked against the ceremony this cookie names, so it answers in
+ *   the browser that asked. Lasts as long as the ceremony may; deleted when it is answered.
  * - **Theme** (`clavia_theme`, path `/`): the colour scheme; absent means "follow the
  *   system". Read by nothing but the page's `data-theme` attribute.
  */
@@ -57,6 +60,10 @@ final readonly class AuthCookies
 
     public const string EXTERNAL_SIGN_IN_PATH = '/auth';
 
+    public const string WEBAUTHN = 'clavia_webauthn';
+
+    public const string WEBAUTHN_PATH = '/auth';
+
     public const string THEME = PageRenderer::THEME_COOKIE;
 
     public const int THEME_LIFETIME = 365 * 24 * 3600;
@@ -70,6 +77,7 @@ final readonly class AuthCookies
      * @param bool             $secure            Whether cookies carry `Secure`; false only in development.
      * @param positive-int     $mfaChallengeLifetime How long the second step of a sign-in may take.
      * @param positive-int     $passwordlessCodeLifetime How long an emailed code stays valid.
+     * @param positive-int     $webauthnCeremonyLifetime How long a passkey ceremony may take.
      */
     public function __construct(
         public string $sessionCookieName,
@@ -77,7 +85,24 @@ final readonly class AuthCookies
         private bool $secure,
         private int $mfaChallengeLifetime = 300,
         private int $passwordlessCodeLifetime = 600,
+        private int $webauthnCeremonyLifetime = 300,
     ) {
+    }
+
+    public function webauthn(#[\SensitiveParameter] string $handle): SetCookie
+    {
+        return SetCookie::create(
+            self::WEBAUTHN,
+            $handle,
+            $this->webauthnCeremonyLifetime,
+            self::WEBAUTHN_PATH,
+            $this->secure,
+        );
+    }
+
+    public function expireWebAuthn(): SetCookie
+    {
+        return SetCookie::expire(self::WEBAUTHN, self::WEBAUTHN_PATH, $this->secure);
     }
 
     public function session(#[\SensitiveParameter] string $sessionId): SetCookie

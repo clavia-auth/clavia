@@ -16,6 +16,7 @@ use Clavia\Adapter\Primary\Http\Auth\AuthPageResponder;
 use Clavia\Adapter\Primary\Http\Auth\ConsentPages;
 use Clavia\Adapter\Primary\Http\Auth\LoginPages;
 use Clavia\Adapter\Primary\Http\Auth\MfaPages;
+use Clavia\Adapter\Primary\Http\Auth\PasskeyPages;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessPages;
 use Clavia\Adapter\Primary\Http\Oidc\EndSessionHandler;
 use Clavia\Adapter\Primary\Http\Shared\ErrorPage;
@@ -24,12 +25,20 @@ use Clavia\Application\Authentication\External\ExternalProviderOption;
 use Clavia\Application\Authentication\LoginPage\SignInMethods;
 use Clavia\Application\Authentication\Mfa\MfaStatus;
 use Clavia\Application\Authentication\Mfa\TotpEnrollment;
+use Clavia\Application\Authentication\Passkey\AccountPasskeys;
+use Clavia\Application\Authentication\Passkey\DescribedPasskey;
+use Clavia\Application\Authentication\Passkey\RegistrationOptions;
 use Clavia\Application\Authentication\Passwordless\PasswordlessPrompt;
 use Clavia\Application\OAuth2\Consent\ConsentedApi;
 use Clavia\Application\OAuth2\Consent\ConsentScreen;
 use Clavia\Application\OAuth2\Consent\ScopeLine;
 use Clavia\Application\Oidc\Logout\SignOutConfirmationNeeded;
+use Clavia\Domain\Authentication\Passkey\RelyingParty;
+use Clavia\Domain\Authentication\Passkey\WebAuthnChallenge;
+use Clavia\Domain\Identity\UserId;
 use ClaviaTest\Support\AcceptanceTestCase;
+use ClaviaTest\Support\Fake\SeededRandomSource;
+use DateTimeImmutable;
 use Laminas\Diactoros\ServerRequest;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -53,7 +62,8 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
 
         $html = (string) $responder->page(new ServerRequest(), $page)->getBody();
 
-        self::assertStringNotContainsString('<script', $html);
+        // A page may load this server's own module; it never prints the hostile one.
+        self::assertStringNotContainsString('<script>alert', $html);
         self::assertStringNotContainsString('<img src=x', $html);
         self::assertStringNotContainsString('"\'>', $html);
         self::assertStringContainsString('&lt;script&gt;', $html);
@@ -155,6 +165,39 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
             ),
         ];
         yield 'the recovery codes' => [MfaPages::recoveryCodes([self::HOSTILE, 'abcd-efgh-jkmn'])];
+        yield 'the passkeys: address, names and ids' => [PasskeyPages::list(
+            new AccountPasskeys(
+                self::HOSTILE,
+                [new DescribedPasskey(
+                    self::HOSTILE,
+                    self::HOSTILE,
+                    true,
+                    new DateTimeImmutable('2026-01-15T10:00:00Z'),
+                    new DateTimeImmutable('2026-01-16T10:00:00Z'),
+                )],
+                10,
+            ),
+            self::HOSTILE,
+            400,
+        )];
+        yield 'the page that makes a passkey: address, names and options' => [PasskeyPages::create(
+            new RegistrationOptions(
+                self::HOSTILE,
+                RelyingParty::of('auth.clavia.test', 'Clavia', 'https://auth.clavia.test'),
+                WebAuthnChallenge::forRegistration(
+                    new SeededRandomSource(1),
+                    UserId::generate(new SeededRandomSource(2)),
+                    new DateTimeImmutable('2026-01-15T10:00:00Z'),
+                    300,
+                ),
+                self::HOSTILE,
+                self::HOSTILE,
+                [],
+                300,
+            ),
+            self::HOSTILE,
+        )];
+        yield 'the recovery codes of a first passkey' => [PasskeyPages::recoveryCodes([self::HOSTILE, 'abcd-efgh'])];
         yield 'the sign-out confirmation: client name and carried fields' => [
             EndSessionHandler::confirmation(new SignOutConfirmationNeeded(
                 self::HOSTILE,

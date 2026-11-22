@@ -1,0 +1,21 @@
+<?php
+/**
+ * The recovery codes that came with the account's first passkey, shown once.
+ *
+ * Variables (set by Clavia\Adapter\Primary\Http\Auth\PasskeyPages):
+ * @var Laminas\View\Renderer\PhpRenderer $this
+ * @var list<string> $codes
+ */
+?>
+<?php $this->placeholder('subtitle')->captureStart() ?>
+      <p class="subtitle">Save these recovery codes somewhere safe. Each one signs you in once if you lose your passkey — and this is the only time they are shown.</p>
+<?php $this->placeholder('subtitle')->captureEnd() ?>
+    <ul class="codes">
+<?php foreach ($codes as $code): ?>
+      <li><?= $this->escapeHtml($code) ?></li>
+<?php endforeach ?>
+    </ul>
+
+    <form method="get" action="/auth/passkeys">
+      <button type="submit">Done</button>
+    </form>
