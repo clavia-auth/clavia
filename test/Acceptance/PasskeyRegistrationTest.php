@@ -99,6 +99,8 @@ final class PasskeyRegistrationTest extends AcceptanceTestCase
         $user = $this->user();
         $this->submitLogin();
         $this->registerPasskey(SoftwareAuthenticator::generate(CoseAlgorithm::EdDSA), 'First');
+        // A second later: passkeys are listed oldest first, and two made at one instant have no order.
+        $this->clock->advance(1);
 
         $second = $this->registerPasskey(SoftwareAuthenticator::generate(CoseAlgorithm::RS256, synced: true), '');
 
