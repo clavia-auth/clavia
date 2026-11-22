@@ -250,6 +250,7 @@ use Clavia\Application\Secrets\GenerateEncryptionKey;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Audit\AuditLog;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
+use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Connection\ConnectionRepository;
@@ -457,6 +458,7 @@ final class ConfigProvider
                     OidcDiscovery::class => Container\OidcDiscoveryFactory::class,
                     ConnectionAccess::class => Container\ConnectionAccessFactory::class,
                     MfaFactorRepository::class => Container\MfaFactorRepositoryFactory::class,
+                    PasskeyRepository::class => Container\PasskeyRepositoryFactory::class,
                     RecoveryCodeRepository::class => Container\RecoveryCodeRepositoryFactory::class,
                     MfaChallengeStore::class => Container\MfaChallengeStoreFactory::class,
                     TotpSeeds::class => Container\TotpSeedsFactory::class,

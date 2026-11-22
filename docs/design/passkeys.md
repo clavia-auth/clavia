@@ -242,7 +242,7 @@ challenge bound to the MFA challenge. `CompleteSecondFactor` gains a passkey att
 
 ## 7. Storage
 
-### Migration `0024_passkeys.sql`
+### Migration `0025_passkeys.sql`
 
 ```sql
 CREATE TABLE passkeys (
@@ -251,24 +251,30 @@ CREATE TABLE passkeys (
     credential_id   bytea NOT NULL,
     public_key      bytea NOT NULL,
     algorithm       integer NOT NULL,
-    sign_count      bigint NOT NULL DEFAULT 0 CHECK (sign_count >= 0),
+    sign_count      bigint NOT NULL DEFAULT 0,
     transports      jsonb NOT NULL DEFAULT '[]',
     aaguid          uuid,
     backup_eligible boolean NOT NULL,
     backed_up       boolean NOT NULL,
-    name            text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 64),
+    name            text NOT NULL,
     created_at      timestamptz NOT NULL,
     last_used_at    timestamptz,
     CONSTRAINT uq_passkeys_credential_id UNIQUE (credential_id),
-    CONSTRAINT ck_passkeys_credential_id_length CHECK (octet_length(credential_id) BETWEEN 16 AND 1023)
+    CONSTRAINT ck_passkeys_credential_id_length CHECK (octet_length(credential_id) BETWEEN 16 AND 1023),
+    CONSTRAINT ck_passkeys_sign_count CHECK (sign_count >= 0),
+    CONSTRAINT ck_passkeys_name_length CHECK (char_length(name) BETWEEN 1 AND 64),
+    -- A passkey cannot be backed up without being eligible for backup (WebAuthn Level 3 §6.1.3).
+    CONSTRAINT ck_passkeys_backup CHECK (backup_eligible OR NOT backed_up)
 );
 
 CREATE INDEX ix_passkeys_user_id ON passkeys (user_id);
 ```
 
 - `PhpDbPasskeyRepository` goes through `Database`. A duplicate credential id (SQLSTATE 23505 on
-  `uq_passkeys_credential_id`) becomes `AlreadyExists`.
-- `recordUse` is a conditional update (`… WHERE id = :id AND sign_count = :previous`), so two
+  `uq_passkeys_credential_id`) becomes `AlreadyExists`. The credential id and the key are `bytea`,
+  passed and read as hexadecimal (`decode`/`encode`), never as driver text.
+- `PasskeyRepository::recordUse(Passkey, int $previousSignCount): bool` is a conditional update
+  (`… WHERE id = :id AND sign_count = :previous`), so two
   sign-ins racing with one counter cannot both pass. The loser is refused like a regression,
   without the audit event.
 - The public key is not secret and is stored in the clear. Nothing about a passkey goes through

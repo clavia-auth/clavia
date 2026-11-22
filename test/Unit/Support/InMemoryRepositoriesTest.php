@@ -13,6 +13,7 @@ namespace ClaviaTest\Unit\Support;
 
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
+use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Connection\ConnectionRepository;
@@ -30,6 +31,7 @@ use ClaviaTest\Support\Contract\ConnectionRepositoryContract;
 use ClaviaTest\Support\Contract\ConsentRepositoryContract;
 use ClaviaTest\Support\Contract\ExternalIdentityRepositoryContract;
 use ClaviaTest\Support\Contract\MfaRepositoriesContract;
+use ClaviaTest\Support\Contract\PasskeyRepositoryContract;
 use ClaviaTest\Support\Contract\ResourceServerRepositoryContract;
 use ClaviaTest\Support\Contract\RoleRepositoryContract;
 use ClaviaTest\Support\Contract\UserRepositoryContract;
@@ -40,6 +42,7 @@ use ClaviaTest\Support\Fake\InMemoryConnectionRepository;
 use ClaviaTest\Support\Fake\InMemoryConsentRepository;
 use ClaviaTest\Support\Fake\InMemoryExternalIdentityRepository;
 use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
+use ClaviaTest\Support\Fake\InMemoryPasskeyRepository;
 use ClaviaTest\Support\Fake\InMemoryRecoveryCodeRepository;
 use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
 use ClaviaTest\Support\Fake\InMemoryRoleRepository;
@@ -59,6 +62,7 @@ final class InMemoryRepositoriesTest extends TestCase
     use AuthorizationCodeRepositoryContract;
     use ResourceServerRepositoryContract;
     use MfaRepositoriesContract;
+    use PasskeyRepositoryContract;
     use ExternalIdentityRepositoryContract;
     use RoleRepositoryContract;
     use ConsentRepositoryContract;
@@ -73,6 +77,7 @@ final class InMemoryRepositoriesTest extends TestCase
     private InMemoryClientGrantRepository $clientGrants;
     private InMemoryMfaFactorRepository $factors;
     private InMemoryRecoveryCodeRepository $recoveryCodes;
+    private InMemoryPasskeyRepository $passkeys;
     private InMemoryExternalIdentityRepository $identities;
     private InMemoryConsentRepository $consents;
     private InMemoryConnectionRepository $connections;
@@ -89,6 +94,7 @@ final class InMemoryRepositoriesTest extends TestCase
         $this->resourceServers = new InMemoryResourceServerRepository($this->clientGrants);
         $this->factors = new InMemoryMfaFactorRepository($this->transactions);
         $this->recoveryCodes = new InMemoryRecoveryCodeRepository();
+        $this->passkeys = new InMemoryPasskeyRepository();
         $this->identities = new InMemoryExternalIdentityRepository();
         $this->roles = new InMemoryRoleRepository($this->resourceServers, $this->users);
         $this->consents = new InMemoryConsentRepository($this->users, $this->clients, $this->resourceServers);
@@ -122,6 +128,12 @@ final class InMemoryRepositoriesTest extends TestCase
     protected function identities(): ExternalIdentityRepository
     {
         return $this->identities;
+    }
+
+    #[\Override]
+    protected function passkeys(): PasskeyRepository
+    {
+        return $this->passkeys;
     }
 
     #[\Override]

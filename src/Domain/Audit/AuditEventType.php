@@ -23,6 +23,10 @@ enum AuditEventType: string
     case SessionEnded = 'session.ended';
     case MfaEnrolled = 'mfa.enrolled';
     case MfaRemoved = 'mfa.removed';
+    case PasskeyRegistered = 'passkey.registered';
+    case PasskeyRenamed = 'passkey.renamed';
+    case PasskeyRemoved = 'passkey.removed';
+    case PasskeyCounterRegressed = 'passkey.counter_regressed';
 
     // ── What people agree to ────────────────────────────────────────────────────
     case ConsentGiven = 'consent.given';

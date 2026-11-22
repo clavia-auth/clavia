@@ -23,12 +23,19 @@ use Clavia\Domain\Audit\AuditEvent;
 use Clavia\Domain\Audit\AuditEventType;
 use Clavia\Domain\Audit\Outcome;
 use Clavia\Domain\Authentication\AuthenticationMethod;
+use Clavia\Domain\Authentication\Event\PasskeyCounterRegressed;
+use Clavia\Domain\Authentication\Event\PasskeyRegistered;
+use Clavia\Domain\Authentication\Event\PasskeyRemoved;
+use Clavia\Domain\Authentication\Event\PasskeyRenamed;
 use Clavia\Domain\Authentication\Event\SecondFactorRemoved;
 use Clavia\Domain\Authentication\Event\SessionEndReason;
 use Clavia\Domain\Authentication\Event\SessionsEnded;
 use Clavia\Domain\Authentication\Event\SignedIn;
 use Clavia\Domain\Authentication\Event\SignInRefusal;
 use Clavia\Domain\Authentication\Event\SignInRefused;
+use Clavia\Domain\Authentication\Passkey\Aaguid;
+use Clavia\Domain\Authentication\Passkey\PasskeyId;
+use Clavia\Domain\Authentication\Passkey\PasskeyName;
 use Clavia\Domain\Authentication\Session;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\Event\ClientConnectionsChanged;
@@ -154,6 +161,75 @@ final class AuditTrailsTest extends TestCase
         $removed = $this->only(AuditEventType::MfaRemoved);
         self::assertSame(ActorKind::System, $removed->actor->kind);
         self::assertSame(['factor' => 'totp', 'reset' => true], $removed->details);
+    }
+
+    public function testARegisteredPasskeyIsTheHoldersAndIsDescribedWithoutItsCredential(): void
+    {
+        $this->events->dispatch(new PasskeyRegistered(
+            $this->person,
+            PasskeyId::generate(new SeededRandomSource(8)),
+            PasskeyName::fromString('Work laptop'),
+            synced: true,
+            aaguid: Aaguid::fromString('adce0002-35bc-c60a-648b-0b25f1f05503'),
+        ));
+        $this->events->dispatch(new PasskeyRenamed(
+            $this->person,
+            PasskeyId::generate(new SeededRandomSource(8)),
+            PasskeyName::fromString('Phone'),
+        ));
+
+        $registered = $this->only(AuditEventType::PasskeyRegistered);
+        self::assertSame(ActorKind::Person, $registered->actor->kind);
+        self::assertSame($this->person->value, $registered->actor->userId?->value);
+        self::assertSame($this->person->value, $registered->target?->id);
+        self::assertSame(
+            [
+                'passkey' => PasskeyId::generate(new SeededRandomSource(8))->value,
+                'name' => 'Work laptop',
+                'synced' => true,
+                'aaguid' => 'adce0002-35bc-c60a-648b-0b25f1f05503',
+            ],
+            $registered->details,
+        );
+        self::assertSame('Phone', $this->only(AuditEventType::PasskeyRenamed)->details['name'] ?? null);
+    }
+
+    public function testARemovedPasskeyIsTheHoldersOrTheOperatorsAndSaysSo(): void
+    {
+        $id = PasskeyId::generate(new SeededRandomSource(8));
+        $this->events->dispatch(new PasskeyRemoved($this->person, $id, PasskeyName::fromString('Old'), true));
+        $this->events->dispatch(new PasskeyRemoved($this->person, $id, PasskeyName::fromString('Lost'), false));
+
+        $removed = $this->log->ofType(AuditEventType::PasskeyRemoved);
+        self::assertCount(2, $removed);
+        $named = static fn (string $name): array => array_values(array_filter(
+            $removed,
+            static fn (AuditEvent $event): bool => ($event->details['name'] ?? null) === $name,
+        ));
+        $byHolder = $named('Old');
+        $byOperator = $named('Lost');
+        self::assertSame(ActorKind::Person, $byHolder[0]->actor->kind);
+        self::assertFalse($byHolder[0]->details['by_operator'] ?? null);
+        self::assertSame(ActorKind::System, $byOperator[0]->actor->kind);
+        self::assertTrue($byOperator[0]->details['by_operator'] ?? null);
+    }
+
+    public function testARegressedCounterIsAFailureByWhoeverPresentedIt(): void
+    {
+        $this->events->dispatch(new PasskeyCounterRegressed(
+            $this->person,
+            PasskeyId::generate(new SeededRandomSource(8)),
+            PasskeyName::fromString('Key'),
+            storedCounter: 9,
+            presentedCounter: 4,
+        ));
+
+        $regressed = $this->only(AuditEventType::PasskeyCounterRegressed);
+        self::assertSame(Outcome::Failure, $regressed->outcome);
+        self::assertSame(ActorKind::Anonymous, $regressed->actor->kind);
+        self::assertSame($this->person->value, $regressed->target?->id);
+        self::assertSame(9, $regressed->details['stored'] ?? null);
+        self::assertSame(4, $regressed->details['presented'] ?? null);
     }
 
     public function testAMachineTokenNamesTheMachineAndNeverTheToken(): void
