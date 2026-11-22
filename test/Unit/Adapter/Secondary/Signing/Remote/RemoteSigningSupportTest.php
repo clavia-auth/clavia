@@ -96,7 +96,7 @@ final class RemoteSigningSupportTest extends TestCase
         $http = new FakeHttpClient(static fn (): JsonResponse => new JsonResponse(['a', 'list']));
 
         $this->expectException(SigningFailed::class);
-        $this->expectExceptionMessage('answered with something other than a JSON object');
+        $this->expectExceptionMessageIsOrContains('answered with something other than a JSON object');
 
         self::api($http)->get('https://kms.test/k');
     }
@@ -108,7 +108,7 @@ final class RemoteSigningSupportTest extends TestCase
         );
 
         $this->expectException(SigningFailed::class);
-        $this->expectExceptionMessage('The service could not be reached: timed out');
+        $this->expectExceptionMessageIsOrContains('The service could not be reached: timed out');
 
         self::api($http)->postJson('https://kms.test/k', ['x' => 1]);
     }
@@ -133,7 +133,7 @@ final class RemoteSigningSupportTest extends TestCase
         );
 
         $this->expectException(SigningFailed::class);
-        $this->expectExceptionMessage('S did not say when its token expires.');
+        $this->expectExceptionMessageIsOrContains('S did not say when its token expires.');
         $token([]);
     }
 
@@ -163,7 +163,9 @@ final class RemoteSigningSupportTest extends TestCase
         );
 
         $this->expectException(SigningFailed::class);
-        $this->expectExceptionMessage('Google Cloud authentication failed: Could not load the default credentials.');
+        $this->expectExceptionMessageIsOrContains(
+            'Google Cloud authentication failed: Could not load the default credentials.',
+        );
 
         $_ = $credentials->token();
     }

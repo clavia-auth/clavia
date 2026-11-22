@@ -40,7 +40,7 @@ final class SettingsTest extends TestCase
     public function testTheRootDomainIsRequired(): void
     {
         $this->expectException(InvalidSettings::class);
-        $this->expectExceptionMessage('CLAVIA_ROOT_DOMAIN is required.');
+        $this->expectExceptionMessageIsOrContains('CLAVIA_ROOT_DOMAIN is required.');
 
         Settings::fromEnvironment([]);
     }
@@ -97,7 +97,7 @@ final class SettingsTest extends TestCase
     public function testTheRootDomainMustBeABareDomain(string $domain): void
     {
         $this->expectException(InvalidSettings::class);
-        $this->expectExceptionMessage('CLAVIA_ROOT_DOMAIN must be a bare domain');
+        $this->expectExceptionMessageIsOrContains('CLAVIA_ROOT_DOMAIN must be a bare domain');
 
         Settings::fromEnvironment(['CLAVIA_ROOT_DOMAIN' => $domain]);
     }
@@ -124,7 +124,7 @@ final class SettingsTest extends TestCase
     public function testTheIssuerMustBeAnHttpsUrlWithNoQueryOrFragment(string $issuer, string $reason): void
     {
         $this->expectException(InvalidSettings::class);
-        $this->expectExceptionMessage($reason);
+        $this->expectExceptionMessageIsOrContains($reason);
 
         Settings::fromEnvironment(self::MINIMAL + ['CLAVIA_ISSUER_URL' => $issuer]);
     }
@@ -141,7 +141,7 @@ final class SettingsTest extends TestCase
     public function testAPlaintextIssuerIsRefusedOutsideDevelopmentEvenOnLoopback(string $issuer): void
     {
         $this->expectException(InvalidSettings::class);
-        $this->expectExceptionMessage('must use https');
+        $this->expectExceptionMessageIsOrContains('must use https');
 
         Settings::fromEnvironment(self::PRODUCTION + ['CLAVIA_ISSUER_URL' => $issuer]);
     }
@@ -278,7 +278,7 @@ final class SettingsTest extends TestCase
     public function testARemoteSigningBackendNeedsItsKeyReference(): void
     {
         $this->expectException(InvalidSettings::class);
-        $this->expectExceptionMessage("CLAVIA_SIGNING_BACKEND='aws-kms' requires CLAVIA_SIGNING_KEY_REF");
+        $this->expectExceptionMessageIsOrContains("CLAVIA_SIGNING_BACKEND='aws-kms' requires CLAVIA_SIGNING_KEY_REF");
 
         Settings::fromEnvironment(self::MINIMAL + ['CLAVIA_SIGNING_BACKEND' => 'aws-kms']);
     }
@@ -386,7 +386,7 @@ final class SettingsTest extends TestCase
     public function testSmtpWithoutAServerIsRefusedEverywhere(): void
     {
         $this->expectException(InvalidSettings::class);
-        $this->expectExceptionMessage('CLAVIA_EMAIL_BACKEND=smtp requires CLAVIA_SMTP_HOST');
+        $this->expectExceptionMessageIsOrContains('CLAVIA_EMAIL_BACKEND=smtp requires CLAVIA_SMTP_HOST');
 
         Settings::fromEnvironment(self::MINIMAL + ['CLAVIA_EMAIL_BACKEND' => 'smtp']);
     }

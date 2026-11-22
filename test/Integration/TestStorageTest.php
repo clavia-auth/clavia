@@ -75,7 +75,7 @@ final class TestStorageTest extends IntegrationTestCase
         putenv('CLAVIA_TEST_DATABASE_URL=postgresql://clavia:clavia@localhost:5433/clavia');
 
         $this->expectException(LogicException::class);
-        $this->expectExceptionMessage('must end in "_test"');
+        $this->expectExceptionMessageIsOrContains('must end in "_test"');
 
         TestEnvironment::databaseUrl();
     }

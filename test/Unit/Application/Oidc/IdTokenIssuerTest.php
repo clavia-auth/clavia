@@ -91,7 +91,7 @@ final class IdTokenIssuerTest extends TestCase
     public function testWithoutAnActiveKeyNothingIsIssued(): void
     {
         $this->expectException(NoActiveSigningKey::class);
-        $this->expectExceptionMessage('clavia keys:generate');
+        $this->expectExceptionMessageIsOrContains('clavia keys:generate');
 
         $this->issuer->issue($this->code(), $this->user, 'the-access-token', $this->clock->now());
     }

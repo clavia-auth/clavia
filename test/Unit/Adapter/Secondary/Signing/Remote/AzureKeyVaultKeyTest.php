@@ -139,7 +139,7 @@ final class AzureKeyVaultKeyTest extends TestCase
         $this->vault->answeringKid = 'https://clavia-prod.vault.azure.net/keys/other/' . self::VERSION;
 
         $this->expectException(SigningFailed::class);
-        $this->expectExceptionMessage('signed with a key other than');
+        $this->expectExceptionMessageIsOrContains('signed with a key other than');
 
         $_ = $this->key()->sign(hash('sha256', 'x', true), SigningAlgorithm::RS256);
     }

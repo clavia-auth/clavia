@@ -73,7 +73,7 @@ final class RemoteTokenSignerTest extends TestCase
         $signer = $this->signer(new LocalSigningKey('local:2'));
 
         $this->expectException(SigningFailed::class);
-        $this->expectExceptionMessage('is not the active key');
+        $this->expectExceptionMessageIsOrContains('is not the active key');
 
         $_ = $signer->sign(new SigningKeyReference(new LocalHsm(2)->kid(), SigningAlgorithm::RS256), 'header.payload');
     }
@@ -120,7 +120,7 @@ final class RemoteTokenSignerTest extends TestCase
         $signer = new RemoteTokenSigner($impostor, [], SigningAlgorithm::RS256, $this->cache);
 
         $this->expectException(SigningFailed::class);
-        $this->expectExceptionMessage('does not verify against its public key');
+        $this->expectExceptionMessageIsOrContains('does not verify against its public key');
 
         $_ = $signer->sign($signer->activeKey(), 'header.payload');
     }

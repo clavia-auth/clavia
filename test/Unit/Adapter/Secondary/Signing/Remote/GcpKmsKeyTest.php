@@ -79,7 +79,7 @@ final class GcpKmsKeyTest extends TestCase
     public function testAKeyRatherThanAKeyVersionIsRefused(): void
     {
         $this->expectException(InvalidKeyReference::class);
-        $this->expectExceptionMessage('cryptoKeyVersions/N');
+        $this->expectExceptionMessageIsOrContains('cryptoKeyVersions/N');
 
         self::keyFor($this->http, 'projects/p/locations/l/keyRings/r/cryptoKeys/signing');
     }
@@ -89,7 +89,7 @@ final class GcpKmsKeyTest extends TestCase
         $this->kms->confirmDigest = false;
 
         $this->expectException(SigningFailed::class);
-        $this->expectExceptionMessage('did not confirm the digest');
+        $this->expectExceptionMessageIsOrContains('did not confirm the digest');
 
         $_ = $this->key()->sign(hash('sha256', 'x', true), SigningAlgorithm::RS256);
     }
@@ -99,7 +99,7 @@ final class GcpKmsKeyTest extends TestCase
         $this->kms->corruptSignature = true;
 
         $this->expectException(SigningFailed::class);
-        $this->expectExceptionMessage('does not match its checksum');
+        $this->expectExceptionMessageIsOrContains('does not match its checksum');
 
         $_ = $this->key()->sign(hash('sha256', 'x', true), SigningAlgorithm::RS256);
     }
@@ -115,7 +115,7 @@ final class GcpKmsKeyTest extends TestCase
 
         $this->kms->algorithm = 'EC_SIGN_P256_SHA256';
         $this->expectException(SigningFailed::class);
-        $this->expectExceptionMessage('does not sign with RS256');
+        $this->expectExceptionMessageIsOrContains('does not sign with RS256');
 
         $this->key()->publicKey(SigningAlgorithm::RS256);
     }
@@ -125,7 +125,9 @@ final class GcpKmsKeyTest extends TestCase
         $key = new GcpKmsKey(self::api($this->http), new StaticAccessTokens('expired-token'), self::VERSION);
 
         $this->expectException(SigningFailed::class);
-        $this->expectExceptionMessage('Google Cloud KMS refused the request (HTTP 401): Request had invalid');
+        $this->expectExceptionMessageIsOrContains(
+            'Google Cloud KMS refused the request (HTTP 401): Request had invalid',
+        );
 
         $key->publicKey(SigningAlgorithm::RS256);
     }

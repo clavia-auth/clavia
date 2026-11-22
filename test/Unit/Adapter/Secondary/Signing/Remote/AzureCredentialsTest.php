@@ -159,7 +159,7 @@ final class AzureCredentialsTest extends TestCase
         self::assertSame('projected.jwt.two', $second['client_assertion'] ?? null);
 
         $this->expectException(SigningFailed::class);
-        $this->expectExceptionMessage('cannot be read');
+        $this->expectExceptionMessageIsOrContains('cannot be read');
         $_ = $tokens->token();
     }
 
@@ -172,7 +172,7 @@ final class AzureCredentialsTest extends TestCase
         $tokens = $this->application('wrong');
 
         $this->expectException(SigningFailed::class);
-        $this->expectExceptionMessage('Microsoft Entra ID refused the request (HTTP 401): AADSTS7000215');
+        $this->expectExceptionMessageIsOrContains('Microsoft Entra ID refused the request (HTTP 401): AADSTS7000215');
 
         $_ = $tokens->token();
     }

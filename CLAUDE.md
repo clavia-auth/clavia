@@ -65,7 +65,7 @@ Everything runs in the `php` container, so the host needs only Docker and mkcert
 | `make shell` | A shell in the PHP container |
 
 `composer check` runs `cs-check` (PHPCS, PSR-12, 120 columns), `static-analysis` (Psalm level 1,
-no baseline), `arch` (deptrac, failing on uncovered classes) and `test` (PHPUnit 12). CI runs
+no baseline), `arch` (deptrac, failing on uncovered classes) and `test` (PHPUnit 13). CI runs
 the same command against PostgreSQL 17 and Redis 7.
 
 The console is `bin/clavia`:
