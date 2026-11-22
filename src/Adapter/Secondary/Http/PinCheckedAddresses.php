@@ -12,9 +12,10 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Secondary\Http;
 
 use GuzzleHttp\Exception\ConnectException;
-use GuzzleHttp\Promise\Create;
 use GuzzleHttp\Promise\PromiseInterface;
+use GuzzleHttp\Promise\RejectedPromise;
 use Psr\Http\Message\RequestInterface;
+use Psr\Http\Message\ResponseInterface;
 
 /**
  * Guzzle middleware: every outbound request passes the {@see OutboundUrlPolicy}, and is
@@ -37,6 +38,10 @@ final readonly class PinCheckedAddresses
 
     /**
      * Guzzle's middleware shape: the next handler in, a handler out.
+     *
+     * @param callable(RequestInterface, array<array-key, mixed>): PromiseInterface<ResponseInterface, mixed> $handler
+     *
+     * @return callable(RequestInterface, array<array-key, mixed>): PromiseInterface<ResponseInterface, mixed>
      */
     public function __invoke(callable $handler): callable
     {
@@ -45,7 +50,10 @@ final readonly class PinCheckedAddresses
             try {
                 $addresses = $this->policy->addresses((string) $uri, 'request URL');
             } catch (OutboundUrlRefused $refused) {
-                return Create::rejectionFor(new ConnectException($refused->getMessage(), $request));
+                /** @var RejectedPromise<ResponseInterface, mixed> $notSent */
+                $notSent = new RejectedPromise(new ConnectException($refused->getMessage(), $request));
+
+                return $notSent;
             }
 
             if ($addresses !== []) {
@@ -60,10 +68,7 @@ final readonly class PinCheckedAddresses
                 $options['curl'] = $curl;
             }
 
-            $promise = $handler($request, $options);
-            assert($promise instanceof PromiseInterface);
-
-            return $promise;
+            return $handler($request, $options);
         };
     }
 

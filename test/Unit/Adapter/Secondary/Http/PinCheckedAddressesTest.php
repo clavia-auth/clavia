@@ -14,12 +14,13 @@ namespace ClaviaTest\Unit\Adapter\Secondary\Http;
 use Clavia\Adapter\Secondary\Http\OutboundUrlPolicy;
 use Clavia\Adapter\Secondary\Http\PinCheckedAddresses;
 use GuzzleHttp\Exception\ConnectException;
-use GuzzleHttp\Promise\Create;
+use GuzzleHttp\Promise\FulfilledPromise;
 use GuzzleHttp\Promise\PromiseInterface;
 use Laminas\Diactoros\Request;
 use Laminas\Diactoros\Response\EmptyResponse;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\RequestInterface;
+use Psr\Http\Message\ResponseInterface;
 
 /**
  * The fetch goes to the addresses the policy checked, and a refused URL is never sent.
@@ -90,12 +91,17 @@ final class PinCheckedAddressesTest extends TestCase
     private function send(string $url, array $resolvesTo): PromiseInterface
     {
         $middleware = new PinCheckedAddresses(new OutboundUrlPolicy(false, static fn (): array => $resolvesTo));
-        $handler = $middleware(function (RequestInterface $request, array $options): PromiseInterface {
-            /** @var array<string, mixed> $options */
-            $this->sent[] = $options;
+        $handler = $middleware(
+            /** @return PromiseInterface<ResponseInterface, mixed> */
+            function (RequestInterface $request, array $options): PromiseInterface {
+                /** @var array<string, mixed> $options */
+                $this->sent[] = $options;
+                /** @var FulfilledPromise<ResponseInterface, mixed> $answered */
+                $answered = new FulfilledPromise(new EmptyResponse());
 
-            return Create::promiseFor(new EmptyResponse());
-        });
+                return $answered;
+            },
+        );
 
         $promise = $handler(new Request($url, 'POST'), []);
         self::assertInstanceOf(PromiseInterface::class, $promise);
