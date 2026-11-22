@@ -513,4 +513,8 @@ Phase 2, signing in with a passkey:
 - **Not built here**: the signal methods (`signalUnknownCredential()` and the others), the dashboard
   tab (clavia-dashboard#3) and the Playwright test, which belongs to the dashboard's end-to-end
   suite.
+- **After a passkey, a passkey is never the second factor.** With `CLAVIA_PASSKEY_SATISFIES_MFA`
+  off, a passkey sign-in is followed by an authenticator app or a recovery code only: the page
+  offers no passkey, and one posted anyway is refused. Otherwise one device, perhaps the very same
+  passkey, would count as both factors.
 

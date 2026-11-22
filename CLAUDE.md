@@ -382,7 +382,9 @@ applies however the person signed in.
   there is no account to count against first. The account must be active and its connection one
   the application allows. Every refusal is `CredentialsRejected`, a wrong password's answer. With
   `CLAVIA_PASSKEY_SATISFIES_MFA` (on by default) a verified passkey is multi-factor by itself
-  (`amr` `hwk` or `swk`, then `mfa`); off, the second factor follows. The last passkey of a pool
+  (`amr` `hwk` or `swk`, then `mfa`); off, the second factor follows, and it cannot be a passkey
+  (`MfaChallenge::firstFactorWasAPasskey()`): one device would count twice. An authenticator app
+  or a recovery code finishes it. The last passkey of a pool
   account with no password and no linked identity cannot be removed: it is the only way in.
 - **Second factor** (`CompleteSecondFactor`, `CompletePasskeySecondFactor`): asked of an account
   with a confirmed authenticator app or a passkey. The challenge lives in Redis behind the

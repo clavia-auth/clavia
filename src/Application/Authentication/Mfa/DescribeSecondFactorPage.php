@@ -46,7 +46,7 @@ final readonly class DescribeSecondFactorPage
         return new SecondFactorPage(
             $client?->redirectOrigins() ?? [],
             $this->factors->find($pending->userId)?->isConfirmed() ?? false,
-            ($this->passkeys?->countOf($pending->userId) ?? 0) > 0,
+            ! $pending->firstFactorWasAPasskey() && ($this->passkeys?->countOf($pending->userId) ?? 0) > 0,
         );
     }
 }
