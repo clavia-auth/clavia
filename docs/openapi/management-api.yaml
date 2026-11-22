@@ -82,7 +82,12 @@ paths:
     post:
       tags: [users]
       operationId: createUser
-      summary: Create a user with a password. The password is hashed and never returned.
+      summary: Create a user, with a password or to be invited.
+      description: |
+        A password is hashed and never returned. Without one the account has none yet
+        (`has_password` is `false`): it cannot sign in with a password, and its person
+        chooses one from the link `POST /api/v1/users/{user_id}/password-reset` mails them,
+        an invitation.
       security:
         - managementToken: [create:users]
       requestBody:
@@ -1859,7 +1864,7 @@ components:
     UserCreate:
       type: object
       additionalProperties: false
-      required: [email, password]
+      required: [email]
       properties:
         connection:
           type: string
@@ -1875,7 +1880,9 @@ components:
           type: string
           minLength: 8
           maxLength: 256
-          description: At least 8 characters, at most 72 bytes once encoded.
+          description: |
+            At least 8 characters, at most 72 bytes once encoded. Omit it to create the
+            account without one; it is then invited with `POST /users/{user_id}/password-reset`.
         email_verified:
           type: boolean
           default: false

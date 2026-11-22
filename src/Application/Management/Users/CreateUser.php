@@ -29,9 +29,11 @@ use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\RandomSource;
 
 /**
- * `POST /api/v1/users`: an account with a password, hashed on the way in with the same
- * primitive the login page verifies against, and never returned — in a pool: the default
- * one unless another is named. An external connection's accounts are made by signing in
+ * `POST /api/v1/users`: an account, in a pool — the default one unless another is named.
+ * A password, when given, is checked against the policy, hashed on the way in with the same
+ * primitive the login page verifies against, and never returned. Without one the account is
+ * an invitation waiting to be sent: password sign-in fails like any other, and the person
+ * chooses a password from the link of {@see SendPasswordLink}. An external connection's accounts are made by signing in
  * through it, not here.
  */
 final readonly class CreateUser
@@ -47,7 +49,7 @@ final readonly class CreateUser
     }
 
     /**
-     * @throws InvalidValue  When the address, the password or a profile field is not acceptable, or
+     * @throws InvalidValue  When the address, a given password or a profile field is not acceptable, or
      *                       the connection is not a pool.
      * @throws NotFound      When the connection does not exist.
      * @throws AlreadyExists When another account in the pool uses the address.
@@ -70,7 +72,7 @@ final readonly class CreateUser
         $user = User::register(
             UserId::generate($this->random),
             $new->email,
-            $this->hasher->hash(PasswordPolicy::accept($new->password)),
+            $new->password === null ? null : $this->hasher->hash(PasswordPolicy::accept($new->password)),
             $now,
             $pool,
         );

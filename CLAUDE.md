@@ -405,8 +405,9 @@ applies however the person signed in.
   password does (a fingerprint of the hash). Account mail has its own `EmailSendLimit`
   namespace. Confirming an address never signs anyone in. An operator can mail the same link
   to an account (`POST /api/v1/users/{id}/password-reset`, `create:user_tickets`,
-  `Management\Users\SendPasswordLink`): an invitation when the account has no password, a
-  reset when it has one, refused for a deactivated account or one outside a pool. The caller is
+  `Management\Users\SendPasswordLink`): an invitation when the account has no password
+  (`POST /api/v1/users` takes none: the account cannot sign in with a password until it
+  chooses one), a reset when it has one, refused for a deactivated account or one outside a pool. The caller is
   authenticated, so unlike the public form it is told how it went: `202`, `429` when the send
   limit is reached, `503` when no mail can be sent.
 

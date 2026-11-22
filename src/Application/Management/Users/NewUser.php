@@ -12,7 +12,10 @@ declare(strict_types=1);
 namespace Clavia\Application\Management\Users;
 
 /**
- * A new account: an address, a password, and optionally its standing and profile.
+ * A new account: an address, optionally a password, and optionally its standing and profile.
+ *
+ * Without a password the account cannot sign in with one until its person chooses it from
+ * the link an operator mails ({@see SendPasswordLink}): an invitation.
  */
 final readonly class NewUser
 {
@@ -22,7 +25,7 @@ final readonly class NewUser
      */
     public function __construct(
         public string $email,
-        #[\SensitiveParameter] public string $password,
+        #[\SensitiveParameter] public ?string $password = null,
         public bool $emailVerified = false,
         public bool $isActive = true,
         public array $profile = [],

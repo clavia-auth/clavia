@@ -123,6 +123,13 @@ final class UsersTest extends TestCase
         $this->create(new NewUser('ada@example.com', 'short'));
     }
 
+    public function testAUserCreatedWithoutAPasswordHasNone(): void
+    {
+        $user = $this->create(new NewUser('ada@example.com'));
+
+        self::assertNull($this->users->find($user->id)?->passwordHash());
+    }
+
     public function testAnAddressAlreadyUsedIsRefusedAsSuch(): void
     {
         $this->create(new NewUser('ada@example.com', 'a-good-password'));
