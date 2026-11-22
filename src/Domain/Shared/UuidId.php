@@ -49,6 +49,34 @@ abstract readonly class UuidId
         return new static(vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($bytes), 4)));
     }
 
+    /**
+     * The sixteen bytes of the UUID: what WebAuthn calls a user handle, which is an opaque byte
+     * string of at most 64 bytes (WebAuthn Level 3 §5.4.3) and must not be personal data.
+     *
+     * @return non-empty-string
+     */
+    final public function toBytes(): string
+    {
+        $bytes = hex2bin(str_replace('-', '', $this->value));
+        assert($bytes !== false && $bytes !== '');
+
+        return $bytes;
+    }
+
+    /**
+     * The identifier whose bytes these are.
+     *
+     * @throws InvalidValue When it is not sixteen bytes.
+     */
+    final public static function fromBytes(string $bytes): static
+    {
+        if (strlen($bytes) !== 16) {
+            throw new InvalidValue('An identifier is sixteen bytes.');
+        }
+
+        return static::fromString(vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($bytes), 4)));
+    }
+
     final public function equals(self $other): bool
     {
         return $other::class === static::class && $this->value === $other->value;
