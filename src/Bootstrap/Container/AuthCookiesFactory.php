@@ -26,7 +26,8 @@ final class AuthCookiesFactory
         $lifetime = $settings->sessionAbsoluteLifetime;
         $challengeLifetime = $settings->mfaChallengeLifetime;
         $codeLifetime = $settings->passwordlessCodeLifetime;
-        assert($name !== '' && $lifetime > 0 && $challengeLifetime > 0 && $codeLifetime > 0);
+        $ceremonyLifetime = $settings->webauthnCeremonyLifetime;
+        assert($name !== '' && $lifetime > 0 && $challengeLifetime > 0 && $codeLifetime > 0 && $ceremonyLifetime > 0);
 
         return new AuthCookies(
             $name,
@@ -34,6 +35,7 @@ final class AuthCookiesFactory
             $settings->sessionCookieSecure,
             $challengeLifetime,
             $codeLifetime,
+            $ceremonyLifetime,
         );
     }
 }

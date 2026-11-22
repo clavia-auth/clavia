@@ -1,0 +1,50 @@
+<?php
+/**
+ * The passkeys of the signed-in account: each with its name, and the way to add, rename or remove
+ * one.
+ *
+ * Variables (set by Clavia\Adapter\Primary\Http\Auth\PasskeyPages):
+ * @var Laminas\View\Renderer\PhpRenderer $this
+ * @var string $csrfToken
+ * @var string $email
+ * @var list<array{id: string, name: string, synced: bool, createdAt: string, lastUsedAt: string|null}> $passkeys
+ * @var bool   $canAddAnother
+ * @var int    $limit
+ */
+?>
+<?php $this->placeholder('subtitle')->captureStart() ?>
+      <p class="subtitle"><?= $this->escapeHtml($email) ?></p>
+<?php $this->placeholder('subtitle')->captureEnd() ?>
+<?php if ($passkeys === []): ?>
+    <p class="hint">
+      A passkey lives on your phone, your computer or a security key, and proves it is you with your
+      fingerprint, your face or your PIN. It works only on this site, so it cannot be phished.
+    </p>
+<?php else: ?>
+    <ul class="passkeys">
+<?php foreach ($passkeys as $passkey): ?>
+      <li>
+        <strong><?= $this->escapeHtml($passkey['name']) ?></strong>
+        <span class="hint"><?= $passkey['synced'] ? 'Synced across your devices' : 'On one device' ?> · added <?= $this->escapeHtml($passkey['createdAt']) ?><?php if ($passkey['lastUsedAt'] !== null): ?> · last used <?= $this->escapeHtml($passkey['lastUsedAt']) ?><?php endif ?></span>
+        <form method="post" action="/auth/passkeys/<?= $this->escapeHtmlAttr(rawurlencode($passkey['id'])) ?>/name" class="inline">
+<?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => '']) ?>
+          <label for="name-<?= $this->escapeHtmlAttr($passkey['id']) ?>">New name</label>
+          <input id="name-<?= $this->escapeHtmlAttr($passkey['id']) ?>" name="name" type="text" required maxlength="64" value="<?= $this->escapeHtmlAttr($passkey['name']) ?>">
+          <button type="submit" class="secondary">Rename</button>
+        </form>
+        <form method="post" action="/auth/passkeys/<?= $this->escapeHtmlAttr(rawurlencode($passkey['id'])) ?>/remove">
+<?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => '']) ?>
+          <button type="submit" class="danger">Remove</button>
+        </form>
+      </li>
+<?php endforeach ?>
+    </ul>
+<?php endif ?>
+<?php if ($canAddAnother): ?>
+    <form method="post" action="/auth/passkeys/new">
+<?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => '']) ?>
+      <button type="submit">Add a passkey</button>
+    </form>
+<?php else: ?>
+    <p class="hint">This account has <?= $this->escapeHtml((string) $limit) ?> passkeys, as many as it may.</p>
+<?php endif ?>

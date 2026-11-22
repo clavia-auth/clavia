@@ -18,6 +18,7 @@ use Clavia\Adapter\Primary\Http\Auth\LoginPageHandler;
 use Clavia\Adapter\Primary\Http\Auth\LogoutHandler;
 use Clavia\Adapter\Primary\Http\Auth\MfaChallengeHandler;
 use Clavia\Adapter\Primary\Http\Auth\MfaSettingsHandler;
+use Clavia\Adapter\Primary\Http\Auth\PasskeysHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordForgotHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessCodeHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessLinkHandler;
@@ -58,13 +59,19 @@ use Clavia\Adapter\Primary\Http\Oidc\EndSessionHandler;
 use Clavia\Adapter\Primary\Http\Oidc\JwksHandler;
 use Clavia\Adapter\Primary\Http\Oidc\UserInfoHandler;
 use Clavia\Adapter\Primary\Http\Shared\HealthHandler;
+use Clavia\Configuration\Settings;
 use Mezzio\Application;
+use Psr\Container\ContainerInterface;
 
 /**
  * Every route the server answers. One process serves all four surfaces; which host
- * reaches which paths is the reverse proxy's decision (see the Caddyfile).
+ * reaches which paths is the reverse proxy's decision (see the Caddyfile). A feature a
+ * setting turns off has no route at all, so its paths are the same 404 as any other.
  */
-return static function (Application $app): void {
+return static function (Application $app, ContainerInterface $container): void {
+    /** @var Settings $settings */
+    $settings = $container->get(Settings::class);
+
     $app->get('/healthz', HealthHandler::class, 'ops.healthz');
 
     // ── /oauth2/* — the authorization server. Callers authenticate as clients. ──
@@ -97,6 +104,13 @@ return static function (Application $app): void {
     $app->route('/auth/mfa/enroll', MfaSettingsHandler::class, ['GET', 'POST'], 'auth.mfa.enroll');
     $app->post('/auth/mfa/enroll/confirm', MfaSettingsHandler::class, 'auth.mfa.enroll.confirm');
     $app->post('/auth/mfa/disable', MfaSettingsHandler::class, 'auth.mfa.disable');
+    // The account holder's passkeys: the list, a new one, and renaming or removing one.
+    if ($settings->passkeysEnabled) {
+        $app->route('/auth/passkeys', PasskeysHandler::class, ['GET', 'POST'], 'auth.passkeys');
+        $app->post('/auth/passkeys/new', PasskeysHandler::class, 'auth.passkeys.new');
+        $app->post('/auth/passkeys/{passkey_id}/name', PasskeysHandler::class, 'auth.passkeys.name');
+        $app->post('/auth/passkeys/{passkey_id}/remove', PasskeysHandler::class, 'auth.passkeys.remove');
+    }
     // Whether an application may act as the signed-in person: the question, and the answer.
     $app->route('/auth/consent', ConsentHandler::class, ['GET', 'POST'], 'auth.consent');
     $app->route('/auth/device', DeviceHandler::class, ['GET', 'POST'], 'auth.device');

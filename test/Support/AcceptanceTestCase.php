@@ -106,7 +106,7 @@ abstract class AcceptanceTestCase extends TestCase
         /** @var Application $application */
         $application = $container->get(Application::class);
         (require __DIR__ . '/../../config/pipeline.php')($application);
-        (require __DIR__ . '/../../config/routes.php')($application);
+        (require __DIR__ . '/../../config/routes.php')($application, $container);
 
         $this->container = $container;
 

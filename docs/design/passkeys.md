@@ -461,3 +461,24 @@ These join CLAUDE.md's invariants.
   (Windows Hello) is hardware-backed, but some security keys report backup eligibility
   unusually. `hwk` and `swk` follow the flag; a relying party that needs certainty must use
   attestation, which is out of scope.
+
+## 17. As built
+
+What phase 1 settled differently from the sections above, so the code and this document agree.
+
+- **The options travel in an escaped `data-webauthn-create` attribute** of the page's form, not in
+  a `<script type="application/json">` block (§6, §8): it is the same data, but no script element
+  is ever printed but the module, and `escapeHtmlAttr()` is the only escaping involved.
+- **Registration starts with `POST /auth/passkeys/new`** (with CSRF), which opens the ceremony and
+  shows the page that makes the passkey; `GET /auth/passkeys` writes nothing. A browser asks for a
+  passkey only on a click, so the page has a button rather than starting on load.
+- **Only the page that makes a passkey loads the module** and allows `script-src 'self'`; every
+  other page keeps a policy with no script at all (§8 put it on every page).
+- **The relying party id** must be the sign-in host or a parent of it *within the root domain*:
+  that is what keeps a public suffix or another site out without a public suffix list (§5). An
+  issuer that is not https (loopback in development) turns passkeys off, with a warning, rather
+  than refusing to start.
+- **Removing the last passkey is not guarded yet** (§6.4): while a passkey is only a second
+  factor, removing one never removes the way in. The guard comes with signing in by passkey.
+- **`user` in `amr` is added to `hwk`/`swk`**, not used instead of them, when nobody was verified.
+

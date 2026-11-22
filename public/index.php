@@ -33,7 +33,7 @@ require 'vendor/autoload.php';
     $app = $container->get(Application::class);
 
     (require 'config/pipeline.php')($app);
-    (require 'config/routes.php')($app);
+    (require 'config/routes.php')($app, $container);
 
     $app->run();
 
