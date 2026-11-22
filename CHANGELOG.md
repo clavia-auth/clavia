@@ -9,7 +9,7 @@ All notable changes to Clavia are written here, for the people who run it. The f
 ## [0.1.0] - 2026-11-22
 
 The first release: an OAuth 2.1 / OpenID Connect authorization server with interactive sign-in,
-second factors, social and enterprise connections, and a Management API. The OpenID Foundation
+second factors, social and OpenID Connect connections, and a Management API. The OpenID Foundation
 conformance suite passes the Config OP plan and the Basic OP plan, but for one test that OAuth 2.1
 forbids passing (a code flow with neither PKCE nor a `nonce`); see
 [`conformance/README.md`](conformance/README.md).
@@ -70,6 +70,9 @@ forbids passing (a code flow with neither PKCE nor a `nonce`); see
   scopes, machine clients and their grants, roles including the first administrator, audit
   purging, and development data.
 - Docker Compose for development: Caddy, PHP-FPM, PostgreSQL, Redis.
+- A container image for each release, `ghcr.io/clavia-auth/clavia`: the application and its runtime
+  dependencies, PHP-FPM alone, configured by `CLAVIA_*` variables. How releases are made is in
+  [`docs/RELEASING.md`](docs/RELEASING.md).
 - A security review of every adapter in `docs/SECURITY-REVIEW.md`.
 
 **Settings and migrations**
