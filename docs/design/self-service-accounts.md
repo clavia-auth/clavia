@@ -20,8 +20,8 @@ database connections (pools), the mailer, single-use handles in Redis, the send 
 
 ### Not in scope
 
-- Operator-triggered mail (send an invitation or a reset from the Management API): a follow-up
-  that reuses these flows.
+- Operator-triggered mail: built afterwards as `POST /api/v1/users/{user_id}/password-reset`,
+  which reuses these flows (see the Management API document).
 - Changing the address from the account pages, profile fields at sign-up, CAPTCHA, terms
   acceptance.
 

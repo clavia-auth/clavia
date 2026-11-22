@@ -43,6 +43,7 @@ use Clavia\Adapter\Primary\Http\Management\UserConsentsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserHandler;
 use Clavia\Adapter\Primary\Http\Management\UserIdentitiesHandler;
 use Clavia\Adapter\Primary\Http\Management\UserMfaHandler;
+use Clavia\Adapter\Primary\Http\Management\UserPasswordLinkHandler;
 use Clavia\Adapter\Primary\Http\Management\UserPermissionsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserRolesHandler;
 use Clavia\Adapter\Primary\Http\Management\UserSessionsHandler;
@@ -138,6 +139,11 @@ return static function (Application $app): void {
         'api.user',
     );
     $app->delete('/api/v1/users/{user_id}/mfa', $management(UserMfaHandler::class), 'api.user.mfa');
+    $app->post(
+        '/api/v1/users/{user_id}/password-reset',
+        $management(UserPasswordLinkHandler::class),
+        'api.user.password-reset',
+    );
     $app->route(
         '/api/v1/users/{user_id}/roles',
         $management(UserRolesHandler::class),

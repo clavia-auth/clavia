@@ -18,6 +18,7 @@ use Clavia\Domain\Audit\AuditEventType;
 use Clavia\Domain\Audit\AuditTarget;
 use Clavia\Domain\Identity\Event\IdentityUnlinked;
 use Clavia\Domain\Identity\Event\EmailVerified;
+use Clavia\Domain\Identity\Event\PasswordLinkSent;
 use Clavia\Domain\Identity\Event\PasswordReset;
 use Clavia\Domain\Identity\Event\UserChanged;
 use Clavia\Domain\Identity\Event\UserCreated;
@@ -52,6 +53,7 @@ final readonly class DirectoryTrail implements EventSubscriber
             UserSignedUp::class => $this->userSignedUp(...),
             EmailVerified::class => $this->emailVerified(...),
             PasswordReset::class => $this->passwordReset(...),
+            PasswordLinkSent::class => $this->passwordLinkSent(...),
             UserChanged::class => $this->userChanged(...),
             UserDeleted::class => $this->userDeleted(...),
             IdentityUnlinked::class => $this->identityUnlinked(...),
@@ -99,6 +101,14 @@ final readonly class DirectoryTrail implements EventSubscriber
             AuditTarget::user($event->userId),
             actor: Actor::person($event->userId),
         );
+    }
+
+    /** The operator is the actor; the detail says which of the two mails it was, never the link. */
+    private function passwordLinkSent(PasswordLinkSent $event): void
+    {
+        $this->audit->record(AuditEventType::UserPasswordLinkSent, AuditTarget::user($event->userId), [
+            'kind' => $event->invitation ? 'invitation' : 'reset',
+        ]);
     }
 
     private function userChanged(UserChanged $event): void

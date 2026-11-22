@@ -403,7 +403,12 @@ applies however the person signed in.
   session (`SessionEndReason::PasswordReset`). Links are `AccountLink`s in Redis (digest keys,
   `GETDEL`), spent only by a POST, and dead once the address changes or, for a reset, once the
   password does (a fingerprint of the hash). Account mail has its own `EmailSendLimit`
-  namespace. Confirming an address never signs anyone in.
+  namespace. Confirming an address never signs anyone in. An operator can mail the same link
+  to an account (`POST /api/v1/users/{id}/password-reset`, `create:user_tickets`,
+  `Management\Users\SendPasswordLink`): an invitation when the account has no password, a
+  reset when it has one, refused for a deactivated account or one outside a pool. The caller is
+  authenticated, so unlike the public form it is told how it went: `202`, `429` when the send
+  limit is reached, `503` when no mail can be sent.
 
 **Sessions** have one door per operation. `Sessions::establish()` is the only way a browser
 becomes authenticated, and it always rotates the identifier. `resolve()` is the only way to read

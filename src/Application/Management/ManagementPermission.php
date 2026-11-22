@@ -22,6 +22,10 @@ namespace Clavia\Application\Management;
  *
  * `read` covers listing and fetching one: they disclose the same facts.
  *
+ * `create:user_tickets` is a ticket in Auth0's sense: a one-time link mailed to a person, here to
+ * choose a password. It is its own permission because it reaches the person's mailbox, not
+ * their record, and `update:users` never suffices.
+ *
  * `update:roles` is the one to guard most carefully: it can attach any permission on any
  * API to a role and give that role to anyone, the caller included. Giving somebody a role
  * needs it wherever that happens — on the role or on the account — and `update:users`
@@ -49,6 +53,7 @@ enum ManagementPermission: string
     case CreateConnections = 'create:connections';
     case UpdateConnections = 'update:connections';
     case DeleteConnections = 'delete:connections';
+    case CreateUserTickets = 'create:user_tickets';
     case ReadAuditEvents = 'read:audit_events';
 
     /** A sentence for the permission, shown wherever one is assigned. */
@@ -66,6 +71,7 @@ enum ManagementPermission: string
             'clients' => 'client applications',
             'roles' => 'roles and who holds them',
             'connections' => 'the ways users sign in',
+            'user_tickets' => 'links for end users to choose a password',
             'audit_events' => 'the audit trail',
             default => 'APIs',
         };
