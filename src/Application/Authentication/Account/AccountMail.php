@@ -14,8 +14,8 @@ namespace Clavia\Application\Authentication\Account;
 use Clavia\Application\Port\OutgoingMail;
 
 /**
- * The words of the account emails: the verification link, the reset link, and the notice
- * sent to an address somebody tried to sign up with again.
+ * The words of the account emails: the verification link, the reset link, the invitation
+ * an operator sends, and the notice sent to an address somebody tried to sign up with again.
  *
  * Plain text, short, and saying what the link is good for and for how long. Each ends by
  * telling someone who did not ask that ignoring it is safe — which it is: a link does
@@ -78,6 +78,29 @@ final readonly class AccountMail
                 "Open this link to choose a new password:\n\n%s\n\n"
                 . "It works once and expires in %s. Choosing a new password signs you out everywhere.\n\n"
                 . "If you did not ask for this, ignore this email: your password stays as it is.\n",
+                $this->url(self::RESET_PATH, $token),
+                self::duration($this->resetLifetimeSeconds),
+            ),
+        );
+    }
+
+    /**
+     * What a person gets when an operator creates their account without a password: the same
+     * link as a reset, worded for someone who has never signed in.
+     *
+     * @param non-empty-string $email
+     * @param non-empty-string $token The link's secret.
+     */
+    public function invitation(string $email, #[\SensitiveParameter] string $token): OutgoingMail
+    {
+        return new OutgoingMail(
+            $email,
+            sprintf('You have been invited to %s', $this->site),
+            sprintf(
+                "An account has been created for you on %s. Open this link to choose its password:\n\n%s\n\n"
+                . "It works once and expires in %s.\n\n"
+                . "If you were not expecting this, ignore this email: no one can sign in to the account without it.\n",
+                $this->site,
                 $this->url(self::RESET_PATH, $token),
                 self::duration($this->resetLifetimeSeconds),
             ),

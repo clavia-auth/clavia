@@ -67,6 +67,7 @@ use Clavia\Adapter\Primary\Http\Management\UserConsentsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserHandler;
 use Clavia\Adapter\Primary\Http\Management\UserIdentitiesHandler;
 use Clavia\Adapter\Primary\Http\Management\UserMfaHandler;
+use Clavia\Adapter\Primary\Http\Management\UserPasswordLinkHandler;
 use Clavia\Adapter\Primary\Http\Management\UserPermissionsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserRolesHandler;
 use Clavia\Adapter\Primary\Http\Management\UserSessionsHandler;
@@ -185,6 +186,7 @@ use Clavia\Application\Management\Users\ReadConsents;
 use Clavia\Application\Management\Users\ReadIdentities;
 use Clavia\Application\Management\Users\ReadUsers;
 use Clavia\Application\Management\Users\ResetUserMfa;
+use Clavia\Application\Management\Users\SendPasswordLink;
 use Clavia\Application\Management\Users\UnlinkIdentity;
 use Clavia\Application\Management\Users\UpdateUser;
 use Clavia\Application\Management\Users\UserSessions;
@@ -467,10 +469,12 @@ final class ConfigProvider
                     DescribeSecondFactorPage::class => Container\DescribeSecondFactorPageFactory::class,
                     RequireSignIn::class => Container\RequireSignInFactory::class,
                     ResetUserMfa::class => Container\ResetUserMfaFactory::class,
+                    SendPasswordLink::class => Container\SendPasswordLinkFactory::class,
                     MfaChallengeHandler::class => Container\MfaChallengeHandlerFactory::class,
                     ConsentHandler::class => Container\ConsentHandlerFactory::class,
                     MfaSettingsHandler::class => Container\MfaSettingsHandlerFactory::class,
                     UserMfaHandler::class => Container\UserMfaHandlerFactory::class,
+                    UserPasswordLinkHandler::class => Container\UserPasswordLinkHandlerFactory::class,
                     ReadUsers::class => Container\ReadUsersFactory::class,
                     CreateUser::class => Container\CreateUserFactory::class,
                     UpdateUser::class => Container\UpdateUserFactory::class,

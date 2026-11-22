@@ -21,12 +21,15 @@ use Clavia\Domain\Identity\User;
 use Clavia\Domain\Shared\SecretGenerator;
 
 /**
- * Mail an account a link — to verify its address, or to choose a new password — within the
+ * Mail an account a link — to verify its address, or to choose a password — within the
  * account send limit.
  *
  * The link is opened before the mail goes out, and closed again if the mail cannot leave:
  * nobody would ever hold it. Whether it was sent is the answer; callers that must not say
  * whether an address has an account do not pass it on.
+ *
+ * A link to choose a password is a reset, or — for an account that has none yet — an
+ * invitation: the same link, a different mail.
  */
 final readonly class SendAccountLink
 {
@@ -50,7 +53,7 @@ final readonly class SendAccountLink
      */
     public function verification(User $user, ?string $loginState, string $clientAddress): bool
     {
-        return $this->send(AccountLink::verifyEmail($user, $loginState), $clientAddress);
+        return $this->send(AccountLink::verifyEmail($user, $loginState), $clientAddress) === Delivery::Sent;
     }
 
     /**
@@ -58,7 +61,19 @@ final readonly class SendAccountLink
      */
     public function reset(User $user, ?string $loginState, string $clientAddress): bool
     {
-        return $this->send(AccountLink::resetPassword($user, $loginState), $clientAddress);
+        return $this->send(AccountLink::resetPassword($user, $loginState), $clientAddress) === Delivery::Sent;
+    }
+
+    /**
+     * An operator's request: mail the account a link to choose a password, an invitation when
+     * it has none, and say how it went.
+     *
+     * The send limit counts against the address of the operator's request, as the same mail
+     * asked for on the public form would.
+     */
+    public function passwordLink(User $user, string $clientAddress): Delivery
+    {
+        return $this->send(AccountLink::resetPassword($user, null), $clientAddress, $user->passwordHash() === null);
     }
 
     /**
@@ -80,10 +95,10 @@ final readonly class SendAccountLink
         return true;
     }
 
-    private function send(AccountLink $link, string $clientAddress): bool
+    private function send(AccountLink $link, string $clientAddress, bool $invitation = false): Delivery
     {
         if (! $this->sendLimit->allowOne(mb_strtolower($link->email), $clientAddress)) {
-            return false;
+            return Delivery::LimitReached;
         }
         $token = $this->secrets->token();
         $verifying = $link->purpose === AccountLinkPurpose::VerifyEmail;
@@ -93,15 +108,17 @@ final readonly class SendAccountLink
             $verifying ? $this->verificationLifetimeSeconds : $this->resetLifetimeSeconds,
         );
         try {
-            $this->mailer->send(
-                $verifying ? $this->mail->verification($link->email, $token) : $this->mail->reset($link->email, $token),
-            );
+            $this->mailer->send(match (true) {
+                $verifying => $this->mail->verification($link->email, $token),
+                $invitation => $this->mail->invitation($link->email, $token),
+                default => $this->mail->reset($link->email, $token),
+            });
         } catch (MailUnavailable) {
             $this->links->claim($token);
 
-            return false;
+            return Delivery::MailUnavailable;
         }
 
-        return true;
+        return Delivery::Sent;
     }
 }

@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace ClaviaTest\Unit\Application\Authentication\Account;
 
 use Clavia\Application\Authentication\Account\AccountMail;
+use Clavia\Application\Authentication\Account\Delivery;
 use Clavia\Application\Authentication\Account\SendAccountLink;
 use Clavia\Application\Authentication\EmailSendLimit;
 use Clavia\Domain\Identity\AccountLinkPurpose;
@@ -106,5 +107,43 @@ final class SendAccountLinkTest extends TestCase
         self::assertSame([], $this->links->tokens());
         self::assertStringNotContainsString('token=', (string) $this->mailer->last()?->text);
         self::assertStringContainsString('/auth/password/forgot', (string) $this->mailer->last()?->text);
+    }
+
+    public function testAnOperatorsLinkToAnAccountWithNoPasswordIsAnInvitation(): void
+    {
+        $user = User::register($this->user->id, 'jane@example.com', null, $this->clock->now());
+
+        self::assertSame(Delivery::Sent, $this->send->passwordLink($user, '192.0.2.1'));
+
+        $token = $this->links->tokens()[0] ?? '';
+        self::assertSame(AccountLinkPurpose::ResetPassword, $this->links->find($token)?->purpose);
+        self::assertStringContainsString('invited', (string) $this->mailer->last()?->subject);
+        self::assertStringContainsString('/auth/password/reset?token=' . $token, (string) $this->mailer->last()?->text);
+    }
+
+    public function testAnOperatorsLinkToAnAccountWithAPasswordIsAReset(): void
+    {
+        self::assertSame(Delivery::Sent, $this->send->passwordLink($this->user, '192.0.2.1'));
+
+        self::assertStringContainsString('new password', (string) $this->mailer->last()?->subject);
+    }
+
+    public function testTheDeliveryTellsALimitFromAMailServerThatRefused(): void
+    {
+        self::assertSame(Delivery::Sent, $this->send->passwordLink($this->user, '192.0.2.1'));
+        self::assertSame(Delivery::Sent, $this->send->passwordLink($this->user, '192.0.2.1'));
+        self::assertSame(Delivery::LimitReached, $this->send->passwordLink($this->user, '192.0.2.1'));
+        self::assertCount(2, $this->links->tokens());
+
+        $this->mailer->failing = true;
+        $other = User::register(
+            UserId::fromString('0b5f6a4e-1c2d-4e3f-8a9b-7c6d5e4f3a2b'),
+            'other@example.com',
+            '$2y$12$hash',
+            $this->clock->now(),
+        );
+
+        self::assertSame(Delivery::MailUnavailable, $this->send->passwordLink($other, '198.51.100.7'));
+        self::assertCount(2, $this->links->tokens(), 'The link that could not be mailed was closed again.');
     }
 }
