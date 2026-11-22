@@ -284,7 +284,9 @@ CREATE INDEX ix_passkeys_user_id ON passkeys (user_id);
 
 `webauthn:<digest(handle)>`, built by `Redis\Keys::forSecret()`, holding the serialised
 `WebAuthnChallenge`, with the ceremony's lifetime as TTL. `RedisWebAuthnChallengeStore`
-implements the `WebAuthnChallengeStore` port (`put`, `take`).
+implements the `WebAuthnChallengeStore` port (`open`, `claim`, named like the other handle
+stores). The login state and the second-factor challenge a ceremony is bound to are kept as their
+digests.
 
 ## 8. The browser side
 
