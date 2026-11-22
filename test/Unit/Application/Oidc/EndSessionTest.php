@@ -215,7 +215,7 @@ final class EndSessionTest extends TestCase
             static fn (mixed $value): bool => $value !== null,
         );
 
-        return new CompactJws($this->keys)->sign($this->keys->activeKey(), $claims);
+        return new CompactJws($this->keys)->sign($this->keys->activeKey(), $claims, 'JWT');
     }
 
     /**

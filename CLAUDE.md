@@ -528,8 +528,9 @@ OpenAPI document says so where the format is chosen.
 ### Sign-out
 
 - **RP-Initiated Logout** (`/oidc/logout`, `EndSession`): the session ends at once when
-  `id_token_hint` verifies against the published keys (retired ones included), names this
-  issuer, and its `sub` is the session's person; the hint's expiry is not checked. Anything less
+  `id_token_hint` is an ID token (`typ: JWT`), verifies against the published keys (retired
+  ones included), names this issuer, and its `sub` is the session's person; the hint's expiry
+  is not checked. Anything less
   shows a confirmation page whose form posts back (`confirmed=yes`, read from a POST only). The
   browser then goes to a registered `post_logout_redirect_uri` of the client (exact match, with
   `state`), or to the sign-in page.
@@ -660,6 +661,9 @@ These follow from the RFCs and from mistakes already made once. Breaking one is 
 - A TOTP code is spent with its time step.
 - Tokens are signed and verified through the JWKS; retired keys stay published until every token
   they signed has expired.
+- Every token this server signs is explicitly typed (RFC 8725 §3.11): `JWT` for an ID token,
+  `logout+jwt`, `at+jwt`. `SignatureVerifier` takes the type it accepts, so one kind is never
+  taken for another (a JWT access token is no `id_token_hint`).
 - Passwords and client secrets are bcrypt hashes (cost 12; more than 72 bytes or a NUL is
   refused, never truncated). Codes and tokens are stored as SHA-256 digests, for indexed lookup.
 - `prompt`, `max_age`, `request` and `request_uri` are one decision at the authorization

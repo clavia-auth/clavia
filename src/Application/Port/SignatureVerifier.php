@@ -24,15 +24,22 @@ use Clavia\Domain\Oidc\PublicJwk;
 interface SignatureVerifier
 {
     /**
-     * The claims of `$compactJws` when one of `$keys` — the one its `kid` names, with the
-     * algorithm that key is for — verifies its signature; null for anything else: a
-     * malformed token, an unknown `kid`, another algorithm (`none` included), a bad
-     * signature, or a payload that is not a JSON object.
+     * The claims of `$compactJws` when its protected header's `typ` is `$type` and one of
+     * `$keys` — the one its `kid` names, with the algorithm that key is for — verifies its
+     * signature; null for anything else: another type, a malformed token, an unknown `kid`,
+     * another algorithm (`none` included), a bad signature, or a payload that is not a JSON
+     * object.
      *
-     * @param list<PublicJwk> $keys
+     * The type is required because every token this server signs — ID tokens, logout tokens,
+     * JWT access tokens — is signed with the same keys and can carry the same `iss` and `sub`:
+     * only the header tells one kind from another (explicit typing, RFC 8725 §3.11). It is
+     * compared exactly, since the only tokens verified here are this server's own.
+     *
+     * @param list<PublicJwk>  $keys
+     * @param non-empty-string $type The `typ` the token must carry (RFC 7515 §4.1.9).
      *
      * @return array<string, mixed>|null
      */
     #[\NoDiscard]
-    public function verifiedClaims(string $compactJws, array $keys): ?array;
+    public function verifiedClaims(string $compactJws, array $keys, string $type): ?array;
 }

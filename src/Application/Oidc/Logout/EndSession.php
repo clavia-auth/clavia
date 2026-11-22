@@ -21,6 +21,7 @@ use Clavia\Domain\Authentication\LocalPath;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
+use Clavia\Domain\Oidc\IdTokenClaims;
 use Clavia\Domain\Shared\InvalidValue;
 
 /**
@@ -92,11 +93,15 @@ final readonly class EndSession
     /**
      * The hint's claims, when it is an ID token this server signed for this issuer.
      *
+     * An ID token by its `typ`: a JWT access token is signed with the same keys and names the
+     * same person, but whoever holds one (any API it is sent to) must not be able to sign that
+     * person out unasked.
+     *
      * @return array<string, mixed>|null
      */
     private function claimsOf(string $idTokenHint): ?array
     {
-        $claims = $this->verifier->verifiedClaims($idTokenHint, $this->keys->publicKeys());
+        $claims = $this->verifier->verifiedClaims($idTokenHint, $this->keys->publicKeys(), IdTokenClaims::TYPE);
 
         $ours = $claims !== null && ($claims['iss'] ?? null) === $this->issuer && is_string($claims['sub'] ?? null);
 

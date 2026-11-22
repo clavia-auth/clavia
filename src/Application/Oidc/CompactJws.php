@@ -42,7 +42,7 @@ final readonly class CompactJws
      *
      * @throws SigningFailed
      */
-    public function sign(SigningKeyReference $key, array $claims, string $type = 'JWT'): string
+    public function sign(SigningKeyReference $key, array $claims, string $type): string
     {
         $header = ['alg' => $key->algorithm->value, 'typ' => $type, 'kid' => $key->kid];
 

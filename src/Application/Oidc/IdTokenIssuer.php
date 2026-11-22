@@ -98,6 +98,6 @@ final readonly class IdTokenIssuer
             $this->lifetimeSeconds,
         );
 
-        return $this->jws->sign($key, $claims->toArray());
+        return $this->jws->sign($key, $claims->toArray(), IdTokenClaims::TYPE);
     }
 }

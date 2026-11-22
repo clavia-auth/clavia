@@ -11,10 +11,13 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Acceptance;
 
+use ClaviaTest\Support\MachineFixtures;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
+use Clavia\Domain\ResourceServer\AccessTokenFormat;
+use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\Shared\Base64Url;
 use Clavia\Domain\Shared\RandomSource;
 use ClaviaTest\Support\AcceptanceTestCase;
@@ -37,6 +40,7 @@ final class RpLogoutTest extends AcceptanceTestCase
     use OAuth2Fixtures;
     use LoginFixtures;
     use OidcFixtures;
+    use MachineFixtures;
 
     private const string SESSION_COOKIE = 'clavia_session';
 
@@ -127,6 +131,28 @@ final class RpLogoutTest extends AcceptanceTestCase
             self::assertSame(200, $this->logout(['id_token_hint' => $hint])->getStatusCode(), $name);
             self::assertNotNull($this->session($sessionId), $name);
         }
+    }
+
+    public function testAJwtAccessTokenIsNoHint(): void
+    {
+        // Signed with the same keys, by the same issuer, for the same person: only `typ`
+        // (`at+jwt`, RFC 9068 §2.1) says it is no ID token. Any API it was sent to holds it,
+        // and must not be able to sign its person out unasked (RFC 8725 §3.11).
+        $this->user();
+        $this->publicClient();
+        $api = $this->anApi(self::TEST_M2M_AUDIENCE, explode(' ', self::TEST_M2M_SCOPE));
+        $this->container()->get(ResourceServerRepository::class)
+            ->save($api->issuingAccessTokensAs(AccessTokenFormat::Jwt));
+        $this->submitLogin();
+        $accessToken = $this->completeFlow('openid api:read', ['audience' => self::TEST_M2M_AUDIENCE])['access_token'];
+        self::assertIsString($accessToken);
+        self::assertSame('at+jwt', $this->verifiedJwt($accessToken)['header']['typ']);
+        $sessionId = $this->cookie(self::SESSION_COOKIE);
+
+        $response = $this->logout(['id_token_hint' => $accessToken]);
+
+        self::assertSame(200, $response->getStatusCode(), 'The person is asked instead.');
+        self::assertNotNull($this->session($sessionId));
     }
 
     public function testAnExpiredHintStillProvesWhoAsks(): void

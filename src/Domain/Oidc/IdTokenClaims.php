@@ -32,6 +32,13 @@ use DateTimeImmutable;
 final readonly class IdTokenClaims
 {
     /**
+     * The `typ` header an ID token carries (RFC 7515 §4.1.9). OIDC Core names none; `JWT`
+     * keeps it apart from a logout token (`logout+jwt`) and an access token (`at+jwt`), which
+     * the same keys sign (RFC 8725 §3.11).
+     */
+    public const string TYPE = 'JWT';
+
+    /**
      * @param array<non-empty-string, string|bool|int|list<string>> $claims
      */
     private function __construct(private array $claims)
