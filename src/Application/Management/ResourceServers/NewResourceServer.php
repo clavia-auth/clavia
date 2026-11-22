@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Management\ResourceServers;
 
+use Clavia\Domain\ResourceServer\AccessTokenFormat;
 use Clavia\Domain\ResourceServer\Permission;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\Url;
@@ -29,6 +30,7 @@ final readonly class NewResourceServer
      *                                                    roles grant on the API.
      * @param bool                       $allowSkippingConsent Whether first-party applications may do without
      *                                                         the consent screen for its permissions.
+     * @param string                     $accessTokenFormat `opaque` or `jwt`: see {@see AccessTokenFormat}.
      */
     public function __construct(
         public string $identifier,
@@ -36,6 +38,7 @@ final readonly class NewResourceServer
         public array $permissions = [],
         public bool $enforcePolicies = false,
         public bool $allowSkippingConsent = true,
+        public string $accessTokenFormat = 'opaque',
     ) {
     }
 
@@ -55,6 +58,15 @@ final readonly class NewResourceServer
             ),
             $definitions,
         );
+    }
+
+    /**
+     * @throws InvalidValue When the value names no format.
+     */
+    public static function accessTokenFormat(string $value): AccessTokenFormat
+    {
+        return AccessTokenFormat::tryFrom($value)
+            ?? throw new InvalidValue("An access token format is 'opaque' or 'jwt'.");
     }
 
     /**

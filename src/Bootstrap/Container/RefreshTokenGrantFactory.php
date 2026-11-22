@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Application\OAuth2\Token\AccessTokenMinter;
 use Clavia\Application\OAuth2\Token\RefreshTokenGrant;
 use Clavia\Application\OAuth2\Token\UserScope;
 use Clavia\Application\Port\DomainEvents;
@@ -32,6 +33,8 @@ final class RefreshTokenGrantFactory
         $refreshTokens = $container->get(RefreshTokenRepository::class);
         /** @var AccessTokenRepository $tokens */
         $tokens = $container->get(AccessTokenRepository::class);
+        /** @var AccessTokenMinter $accessTokens */
+        $accessTokens = $container->get(AccessTokenMinter::class);
         /** @var UserRepository $users */
         $users = $container->get(UserRepository::class);
         /** @var TransactionManager $transactions */
@@ -58,6 +61,7 @@ final class RefreshTokenGrantFactory
         return new RefreshTokenGrant(
             $refreshTokens,
             $tokens,
+            $accessTokens,
             $users,
             $transactions,
             $secrets,

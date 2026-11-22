@@ -50,6 +50,7 @@ final readonly class ResourceServerHandler implements RequestHandlerInterface
                     ResourceServerFields::permissions($management->body),
                     $management->body->bool('enforce_policies'),
                     $management->body->bool('allow_skipping_consent'),
+                    $management->body->string('access_token_format'),
                 );
 
                 return $this->responder->json(ManagementViews::resourceServer($api));

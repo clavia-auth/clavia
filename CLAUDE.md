@@ -285,10 +285,10 @@ objects, repository interfaces, and an `Event` namespace for its domain events.
 | `Identity` | `User`, `Profile`, `PasswordPolicy`, `ExternalIdentity`, `AssertedIdentity`, `AccountLink` | Every account belongs to one connection; an address is unique within it; a changed address is unverified; an emailed link dies with the address or password it was issued against |
 | `Client` | `Client`, `ClientId`, `ClientType`, `ClientAuthMethod`, `GrantType`, `ResponseType`, `Ownership`, `BackChannelLogout` | Type, auth method and secret agree; the code flow needs a redirect URI; `client_credentials` needs a confidential client; `tpc_…` ids are third-party |
 | `Connection` | `Connection`, `ConnectionName`, `ConnectionStrategy` (database, social, OIDC, passwordless), `OidcSettings`, `BuiltInConnection` | The default pool, social providers and `email` are switched, never created or deleted; only a pool takes sign-ups or requires a verified address |
-| `ResourceServer` | `ResourceServer` (an API: `rs_…` id, audience, permissions), `Permission`, `ClientGrant` | A system API (the Management API) can be renamed, never deleted, always enforces roles |
+| `ResourceServer` | `ResourceServer` (an API: `rs_…` id, audience, permissions, `AccessTokenFormat`), `Permission`, `ClientGrant` | A system API (the Management API) can be renamed, never deleted, always enforces roles; tokens are opaque unless the API takes JWTs |
 | `Rbac` | `Role`, `GrantedPermission`, `RoleRepository` (also the assignments) | A person holds a permission only through a role; `permissionsHeld(user, API)` is the question issuance asks |
 | `Consent` | `UserConsent`, `ConsentPolicy`, `PendingConsent` | `ConsentPolicy` alone decides who is asked |
-| `OAuth2` | `AuthorizationCode`, `AccessToken`, `RefreshToken` (families), `DeviceAuthorization`, `UserCode`, `CodeChallenge`/`CodeVerifier` (S256), `Prompt`, `MaxAge`, `OAuth2Error`/`ErrorCode`, `BearerTokenError` | Single use, exact matching, rotation with replay revocation |
+| `OAuth2` | `AuthorizationCode`, `AccessToken`, `AccessTokenClaims` (RFC 9068), `RefreshToken` (families), `DeviceAuthorization`, `UserCode`, `CodeChallenge`/`CodeVerifier` (S256), `Prompt`, `MaxAge`, `OAuth2Error`/`ErrorCode`, `BearerTokenError` | Single use, exact matching, rotation with replay revocation |
 | `Oidc` | `SigningKey`, `SigningAlgorithm`, `PublicJwk`, `Nonce`, `OidcScope`, `IdentityClaims`, `IdTokenClaims`, `LogoutTokenClaims` | One active key; retired keys stay published until their tokens expire |
 | `Authentication` | `Session`, `AuthenticationMethod` (RFC 8176 `amr`), `AuthenticationContext`, `LocalPath`, `LoginState`, `MfaChallenge`, `Mfa\*` (`Totp`, `RecoveryCode`, `MfaFactor`), `Passkey\*` (`Passkey`, `CredentialId`, `PasskeyRepository`, `WebAuthnChallenge`, `RelyingParty`…), `PasswordlessChallenge`, `PendingExternalSignIn` | Sessions have idle and absolute lifetimes and a `sid`; a TOTP step is spent once; a passkey's signature counter must grow (a synced passkey's stays at zero), and its eligibility for backup never changes |
 | `Audit` | `AuditEvent`, `AuditEventType`, `Actor`, `AuditTarget`, `Outcome`, `AuditQuery`, `AuditLog` | Append-only; facts, never secrets |
@@ -494,6 +494,24 @@ User-code guesses are throttled (`UserCodeThrottle`, §5.1).
   issued to it. Another client's token is `invalid_grant`; an unknown one a quiet 200. A refresh
   token takes its family along; an access token goes alone. `token_type_hint` says where to look
   first, never where to look only.
+
+### Access token formats
+
+Every grant mints through `Token\AccessTokenMinter`, which issues the form the token's API
+chose (`access_token_format`, opaque by default; a token for no API is always opaque):
+
+- **Opaque**: a 43-character secret the API resolves at introspection.
+- **JWT** (RFC 9068): `typ: at+jwt`, signed through `TokenSigner` with the active key, claims
+  from `AccessTokenClaims` (`iss`, `exp`, `aud`, `sub`, `client_id`, `iat`, `jti`, `scope`).
+  `sub` is the client's id for a client acting as itself; `jti` is the recorded token's id. No
+  `auth_time`, `acr`, `amr` (§2.2.1: a refreshed token no longer knows them) and no identity
+  claims (userinfo releases those).
+
+Both are recorded by the digest of the value handed out, signed before the row is written, so
+introspection, revocation, userinfo and the Management API treat them alike, and a signing
+failure records nothing. **Revocation cannot reach an API that validates a JWT on its own**: it
+accepts it until `exp`, so the access token lifetime bounds a revoked JWT's life there. The
+OpenAPI document says so where the format is chosen.
 
 ### OpenID Connect
 

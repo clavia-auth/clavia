@@ -12,7 +12,10 @@ declare(strict_types=1);
 namespace ClaviaTest\Unit\Application\OAuth2;
 
 use Clavia\Application\OAuth2\RequestParameters;
+use Clavia\Application\OAuth2\Token\AccessTokenMinter;
 use Clavia\Application\OAuth2\Token\ClientCredentialsGrant;
+use Clavia\Application\Oidc\CompactJws;
+use ClaviaTest\Support\Fake\InMemorySigningKeys;
 use Clavia\Application\OAuth2\Token\IssuedToken;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
@@ -45,6 +48,7 @@ final class ClientCredentialsGrantTest extends TestCase
     private InMemoryResourceServerRepository $resourceServers;
     private InMemoryClientGrantRepository $clientGrants;
     private InMemoryAccessTokenRepository $tokens;
+    private InMemorySigningKeys $keys;
     private ClientCredentialsGrant $grant;
     private Client $client;
     private ResourceServer $api;
@@ -57,12 +61,19 @@ final class ClientCredentialsGrantTest extends TestCase
         $this->resourceServers = new InMemoryResourceServerRepository();
         $this->clientGrants = new InMemoryClientGrantRepository();
         $this->tokens = new InMemoryAccessTokenRepository();
+        $this->keys = new InMemorySigningKeys($this->clock);
         $this->grant = new ClientCredentialsGrant(
             $this->resourceServers,
             $this->clientGrants,
-            $this->tokens,
-            new SecretGenerator($random),
-            $random,
+            new AccessTokenMinter(
+                $this->tokens,
+                $this->resourceServers,
+                $this->keys,
+                new CompactJws($this->keys),
+                new SecretGenerator($random),
+                $random,
+                'https://auth.clavia.test',
+            ),
             $this->clock,
             900,
             new InMemoryDomainEvents(),

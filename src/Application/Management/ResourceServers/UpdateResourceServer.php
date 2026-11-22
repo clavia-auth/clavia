@@ -22,8 +22,9 @@ use Clavia\Domain\Shared\InvalidValue;
 
 /**
  * `PATCH /api/v1/resource-servers/{resource_server_id}`: rename an API, replace the
- * permissions it defines, turn roles on or off for it, or let first-party applications
- * skip the consent screen for it or not. The identifier never changes —
+ * permissions it defines, turn roles on or off for it, let first-party applications
+ * skip the consent screen for it or not, or change the form of the access tokens issued
+ * for it from the next token on. The identifier never changes —
  * it is the `aud` of every token already issued.
  *
  * A permission dropped from an API stops being issued on the next token, client grants
@@ -43,6 +44,7 @@ final readonly class UpdateResourceServer
      * @param list<PermissionDefinition>|null $permissions     The whole new set; null leaves it alone.
      * @param bool|null                       $enforcePolicies Null leaves it alone.
      * @param bool|null                       $allowSkippingConsent Null leaves it alone.
+     * @param string|null                     $accessTokenFormat    `opaque` or `jwt`; null leaves it alone.
      *
      * @throws NotFound
      * @throws InvalidValue
@@ -55,6 +57,7 @@ final readonly class UpdateResourceServer
         ?array $permissions,
         ?bool $enforcePolicies = null,
         ?bool $allowSkippingConsent = null,
+        ?string $accessTokenFormat = null,
     ): ResourceServer {
         $resourceServer = $this->resourceServers->find($id) ?? throw NotFound::of('API');
 
@@ -67,6 +70,11 @@ final readonly class UpdateResourceServer
         if ($allowSkippingConsent !== null) {
             $resourceServer = $resourceServer->allowingConsentSkip($allowSkippingConsent);
         }
+        if ($accessTokenFormat !== null) {
+            $resourceServer = $resourceServer->issuingAccessTokensAs(
+                NewResourceServer::accessTokenFormat($accessTokenFormat),
+            );
+        }
         if ($name !== null) {
             $resourceServer = $resourceServer->renamed($name);
         }
@@ -76,6 +84,7 @@ final readonly class UpdateResourceServer
             'permissions' => $permissions !== null,
             'enforce_policies' => $enforcePolicies !== null,
             'allow_skipping_consent' => $allowSkippingConsent !== null,
+            'access_token_format' => $accessTokenFormat !== null,
         ]))));
 
         return $resourceServer;

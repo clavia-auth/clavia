@@ -21,8 +21,9 @@ use DateTimeImmutable;
 /**
  * An issued access token (RFC 6750 bearer).
  *
- * Opaque: a random string whose digest is looked up here, which is what lets every
- * surface that accepts a token honour revocation the instant it happens.
+ * Recorded by the digest of the value the client holds — a random string, or the JWT of
+ * an API that takes them (RFC 9068) — and looked up by it here, which is what lets every
+ * surface of this server that accepts a token honour revocation the instant it happens.
  * `authorizationCodeId` records which code minted it, so a replayed code can revoke
  * everything it produced (RFC 6749 §4.1.2) — including what was later minted from the
  * refresh tokens that code started. `audience` is the API the token is for — its
@@ -199,6 +200,27 @@ final class AccessToken
             $expiresAt,
             $revokedAt,
             $refreshFamilyId,
+        );
+    }
+
+    /**
+     * The same token, known by the digest of another value: the JWT that describes it,
+     * which can only be signed once the token it describes exists.
+     */
+    public function presentedAs(Digest $digest): self
+    {
+        return self::reconstitute(
+            $this->id,
+            $digest,
+            $this->clientId,
+            $this->userId,
+            $this->authorizationCodeId,
+            $this->audience,
+            $this->scope,
+            $this->issuedAt,
+            $this->expiresAt,
+            $this->revokedAt,
+            $this->refreshFamilyId,
         );
     }
 

@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace ClaviaTest\Unit\Application\OAuth2;
 
 use Clavia\Application\OAuth2\RequestParameters;
+use Clavia\Application\OAuth2\Token\AccessTokenMinter;
 use Clavia\Application\OAuth2\Token\AuthorizationCodeGrant;
 use Clavia\Application\OAuth2\Token\IssuedToken;
 use Clavia\Application\OAuth2\Token\UserScope;
@@ -83,6 +84,15 @@ final class AuthorizationCodeGrantTest extends TestCase
         $this->grant = new AuthorizationCodeGrant(
             $this->codes,
             $this->tokens,
+            new AccessTokenMinter(
+                $this->tokens,
+                $this->resourceServers,
+                $this->keys,
+                new CompactJws($this->keys),
+                new SecretGenerator($random),
+                $random,
+                'https://auth.clavia.test',
+            ),
             $this->refreshTokens,
             $this->users,
             $transactions,

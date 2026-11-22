@@ -219,6 +219,7 @@ use Clavia\Application\OAuth2\Device\PendingDeviceRequests;
 use Clavia\Application\OAuth2\Device\RequestDeviceAuthorization;
 use Clavia\Application\OAuth2\Device\UserCodeThrottle;
 use Clavia\Application\OAuth2\ReadRequestedAccess;
+use Clavia\Application\OAuth2\Token\AccessTokenMinter;
 use Clavia\Application\OAuth2\Token\AuthorizationCodeGrant;
 use Clavia\Application\OAuth2\Token\ClientCredentialsGrant;
 use Clavia\Application\OAuth2\Token\DeviceCodeGrant;
@@ -395,6 +396,7 @@ final class ConfigProvider
                     HeldConsents::class => Container\HeldConsentsFactory::class,
                     DescribeConsent::class => Container\DescribeConsentFactory::class,
                     DecideConsent::class => Container\DecideConsentFactory::class,
+                    AccessTokenMinter::class => Container\AccessTokenMinterFactory::class,
                     AuthorizationCodeGrant::class => Container\AuthorizationCodeGrantFactory::class,
                     RefreshTokenGrant::class => Container\RefreshTokenGrantFactory::class,
                     UserScope::class => Container\UserScopeFactory::class,

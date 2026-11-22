@@ -45,6 +45,7 @@ final readonly class RegisterResourceServer
     public function __invoke(NewResourceServer $new): ResourceServer
     {
         NewResourceServer::checkIdentifier($new->identifier);
+        $format = NewResourceServer::accessTokenFormat($new->accessTokenFormat);
 
         $resourceServer = ResourceServer::register(
             ResourceServerId::generate($this->secrets),
@@ -54,6 +55,7 @@ final readonly class RegisterResourceServer
             $this->clock->now(),
             enforcePolicies: $new->enforcePolicies,
             allowSkippingConsent: $new->allowSkippingConsent,
+            accessTokenFormat: $format,
         );
         $this->resourceServers->save($resourceServer);
         $this->events->dispatch(new ResourceServerRegistered($resourceServer));

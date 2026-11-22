@@ -780,6 +780,7 @@ final class ManagementApiTest extends AcceptanceTestCase
         self::assertSame(self::APIS . '/' . $id, $created->getHeaderLine('Location'));
         // Not settable by a caller: an API nobody can delete is made on the machine.
         self::assertFalse($body['is_system']);
+        self::assertSame('opaque', $body['access_token_format']);
 
         $patched = $this->api('PATCH', self::APIS . '/' . $id, [
             'permissions' => [['value' => 'invoices:read'], ['value' => 'invoices:write']],
@@ -791,6 +792,42 @@ final class ManagementApiTest extends AcceptanceTestCase
 
         self::assertSame(204, $this->api('DELETE', self::APIS . '/' . $id)->getStatusCode());
         self::assertSame(404, $this->api('GET', self::APIS . '/' . $id)->getStatusCode());
+    }
+
+    public function testAnApiChoosesTheFormOfItsAccessTokens(): void
+    {
+        $this->adminToken();
+
+        $created = $this->api('POST', self::APIS, [
+            'identifier' => 'https://invoices.test/api/',
+            'access_token_format' => 'jwt',
+        ]);
+        self::assertSame(201, $created->getStatusCode(), (string) $created->getBody());
+        self::assertSame('jwt', self::document($created)['access_token_format']);
+        $path = self::APIS . '/' . (string) self::document($created)['id'];
+
+        $patched = $this->api('PATCH', $path, ['access_token_format' => 'opaque']);
+        self::assertSame(200, $patched->getStatusCode(), (string) $patched->getBody());
+        self::assertSame('opaque', self::document($patched)['access_token_format']);
+
+        self::assertSame(422, $this->api('PATCH', $path, ['access_token_format' => 'jwe'])->getStatusCode());
+    }
+
+    public function testTheManagementApiMayTakeJwtAccessTokens(): void
+    {
+        // The form is between this server and the API, and here both are this server.
+        $this->adminToken();
+        $api = $this->managementApi();
+
+        $response = $this->api('PATCH', self::APIS . '/' . $api->id->value, ['access_token_format' => 'jwt']);
+
+        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame('jwt', self::document($response)['access_token_format']);
+
+        // The next token is a JWT, and the Management API takes it like any other.
+        $jwt = $this->adminToken();
+        self::assertCount(3, explode('.', $jwt));
+        self::assertSame(200, $this->api('GET', self::APIS)->getStatusCode());
     }
 
     public function testIdentifierMustBeAnAbsoluteUri(): void

@@ -23,7 +23,6 @@ use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AccessToken;
 use Clavia\Domain\OAuth2\AccessTokenId;
-use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\DeviceAuthorization;
 use Clavia\Domain\OAuth2\DevicePoll;
 use Clavia\Domain\OAuth2\Event\AccessTokenIssued;
@@ -56,7 +55,7 @@ final readonly class DeviceCodeGrant implements Grant
      */
     public function __construct(
         private DeviceAuthorizationStore $requests,
-        private AccessTokenRepository $tokens,
+        private AccessTokenMinter $accessTokens,
         private RefreshTokenRepository $refreshTokens,
         private UserRepository $users,
         private SecretGenerator $secrets,
@@ -164,19 +163,21 @@ final readonly class DeviceCodeGrant implements Grant
             $this->refreshTokens->add($refreshToken);
         }
 
-        $value = $this->secrets->token();
-        $token = AccessToken::issueForUser(
-            AccessTokenId::generate($this->random),
-            Digest::of($value),
-            $request->clientId,
-            $user->id,
-            $request->audience,
-            $scope,
-            $now,
-            $this->accessTokenLifetimeSeconds,
-            $refreshToken?->familyId,
+        $minted = $this->accessTokens->mint(
+            fn (AccessTokenId $id, Digest $digest): AccessToken => AccessToken::issueForUser(
+                $id,
+                $digest,
+                $request->clientId,
+                $user->id,
+                $request->audience,
+                $scope,
+                $now,
+                $this->accessTokenLifetimeSeconds,
+                $refreshToken?->familyId,
+            ),
         );
-        $this->tokens->add($token);
+        $token = $minted->token;
+        $value = $minted->value;
         $this->events->dispatch(new AccessTokenIssued($token, GrantType::DeviceCode, $refreshToken !== null));
 
         $idToken = $scope->contains(OidcScope::OPENID)
