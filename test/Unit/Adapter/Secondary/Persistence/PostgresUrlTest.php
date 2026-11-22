@@ -81,7 +81,7 @@ final class PostgresUrlTest extends TestCase
     public function testItRefusesWhatItCannotConnectWith(string $url, string $reason): void
     {
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage($reason);
+        $this->expectExceptionMessageIsOrContains($reason);
 
         PostgresUrl::parse($url);
     }

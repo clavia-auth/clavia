@@ -115,7 +115,7 @@ final class ClientTest extends TestCase
     public function testOnlyAConfidentialClientMayUseClientCredentials(): void
     {
         $this->expectException(InvalidValue::class);
-        $this->expectExceptionMessage('confidential clients only');
+        $this->expectExceptionMessageIsOrContains('confidential clients only');
 
         $this->register(grantTypes: [GrantType::ClientCredentials], responseTypes: []);
     }
@@ -199,7 +199,7 @@ final class ClientTest extends TestCase
         self::assertTrue($relieved->withPkceRequired(true)->requiresPkce);
 
         $this->expectException(InvalidValue::class);
-        $this->expectExceptionMessage('Only a confidential client can do without PKCE.');
+        $this->expectExceptionMessageIsOrContains('Only a confidential client can do without PKCE.');
         $this->register()->withPkceRequired(false);
     }
 

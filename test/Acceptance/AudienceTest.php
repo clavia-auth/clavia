@@ -116,7 +116,7 @@ final class AudienceTest extends AcceptanceTestCase
         $client = $this->m2mClient();
 
         $this->expectException(InvalidValue::class);
-        $this->expectExceptionMessage('does not define: invoices:delete');
+        $this->expectExceptionMessageIsOrContains('does not define: invoices:delete');
 
         ClientGrant::grant(
             $client->id,

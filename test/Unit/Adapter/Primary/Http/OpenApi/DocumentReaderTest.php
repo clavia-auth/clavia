@@ -95,7 +95,7 @@ final class DocumentReaderTest extends TestCase
     public function testADocumentThisValidatorCannotEnforceIsRefused(array $overrides, string $expected): void
     {
         $this->expectException(InvalidDocument::class);
-        $this->expectExceptionMessage($expected);
+        $this->expectExceptionMessageIsOrContains($expected);
 
         Document::fromJson(self::document($overrides));
     }
@@ -225,7 +225,7 @@ final class DocumentReaderTest extends TestCase
     public function testYamlThatDoesNotParseIsRefused(): void
     {
         $this->expectException(InvalidDocument::class);
-        $this->expectExceptionMessage('not valid YAML');
+        $this->expectExceptionMessageIsOrContains('not valid YAML');
 
         Document::fromYaml("openapi: [unclosed\n");
     }

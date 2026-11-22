@@ -179,7 +179,7 @@ final class SqlFileMigratorTest extends IntegrationTestCase
         unlink($this->directory . '/0001_create_users.sql');
 
         $this->expectException(SchemaMigrationFailed::class);
-        $this->expectExceptionMessage('0001_create_users is recorded as applied but its file is not in');
+        $this->expectExceptionMessageIsOrContains('0001_create_users is recorded as applied but its file is not in');
 
         $this->migrator()->migrate();
     }
@@ -191,7 +191,7 @@ final class SqlFileMigratorTest extends IntegrationTestCase
         $this->file('0001_create_users.sql', 'CREATE TABLE users (id integer PRIMARY KEY);');
 
         $this->expectException(SchemaMigrationFailed::class);
-        $this->expectExceptionMessage('0001_create_users is pending but older than 0002');
+        $this->expectExceptionMessageIsOrContains('0001_create_users is pending but older than 0002');
 
         $this->migrator()->migrate();
     }
@@ -202,7 +202,7 @@ final class SqlFileMigratorTest extends IntegrationTestCase
         $this->file('0001_create_clients.sql', 'SELECT 1;');
 
         $this->expectException(SchemaMigrationFailed::class);
-        $this->expectExceptionMessage('Two migrations share version 0001');
+        $this->expectExceptionMessageIsOrContains('Two migrations share version 0001');
 
         $this->migrator()->status();
     }
@@ -238,7 +238,7 @@ final class SqlFileMigratorTest extends IntegrationTestCase
         $migrator = new SqlFileMigrator($this->db, $this->directory . '/nowhere', $this->clock);
 
         $this->expectException(SchemaMigrationFailed::class);
-        $this->expectExceptionMessage('does not exist');
+        $this->expectExceptionMessageIsOrContains('does not exist');
 
         $migrator->migrate();
     }

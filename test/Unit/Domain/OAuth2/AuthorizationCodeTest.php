@@ -125,7 +125,7 @@ final class AuthorizationCodeTest extends TestCase
     public function testACodeIsBoundByAChallengeOrANonceAndNeverByNeither(): void
     {
         $this->expectException(InvalidValue::class);
-        $this->expectExceptionMessage('bound to its client by a nonce instead');
+        $this->expectExceptionMessageIsOrContains('bound to its client by a nonce instead');
 
         AuthorizationCode::issue(
             AuthorizationCodeId::generate(new SeededRandomSource(1)),

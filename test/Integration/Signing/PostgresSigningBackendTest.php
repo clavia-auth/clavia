@@ -188,7 +188,7 @@ final class PostgresSigningBackendTest extends IntegrationTestCase
         });
 
         $this->expectException(SigningFailed::class);
-        $this->expectExceptionMessage('is not the active key');
+        $this->expectExceptionMessageIsOrContains('is not the active key');
 
         $_ = $this->signer->sign($reference, 'header.payload');
     }

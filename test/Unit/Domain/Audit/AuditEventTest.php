@@ -50,7 +50,7 @@ final class AuditEventTest extends TestCase
     public function testADetailNamingACredentialIsRefused(string $name): void
     {
         $this->expectException(InvalidValue::class);
-        $this->expectExceptionMessage('never holds a credential');
+        $this->expectExceptionMessageIsOrContains('never holds a credential');
 
         self::event([$name => 'x']);
     }

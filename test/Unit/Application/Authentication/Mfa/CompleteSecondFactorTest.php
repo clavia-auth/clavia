@@ -134,7 +134,7 @@ final class CompleteSecondFactorTest extends TestCase
 
     public function testACodeFromTheAppSignsInWithEveryMethodUsed(): void
     {
-        $outcome = $this->attempt($this->currentCode());
+        $outcome = $this->enterCode($this->currentCode());
 
         self::assertInstanceOf(SignedIn::class, $outcome);
         self::assertSame('/oauth2/authorize?client_id=spa', $outcome->nextUrl);
@@ -155,7 +155,7 @@ final class CompleteSecondFactorTest extends TestCase
 
     public function testARecoveryCodeSignsInOnceWithoutClaimingAnAppCode(): void
     {
-        $outcome = $this->attempt('AAAA-BBBB-CCCC');
+        $outcome = $this->enterCode('AAAA-BBBB-CCCC');
 
         self::assertInstanceOf(SignedIn::class, $outcome);
         self::assertSame(
@@ -165,7 +165,7 @@ final class CompleteSecondFactorTest extends TestCase
         self::assertSame(1, $this->recoveryCodes->unusedCount($this->user->id));
 
         $this->reopen();
-        self::assertInstanceOf(SecondFactorRejected::class, $this->attempt('aaaa-bbbb-cccc'));
+        self::assertInstanceOf(SecondFactorRejected::class, $this->enterCode('aaaa-bbbb-cccc'));
     }
 
     public function testTheSessionReplacesTheOneTheBrowserHeld(): void
@@ -177,7 +177,7 @@ final class CompleteSecondFactorTest extends TestCase
             null,
         );
 
-        $outcome = $this->attempt($this->currentCode(), $previous);
+        $outcome = $this->enterCode($this->currentCode(), $previous);
 
         self::assertInstanceOf(SignedIn::class, $outcome);
         self::assertNotSame($previous, $outcome->sessionId);
@@ -186,13 +186,13 @@ final class CompleteSecondFactorTest extends TestCase
 
     public function testAWrongCodeIsCountedAndTheLimitEndsTheChallenge(): void
     {
-        self::assertInstanceOf(SecondFactorRejected::class, $this->attempt('000000'));
-        self::assertInstanceOf(SecondFactorRejected::class, $this->attempt('not-a-code'));
+        self::assertInstanceOf(SecondFactorRejected::class, $this->enterCode('000000'));
+        self::assertInstanceOf(SecondFactorRejected::class, $this->enterCode('not-a-code'));
         self::assertSame(2, $this->challenges->find(self::HANDLE)?->attempts);
 
-        self::assertInstanceOf(ChallengeGone::class, $this->attempt('000000'));
+        self::assertInstanceOf(ChallengeGone::class, $this->enterCode('000000'));
         self::assertNull($this->challenges->find(self::HANDLE));
-        self::assertInstanceOf(ChallengeGone::class, $this->attempt($this->currentCode()));
+        self::assertInstanceOf(ChallengeGone::class, $this->enterCode($this->currentCode()));
         self::assertSame(0, $this->sessionStore->count());
     }
 
@@ -200,7 +200,7 @@ final class CompleteSecondFactorTest extends TestCase
     {
         $spent = Totp::codeAt($this->secret, $this->clock->now()->modify('-' . Totp::PERIOD . ' seconds'));
 
-        self::assertInstanceOf(SecondFactorRejected::class, $this->attempt($spent));
+        self::assertInstanceOf(SecondFactorRejected::class, $this->enterCode($spent));
     }
 
     public function testAThrottledAccountHasEvenTheRightCodeRefused(): void
@@ -209,11 +209,11 @@ final class CompleteSecondFactorTest extends TestCase
         // count against the account.
         for ($i = 0; $i < 4; ++$i) {
             $this->reopen();
-            $this->attempt('000000');
+            $this->enterCode('000000');
         }
         $this->reopen();
 
-        self::assertInstanceOf(SecondFactorRejected::class, $this->attempt($this->currentCode()));
+        self::assertInstanceOf(SecondFactorRejected::class, $this->enterCode($this->currentCode()));
         self::assertSame(0, $this->sessionStore->count());
         self::assertNotSame(
             Totp::timeStep($this->clock->now()),
@@ -224,17 +224,17 @@ final class CompleteSecondFactorTest extends TestCase
 
     public function testSuccessClearsTheFailuresCounted(): void
     {
-        $this->attempt('000000');
-        $this->attempt('000000');
-        self::assertInstanceOf(SignedIn::class, $this->attempt($this->currentCode()));
+        $this->enterCode('000000');
+        $this->enterCode('000000');
+        self::assertInstanceOf(SignedIn::class, $this->enterCode($this->currentCode()));
 
         for ($i = 0; $i < 3; ++$i) {
             $this->reopen();
-            $this->attempt('000000');
+            $this->enterCode('000000');
         }
         $this->reopen();
         $this->clock->advance(Totp::PERIOD);
-        self::assertInstanceOf(SignedIn::class, $this->attempt($this->currentCode()));
+        self::assertInstanceOf(SignedIn::class, $this->enterCode($this->currentCode()));
     }
 
     public function testAnAccountDeactivatedMeanwhileCannotFinish(): void
@@ -242,7 +242,7 @@ final class CompleteSecondFactorTest extends TestCase
         $this->user->deactivate($this->clock->now());
         $this->users->save($this->user);
 
-        self::assertInstanceOf(SecondFactorRejected::class, $this->attempt($this->currentCode()));
+        self::assertInstanceOf(SecondFactorRejected::class, $this->enterCode($this->currentCode()));
         self::assertSame(0, $this->sessionStore->count());
     }
 
@@ -250,7 +250,7 @@ final class CompleteSecondFactorTest extends TestCase
     {
         $this->users->delete($this->user->id);
 
-        self::assertInstanceOf(SecondFactorRejected::class, $this->attempt($this->currentCode()));
+        self::assertInstanceOf(SecondFactorRejected::class, $this->enterCode($this->currentCode()));
         self::assertSame(0, $this->sessionStore->count());
     }
 
@@ -258,13 +258,13 @@ final class CompleteSecondFactorTest extends TestCase
     {
         $this->factors->removeAll($this->user->id);
 
-        self::assertInstanceOf(SecondFactorRejected::class, $this->attempt($this->currentCode()));
+        self::assertInstanceOf(SecondFactorRejected::class, $this->enterCode($this->currentCode()));
     }
 
     public function testAnUnknownOrEmptyChallengeIsGone(): void
     {
-        self::assertInstanceOf(ChallengeGone::class, $this->attempt($this->currentCode(), challenge: 'unknown'));
-        self::assertInstanceOf(ChallengeGone::class, $this->attempt($this->currentCode(), challenge: ''));
+        self::assertInstanceOf(ChallengeGone::class, $this->enterCode($this->currentCode(), challenge: 'unknown'));
+        self::assertInstanceOf(ChallengeGone::class, $this->enterCode($this->currentCode(), challenge: ''));
     }
 
     public function testThePageIsDescribedOnlyForAnOpenChallenge(): void
@@ -277,7 +277,7 @@ final class CompleteSecondFactorTest extends TestCase
         self::assertNull($describe(null));
     }
 
-    private function attempt(
+    private function enterCode(
         string $code,
         ?string $currentSession = null,
         string $challenge = self::HANDLE,

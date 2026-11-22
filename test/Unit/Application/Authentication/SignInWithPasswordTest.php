@@ -145,7 +145,7 @@ final class SignInWithPasswordTest extends TestCase
     {
         $this->requireVerifiedEmail();
 
-        $outcome = $this->attempt();
+        $outcome = $this->signInWith();
 
         self::assertInstanceOf(EmailVerificationRequired::class, $outcome);
         self::assertSame(self::EMAIL, $outcome->email);
@@ -160,7 +160,7 @@ final class SignInWithPasswordTest extends TestCase
     {
         $this->requireVerifiedEmail();
 
-        self::assertInstanceOf(CredentialsRejected::class, $this->attempt(password: 'not the password'));
+        self::assertInstanceOf(CredentialsRejected::class, $this->signInWith(password: 'not the password'));
         self::assertSame([], $this->mailer->sent);
     }
 
@@ -170,18 +170,18 @@ final class SignInWithPasswordTest extends TestCase
         $this->user->recordEmailVerification(true, $this->clock->now());
         $this->users->save($this->user);
 
-        self::assertInstanceOf(SignedIn::class, $this->attempt());
+        self::assertInstanceOf(SignedIn::class, $this->signInWith());
     }
 
     public function testAnUnverifiedAccountSignsInWhereNoVerifiedAddressIsRequired(): void
     {
-        self::assertInstanceOf(SignedIn::class, $this->attempt());
+        self::assertInstanceOf(SignedIn::class, $this->signInWith());
         self::assertSame([], $this->mailer->sent);
     }
 
     public function testTheRightPasswordStartsAPasswordSessionForTheAccount(): void
     {
-        $outcome = $this->attempt();
+        $outcome = $this->signInWith();
 
         self::assertInstanceOf(SignedIn::class, $outcome);
         $session = $this->sessions->resolve($outcome->sessionId);
@@ -200,7 +200,7 @@ final class SignInWithPasswordTest extends TestCase
             new LoginState('/oauth2/authorize?client_id=spa', ClientId::fromString('spa')),
         );
 
-        $outcome = $this->attempt(loginState: 'handle');
+        $outcome = $this->signInWith(loginState: 'handle');
 
         self::assertInstanceOf(SecondFactorRequired::class, $outcome);
         self::assertSame(0, $this->sessionStore->count());
@@ -221,7 +221,7 @@ final class SignInWithPasswordTest extends TestCase
     {
         $this->factors->save(MfaFactor::stage($this->user->id, 'sealed', $this->clock->now()));
 
-        self::assertInstanceOf(SignedIn::class, $this->attempt());
+        self::assertInstanceOf(SignedIn::class, $this->signInWith());
         self::assertSame(0, $this->challenges->count());
     }
 
@@ -229,7 +229,7 @@ final class SignInWithPasswordTest extends TestCase
     {
         $this->enrolSecondFactor();
 
-        self::assertInstanceOf(CredentialsRejected::class, $this->attempt(password: 'wrong'));
+        self::assertInstanceOf(CredentialsRejected::class, $this->signInWith(password: 'wrong'));
         self::assertSame(0, $this->challenges->count());
     }
 
@@ -237,7 +237,7 @@ final class SignInWithPasswordTest extends TestCase
     {
         $this->loginStates->put('handle', new LoginState('/oauth2/authorize?client_id=spa'));
 
-        $outcome = $this->attempt(loginState: 'handle');
+        $outcome = $this->signInWith(loginState: 'handle');
 
         self::assertInstanceOf(SignedIn::class, $outcome);
         self::assertSame('/oauth2/authorize?client_id=spa', $outcome->nextUrl);
@@ -248,7 +248,7 @@ final class SignInWithPasswordTest extends TestCase
     {
         $this->loginStates->put('handle', new LoginState('//evil.example/steal'));
 
-        $outcome = $this->attempt(loginState: 'handle');
+        $outcome = $this->signInWith(loginState: 'handle');
 
         self::assertInstanceOf(SignedIn::class, $outcome);
         self::assertSame('/auth/login', $outcome->nextUrl);
@@ -256,7 +256,7 @@ final class SignInWithPasswordTest extends TestCase
 
     public function testAnUnknownHandleStillSignsInAndLandsOnTheLoginPage(): void
     {
-        $outcome = $this->attempt(loginState: 'expired');
+        $outcome = $this->signInWith(loginState: 'expired');
 
         self::assertInstanceOf(SignedIn::class, $outcome);
         self::assertSame('/auth/login', $outcome->nextUrl);
@@ -264,10 +264,10 @@ final class SignInWithPasswordTest extends TestCase
 
     public function testTheSessionTheBrowserHeldIsEnded(): void
     {
-        $before = $this->attempt();
+        $before = $this->signInWith();
         self::assertInstanceOf(SignedIn::class, $before);
 
-        $after = $this->attempt(currentSessionId: $before->sessionId);
+        $after = $this->signInWith(currentSessionId: $before->sessionId);
 
         self::assertInstanceOf(SignedIn::class, $after);
         self::assertNull($this->sessions->resolve($before->sessionId));
@@ -278,7 +278,7 @@ final class SignInWithPasswordTest extends TestCase
     {
         $this->loginStates->put('handle', new LoginState('/oauth2/authorize?client_id=spa'));
 
-        $outcome = $this->attempt(password: 'wrong', loginState: 'handle');
+        $outcome = $this->signInWith(password: 'wrong', loginState: 'handle');
 
         self::assertInstanceOf(CredentialsRejected::class, $outcome);
         self::assertNotNull($this->loginStates->get('handle'));
@@ -289,7 +289,7 @@ final class SignInWithPasswordTest extends TestCase
 
     public function testAnUnknownAccountIsRejectedAfterTheSameWorkAsAWrongPassword(): void
     {
-        $outcome = $this->attempt(email: 'nobody@example.com');
+        $outcome = $this->signInWith(email: 'nobody@example.com');
 
         self::assertInstanceOf(CredentialsRejected::class, $outcome);
         self::assertSame(1, $this->hasher->simulatedVerifications);
@@ -301,7 +301,7 @@ final class SignInWithPasswordTest extends TestCase
         $this->user->deactivate($this->clock->now());
         $this->users->save($this->user);
 
-        $outcome = $this->attempt();
+        $outcome = $this->signInWith();
 
         self::assertInstanceOf(CredentialsRejected::class, $outcome);
         self::assertSame(1, $this->hasher->simulatedVerifications);
@@ -317,27 +317,27 @@ final class SignInWithPasswordTest extends TestCase
             $this->clock->now(),
         ));
 
-        self::assertInstanceOf(CredentialsRejected::class, $this->attempt(email: 'sso@example.com', password: ''));
+        self::assertInstanceOf(CredentialsRejected::class, $this->signInWith(email: 'sso@example.com', password: ''));
         self::assertSame(1, $this->hasher->simulatedVerifications);
     }
 
     public function testAnEmptyEmailLooksNothingUp(): void
     {
-        self::assertInstanceOf(CredentialsRejected::class, $this->attempt(email: ''));
+        self::assertInstanceOf(CredentialsRejected::class, $this->signInWith(email: ''));
     }
 
     public function testTheEmailIsMatchedExactly(): void
     {
-        self::assertInstanceOf(CredentialsRejected::class, $this->attempt(email: 'JANE@example.com'));
+        self::assertInstanceOf(CredentialsRejected::class, $this->signInWith(email: 'JANE@example.com'));
     }
 
     public function testOnceThrottledEvenTheRightPasswordIsRejectedWithoutBeingChecked(): void
     {
         foreach (range(1, 3) as $ignored) {
-            self::assertInstanceOf(CredentialsRejected::class, $this->attempt(password: 'wrong'));
+            self::assertInstanceOf(CredentialsRejected::class, $this->signInWith(password: 'wrong'));
         }
 
-        $outcome = $this->attempt();
+        $outcome = $this->signInWith();
 
         self::assertInstanceOf(CredentialsRejected::class, $outcome);
         // The same time spent as any other refusal, and no further failure counted.
@@ -348,18 +348,18 @@ final class SignInWithPasswordTest extends TestCase
     public function testAnotherAddressIsLockedOutOfAThrottledAccount(): void
     {
         foreach (range(1, 3) as $ignored) {
-            $this->attempt(password: 'wrong');
+            $this->signInWith(password: 'wrong');
         }
 
-        self::assertInstanceOf(CredentialsRejected::class, $this->attempt(clientAddress: '198.51.100.1'));
+        self::assertInstanceOf(CredentialsRejected::class, $this->signInWith(clientAddress: '198.51.100.1'));
     }
 
     public function testASuccessClearsTheCounters(): void
     {
-        $this->attempt(password: 'wrong');
-        $this->attempt(password: 'wrong');
+        $this->signInWith(password: 'wrong');
+        $this->signInWith(password: 'wrong');
 
-        self::assertInstanceOf(SignedIn::class, $this->attempt());
+        self::assertInstanceOf(SignedIn::class, $this->signInWith());
 
         self::assertSame(0, $this->counter->count('account:' . self::EMAIL));
         self::assertSame(0, $this->counter->count('address:' . self::ADDRESS));
@@ -374,7 +374,7 @@ final class SignInWithPasswordTest extends TestCase
         $this->clients->save(Clients::public('spa')->withConnections([$staff]));
         $this->loginStates->put('handle', self::pendingRequest());
 
-        $outcome = $this->attempt(password: 'staff-password', loginState: 'handle');
+        $outcome = $this->signInWith(password: 'staff-password', loginState: 'handle');
 
         self::assertInstanceOf(SignedIn::class, $outcome);
         $session = $this->sessions->resolve($outcome->sessionId);
@@ -389,7 +389,7 @@ final class SignInWithPasswordTest extends TestCase
 
         self::assertInstanceOf(
             CredentialsRejected::class,
-            $this->attempt(email: 'staff@example.com', password: 'staff-password', loginState: 'handle'),
+            $this->signInWith(email: 'staff@example.com', password: 'staff-password', loginState: 'handle'),
         );
     }
 
@@ -401,8 +401,8 @@ final class SignInWithPasswordTest extends TestCase
         $this->loginStates->put('handle', self::pendingRequest());
         $this->loginStates->put('again', self::pendingRequest());
 
-        $asEmployee = $this->attempt(password: 'staff-password', loginState: 'handle');
-        $asCustomer = $this->attempt(loginState: 'again');
+        $asEmployee = $this->signInWith(password: 'staff-password', loginState: 'handle');
+        $asCustomer = $this->signInWith(loginState: 'again');
 
         self::assertInstanceOf(SignedIn::class, $asEmployee);
         self::assertInstanceOf(SignedIn::class, $asCustomer);
@@ -418,7 +418,7 @@ final class SignInWithPasswordTest extends TestCase
         $this->connections->save($pool->switched(null, false, null));
         $this->loginStates->put('handle', self::pendingRequest());
 
-        self::assertInstanceOf(PasswordSignInUnavailable::class, $this->attempt(loginState: 'handle'));
+        self::assertInstanceOf(PasswordSignInUnavailable::class, $this->signInWith(loginState: 'handle'));
         self::assertSame(0, $this->counter->count('account:' . self::EMAIL), 'Nothing was attempted.');
         self::assertNotNull($this->loginStates->get('handle'));
     }
@@ -429,7 +429,7 @@ final class SignInWithPasswordTest extends TestCase
         self::assertNotNull($pool);
         $this->connections->save($pool->switched(false, null, null));
 
-        self::assertInstanceOf(PasswordSignInUnavailable::class, $this->attempt());
+        self::assertInstanceOf(PasswordSignInUnavailable::class, $this->signInWith());
     }
 
     private function staffPool(): ConnectionName
@@ -459,7 +459,7 @@ final class SignInWithPasswordTest extends TestCase
         return new LoginState('/oauth2/authorize?client_id=spa', ClientId::fromString('spa'));
     }
 
-    private function attempt(
+    private function signInWith(
         string $email = self::EMAIL,
         string $password = self::PASSWORD,
         string $clientAddress = self::ADDRESS,

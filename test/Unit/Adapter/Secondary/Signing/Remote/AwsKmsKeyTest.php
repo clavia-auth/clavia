@@ -94,7 +94,7 @@ final class AwsKmsKeyTest extends TestCase
 
     public function testAnAliasIsRefusedForWhatItCanDo(): void
     {
-        $this->expectExceptionMessage('an alias can be repointed at another key');
+        $this->expectExceptionMessageIsOrContains('an alias can be repointed at another key');
 
         new AwsKmsKey($this->kms->client(), 'alias/clavia-signing');
     }
@@ -104,7 +104,7 @@ final class AwsKmsKeyTest extends TestCase
         $this->kms->refusal = 'User is not authorized to perform: kms:Sign';
 
         $this->expectException(SigningFailed::class);
-        $this->expectExceptionMessage('AWS KMS refused: User is not authorized to perform: kms:Sign');
+        $this->expectExceptionMessageIsOrContains('AWS KMS refused: User is not authorized to perform: kms:Sign');
 
         $_ = $this->key()->sign(hash('sha256', 'x', true), SigningAlgorithm::RS256);
     }
@@ -114,7 +114,7 @@ final class AwsKmsKeyTest extends TestCase
         $this->kms->keyUsage = 'ENCRYPT_DECRYPT';
 
         $this->expectException(SigningFailed::class);
-        $this->expectExceptionMessage('is not a SIGN_VERIFY key that signs with RSASSA_PKCS1_V1_5_SHA_256');
+        $this->expectExceptionMessageIsOrContains('is not a SIGN_VERIFY key that signs with RSASSA_PKCS1_V1_5_SHA_256');
 
         $this->key()->publicKey(SigningAlgorithm::RS256);
     }

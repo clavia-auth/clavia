@@ -108,7 +108,7 @@ final class ResponseValidatorTest extends TestCase
     public function testTheMessageNamesTheOperation(): void
     {
         $this->expectException(ResponseDoesNotMatch::class);
-        $this->expectExceptionMessage('POST /items answered what the document does not describe');
+        $this->expectExceptionMessageIsOrContains('POST /items answered what the document does not describe');
 
         ResponseValidator::validate(self::operation(), new Response(status: 500));
     }

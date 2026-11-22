@@ -279,7 +279,7 @@ final class ResourceServersTest extends TestCase
 
         self::assertSame('a', $this->grant()($outsider->id, $ordinary->identifier)->scopes->toString());
         $this->expectException(InvalidValue::class);
-        $this->expectExceptionMessage('third-party');
+        $this->expectExceptionMessageIsOrContains('third-party');
         $this->grant()($outsider->id, $system->identifier);
     }
 
