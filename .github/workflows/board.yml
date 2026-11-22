@@ -1,0 +1,60 @@
+# Keeps Ready on the Clavia board stocked (.github/scripts/refill-ready.sh): every morning, when
+# an issue closes, changes milestone or labels, when a pull request merges, and on demand.
+# clavia-dashboard calls this workflow for its own events.
+#
+# Needs the PROJECT_TOKEN organisation secret: a fine-grained token of the maintainer with
+# Projects read and write on clavia-auth. Without it the job says so and does nothing.
+name: Board
+
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  issues:
+    types: [closed, reopened, labeled, unlabeled, milestoned, demilestoned]
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Only report what would move
+        type: boolean
+        default: false
+  workflow_call:
+    secrets:
+      PROJECT_TOKEN:
+        required: false
+
+concurrency:
+  group: board-refill
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  refill-ready:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check the token
+        id: token
+        env:
+          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+        run: |
+          if [ -z "$PROJECT_TOKEN" ]; then
+            echo "::notice::PROJECT_TOKEN is not set: Ready is not refilled."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v7
+        if: steps.token.outputs.present == 'true'
+        with:
+          repository: clavia-auth/clavia
+          sparse-checkout: .github/scripts
+      - name: Refill Ready
+        if: steps.token.outputs.present == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+        run: .github/scripts/refill-ready.sh
