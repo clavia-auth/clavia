@@ -35,7 +35,11 @@ open to a better design.
 
 ## Working agreements
 
-- **Commit only when asked.** Stage and propose a message; the maintainer commits.
+- **Work goes through the backlog and pull requests.** Claude takes an issue, works on a branch,
+  commits, pushes and opens a pull request; the maintainer reviews and merges. Claude never
+  merges, approves, or pushes to `main` (a ruleset protects it). The steps are skills in
+  `.claude/skills/`: `ticket-pick`, `ticket-work`, `ticket-review`, `ticket-triage`,
+  `ticket-design`, `ticket-release`; `CONTRIBUTING.md` describes the board they move issues on.
 - **Files the maintainer owns**, changed only on request: `.env.example`, `setup-ssl.sh`,
   the `Makefile` and `.github/workflows/ci.yml`. Report what they need instead.
 - **`php-db/*` is pinned. Never `composer update` it** (see
@@ -110,6 +114,8 @@ docs/SECURITY-REVIEW.md     review of every adapter against the invariants
 conformance/                OpenID Foundation conformance: results and how to run them
 test/{Unit,Integration,Acceptance,Support}/
 docker/php/                 the PHP-FPM image
+.claude/                    the ticket-* skills and board.sh, which move work through the backlog
+.github/                    CI, the @claude workflow, issue forms, the pull request template
 Caddyfile, docker-compose.yml, setup-ssl.sh, Makefile
 ```
 

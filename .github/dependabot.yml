@@ -1,0 +1,26 @@
+# Weekly update pull requests, grouped so a week's updates are one review.
+# php-db/* is pinned on purpose (CLAUDE.md, "Known issues"): never bumped here.
+version: 2
+updates:
+  - package-ecosystem: composer
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: ["area: operations"]
+    ignore:
+      - dependency-name: "php-db/*"
+    groups:
+      composer:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels: ["area: operations"]
+    groups:
+      actions:
+        patterns: ["*"]

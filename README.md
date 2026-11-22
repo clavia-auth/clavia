@@ -223,6 +223,10 @@ in-memory double and a contract test run against both the double and the real ad
 
 Contributions are welcome: bug reports, documentation, and code.
 
+[`CONTRIBUTING.md`](CONTRIBUTING.md) explains how work is planned on the
+[project board](https://github.com/orgs/clavia-auth/projects/1), what a pull request must meet,
+and how Claude works the backlog with the `ticket-*` skills. In short:
+
 1. **Open an issue first** for anything beyond a small fix, so the design can be agreed before
    the work.
 2. **Read [`CLAUDE.md`](CLAUDE.md)**: the architecture rules, the security invariants and the
