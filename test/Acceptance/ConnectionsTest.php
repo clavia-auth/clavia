@@ -39,8 +39,7 @@ use ClaviaTest\Support\OAuth2Fixtures;
 use DateTimeImmutable;
 
 /**
- * Connections — which ways to sign in each application may use — ported from the Python
- * suite's `test_connections.py`.
+ * Connections — which ways to sign in each application may use.
  *
  * The login page for an application offers only what it enables; a password posted or a
  * provider link followed outside that list is refused, not merely hidden; a session

@@ -31,9 +31,7 @@ use Clavia\Domain\Shared\Url;
 use Psr\Http\Message\ResponseInterface;
 
 /**
- * The users, clients and request builders the OAuth2 acceptance tests share — the
- * counterpart of the fixtures and helpers in the Python suite's `conftest.py`, under the
- * same names.
+ * The users, clients and request builders the OAuth2 acceptance tests share.
  *
  * Everything is created through the real repositories of the application under test.
  *

@@ -28,8 +28,7 @@ use ClaviaTest\Support\TestStorage;
 use DateTimeImmutable;
 
 /**
- * Audiences: which API a token is for — ported from the Python suite's
- * `test_audience.py`, with the redemption-time checks this implementation adds.
+ * Audiences: which API a token is for, with the checks made again at redemption.
  *
  * Registering an API is what makes a scope mean something, and `aud` is what ties a
  * token to one. The client credentials grant reads the client's grant on the API; the

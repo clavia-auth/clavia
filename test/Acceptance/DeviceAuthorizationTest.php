@@ -36,8 +36,7 @@ use DateTimeImmutable;
 use Psr\Http\Message\ResponseInterface;
 
 /**
- * The device authorization grant (RFC 8628) — ported from the Python suite's
- * `test_device_authorization.py`.
+ * The device authorization grant (RFC 8628).
  *
  * A device with no browser asks for a code, a person types it on a machine that has one,
  * and the device polls until the person has decided. What matters: a device code is

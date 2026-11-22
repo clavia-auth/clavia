@@ -29,7 +29,7 @@ use Psr\Log\LoggerInterface;
  * Drives the real application in-process: the same container, pipeline and routes as
  * `public/index.php`, with a request handed straight to the PSR-15 pipeline.
  *
- * This is where the tests ported from the Python project live. Each test gets a fresh
+ * Acceptance tests live here. Each test gets a fresh
  * application, built from {@see TestEnvironment::variables()} plus whatever it
  * overrides — never from the machine's `.env` — and starts with every table and the
  * Redis test database empty.

@@ -23,8 +23,6 @@ use Psr\Http\Message\ResponseInterface;
  *
  * Each test here corresponds to an attack the protocol is meant to stop, so a failure in
  * this file means a security regression rather than a broken feature.
- *
- * Ported from `tests/test_pkce_security.py`, test for test.
  */
 final class PkceSecurityTest extends AcceptanceTestCase
 {

@@ -1,7 +1,7 @@
-# Security review of the adapters (Step 20)
+# Security review of the adapters
 
 A review of every adapter group under `src/Adapter` against the invariants in `CLAUDE.md`,
-made before cut-over, together with the OpenID Foundation conformance run
+made before the first release, together with the OpenID Foundation conformance run
 ([`conformance/README.md`](../conformance/README.md)). It is the project's own review, not
 a third-party audit; one is worth commissioning before Clavia holds real accounts.
 

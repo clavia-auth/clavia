@@ -31,8 +31,7 @@ use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
- * OpenID Connect connections — any provider, registered by an operator — ported from the
- * Python suite's `test_oidc_connection.py`.
+ * OpenID Connect connections — any provider, registered by an operator.
  *
  * The provider is {@see FakeOpenIdProvider} on the fake wire: discovery, the token
  * endpoint and the JWKS. It signs its ID tokens with a key of its own, so what these

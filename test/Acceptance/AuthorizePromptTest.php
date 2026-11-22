@@ -20,8 +20,7 @@ use Psr\Http\Message\ResponseInterface;
 
 /**
  * `prompt`, `max_age` and the request-object parameters at `/oauth2/authorize` (OpenID
- * Connect Core §3.1.2.1, §3.1.2.6, §6), and the `iss` response parameter (RFC 9207) —
- * ported from the Python suite's `test_authorize_prompt.py`.
+ * Connect Core §3.1.2.1, §3.1.2.6, §6), and the `iss` response parameter (RFC 9207).
  *
  * Whether the person has to be seen again is decided once, by the authorization
  * endpoint: no session, a session the client cannot use, `prompt=login` or

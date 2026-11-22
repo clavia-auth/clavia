@@ -20,8 +20,7 @@ use ClaviaTest\Support\TestStorage;
 use Throwable;
 
 /**
- * The Client Credentials grant (RFC 6749 §4.4), end to end — ported from the Python
- * suite's `test_client_credentials.py`.
+ * The Client Credentials grant (RFC 6749 §4.4), end to end.
  *
  * A machine authenticating as itself. There is no person to protect from the client,
  * so these tests are about the client proving it holds a secret, about its token being
@@ -306,7 +305,7 @@ final class ClientCredentialsTest extends AcceptanceTestCase
         );
     }
 
-    // ── The audience (beyond the Python suite, which covers it in test_audience) ──
+    // ── The audience ──
 
     public function testTheAudienceIsRequired(): void
     {
