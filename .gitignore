@@ -27,3 +27,6 @@ certs/*.pem
 
 # Output of `composer check` captured for review; never part of the repository.
 /check-output.txt
+
+# Claude Code: personal settings, never shared.
+.claude/settings.local.json
