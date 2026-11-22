@@ -1,0 +1,23 @@
+<?php
+/**
+ * Something was mailed — or, to someone who must not learn whether an address has an
+ * account, may have been. The wording never says which.
+ *
+ * Variables (set by Clavia\Adapter\Primary\Http\Auth\AccountPages):
+ * @var Laminas\View\Renderer\PhpRenderer $this
+ * @var string $csrfToken
+ * @var string $email     The address the person typed.
+ * @var 'sign-up'|'reset'|'unverified' $why
+ * @var string $loginHref Back to the login page of the same request.
+ */
+?>
+<?php $this->placeholder('subtitle')->captureStart() ?>
+<?php if ($why === 'reset'): ?>
+      <p class="subtitle">If <strong><?= $this->escapeHtml($email) ?></strong> has an account here, we sent it a link to choose a new password.</p>
+<?php elseif ($why === 'unverified'): ?>
+      <p class="subtitle">Confirm <strong><?= $this->escapeHtml($email) ?></strong> before signing in: we sent it a new link.</p>
+<?php else: ?>
+      <p class="subtitle">We sent a link to <strong><?= $this->escapeHtml($email) ?></strong>. Open it to confirm your address, then sign in.</p>
+<?php endif ?>
+<?php $this->placeholder('subtitle')->captureEnd() ?>
+    <p class="hint">Nothing arrived? Check your spam folder, or <a href="<?= $this->escapeHtmlAttr($loginHref) ?>">go back to sign in</a>.</p>

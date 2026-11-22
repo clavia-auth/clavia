@@ -31,6 +31,8 @@ final readonly class NewConnection
         public ?string $oidcClientId = null,
         #[\SensitiveParameter] public ?string $oidcClientSecret = null,
         public ?string $oidcScope = null,
+        public bool $allowSignUp = false,
+        public bool $requireVerifiedEmail = false,
     ) {
     }
 

@@ -76,6 +76,12 @@ final class LoginPages
                     ],
                     $methods->providers,
                 ),
+                'signUpHref' => $methods->signUp
+                    ? AccountPages::withState(AccountPages::SIGN_UP_PATH, $loginState)
+                    : '',
+                'forgotHref' => $methods->passwordReset
+                    ? AccountPages::withState(AccountPages::FORGOT_PATH, $loginState)
+                    : '',
             ],
             error: $error,
             status: $status,
@@ -100,6 +106,8 @@ final class LoginPages
                 'password' => false,
                 'emailSignIn' => false,
                 'providers' => [],
+                'signUpHref' => '',
+                'forgotHref' => '',
             ],
         );
     }

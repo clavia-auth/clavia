@@ -27,13 +27,13 @@ use Throwable;
  *     is_domain_connection: bool, oidc_issuer: string|null, oidc_client_id: string|null,
  *     oidc_client_secret_encrypted: string|null, oidc_scope: string|null,
  *     oidc_authorization_endpoint: string|null, oidc_token_endpoint: string|null, oidc_jwks_uri: string|null,
- *     created_at: string}
+ *     created_at: string, allow_sign_up: bool, require_verified_email: bool}
  */
 final readonly class PhpDbConnectionRepository implements ConnectionRepository
 {
     private const string COLUMNS = 'name, display_name, strategy, is_enabled, is_domain_connection, oidc_issuer, '
         . 'oidc_client_id, oidc_client_secret_encrypted, oidc_scope, oidc_authorization_endpoint, '
-        . 'oidc_token_endpoint, oidc_jwks_uri, created_at';
+        . 'oidc_token_endpoint, oidc_jwks_uri, created_at, allow_sign_up, require_verified_email';
 
     public function __construct(private Database $database)
     {
@@ -68,7 +68,7 @@ final readonly class PhpDbConnectionRepository implements ConnectionRepository
                 'INSERT INTO connections (' . self::COLUMNS . ') VALUES (:name, :display_name, :strategy,'
                 . ' :is_enabled, :is_domain_connection, :oidc_issuer, :oidc_client_id,'
                 . ' :oidc_client_secret_encrypted, :oidc_scope, :oidc_authorization_endpoint,'
-                . ' :oidc_token_endpoint, :oidc_jwks_uri, :created_at)',
+                . ' :oidc_token_endpoint, :oidc_jwks_uri, :created_at, :allow_sign_up, :require_verified_email)',
                 self::parameters($connection),
             );
         } catch (Throwable $failure) {
@@ -99,7 +99,9 @@ final readonly class PhpDbConnectionRepository implements ConnectionRepository
                     oidc_scope = :oidc_scope,
                     oidc_authorization_endpoint = :oidc_authorization_endpoint,
                     oidc_token_endpoint = :oidc_token_endpoint,
-                    oidc_jwks_uri = :oidc_jwks_uri
+                    oidc_jwks_uri = :oidc_jwks_uri,
+                    allow_sign_up = :allow_sign_up,
+                    require_verified_email = :require_verified_email
                 WHERE name = :name
                 SQL,
             $parameters,
@@ -133,6 +135,8 @@ final readonly class PhpDbConnectionRepository implements ConnectionRepository
             'oidc_token_endpoint' => $oidc?->tokenEndpoint->value,
             'oidc_jwks_uri' => $oidc?->jwksUri->value,
             'created_at' => Timestamp::toDatabase($connection->createdAt),
+            'allow_sign_up' => $connection->allowsSignUp,
+            'require_verified_email' => $connection->requiresVerifiedEmail,
         ];
     }
 
@@ -170,6 +174,8 @@ final readonly class PhpDbConnectionRepository implements ConnectionRepository
             $row['is_domain_connection'],
             $oidc,
             Timestamp::fromDatabase($row['created_at']),
+            $row['allow_sign_up'],
+            $row['require_verified_email'],
         );
     }
 }

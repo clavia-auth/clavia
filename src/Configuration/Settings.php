@@ -220,6 +220,24 @@ final readonly class Settings
         /** Sign-in emails one address (and one client address) may trigger per hour. */
         #[Range(min: 1)]
         public int $passwordlessSendLimit = 5,
+        /**
+         * How long an email verification link stays valid, seconds: a day by default, since a
+         * person signing up may read their mail later.
+         */
+        #[Range(min: 600, max: 604800)]
+        public int $verificationLinkLifetime = 86400,
+        /** How long a password reset link stays valid, seconds. */
+        #[Range(min: 300, max: 86400)]
+        public int $resetLinkLifetime = 1800,
+        /**
+         * Account emails — verification and reset links, the notice that an address is taken —
+         * one address (and one client address) may trigger per hour.
+         */
+        #[Range(min: 1, max: 100)]
+        public int $accountEmailSendLimit = 5,
+        /** Accounts one client address may create from the sign-up page per hour. */
+        #[Range(min: 1, max: 1000)]
+        public int $signUpLimit = 10,
         // ------------------------------------------------------------------
         // OAuth2
         // ------------------------------------------------------------------

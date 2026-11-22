@@ -50,6 +50,9 @@ enum AuditEventType: string
     case UserDeleted = 'user.deleted';
     case UserIdentityUnlinked = 'user.identity_unlinked';
     case UserRolesChanged = 'user.roles_changed';
+    case UserSignedUp = 'user.signed_up';
+    case UserEmailVerified = 'user.email_verified';
+    case UserPasswordReset = 'user.password_reset';
     case RoleCreated = 'role.created';
     case RoleUpdated = 'role.updated';
     case RoleDeleted = 'role.deleted';

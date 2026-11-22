@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Authentication\SignIn;
 
+use Clavia\Application\Authentication\Account\SendAccountLink;
 use Clavia\Application\Authentication\LoginThrottle;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\Port\DomainEvents;
@@ -38,6 +39,10 @@ use Clavia\Domain\Identity\UserRepository;
  * pools may hold the same address — a customer and an employee — and they are different
  * accounts: the one whose password verifies is the one signing in.
  *
+ * In a pool that requires a verified address, an unverified account whose password is right
+ * gets no session but a fresh verification link ({@see EmailVerificationRequired}): the one
+ * answer that differs, and only for someone who knows the password.
+ *
  * Every failure takes the same time and gives the same answer. When no account could
  * match, a verification is still simulated, so how fast the server answers does not
  * say whether an address has an account — nor in how many pools. A throttled subject is
@@ -55,6 +60,7 @@ final readonly class SignInWithPassword
         private ConnectionAccess $access,
         private CompleteFirstFactor $completeFirstFactor,
         private DomainEvents $events,
+        private SendAccountLink $verificationLinks,
     ) {
     }
 
@@ -71,6 +77,13 @@ final readonly class SignInWithPassword
         $user = $this->authenticate($attempt, $pools, $clientId);
         if ($user === null) {
             return new CredentialsRejected();
+        }
+        if (! $user->isEmailVerified() && $this->access->requiresVerifiedEmail($user->connection)) {
+            $this->refused($attempt, $clientId, SignInRefusal::EmailNotVerified, $user);
+            $loginState = $attempt->loginState === null || $attempt->loginState === '' ? null : $attempt->loginState;
+            $this->verificationLinks->verification($user, $loginState, $attempt->clientAddress);
+
+            return new EmailVerificationRequired($user->email);
         }
 
         // The handle has done its job once the person is authenticated: forgotten now

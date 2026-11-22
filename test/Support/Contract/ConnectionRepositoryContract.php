@@ -115,6 +115,31 @@ trait ConnectionRepositoryContract
     }
 
     #[Test]
+    public function aPoolKeepsItsSelfServiceSettings(): void
+    {
+        $this->connections()->add(Connection::pool(
+            ConnectionName::fromString('customers'),
+            'Customers',
+            true,
+            false,
+            new DateTimeImmutable('2026-01-15T10:00:00Z'),
+            true,
+            true,
+        ));
+        $created = $this->connections()->find(ConnectionName::fromString('customers'));
+        self::assertNotNull($created);
+        self::assertTrue($created->allowsSignUp);
+        self::assertTrue($created->requiresVerifiedEmail);
+
+        $this->connections()->save($created->switched(null, null, null, false, false));
+
+        $saved = $this->connections()->find(ConnectionName::fromString('customers'));
+        self::assertNotNull($saved);
+        self::assertFalse($saved->allowsSignUp);
+        self::assertFalse($saved->requiresVerifiedEmail);
+    }
+
+    #[Test]
     public function savingStoresTheSwitchesTheLabelAndTheProviderSettings(): void
     {
         $this->connections()->add($this->acme());

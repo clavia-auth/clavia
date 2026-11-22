@@ -56,6 +56,8 @@ final readonly class ConnectionsHandler implements RequestHandlerInterface
             $body->string('oidc_client_id'),
             $body->string('oidc_client_secret'),
             $body->string('oidc_scope'),
+            $body->bool('allow_sign_up') ?? false,
+            $body->bool('require_verified_email') ?? false,
         ));
 
         return $this->responder->created(

@@ -133,6 +133,29 @@ button:focus-visible {
 
 .card button:hover { background: var(--accent-hover); }
 
+/* A navigation that is the page's one action — "Sign in" after a confirmed address or a new
+   password — looks like the primary button, but stays a link: it changes nothing. */
+.card a.button {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: .25rem;
+  padding: .7rem;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  color: var(--accent-text);
+  background: var(--accent);
+  border-radius: 8px;
+}
+
+.card a.button:hover { background: var(--accent-hover); }
+
+.card a.button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
 /* Two submit buttons on one form — the email form's code and link — are two choices. */
 .card form:not(.decision) button + button { margin-top: .5rem; }
 

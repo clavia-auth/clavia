@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Application\Authentication\Account\SendAccountLink;
 use Clavia\Application\Authentication\LoginThrottle;
 use Clavia\Application\Authentication\SignIn\CompleteFirstFactor;
 use Clavia\Application\Authentication\SignIn\SignInWithPassword;
@@ -42,6 +43,8 @@ final class SignInWithPasswordFactory
         $completeFirstFactor = $container->get(CompleteFirstFactor::class);
         /** @var DomainEvents $events */
         $events = $container->get(DomainEvents::class);
+        /** @var SendAccountLink $verificationLinks */
+        $verificationLinks = $container->get(SendAccountLink::class);
 
         return new SignInWithPassword(
             $users,
@@ -52,6 +55,7 @@ final class SignInWithPasswordFactory
             $access,
             $completeFirstFactor,
             $events,
+            $verificationLinks,
         );
     }
 }

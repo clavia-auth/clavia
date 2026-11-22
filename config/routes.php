@@ -18,10 +18,14 @@ use Clavia\Adapter\Primary\Http\Auth\LoginPageHandler;
 use Clavia\Adapter\Primary\Http\Auth\LogoutHandler;
 use Clavia\Adapter\Primary\Http\Auth\MfaChallengeHandler;
 use Clavia\Adapter\Primary\Http\Auth\MfaSettingsHandler;
+use Clavia\Adapter\Primary\Http\Auth\PasswordForgotHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessCodeHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessLinkHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessStartHandler;
+use Clavia\Adapter\Primary\Http\Auth\PasswordResetHandler;
+use Clavia\Adapter\Primary\Http\Auth\SignUpHandler;
 use Clavia\Adapter\Primary\Http\Auth\ThemeHandler;
+use Clavia\Adapter\Primary\Http\Auth\VerifyEmailHandler;
 use Clavia\Adapter\Primary\Http\Management\AuditEventsHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientConnectionsHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientHandler;
@@ -106,6 +110,13 @@ return static function (Application $app): void {
         ['GET', 'POST'],
         'auth.passwordless.verify',
     );
+    // Self-service accounts: creating one, proving its address, choosing a new password.
+    // Every link mailed opens on a page that asks, and changes something only on the POST
+    // from it (docs/design/self-service-accounts.md).
+    $app->route('/auth/signup', SignUpHandler::class, ['GET', 'POST'], 'auth.signup');
+    $app->route('/auth/verify-email', VerifyEmailHandler::class, ['GET', 'POST'], 'auth.verify-email');
+    $app->route('/auth/password/forgot', PasswordForgotHandler::class, ['GET', 'POST'], 'auth.password.forgot');
+    $app->route('/auth/password/reset', PasswordResetHandler::class, ['GET', 'POST'], 'auth.password.reset');
     // Signing in through an external provider: out, then back. Both are navigations (GET);
     // the callback's path is the redirect URI registered at the provider.
     $app->get('/auth/social/{provider:[a-z][a-z0-9-]*}', ExternalSignInHandler::class, 'auth.social');

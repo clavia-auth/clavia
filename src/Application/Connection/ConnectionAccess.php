@@ -120,6 +120,45 @@ final readonly class ConnectionAccess
     }
 
     /**
+     * The pool a person signing up for `$client` would join, or null when the application
+     * offers no sign-up.
+     *
+     * Among the pools the application may use and that allow sign-up: the default pool when it
+     * is one of them, otherwise the first by name. One form, one pool, chosen the same way
+     * every time.
+     */
+    public function signUpPool(?Client $client): ?Connection
+    {
+        $open = [];
+        foreach ($this->available($client) as $usable) {
+            if ($usable->connection->isDatabase() && $usable->connection->allowsSignUp) {
+                $open[$usable->connection->name->value] = $usable->connection;
+            }
+        }
+        if ($open === []) {
+            return null;
+        }
+        ksort($open, SORT_STRING);
+
+        return $open[ConnectionName::DEFAULT_POOL] ?? array_values($open)[0];
+    }
+
+    /**
+     * Whether accounts in `$pool` must prove their address before signing in with a password.
+     * An unknown connection requires nothing: there is no account in it to sign in.
+     */
+    public function requiresVerifiedEmail(ConnectionName $pool): bool
+    {
+        return $this->connections->find($pool)?->requiresVerifiedEmail === true;
+    }
+
+    /** Whether this deployment can send mail: links and notices are not offered without it. */
+    public function canSendMail(): bool
+    {
+        return $this->mailer->canSend();
+    }
+
+    /**
      * The external connection of that name with its provider, when it is switched on and
      * can work. Unknown, off, unconfigured and not external are the same null: a
      * deployment without GitHub does not answer differently from one that never heard of it.

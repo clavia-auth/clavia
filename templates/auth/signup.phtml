@@ -1,0 +1,30 @@
+<?php
+/**
+ * The sign-up form: an address and a password, in the pool the application opens to
+ * sign-ups.
+ *
+ * Variables (set by Clavia\Adapter\Primary\Http\Auth\AccountPages):
+ * @var Laminas\View\Renderer\PhpRenderer $this
+ * @var string $csrfToken
+ * @var string $loginState
+ * @var string $email                Prefilled after a refusal, or ''.
+ * @var bool   $requiresVerification Whether the account must confirm its address before signing in.
+ * @var string $loginHref            Back to the login page of the same request.
+ */
+?>
+<?php $this->placeholder('subtitle')->captureStart() ?>
+<?php if ($requiresVerification): ?>
+      <p class="subtitle">We will send you a link to confirm your address before you sign in.</p>
+<?php else: ?>
+      <p class="subtitle">Then continue to the application that sent you here.</p>
+<?php endif ?>
+<?php $this->placeholder('subtitle')->captureEnd() ?>
+    <form method="post" action="/auth/signup" autocomplete="on" novalidate>
+<?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => $loginState]) ?>
+<?= $this->partial('partial::field', ['name' => 'email', 'label' => 'Email', 'type' => 'email', 'autocomplete' => 'email', 'value' => $email, 'autofocus' => true]) ?>
+<?= $this->partial('partial::field', ['name' => 'password', 'label' => 'Password', 'type' => 'password', 'autocomplete' => 'new-password', 'value' => '', 'autofocus' => false]) ?>
+      <p class="hint">At least 8 characters.</p>
+
+      <button type="submit">Create account</button>
+    </form>
+    <p class="hint">Already have an account? <a href="<?= $this->escapeHtmlAttr($loginHref) ?>">Sign in</a></p>

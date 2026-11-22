@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Authentication\Passwordless;
 
+use Clavia\Application\Authentication\EmailSendLimit;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Application\Port\Mailer;
@@ -31,7 +32,7 @@ use Clavia\Domain\Shared\SecretGenerator;
  *
  * In order: the request must name an address and a mode; the application behind the
  * login page's handle must let its users in by email ({@see ConnectionAccess}); the send
- * limit must allow one more message ({@see PasswordlessSendLimit}). Only then is a
+ * limit must allow one more message ({@see EmailSendLimit}). Only then is a
  * challenge opened and the message sent — and a message that cannot be sent leaves no
  * challenge behind.
  *
@@ -49,7 +50,7 @@ final readonly class StartPasswordlessSignIn
         private ClientRepository $clients,
         private LoginStateStore $loginStates,
         private PasswordlessChallengeStore $challenges,
-        private PasswordlessSendLimit $sendLimit,
+        private EmailSendLimit $sendLimit,
         private Mailer $mailer,
         private SignInMail $mail,
         private DescribePasswordlessChallenge $describe,

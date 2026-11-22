@@ -86,7 +86,10 @@ final class ShowConfigCommand extends Command
      * Hide credentials, so the output can be pasted into an issue.
      *
      * URLs get only their password removed; the host and database still matter for
-     * diagnosing a misconfiguration.
+     * diagnosing a misconfiguration. A setting is a credential when its name ends in
+     * `Password` or `Secret` (`smtpPassword`, `googleClientSecret`) or starts with `secret`
+     * (`secretEncryptionKey`) — not merely when it contains the word: the passwordless
+     * lifetimes and limits are not secrets.
      */
     private function mask(string $name, string $value): string
     {
@@ -94,7 +97,7 @@ final class ShowConfigCommand extends Command
             return sprintf('%s://%s:***@%s', $url['scheme'], $url['user'], $url['rest']);
         }
 
-        if ($value !== '<unset>' && preg_match('/password|secret/i', $name) === 1) {
+        if ($value !== '<unset>' && preg_match('/(?:Password|Secret)$|^secret/', $name) === 1) {
             return '***';
         }
 

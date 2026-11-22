@@ -11,11 +11,12 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Application\Authentication\EmailSendLimit;
 use Clavia\Application\Authentication\Passwordless\DescribePasswordlessChallenge;
-use Clavia\Application\Authentication\Passwordless\PasswordlessSendLimit;
 use Clavia\Application\Authentication\Passwordless\SignInMail;
 use Clavia\Application\Authentication\Passwordless\StartPasswordlessSignIn;
 use Clavia\Application\Connection\ConnectionAccess;
+use Clavia\Application\Port\AttemptCounter;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Application\Port\Mailer;
 use Clavia\Application\Port\PasswordlessChallengeStore;
@@ -37,8 +38,8 @@ final class StartPasswordlessSignInFactory
         $loginStates = $container->get(LoginStateStore::class);
         /** @var PasswordlessChallengeStore $challenges */
         $challenges = $container->get(PasswordlessChallengeStore::class);
-        /** @var PasswordlessSendLimit $sendLimit */
-        $sendLimit = $container->get(PasswordlessSendLimit::class);
+        /** @var AttemptCounter $counter */
+        $counter = $container->get(AttemptCounter::class);
         /** @var Mailer $mailer */
         $mailer = $container->get(Mailer::class);
         /** @var SignInMail $mail */
@@ -54,14 +55,15 @@ final class StartPasswordlessSignInFactory
 
         $codeLifetime = $settings->passwordlessCodeLifetime;
         $linkLifetime = $settings->passwordlessLinkLifetime;
-        assert($codeLifetime > 0 && $linkLifetime > 0);
+        $sendLimit = $settings->passwordlessSendLimit;
+        assert($codeLifetime > 0 && $linkLifetime > 0 && $sendLimit > 0);
 
         return new StartPasswordlessSignIn(
             $access,
             $clients,
             $loginStates,
             $challenges,
-            $sendLimit,
+            new EmailSendLimit($counter, $sendLimit, 'passwordless'),
             $mailer,
             $mail,
             $describe,

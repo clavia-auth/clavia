@@ -11,10 +11,14 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Application\Authentication;
 
+use Clavia\Application\Authentication\Account\AccountMail;
+use Clavia\Application\Authentication\Account\SendAccountLink;
+use Clavia\Application\Authentication\EmailSendLimit;
 use Clavia\Application\Authentication\LoginThrottle;
 use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Authentication\SignIn\CompleteFirstFactor;
 use Clavia\Application\Authentication\SignIn\CredentialsRejected;
+use Clavia\Application\Authentication\SignIn\EmailVerificationRequired;
 use Clavia\Application\Authentication\SignIn\PasswordSignIn;
 use Clavia\Application\Authentication\SignIn\PasswordSignInUnavailable;
 use Clavia\Application\Authentication\SignIn\SecondFactorRequired;
@@ -23,6 +27,8 @@ use Clavia\Application\Authentication\SignIn\SignInOutcome;
 use Clavia\Application\Authentication\SignIn\SignInWithPassword;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Domain\Authentication\AuthenticationMethod;
+use Clavia\Domain\Authentication\Event\SignInRefusal;
+use Clavia\Domain\Authentication\Event\SignInRefused;
 use Clavia\Domain\Authentication\LoginState;
 use Clavia\Domain\Authentication\Mfa\MfaFactor;
 use Clavia\Domain\Authentication\Mfa\Totp;
@@ -37,6 +43,7 @@ use ClaviaTest\Support\Clients;
 use ClaviaTest\Support\Fake\FakeIdentityProviders;
 use ClaviaTest\Support\Fake\FakePasswordHasher;
 use ClaviaTest\Support\Fake\FrozenClock;
+use ClaviaTest\Support\Fake\InMemoryAccountLinkStore;
 use ClaviaTest\Support\Fake\InMemoryAttemptCounter;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
 use ClaviaTest\Support\Fake\InMemoryConnectionRepository;
@@ -70,6 +77,9 @@ final class SignInWithPasswordTest extends TestCase
     private User $user;
     private InMemoryClientRepository $clients;
     private InMemoryConnectionRepository $connections;
+    private RecordingMailer $mailer;
+    private InMemoryAccountLinkStore $links;
+    private InMemoryDomainEvents $events;
 
     #[\Override]
     protected function setUp(): void
@@ -93,6 +103,9 @@ final class SignInWithPasswordTest extends TestCase
         $this->clients = new InMemoryClientRepository();
         $this->connections = new InMemoryConnectionRepository($this->clients);
         $this->clients->save(Clients::public('spa'));
+        $this->mailer = new RecordingMailer();
+        $this->links = new InMemoryAccountLinkStore($this->clock);
+        $this->events = new InMemoryDomainEvents();
         $this->signIn = new SignInWithPassword(
             $this->users,
             $this->hasher,
@@ -107,7 +120,16 @@ final class SignInWithPasswordTest extends TestCase
                 new SecretGenerator(new SeededRandomSource(3)),
                 300,
             ),
-            new InMemoryDomainEvents(),
+            $this->events,
+            new SendAccountLink(
+                $this->links,
+                new EmailSendLimit($this->counter, 5, 'account'),
+                $this->mailer,
+                new AccountMail('clavia.test', 'https://auth.clavia.test', 86400, 1800),
+                new SecretGenerator(new SeededRandomSource(4)),
+                86400,
+                1800,
+            ),
         );
 
         $this->user = User::register(
@@ -117,6 +139,44 @@ final class SignInWithPasswordTest extends TestCase
             $this->clock->now(),
         );
         $this->users->save($this->user);
+    }
+
+    public function testAnUnverifiedAccountInAPoolRequiringAVerifiedAddressIsSentALinkInsteadOfASession(): void
+    {
+        $this->requireVerifiedEmail();
+
+        $outcome = $this->attempt();
+
+        self::assertInstanceOf(EmailVerificationRequired::class, $outcome);
+        self::assertSame(self::EMAIL, $outcome->email);
+        self::assertSame([], $this->sessions->of($this->user->id));
+        self::assertCount(1, $this->links->tokens());
+        self::assertSame(self::EMAIL, $this->mailer->last()?->to);
+        $refusal = $this->events->ofType(SignInRefused::class)[0] ?? null;
+        self::assertSame(SignInRefusal::EmailNotVerified, $refusal?->reason);
+    }
+
+    public function testAWrongPasswordForAnUnverifiedAccountSaysNothingAboutVerification(): void
+    {
+        $this->requireVerifiedEmail();
+
+        self::assertInstanceOf(CredentialsRejected::class, $this->attempt(password: 'not the password'));
+        self::assertSame([], $this->mailer->sent);
+    }
+
+    public function testAVerifiedAccountSignsInWhereAVerifiedAddressIsRequired(): void
+    {
+        $this->requireVerifiedEmail();
+        $this->user->recordEmailVerification(true, $this->clock->now());
+        $this->users->save($this->user);
+
+        self::assertInstanceOf(SignedIn::class, $this->attempt());
+    }
+
+    public function testAnUnverifiedAccountSignsInWhereNoVerifiedAddressIsRequired(): void
+    {
+        self::assertInstanceOf(SignedIn::class, $this->attempt());
+        self::assertSame([], $this->mailer->sent);
     }
 
     public function testTheRightPasswordStartsAPasswordSessionForTheAccount(): void
@@ -416,5 +476,12 @@ final class SignInWithPasswordTest extends TestCase
         self::assertTrue($factor->accept($secret, Totp::codeAt($secret, $this->clock->now()), $this->clock->now()));
         $factor->confirm($this->clock->now());
         $this->factors->save($factor);
+    }
+
+    private function requireVerifiedEmail(): void
+    {
+        $pool = $this->connections->find(ConnectionName::defaultPool());
+        self::assertNotNull($pool);
+        $this->connections->save($pool->switched(null, null, null, requiresVerifiedEmail: true));
     }
 }

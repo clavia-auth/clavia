@@ -53,6 +53,9 @@ final readonly class CreateConnection
             throw new AlreadyExists(sprintf("A connection named '%s' already exists.", $name->value));
         }
 
+        if (($new->allowSignUp || $new->requireVerifiedEmail) && $strategy !== ConnectionStrategy::Database) {
+            throw new InvalidValue('Only a database connection takes sign-ups or requires a verified address.');
+        }
         $connection = match ($strategy) {
             ConnectionStrategy::Social => throw new InvalidValue(
                 'Social connections are built in: switch them on or off. Register any other OpenID Connect '
@@ -69,6 +72,8 @@ final readonly class CreateConnection
                     $new->isEnabled,
                     $new->isDomainConnection,
                     $this->clock->now(),
+                    $new->allowSignUp,
+                    $new->requireVerifiedEmail,
                 ),
             ConnectionStrategy::Oidc => Connection::openIdProvider(
                 $name,

@@ -24,11 +24,17 @@ final readonly class SignInMethods
      * @param bool                         $email     Whether the email form is shown: the application signs
      *                                                people in with a code or a link sent by email.
      * @param list<ExternalProviderOption> $providers The external connections, in order.
+     * @param bool                         $signUp    Whether "Create an account" is offered: the application
+     *                                                opens a pool to sign-ups.
+     * @param bool                         $passwordReset Whether "Forgot your password?" is offered: the
+     *                                                password form is, and mail can be sent.
      */
     public function __construct(
         public bool $password,
         public bool $email,
         public array $providers,
+        public bool $signUp = false,
+        public bool $passwordReset = false,
     ) {
     }
 

@@ -29,6 +29,13 @@ use DateTimeImmutable;
  *   operator opened to strangers. A first-party application goes by its own list
  *   alone, so opening a connection to strangers forces it on no application of ours.
  *
+ * Two more settings belong to pools (database connections) alone:
+ *
+ * - `allowsSignUp`: people may create their own account in it, from the sign-up page;
+ * - `requiresVerifiedEmail`: an account in it signs in with its password only once it has
+ *   proved control of its address. With sign-up open, this is what stops somebody from
+ *   registering a stranger's address and using it.
+ *
  * Every account belongs to exactly one connection: the pool it was created in, or the
  * external connection that created it.
  */
@@ -44,6 +51,8 @@ final readonly class Connection
         public bool $isDomainConnection,
         public ?OidcSettings $oidc,
         public DateTimeImmutable $createdAt,
+        public bool $allowsSignUp,
+        public bool $requiresVerifiedEmail,
     ) {
     }
 
@@ -58,6 +67,8 @@ final readonly class Connection
         bool $isEnabled,
         bool $isDomainConnection,
         DateTimeImmutable $now,
+        bool $allowsSignUp = false,
+        bool $requiresVerifiedEmail = false,
     ): self {
         return self::reconstitute(
             $name,
@@ -67,6 +78,8 @@ final readonly class Connection
             $isDomainConnection,
             null,
             $now,
+            $allowsSignUp,
+            $requiresVerifiedEmail,
         );
     }
 
@@ -98,8 +111,9 @@ final readonly class Connection
      * A connection read back from storage — or seeded, for the built-in ones. The same
      * rules apply.
      *
-     * @throws InvalidValue When the display name is unusable, or the OIDC settings are present
-     *                      on anything but an OIDC connection or missing from one.
+     * @throws InvalidValue When the display name is unusable, the OIDC settings are present on
+     *                      anything but an OIDC connection or missing from one, or sign-up or a
+     *                      verified address is asked of anything but a pool.
      */
     public static function reconstitute(
         ConnectionName $name,
@@ -109,25 +123,46 @@ final readonly class Connection
         bool $isDomainConnection,
         ?OidcSettings $oidc,
         DateTimeImmutable $createdAt,
+        bool $allowsSignUp = false,
+        bool $requiresVerifiedEmail = false,
     ): self {
         self::checkDisplayName($displayName);
         if (($strategy === ConnectionStrategy::Oidc) !== ($oidc !== null)) {
             throw new InvalidValue('An OIDC connection, and only one, has OIDC settings.');
         }
+        if (($allowsSignUp || $requiresVerifiedEmail) && $strategy !== ConnectionStrategy::Database) {
+            throw new InvalidValue('Only a database connection takes sign-ups or requires a verified address.');
+        }
 
-        return new self($name, $displayName, $strategy, $isEnabled, $isDomainConnection, $oidc, $createdAt);
+        return new self(
+            $name,
+            $displayName,
+            $strategy,
+            $isEnabled,
+            $isDomainConnection,
+            $oidc,
+            $createdAt,
+            $allowsSignUp,
+            $requiresVerifiedEmail,
+        );
     }
 
     /**
      * The same connection with its switches and its label changed; null leaves one as it is.
      *
      * Turning one off takes effect at the next sign-in: sessions established through it
-     * stand until they end.
+     * stand until they end. Requiring a verified address takes effect at the next password
+     * sign-in of each unverified account.
      *
-     * @throws InvalidValue
+     * @throws InvalidValue When sign-up or a verified address is asked of anything but a pool.
      */
-    public function switched(?bool $isEnabled, ?bool $isDomainConnection, ?string $displayName): self
-    {
+    public function switched(
+        ?bool $isEnabled,
+        ?bool $isDomainConnection,
+        ?string $displayName,
+        ?bool $allowsSignUp = null,
+        ?bool $requiresVerifiedEmail = null,
+    ): self {
         return self::reconstitute(
             $this->name,
             $displayName ?? $this->displayName,
@@ -136,6 +171,8 @@ final readonly class Connection
             $isDomainConnection ?? $this->isDomainConnection,
             $this->oidc,
             $this->createdAt,
+            $allowsSignUp ?? $this->allowsSignUp,
+            $requiresVerifiedEmail ?? $this->requiresVerifiedEmail,
         );
     }
 

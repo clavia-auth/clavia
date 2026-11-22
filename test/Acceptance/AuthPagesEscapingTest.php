@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Acceptance;
 
+use Clavia\Adapter\Primary\Http\Auth\AccountPages;
 use Clavia\Adapter\Primary\Http\Auth\AuthPageResponder;
 use Clavia\Adapter\Primary\Http\Auth\ConsentPages;
 use Clavia\Adapter\Primary\Http\Auth\LoginPages;
@@ -65,7 +66,7 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
             LoginPages::form(
                 self::HOSTILE,
                 [],
-                new SignInMethods(true, true, [new ExternalProviderOption(self::HOSTILE, self::HOSTILE)]),
+                new SignInMethods(true, true, [new ExternalProviderOption(self::HOSTILE, self::HOSTILE)], true, true),
                 self::HOSTILE,
                 self::HOSTILE,
                 401,
@@ -84,9 +85,36 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
                 'password' => true,
                 'emailSignIn' => false,
                 'providers' => [],
+                'signUpHref' => '',
+                'forgotHref' => '',
             ],
             error: self::HOSTILE,
         )];
+        yield 'the sign-up form: state, address and error' => [
+            AccountPages::signUp(self::HOSTILE, [], true, self::HOSTILE, self::HOSTILE, 400),
+        ];
+        yield 'check your inbox: address and handle' => [
+            AccountPages::checkInbox(self::HOSTILE, 'sign-up', self::HOSTILE),
+        ];
+        yield 'check your inbox after a reset request' => [AccountPages::checkInbox(self::HOSTILE, 'reset', null)];
+        yield 'check your inbox for an unverified account' => [
+            AccountPages::checkInbox(self::HOSTILE, 'unverified', null),
+        ];
+        yield 'the verification link: address, token and error' => [
+            AccountPages::confirmEmail(self::HOSTILE, self::HOSTILE, self::HOSTILE, 400),
+        ];
+        yield 'the confirmed address: address and handle' => [
+            AccountPages::emailVerified(self::HOSTILE, self::HOSTILE),
+        ];
+        yield 'the forgot form: state, address and error' => [
+            AccountPages::forgot(self::HOSTILE, self::HOSTILE, self::HOSTILE, 400),
+        ];
+        yield 'the reset form: address, token and error' => [
+            AccountPages::resetForm(self::HOSTILE, self::HOSTILE, self::HOSTILE, 400),
+        ];
+        yield 'the changed password: address and handle' => [
+            AccountPages::passwordChanged(self::HOSTILE, self::HOSTILE),
+        ];
         yield 'the second step: error' => [MfaPages::challenge([], self::HOSTILE, 401)];
         yield 'the code page: address and error' => [
             PasswordlessPages::code(new PasswordlessPrompt(self::HOSTILE, []), self::HOSTILE, 401),

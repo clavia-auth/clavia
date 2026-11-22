@@ -20,7 +20,7 @@ use Clavia\Application\Authentication\Passwordless\PasswordlessCodeSent;
 use Clavia\Application\Authentication\Passwordless\PasswordlessFailure;
 use Clavia\Application\Authentication\Passwordless\PasswordlessLinkSent;
 use Clavia\Application\Authentication\Passwordless\PasswordlessRefused;
-use Clavia\Application\Authentication\Passwordless\PasswordlessSendLimit;
+use Clavia\Application\Authentication\EmailSendLimit;
 use Clavia\Application\Authentication\Passwordless\PasswordlessStart;
 use Clavia\Application\Authentication\Passwordless\SignInMail;
 use Clavia\Application\Authentication\Passwordless\StartPasswordlessSignIn;
@@ -116,7 +116,7 @@ final class PasswordlessSignInTest extends TestCase
             $this->clients,
             $this->loginStates,
             $this->challenges,
-            new PasswordlessSendLimit(new InMemoryAttemptCounter($this->clock), 2),
+            new EmailSendLimit(new InMemoryAttemptCounter($this->clock), 2, 'passwordless'),
             $this->mailer,
             new SignInMail('acme.com', 'https://auth.acme.com', 600, 900),
             $describe,
@@ -242,7 +242,7 @@ final class PasswordlessSignInTest extends TestCase
             $this->startWith('ada@example.com', 'link', clientAddress: '198.51.100.9'),
         );
 
-        $this->clock->advance(PasswordlessSendLimit::WINDOW_SECONDS + 1);
+        $this->clock->advance(EmailSendLimit::WINDOW_SECONDS + 1);
         self::assertInstanceOf(PasswordlessLinkSent::class, $this->startWith('jane@example.com', 'link'));
     }
 

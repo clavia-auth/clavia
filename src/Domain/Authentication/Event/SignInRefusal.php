@@ -52,6 +52,9 @@ enum SignInRefusal: string
 
     case AccountDisabled = 'account_disabled';
 
+    /** The right password, for an account whose pool requires a verified address it has not proved. */
+    case EmailNotVerified = 'email_not_verified';
+
     /** The application does not enable that connection, or it cannot work. */
     case NotAvailable = 'not_available';
 }

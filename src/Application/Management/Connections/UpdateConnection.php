@@ -50,9 +50,11 @@ final readonly class UpdateConnection
         ?bool $isEnabled,
         ?bool $isDomainConnection,
         array $oidc = [],
+        ?bool $allowSignUp = null,
+        ?bool $requireVerifiedEmail = null,
     ): Connection {
         $connection = ReadConnections::find($this->connections, $name)
-            ->switched($isEnabled, $isDomainConnection, $displayName);
+            ->switched($isEnabled, $isDomainConnection, $displayName, $allowSignUp, $requireVerifiedEmail);
 
         if ($oidc !== []) {
             $current = $connection->oidc ?? throw new InvalidValue('Only an OIDC connection has OIDC settings.');
@@ -71,6 +73,8 @@ final readonly class UpdateConnection
                 'display_name' => $displayName !== null,
                 'is_enabled' => $isEnabled !== null,
                 'is_domain_connection' => $isDomainConnection !== null,
+                'allow_sign_up' => $allowSignUp !== null,
+                'require_verified_email' => $requireVerifiedEmail !== null,
             ])),
             array_map(static fn (string|int $field): string => 'oidc.' . $field, array_keys($oidc)),
         )));

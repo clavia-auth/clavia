@@ -163,6 +163,31 @@ final class ConnectionTest extends TestCase
         self::assertSame('connection:acme', OidcSettings::secretContext(ConnectionName::fromString('acme')));
     }
 
+
+    public function testAPoolMayTakeSignUpsAndRequireAVerifiedAddress(): void
+    {
+        $pool = $this->pool('customers')->switched(null, null, null, true, true);
+
+        self::assertTrue($pool->allowsSignUp);
+        self::assertTrue($pool->requiresVerifiedEmail);
+        self::assertFalse($this->pool('staff')->allowsSignUp, 'Off unless an operator opens it.');
+    }
+
+    public function testOnlyAPoolTakesSignUpsOrRequiresAVerifiedAddress(): void
+    {
+        $this->expectException(InvalidValue::class);
+
+        Connection::reconstitute(
+            ConnectionName::fromString('google'),
+            'Google',
+            ConnectionStrategy::Social,
+            true,
+            false,
+            null,
+            new DateTimeImmutable('2026-01-15T10:00:00Z'),
+            true,
+        );
+    }
     private function pool(string $name): Connection
     {
         return Connection::pool(ConnectionName::fromString($name), 'Pool', true, false, new DateTimeImmutable());

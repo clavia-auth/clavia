@@ -259,7 +259,7 @@ only with an access token, and the dashboard is an OAuth client like any other.
   refresh tokens, signing keys, the audit trail.
 - **Redis** holds short-lived material: browser sessions, sign-in throttling, pending second
   factors, sign-in and consent handles, outbound social-login state, device and user codes,
-  passwordless challenges, nonces, cached JWKS and public keys.
+  passwordless challenges, verification and reset links, nonces, cached JWKS and public keys.
 
 Authorization codes and refresh tokens look like Redis material and deliberately are not:
 single use needs a `SELECT … FOR UPDATE`, and replay detection must outlive any sensible TTL.
@@ -272,9 +272,9 @@ objects, repository interfaces, and an `Event` namespace for its domain events.
 | Context | Holds | Key rules |
 |---|---|---|
 | `Shared` | `Clock`, `RandomSource`, `SecretGenerator`, `Digest`, `Scope`/`ScopeSet`, `Audience`, `Url`, `UuidId`, `Base64Url`, `PageRequest`/`Page`, `InvalidValue`, `AlreadyExists`, `DomainEvent` | Secrets are 43-character tokens; codes and tokens are stored as their SHA-256 `Digest`; URLs are kept byte for byte and compared exactly |
-| `Identity` | `User`, `Profile`, `PasswordPolicy`, `ExternalIdentity`, `AssertedIdentity` | Every account belongs to one connection; an address is unique within it; a changed address is unverified |
+| `Identity` | `User`, `Profile`, `PasswordPolicy`, `ExternalIdentity`, `AssertedIdentity`, `AccountLink` | Every account belongs to one connection; an address is unique within it; a changed address is unverified; an emailed link dies with the address or password it was issued against |
 | `Client` | `Client`, `ClientId`, `ClientType`, `ClientAuthMethod`, `GrantType`, `ResponseType`, `Ownership`, `BackChannelLogout` | Type, auth method and secret agree; the code flow needs a redirect URI; `client_credentials` needs a confidential client; `tpc_…` ids are third-party |
-| `Connection` | `Connection`, `ConnectionName`, `ConnectionStrategy` (database, social, OIDC, passwordless), `OidcSettings`, `BuiltInConnection` | The default pool, social providers and `email` are switched, never created or deleted |
+| `Connection` | `Connection`, `ConnectionName`, `ConnectionStrategy` (database, social, OIDC, passwordless), `OidcSettings`, `BuiltInConnection` | The default pool, social providers and `email` are switched, never created or deleted; only a pool takes sign-ups or requires a verified address |
 | `ResourceServer` | `ResourceServer` (an API: `rs_…` id, audience, permissions), `Permission`, `ClientGrant` | A system API (the Management API) can be renamed, never deleted, always enforces roles |
 | `Rbac` | `Role`, `GrantedPermission`, `RoleRepository` (also the assignments) | A person holds a permission only through a role; `permissionsHeld(user, API)` is the question issuance asks |
 | `Consent` | `UserConsent`, `ConsentPolicy`, `PendingConsent` | `ConsentPolicy` alone decides who is asked |
@@ -288,9 +288,9 @@ The application mirrors these contexts (`Application\OAuth2`, `Authentication`, 
 (`TokenSigner`, `SigningKeyStore`, `SignatureVerifier`), secrets (`PasswordHasher`,
 `SecretCipher`), persistence (`TransactionManager`, `SchemaMigrator`), the Redis stores
 (`SessionStore`, `LoginStateStore`, `MfaChallengeStore`, `ConsentStateStore`,
-`DeviceAuthorizationStore`, `PasswordlessChallengeStore`, `ExternalSignInStore`,
-`NonceRegistry`, `AttemptCounter`), mail (`Mailer`, `MailOutbox`), identity providers
-(`IdentityProvider[s]`, `OidcDiscovery`), outbound URLs (`OutboundUrls`), deferred work
+`DeviceAuthorizationStore`, `PasswordlessChallengeStore`, `AccountLinkStore`,
+`ExternalSignInStore`, `NonceRegistry`, `AttemptCounter`), mail (`Mailer`, `MailOutbox`),
+identity providers (`IdentityProvider[s]`, `OidcDiscovery`), outbound URLs (`OutboundUrls`), deferred work
 (`DeferredTasks`, `BackChannelLogoutDelivery`) and events (`DomainEvents`).
 
 ## Flows
@@ -383,6 +383,21 @@ applies however the person signed in.
   mail scanner's GET spends nothing. Sends are limited per address and client address. Mail is
   sent synchronously; a failure is a 503, and the `none` backend makes the connection
   unusable. `amr` is `otp`.
+- **Self-service accounts** (`Account\*`, design in `docs/design/self-service-accounts.md`).
+  A pool may take sign-ups (`allow_sign_up`) and may require a verified address
+  (`require_verified_email`), both off by default. `ConnectionAccess::signUpPool()` picks the
+  pool: the default one when it is open, otherwise the first by name. `SignUp` creates the
+  account unverified (`UserSignedUp`) and mails a verification link. In a pool requiring a
+  verified address the answer is "check your inbox" whatever happened, and a taken address is
+  mailed a notice instead; a pool that does not signs the new account in at once and says when an
+  address is taken. Password sign-in refuses an unverified account in such a pool *after* its
+  password verifies (`EmailVerificationRequired`) and sends a new link. `RequestPasswordReset`
+  always answers the same and mails only existing accounts; `ResetPassword` checks the policy
+  before spending the link, changes the password, marks the address verified, and ends every
+  session (`SessionEndReason::PasswordReset`). Links are `AccountLink`s in Redis (digest keys,
+  `GETDEL`), spent only by a POST, and dead once the address changes or, for a reset, once the
+  password does (a fingerprint of the hash). Account mail has its own `EmailSendLimit`
+  namespace. Confirming an address never signs anyone in.
 
 **Sessions** have one door per operation. `Sessions::establish()` is the only way a browser
 becomes authenticated, and it always rotates the identifier. `resolve()` is the only way to read
@@ -594,6 +609,9 @@ These follow from the RFCs and from mistakes already made once. Breaking one is 
 - A post-sign-in target never travels in a URL. It is held server-side behind an opaque handle,
   and whatever it resolves to is re-validated before becoming a `Location` (`LocalPath`, or for
   sign-out an https URL on an origin some client registered). Rejected, never repaired.
+- No form says whether an address has an account: sign-in, sign-up into a pool requiring a
+  verified address, and password reset answer alike. A link emailed to an address changes
+  something only on the POST from the page it opens on, never on the GET a mail scanner makes.
 - Every `/auth/*` state change is a POST with a CSRF token (double-submit, per browser). Sign-out
   and the theme toggle need none: a `SameSite=Lax` cookie never rides a cross-site POST.
 - **The auth pages' CSP is built per page.** Chromium applies `form-action` to a form's whole

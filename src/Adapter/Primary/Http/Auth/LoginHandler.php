@@ -14,6 +14,7 @@ namespace Clavia\Adapter\Primary\Http\Auth;
 use Clavia\Adapter\Primary\Http\Shared\RequestCookies;
 use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
+use Clavia\Application\Authentication\SignIn\EmailVerificationRequired;
 use Clavia\Application\Authentication\SignIn\PasswordSignIn;
 use Clavia\Application\Authentication\SignIn\PasswordSignInUnavailable;
 use Clavia\Application\Authentication\SignIn\SecondFactorRequired;
@@ -31,7 +32,9 @@ use Psr\Http\Server\RequestHandlerInterface;
  * most sensitive endpoint of the product.
  *
  * When the account has a second factor, a correct password leads to `/auth/mfa` with a
- * challenge cookie instead of a session ({@see MfaChallengeHandler}).
+ * challenge cookie instead of a session ({@see MfaChallengeHandler}). When its pool requires
+ * a verified address it has not proved, it leads to "check your email" instead: a new
+ * verification link was sent.
  *
  * A failure re-renders the form with the same `state`, so the person is not sent back
  * to the application to start over: `400` when the CSRF check fails or the application
@@ -73,6 +76,13 @@ final readonly class LoginHandler implements RequestHandlerInterface
             return $this->responder->redirect(
                 MfaPages::CHALLENGE_PATH,
                 [$this->cookies->mfaChallenge($outcome->challenge)],
+            );
+        }
+        if ($outcome instanceof EmailVerificationRequired) {
+            // The right password, but the address is not proved yet: a new link went out.
+            return $this->responder->page(
+                $request,
+                AccountPages::checkInbox($outcome->email, 'unverified', $loginState),
             );
         }
         if ($outcome instanceof PasswordSignInUnavailable) {

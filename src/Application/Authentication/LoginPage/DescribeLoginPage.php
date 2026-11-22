@@ -72,7 +72,8 @@ final readonly class DescribeLoginPage
         $password = false;
         $email = false;
         $providers = [];
-        foreach ($this->access->available($this->client($loginState)) as $usable) {
+        $client = $this->client($loginState);
+        foreach ($this->access->available($client) as $usable) {
             if ($usable->connection->isDatabase()) {
                 $password = true;
             } elseif ($usable->connection->isPasswordless()) {
@@ -85,7 +86,18 @@ final readonly class DescribeLoginPage
             }
         }
 
-        return new SignInMethods($password, $email, $providers);
+        $pool = $this->access->signUpPool($client);
+        $mail = $this->access->canSendMail();
+
+        return new SignInMethods(
+            $password,
+            $email,
+            $providers,
+            // Sign-up needs mail only when the new account must prove its address first.
+            $pool !== null && ($mail || ! $pool->requiresVerifiedEmail),
+            // A reset link is mailed: no mail, no "forgot your password".
+            $password && $mail,
+        );
     }
 
     /**

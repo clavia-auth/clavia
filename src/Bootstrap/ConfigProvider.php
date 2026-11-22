@@ -40,10 +40,14 @@ use Clavia\Adapter\Primary\Http\Auth\LoginPageHandler;
 use Clavia\Adapter\Primary\Http\Auth\LogoutHandler;
 use Clavia\Adapter\Primary\Http\Auth\MfaChallengeHandler;
 use Clavia\Adapter\Primary\Http\Auth\MfaSettingsHandler;
+use Clavia\Adapter\Primary\Http\Auth\PasswordForgotHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessCodeHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessLinkHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessStartHandler;
+use Clavia\Adapter\Primary\Http\Auth\PasswordResetHandler;
+use Clavia\Adapter\Primary\Http\Auth\SignUpHandler;
 use Clavia\Adapter\Primary\Http\Auth\ThemeHandler;
+use Clavia\Adapter\Primary\Http\Auth\VerifyEmailHandler;
 use Clavia\Adapter\Primary\Http\Management\AuditEventsHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientConnectionsHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientHandler;
@@ -104,6 +108,14 @@ use Clavia\Application\Audit\Trail\AuthenticationTrail;
 use Clavia\Application\Audit\Trail\AuthorizationTrail;
 use Clavia\Application\Audit\Trail\ConfigurationTrail;
 use Clavia\Application\Audit\Trail\DirectoryTrail;
+use Clavia\Application\Authentication\Account\AccountMail;
+use Clavia\Application\Authentication\Account\ConfirmEmail;
+use Clavia\Application\Authentication\Account\DescribeAccountLink;
+use Clavia\Application\Authentication\Account\DescribeSignUpPage;
+use Clavia\Application\Authentication\Account\RequestPasswordReset;
+use Clavia\Application\Authentication\Account\ResetPassword;
+use Clavia\Application\Authentication\Account\SendAccountLink;
+use Clavia\Application\Authentication\Account\SignUp;
 use Clavia\Application\Authentication\DevelopmentAutoLogin;
 use Clavia\Application\Authentication\External\BeginExternalSignIn;
 use Clavia\Application\Authentication\External\CompleteExternalSignIn;
@@ -122,7 +134,6 @@ use Clavia\Application\Authentication\Passwordless\AnswerPasswordlessCode;
 use Clavia\Application\Authentication\Passwordless\DescribePasswordlessChallenge;
 use Clavia\Application\Authentication\Passwordless\FinishPasswordlessSignIn;
 use Clavia\Application\Authentication\Passwordless\FollowPasswordlessLink;
-use Clavia\Application\Authentication\Passwordless\PasswordlessSendLimit;
 use Clavia\Application\Authentication\Passwordless\SignInMail;
 use Clavia\Application\Authentication\Passwordless\StartPasswordlessSignIn;
 use Clavia\Application\Authentication\RequireSignIn;
@@ -208,6 +219,7 @@ use Clavia\Application\Oidc\Keys\RotateSigningKey;
 use Clavia\Application\Oidc\Logout\BackChannelLogout;
 use Clavia\Application\Oidc\Logout\EndSession;
 use Clavia\Application\Oidc\UserInfo\ReadUserInfo;
+use Clavia\Application\Port\AccountLinkStore;
 use Clavia\Application\Port\AttemptCounter;
 use Clavia\Application\Port\BackChannelLogoutDelivery;
 use Clavia\Application\Port\ConsentStateStore;
@@ -413,7 +425,6 @@ final class ConfigProvider
                     Mailer::class => Container\MailerFactory::class,
                     MailOutbox::class => Container\MailOutboxFactory::class,
                     PasswordlessChallengeStore::class => Container\PasswordlessChallengeStoreFactory::class,
-                    PasswordlessSendLimit::class => Container\PasswordlessSendLimitFactory::class,
                     SignInMail::class => Container\SignInMailFactory::class,
                     DescribePasswordlessChallenge::class => Container\DescribePasswordlessChallengeFactory::class,
                     StartPasswordlessSignIn::class => Container\StartPasswordlessSignInFactory::class,
@@ -423,6 +434,19 @@ final class ConfigProvider
                     PasswordlessStartHandler::class => Container\PasswordlessStartHandlerFactory::class,
                     PasswordlessCodeHandler::class => Container\PasswordlessCodeHandlerFactory::class,
                     PasswordlessLinkHandler::class => Container\PasswordlessLinkHandlerFactory::class,
+                    AccountLinkStore::class => Container\AccountLinkStoreFactory::class,
+                    AccountMail::class => Container\AccountMailFactory::class,
+                    SendAccountLink::class => Container\SendAccountLinkFactory::class,
+                    SignUp::class => Container\SignUpFactory::class,
+                    DescribeSignUpPage::class => Container\DescribeSignUpPageFactory::class,
+                    ConfirmEmail::class => Container\ConfirmEmailFactory::class,
+                    DescribeAccountLink::class => Container\DescribeAccountLinkFactory::class,
+                    RequestPasswordReset::class => Container\RequestPasswordResetFactory::class,
+                    ResetPassword::class => Container\ResetPasswordFactory::class,
+                    SignUpHandler::class => Container\SignUpHandlerFactory::class,
+                    VerifyEmailHandler::class => Container\VerifyEmailHandlerFactory::class,
+                    PasswordForgotHandler::class => Container\PasswordForgotHandlerFactory::class,
+                    PasswordResetHandler::class => Container\PasswordResetHandlerFactory::class,
                     ClientInterface::class => Container\HttpClientFactory::class,
                     IdentityProviders::class => Container\IdentityProvidersFactory::class,
                     IdTokenVerifier::class => Container\IdTokenVerifierFactory::class,

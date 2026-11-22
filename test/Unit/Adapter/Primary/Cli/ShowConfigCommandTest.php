@@ -59,6 +59,15 @@ final class ShowConfigCommandTest extends TestCase
         self::assertStringNotContainsString('hunter2', implode("\n", $lines));
     }
 
+    public function testASettingThatOnlyMentionsAPasswordIsNoCredential(): void
+    {
+        $lines = $this->printed([]);
+
+        self::assertSame('900', $lines['CLAVIA_PASSWORDLESS_LINK_LIFETIME']);
+        self::assertSame('5', $lines['CLAVIA_PASSWORDLESS_SEND_LIMIT']);
+        self::assertSame('1800', $lines['CLAVIA_RESET_LINK_LIFETIME']);
+    }
+
     public function testCredentialsAreShownOnRequest(): void
     {
         $lines = $this->printed(['--show-secrets' => true]);

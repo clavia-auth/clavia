@@ -12,12 +12,12 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Secondary\Persistence\Migrations;
 
 use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\Timestamp;
 use Clavia\Application\Port\MigrationStatus;
 use Clavia\Application\Port\SchemaMigrationFailed;
 use Clavia\Application\Port\SchemaMigrator;
 use Clavia\Domain\Shared\Clock;
 use DateTimeImmutable;
-use DateTimeInterface;
 use Throwable;
 
 /**
@@ -117,7 +117,7 @@ final readonly class SqlFileMigrator implements SchemaMigrator
                     'version' => $pending->version,
                     'name' => $pending->name,
                     'checksum' => $checksum,
-                    'applied_at' => $appliedAt->format(DateTimeInterface::RFC3339_EXTENDED),
+                    'applied_at' => Timestamp::toDatabase($appliedAt),
                 ],
             );
             $this->database->commit();
@@ -277,7 +277,7 @@ final readonly class SqlFileMigrator implements SchemaMigrator
             $recorded[$row['version']] = [
                 'name' => $row['name'],
                 'checksum' => $row['checksum'],
-                'applied_at' => new DateTimeImmutable($row['applied_at']),
+                'applied_at' => Timestamp::fromDatabase($row['applied_at']),
             ];
         }
 

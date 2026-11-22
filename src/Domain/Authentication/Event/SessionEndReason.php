@@ -28,6 +28,9 @@ enum SessionEndReason: string
     /** An operator ended this one session by its `sid`. */
     case EndedByOperator = 'ended_by_operator';
 
+    /** The person set a new password from a reset link: every session of theirs ends. */
+    case PasswordReset = 'password_reset';
+
     /** Whether the person themself ended it, rather than somebody acting on the account. */
     public function byThePerson(): bool
     {

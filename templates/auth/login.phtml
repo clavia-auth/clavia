@@ -12,6 +12,8 @@
  * @var bool        $password   Whether the password form is offered.
  * @var bool        $emailSignIn Whether the email form — a code or a link by email — is offered.
  * @var list<array{label: string, href: string}> $providers External connections, as links.
+ * @var string      $signUpHref ''  when sign-up is not offered; otherwise the sign-up page for this request.
+ * @var string      $forgotHref ''  when a reset is not offered; otherwise the reset page for this request.
  */
 ?>
 <?php $this->placeholder('subtitle')->captureStart() ?>
@@ -37,6 +39,9 @@
 
       <button type="submit">Sign in</button>
     </form>
+<?php if ($forgotHref !== ''): ?>
+    <p class="hint"><a href="<?= $this->escapeHtmlAttr($forgotHref) ?>">Forgot your password?</a></p>
+<?php endif ?>
 <?php endif ?>
 <?php if ($emailSignIn): ?>
 <?php if ($password): ?>
@@ -64,5 +69,8 @@
       <li><a class="provider" href="<?= $this->escapeHtmlAttr($provider['href']) ?>">Continue with <?= $this->escapeHtml($provider['label']) ?></a></li>
 <?php endforeach ?>
     </ul>
+<?php endif ?>
+<?php if ($signUpHref !== ''): ?>
+    <p class="hint">New here? <a href="<?= $this->escapeHtmlAttr($signUpHref) ?>">Create an account</a></p>
 <?php endif ?>
 <?php endif ?>

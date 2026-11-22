@@ -13,11 +13,15 @@ namespace Clavia\Application\Audit\Trail;
 
 use Clavia\Application\Audit\Audit;
 use Clavia\Application\Event\EventSubscriber;
+use Clavia\Domain\Audit\Actor;
 use Clavia\Domain\Audit\AuditEventType;
 use Clavia\Domain\Audit\AuditTarget;
 use Clavia\Domain\Identity\Event\IdentityUnlinked;
+use Clavia\Domain\Identity\Event\EmailVerified;
+use Clavia\Domain\Identity\Event\PasswordReset;
 use Clavia\Domain\Identity\Event\UserChanged;
 use Clavia\Domain\Identity\Event\UserCreated;
+use Clavia\Domain\Identity\Event\UserSignedUp;
 use Clavia\Domain\Identity\Event\UserDeleted;
 use Clavia\Domain\Rbac\Event\RoleChanged;
 use Clavia\Domain\Rbac\Event\RoleCreated;
@@ -45,6 +49,9 @@ final readonly class DirectoryTrail implements EventSubscriber
     {
         return [
             UserCreated::class => $this->userCreated(...),
+            UserSignedUp::class => $this->userSignedUp(...),
+            EmailVerified::class => $this->emailVerified(...),
+            PasswordReset::class => $this->passwordReset(...),
             UserChanged::class => $this->userChanged(...),
             UserDeleted::class => $this->userDeleted(...),
             IdentityUnlinked::class => $this->identityUnlinked(...),
@@ -64,6 +71,34 @@ final readonly class DirectoryTrail implements EventSubscriber
             'connection' => $user->connection->value,
             'email' => $user->email,
         ]);
+    }
+
+    /** The person acted on their own account: they are the actor, through the sign-up page. */
+    private function userSignedUp(UserSignedUp $event): void
+    {
+        $user = $event->user;
+        $this->audit->record(AuditEventType::UserSignedUp, AuditTarget::user($user->id), [
+            'connection' => $user->connection->value,
+            'email' => $user->email,
+        ], Actor::person($user->id));
+    }
+
+    private function emailVerified(EmailVerified $event): void
+    {
+        $this->audit->record(
+            AuditEventType::UserEmailVerified,
+            AuditTarget::user($event->userId),
+            actor: Actor::person($event->userId),
+        );
+    }
+
+    private function passwordReset(PasswordReset $event): void
+    {
+        $this->audit->record(
+            AuditEventType::UserPasswordReset,
+            AuditTarget::user($event->userId),
+            actor: Actor::person($event->userId),
+        );
     }
 
     private function userChanged(UserChanged $event): void

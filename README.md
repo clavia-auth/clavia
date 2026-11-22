@@ -40,6 +40,7 @@ build. Signing keys can live in a cloud KMS so that they never touch the server'
 
 **Sign-in**
 - Server-rendered sign-in pages with no JavaScript, light and dark
+- Self-service sign-up, email verification and password reset, opened per connection
 - Passwords, email codes and magic links, Google, GitHub, and any OpenID Connect provider
 - Two-factor authentication with authenticator apps and recovery codes
 - Consent screens for third-party applications; per-application connections
@@ -142,6 +143,7 @@ the server sees. The essentials:
 | `CLAVIA_GOOGLE_CLIENT_ID`/`_SECRET`, `CLAVIA_GITHUB_CLIENT_ID`/`_SECRET` | Social sign-in; register `https://auth.{domain}/auth/social/{provider}/callback` at the provider |
 | `CLAVIA_ACCESS_TOKEN_LIFETIME`, `CLAVIA_REFRESH_TOKEN_LIFETIME`, `CLAVIA_REFRESH_TOKEN_ABSOLUTE_LIFETIME` | Token lifetimes (1 hour, 30 days idle, 90 days at most) |
 | `CLAVIA_AUDIT_RETENTION_DAYS` | How long audit events are kept (90 days) |
+| `CLAVIA_VERIFICATION_LINK_LIFETIME`, `CLAVIA_RESET_LINK_LIFETIME` | How long verification and reset links work (a day, 30 minutes) |
 | `CLAVIA_TRUSTED_PROXIES` | Proxies whose `X-Forwarded-Proto` is believed (none by default) |
 
 ### In production
@@ -153,6 +155,9 @@ the server sees. The essentials:
 - **Bootstrap an administrator** from the shell:
   `bin/clavia management-api:register`, then `bin/clavia roles:create Administrator` and
   `bin/clavia roles:assign Administrator you@example.com`.
+- **Open sign-up** per pool from the Management API, with a verified address required so nobody
+  can register someone else's:
+  `PATCH /api/v1/connections/password` with `{"allow_sign_up": true, "require_verified_email": true}`.
 - **Purge old audit events daily**: `0 3 * * * bin/clavia audit:purge`.
 - **Serve `auth.{domain}` and `management.{domain}` as separate origins.** Their separation is a
   security property.

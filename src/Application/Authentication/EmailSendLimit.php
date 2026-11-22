@@ -9,49 +9,50 @@
 
 declare(strict_types=1);
 
-namespace Clavia\Application\Authentication\Passwordless;
+namespace Clavia\Application\Authentication;
 
 use Clavia\Application\Port\AttemptCounter;
 
 /**
- * How many sign-in emails may go out, per hour.
+ * How many emails of one kind may go out, per hour.
  *
- * The email form creates accounts on demand and sends mail to whatever address it is
- * given; unlimited, it is a cannon pointed at strangers' mailboxes, and a way to burn the
- * deployment's sending reputation. Two counters, either of which can trip, as for
- * passwords ({@see \Clavia\Application\Authentication\LoginThrottle}):
+ * Every form that mails an address a stranger may type — a sign-in code or link, a
+ * verification or reset link, a notice — is, unlimited, a cannon pointed at other people's
+ * mailboxes and a way to burn the deployment's sending reputation. Two counters, either of
+ * which can trip, as for passwords ({@see LoginThrottle}):
  *
  * - **per address**, so no one mailbox can be flooded, from however many sources;
  * - **per client address**, so no one source can spray many mailboxes.
  *
- * Every send counts and restarts the window. Checking and counting are two steps, so a
- * burst of concurrent requests can overshoot the limit by the size of the burst; the limit
- * is about volume over an hour, where that does not matter.
+ * Each kind counts on its own (`$namespace`): asking for sign-in codes does not use up the
+ * reset links. Every send counts and restarts the window. Checking and counting are two
+ * steps, so a burst of concurrent requests can overshoot the limit by the size of the
+ * burst; the limit is about volume over an hour, where that does not matter.
  */
-final readonly class PasswordlessSendLimit
+final readonly class EmailSendLimit
 {
     /** The window a send counts in, restarted by every new one. */
     public const int WINDOW_SECONDS = 3600;
 
     /**
-     * @param positive-int $limit Sends per hour, per address and per client address
-     *                            (`CLAVIA_PASSWORDLESS_SEND_LIMIT`).
+     * @param positive-int     $limit     Sends per hour, per address and per client address.
+     * @param non-empty-string $namespace The kind of email counted: `passwordless`, `account`.
      */
     public function __construct(
         private AttemptCounter $counter,
         private int $limit,
+        private string $namespace,
     ) {
     }
 
     /**
      * Whether one more email may go out — and if so, count it.
      *
-     * @param non-empty-string $email An address normalized by
-     *                                {@see \Clavia\Domain\Authentication\PasswordlessChallenge::address()}.
+     * @param non-empty-string $email An address, normalized (trimmed, lower-cased).
      */
     public function allowOne(string $email, string $clientAddress): bool
     {
-        $subjects = ['passwordless-email:' . $email, 'passwordless-address:' . $clientAddress];
+        $subjects = [$this->namespace . '-email:' . $email, $this->namespace . '-address:' . $clientAddress];
         if (array_any($subjects, fn (string $subject): bool => $this->counter->count($subject) >= $this->limit)) {
             return false;
         }

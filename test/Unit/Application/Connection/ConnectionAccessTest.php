@@ -137,6 +137,38 @@ final class ConnectionAccessTest extends TestCase
         self::assertNull($this->access->external(ConnectionName::fromString('google')), 'Switched off.');
     }
 
+
+    public function testNoApplicationTakesSignUpsUntilAPoolAllowsThem(): void
+    {
+        self::assertNull($this->access->signUpPool(null));
+    }
+
+    public function testTheDefaultPoolTakesSignUpsBeforeAnyOther(): void
+    {
+        $this->connections->save($this->find('staff')->switched(null, null, null, allowsSignUp: true));
+        self::assertSame('staff', $this->access->signUpPool(null)?->name->value);
+
+        $this->connections->save($this->find('password')->switched(null, null, null, allowsSignUp: true));
+        self::assertSame('password', $this->access->signUpPool(null)?->name->value);
+    }
+
+    public function testOnlyAPoolTheApplicationMayUseTakesItsSignUps(): void
+    {
+        $this->connections->save($this->find('password')->switched(null, null, null, allowsSignUp: true));
+
+        self::assertNull($this->access->signUpPool($this->firstParty([ConnectionName::fromString('staff')])));
+        $pool = $this->access->signUpPool($this->firstParty([ConnectionName::defaultPool()]));
+        self::assertSame('password', $pool?->name->value);
+    }
+
+    public function testAVerifiedAddressIsRequiredOnlyWhereThePoolSaysSo(): void
+    {
+        $this->connections->save($this->find('staff')->switched(null, null, null, requiresVerifiedEmail: true));
+
+        self::assertTrue($this->access->requiresVerifiedEmail(ConnectionName::fromString('staff')));
+        self::assertFalse($this->access->requiresVerifiedEmail(ConnectionName::defaultPool()));
+        self::assertFalse($this->access->requiresVerifiedEmail(ConnectionName::fromString('nowhere')));
+    }
     /**
      * @param list<ConnectionName> $connections
      */
