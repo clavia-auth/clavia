@@ -1,1887 +1,812 @@
 # CLAUDE.md
 
-Guidance for Claude Code when working in this repository.
+Guidance for working in this repository: what Clavia is, how it is built, how its flows work,
+and the rules a change must keep.
 
-## Project
+Clavia is an open-source OAuth 2.1 / OpenID Connect authorization server, a self-hosted
+alternative to Auth0. It provides the OAuth 2.1 flows, interactive sign-in with second factors,
+social and enterprise connections, and a Management API. It is written in PHP 8.5 on Mezzio,
+with PostgreSQL and Redis, in a strict hexagonal architecture that the build enforces.
 
-Clavia is an open-source OAuth 2.1 / OpenID Connect authorization server — an Auth0 equivalent
-covering OAuth2 flows, interactive login/logout with MFA, and a Management API. The bar is
-unchanged from the Python project: *"The code and architecture need to be perfectly coded and
-documented."* Spec conformance and public-API documentation are part of "done".
+**The bar:** the code and the architecture are to be perfectly written and documented.
+Conformance to the specifications and documentation of every public API are part of "done".
+Write standard, modern PHP: strict types, PSR interfaces, well-maintained libraries used as they
+are meant to be used, the platform's own defaults. Choose by what is correct, secure and
+maintainable. Only the RFCs and the security invariants below are fixed; everything else is
+open to a better design.
 
-**Engineering direction (overrides everything below it).** This project owes nothing to FastAPI or
-Python. Where a restriction, convention or choice below exists only because the Python server did
-it that way — a response shape, a JSON encoding flag, an error body, a token format, a library
-workaround, a test layout — it is **not binding**. Write standard, clean, robust, state-of-the-art
-PHP 8+: idiomatic PSR-based code, well-maintained libraries used as they are meant to be used
-(e.g. Diactoros `JsonResponse` rather than a hand-rolled equivalent), modern language features,
-strict types, and the platform's own defaults. Choose by what is correct, secure and maintainable
-in PHP, never by what the Python server emitted. Only the OAuth 2.1 / OIDC / RFC requirements and
-the security invariants are fixed. Whatever a section below says about Python parity, "frozen"
-contracts or `docs/DEVIATIONS.md` yields to this paragraph; where code still mirrors Python for no
-other reason, replace it when you touch it, and inject collaborators by interface where that
-helps (e.g. a response factory), not as concrete classes.
+## Contents
 
-**This repository is the PHP 8.5 port of Clavia.** The reference implementation is the Python
-project at `../Clavia Python/clavia` (FastAPI + Authlib + SQLAlchemy; ~10k lines of source, 21
-test files, 404 tests, 31 commits). It is feature-complete for everything below except audit logs
-and multi-tenancy.
+1. [Working agreements](#working-agreements)
+2. [Commands](#commands)
+3. [Repository map](#repository-map)
+4. [Architecture](#architecture)
+5. [Hosts, surfaces and storage](#hosts-surfaces-and-storage)
+6. [The domain](#the-domain)
+7. [Flows](#flows)
+8. [Security invariants](#security-invariants)
+9. [Conventions](#conventions)
+10. [Testing](#testing)
+11. [Recipes](#recipes)
+12. [Definition of done](#definition-of-done)
+13. [Known issues and decisions](#known-issues-and-decisions)
 
-## Current state
+---
 
-**Steps 0 to 20 are done: the foundations, Authorization Code + PKCE, the login page with
-browser sessions, OpenID Connect (ID tokens, discovery, JWKS, userinfo), Client
-Credentials for machine clients holding a grant on an API, the Management API with
-audiences in the user's flow, two-factor authentication (TOTP and recovery codes),
-signing in with Google or GitHub, RP-Initiated Logout, roles (RBAC), rotating refresh
-tokens, application ownership with the consent screen, and connections — pools of accounts,
-the social providers and operator-registered OpenID Connect providers, enabled per
-application — token introspection and revocation, device authorization, passwordless sign-in by email, and
-back-channel logout with session management, and the authentication-request parameters
-(`prompt`, `max_age`, request objects refused), and remote signing backends (AWS KMS, Google
-Cloud KMS, Azure Key Vault, a class of the operator's own). Phase E has brought the audit
-trail (`GET /api/v1/audit-events`, `clavia audit:purge`) and the dashboard as a Next.js
-application in its own repository (`clavia-dashboard`), which Caddy serves at
-`management.{domain}/dashboard/`.**
-The application answers `GET /healthz`,
-`GET|POST /oauth2/authorize`, `POST /oauth2/token`, `POST /oauth2/introspect`, `POST /oauth2/revoke`,
-`POST /oauth2/device/code`, `GET|POST /auth/device`,
-`GET /.well-known/openid-configuration`,
-`GET /.well-known/oauth-authorization-server`, `GET /oidc/jwks.json`, `GET|POST /oidc/userinfo`,
-`GET|POST /oidc/logout`,
-`GET|POST /auth/login`, `GET|POST /auth/mfa`, `GET|POST /auth/mfa/enroll`,
-`POST /auth/mfa/enroll/confirm`, `POST /auth/mfa/disable`, `GET /auth/social/{provider}` and
-its `/callback`, `GET|POST /auth/consent`, `POST /auth/logout`,
-`POST /auth/theme` and the Management API under `/api/v1/` (users with their second factor,
-roles, effective permissions, consents and linked identities, clients with secret rotation
-and their connections, resource servers, roles and their holders, connections): a person can
-sign in with a password in one of the pools an application enables, or through Google, GitHub
-or an OpenID Connect provider an operator registered — and, once they have turned it on, a code from their authenticator app or a
-recovery code — complete the flow in a browser, naming an API in `audience` if the client
-wants its permissions — on an API that enforces roles, only what their roles grant there —
-and the client gets an RS256 ID token it can verify against the published
-JWKS; a machine client gets a subject-less token for an API it holds a grant on, and with one
-for the Management API it administers the deployment, as a person holding a role there does. Update this section at the
-end of every step (what exists, where it lives, which conventions it established).
+## Working agreements
 
-What exists:
+- **Commit only when asked.** Stage and propose a message; the maintainer commits.
+- **Files the maintainer owns**, changed only on request: `.env.example`, `setup-ssl.sh`,
+  the `Makefile` and `.github/workflows/ci.yml`. Report what they need instead.
+- **`php-db/*` is pinned. Never `composer update` it** (see
+  [Known issues](#known-issues-and-decisions)).
+- **Every PHP file starts with the BSD-3 header in `.docheader`.** `LicenseHeaderTest`
+  enforces it.
+- **`composer check` is green before anything is proposed.**
 
-- **Skeleton**: `public/index.php` → `config/container.php` (laminas-servicemanager) →
-  `config/pipeline.php` → `config/routes.php`. The pipeline is `ErrorHandler` → routing →
-  405 → dispatch → 404. There is no implicit `HEAD` or `OPTIONS`: a route answers the methods
-  it lists and nothing else.
-- **Settings** (`src/Configuration`): `Settings` is a readonly class whose constructor
-  parameters *are* the `CLAVIA_*` variables (`rootDomain` ⇄ `CLAVIA_ROOT_DOMAIN`);
-  `Settings::fromEnvironment()` coerces, bounds-checks (`#[Range]`) and cross-checks them, with
-  every validator of the Python `config.py`. `bin/clavia config` prints them from the class.
-- **Composition root** (`src/Bootstrap`): `ConfigProvider` maps every service to a factory in
-  `Bootstrap\Container`; `EnvironmentVariables` merges the process environment over `.env`.
-- **Local infrastructure**: `docker-compose.yml` (Caddy, `php` = PHP-FPM 8.5, Postgres :5433,
-  `db-test` :5434, Redis), `docker/php/`, the ported `Caddyfile`, `Makefile`, `setup-ssl.sh`.
-- **QA**: `composer check` = PHPCS (PSR-12, 120 columns) + Psalm level 1 + deptrac + PHPUnit.
-  `.github/workflows/ci.yml` runs it, with PostgreSQL and Redis as services.
-- **Shared kernel** (`src/Domain/Shared`): the `Clock` and `RandomSource` ports; `Digest`
-  (SHA-256, the at-rest form of codes and tokens); `SecretGenerator` (43-character tokens,
-  alphanumeric ids, `rs_…`/`rol_…` prefixed ids); `Scope`/`ScopeSet` (RFC 6749 §3.3, with the
-  narrowing operations); `Audience`; `Url` (kept byte for byte, compared exactly); `InvalidValue`.
-- **Technical ports** (`src/Application/Port`): `TransactionManager`, `PasswordHasher`,
-  `SecretCipher`, `SchemaMigrator` and their exceptions. One use case so far:
-  `Application\Secrets\GenerateEncryptionKey`.
-- **Secondary adapters** (`src/Adapter/Secondary`): `System\SystemClock`/`SystemRandomSource`;
-  `Crypto\BcryptPasswordHasher` (cost 12) and `Crypto\AesGcmSecretCipher`;
-  `Persistence\PhpDb\Database` (the one door to PostgreSQL), `PostgresUrl`,
-  `PhpDbTransactionManager`; `Persistence\Migrations\SqlFileMigrator`; `Redis\RedisConnection`
-  and `Redis\Keys`.
-- **Console**: `clavia db:migrate`, `clavia db:status`, `clavia secrets:generate-key`,
-  `clavia seed-dev`, `clavia authorize-url`, `clavia keys:generate|rotate|list`,
-  `clavia clients:create-m2m`, `clavia clients:grant`, `clavia management-api:register|scopes`.
-- **Test kit** (`test/Support`): `Fake\*` (one in-memory double per port), `Contract\*`
-  (traits run against both the double and the real adapter), `TestEnvironment`, `TestStorage`,
-  `IntegrationTestCase`, `AcceptanceTestCase` (`get`/`post`/`locationQuery`, a cookie jar,
-  `freezeClock()`, an active signing key installed before every test), `OAuth2Fixtures`
-  (users, clients, PKCE pairs and whole flows), `LoginFixtures` (`submitLogin`, login-state
-  handles), `OidcFixtures` (`completeFlow`, `verifiedIdToken` — checked against the JWKS
-  fetched over HTTP), `MachineFixtures` (a machine client, an API, a grant,
-  `requestMachineToken`), `ManagementFixtures` (the Management API, `adminToken()`, `api()` —
-  every response checked against the OpenAPI document), `TestSigningKeys` (RSA keys generated
-  once per run), `Clients` (ready-made registrations for unit tests).
-- **Authorization Code + PKCE** (Step 2):
-  - `Domain\Identity` — `User`, `UserId`, `UserRepository`. `Domain\Client` — `Client`
-    (`client_id` is the key; type, auth method and secret must agree), `ClientId`, the
-    `ClientType` / `ClientAuthMethod` / `GrantType` / `ResponseType` enums, `ClientRepository`.
-    `Domain\OAuth2` — `OAuth2Error` + `ErrorCode`, `CodeChallenge` / `CodeVerifier` (S256
-    only), `AuthorizationCode` (`redeem()` returns a `Redemption`), `AccessToken`, their ids
-    and repositories. `Domain\Authentication\LoginState`. `Domain\Shared\UuidId` is the base
-    of every UUID identifier.
-  - `Application\OAuth2\Authorize\Authorize` (returns `CodeIssued`, `RequestRefused` or
-    `LoginRequired`; throws `OAuth2Error` when it must not redirect),
-    `ClientAuthentication\ClientAuthenticator`, `Token\IssueToken` (dispatches to a `Grant`)
-    and `Token\AuthorizationCodeGrant`; `RequestParameters` (keeps repetitions);
-    `Authentication\DevelopmentAutoLogin`; `Development\SeedDevelopmentData` and
-    `BuildAuthorizationUrl`; the `LoginStateStore` port.
-  - `Adapter\Secondary\Persistence\PhpDb\PhpDb{User,Client,AuthorizationCode,AccessToken}Repository`,
-    `Timestamp`; `Adapter\Secondary\Redis\RedisLoginStateStore`.
-  - `Adapter\Primary\Http\OAuth2\{AuthorizeHandler,TokenHandler,OAuth2Responder}`,
-    `Adapter\Primary\Http\Shared\RequestParameterReader`, `Adapter\Primary\Cli\{SeedDevelopmentData,AuthorizeUrl}Command`.
-  - Migrations `0001_users` … `0004_oauth2_access_tokens`.
-- **Login page and sessions** (Step 3):
-  - `Domain\Authentication` — `Session` (absolute and idle lifetimes, `sid`, `methods`),
-    `AuthenticationMethod` (RFC 8176 `amr` values), `LocalPath` (the only shape a post-sign-in
-    `Location` may take).
-  - `Application\Authentication` — `Sessions` (establish with rotation, resolve with sliding,
-    end), `LoginThrottle`, `ResolveEndUser` (session, then the development auto-login),
-    `SignIn\SignInWithPassword` (`SignedIn | CredentialsRejected`), `SignOut`,
-    `LoginPage\DescribeLoginPage`; ports `SessionStore` and `AttemptCounter`;
-    `PasswordHasher::simulateVerification()`; `ClientRepository::registersRedirectOrigin()`
-    and `Client::redirectOrigins()`.
-  - `Adapter\Secondary\Redis\{RedisSessionStore,RedisAttemptCounter}`.
-  - `Adapter\Primary\Http\Auth\{LoginPageHandler,LoginHandler,LogoutHandler,ThemeHandler}`,
-    `AuthPageResponder` + `AuthPage` + `LoginPages` (view models), `AuthCookies`, `CsrfToken`;
-    `Adapter\Primary\Http\Shared\{RequestCookies,SetCookie}`. `AuthorizeHandler` now
-    resolves the end user from the session cookie.
-  - `templates/` — `layout/page.phtml`, `auth/login.phtml`, `error/page.phtml`,
-    `partial/{alert,csrf,field}.phtml`, rendered by laminas-view through
-    `mezzio/mezzio-laminasviewrenderer`.
-- **OpenID Connect** (Step 4):
-  - `Domain\Oidc` — `SigningKey` (active → retired, published until its grace ends),
-    `SigningKeyStatus`, `SigningAlgorithm` (RS256; its hash and `halfHash()` for `at_hash`),
-    `PublicJwk` (public members only, `kid` = RFC 7638 thumbprint), `Nonce`, `OidcScope`,
-    `IdentityClaims` (what a scope releases, at userinfo; the ID token carries `sub` and protocol claims only),
-    `IdTokenClaims`. `Domain\Identity\Profile` (the `profile` claims) on `User`;
-    `Domain\Authentication\AuthenticationContext` (`auth_time`, `amr`) captured on the
-    `AuthorizationCode` with its `nonce`. `Domain\OAuth2\BearerTokenError` +
-    `BearerErrorCode` (RFC 6750 §3.1). `Domain\Shared\Base64Url`.
-  - `Application\Oidc` — `CompactJws` (the JWS assembled by hand), `IdTokenIssuer`,
-    `Discovery\ProviderMetadata`, `Keys\{GenerateSigningKey,RotateSigningKey,ListSigningKeys,PublishSigningKeys}`,
-    `UserInfo\ReadUserInfo`. Ports `TokenSigner` (+ `SigningKeyReference`,
-    `NoActiveSigningKey`, `SigningFailed`), `SigningKeyStore`, `NonceRegistry`.
-    `AuthorizationCodeGrant` mints the ID token in the redemption's transaction;
-    `Authorize` checks the nonce before login and spends it with the code;
-    `IssueToken::supportedGrantTypes()|supportedAuthMethods()` feed discovery.
-  - `Adapter\Secondary\Signing\Postgres\{PostgresTokenSigner,PostgresSigningKeyStore,SigningKeyRow}`;
-    `Redis\RedisNonceRegistry`; `Persistence\PhpDb\Jsonb`.
-  - `Adapter\Primary\Http\Oidc\{DiscoveryHandler,JwksHandler,UserInfoHandler}`,
-    `Http\Shared\{BearerCredentials,BearerChallenger}`; `Cli\{GenerateSigningKey,RotateSigningKey,ListSigningKeys}Command`.
-    `seed-dev` creates a signing key when none is active (with `postgres`; Step 19 made the
-    key store postgres-only and the remote backends real).
-  - Migrations `0005_user_profiles`, `0006_authorization_code_authentication`,
-    `0007_oidc_signing_keys` (a partial unique index allows one active key).
-- **Client Credentials** (Step 5):
-  - `Domain\ResourceServer` — `ResourceServer` (an API: `rs_…` id, its `Audience`
-    identifier, its permissions), `ResourceServerId`, `Permission`, `ClientGrant`
-    (`grantableOn()`: the grant narrowed to what the API still defines), their repositories.
-    `GrantType::ClientCredentials`; `ErrorCode::InvalidTarget` (RFC 8707) and `AccessDenied`;
-    `AccessToken::issueToClient()` and `AccessToken::$audience`.
-  - `Application\OAuth2\Token\ClientCredentialsGrant` (registered in `IssueTokenFactory`,
-    so discovery lists it); `Application\Clients\RegisterMachineClient`.
-  - `Adapter\Secondary\Persistence\PhpDb\{PhpDbResourceServerRepository,PhpDbClientGrantRepository}`;
-    `Adapter\Primary\Cli\CreateMachineClientCommand`.
-  - Migrations `0008_resource_servers` (with `permissions`), `0009_client_grants`,
-    `0010_access_token_audience`.
-- **Management API and audiences** (Step 6):
-  - `Domain\Shared` — `PageRequest` (page ≥ 1, 1–100 per page, a literal search of at most
-    200 characters) and `Page<T>`; `AlreadyExists` (thrown by a repository on a unique
-    violation). `Domain\Identity\PasswordPolicy` (≥ 8 characters, ≤ 72 bytes, the hash's
-    limit); `User::changeEmail()` (a new address is unverified), `recordEmailVerification()`,
-    `changePassword()`. `Client::reconfigure()` / `withSecretHash()` and the coherence rules
-    (the `code` response type and the `authorization_code` grant come together and need a
-    redirect URI; `client_credentials` needs a confidential client). `ResourceServer::$isSystem`
-    with `renamed()`, `withPermissions()`, `asSystem()`, `assertDeletable()` and
-    `SystemApiProtected`. Every repository of the three gains `delete()` and `page()`.
-    `AuthorizationCode::$audience`.
-  - `Application\Management` — `ManagementPermission` (the twelve scopes), `NotFound`,
-    `Conflict`; `Caller\{AuthenticateManagementCaller,ManagementCaller}`; per resource a
-    `ReadX` query (`page()`, `one()`) and one use case per change: `Users\{CreateUser,UpdateUser,DeleteUser}`,
-    `Clients\{RegisterClient,UpdateClient,RotateClientSecret,DeleteClient}`,
-    `ResourceServers\{RegisterResourceServer,UpdateResourceServer,DeleteResourceServer}`;
-    `Provisioning\{RegisterManagementApi,GrantClientAccess}` (shell only).
-    `Development\SeedManagementAccess`. `Authorize` resolves `audience` and
-    `AuthorizationCodeGrant` re-checks it at redemption.
-  - `Adapter\Primary\Http\OpenApi` — the OpenAPI 3.0 document model and validator (see
-    below the conventions).
-  - `Adapter\Primary\Http\Management` — `ManagementContract` (the OpenAPI document:
-    operation lookup, required permission, request and response validation),
-    `ManagementApiMiddleware` (the front door of every `/api/v1/*` route), `ManagementRequest`,
-    `JsonObject`, `Paging`, `UserFields`, `ResourceServerFields`, `ContractViolation`, `Problem`,
-    `ManagementResponder`, `ManagementViews`, and seven handlers (`UsersHandler`,
-    `UserHandler`, `ClientsHandler`, `ClientHandler`, `RotateClientSecretHandler`,
-    `ResourceServersHandler`, `ResourceServerHandler`). `Cli\{RegisterManagementApi,ListManagementScopes,GrantClientAccess}Command`.
-  - `Adapter\Secondary\Persistence\PhpDb\{Constraint,Search}`.
-  - `docs/openapi/management-api.yaml` (OpenAPI 3.0.3). Migrations
-    `0011_system_resource_servers`, `0012_authorization_code_audience`.
-- **Multi-factor authentication** (Step 7):
-  - `Domain\Authentication\Mfa` — `Totp` (RFC 6238/4226: SHA-1, six digits, thirty seconds,
-    one step either side, every step compared in constant time, single-use by time step),
-    `TotpSecret` (160 random bits; at least 128 accepted), `Base32` (RFC 4648),
-    `RecoveryCode` (`xxxx-xxxx-xxxx`, looked up by the SHA-256 of the normalised code),
-    `MfaFactor` (pending → confirmed, `accept()` records the step) with
-    `FactorAlreadyConfirmed`, and the `MfaFactorRepository` / `RecoveryCodeRepository`
-    interfaces. `Domain\Authentication\MfaChallenge` (the parked first factor) and
-    `AuthenticationMethod::{OneTimePassword, MultipleFactors, combined()}`.
-  - `Application\Authentication\Mfa` — `TotpSeeds` (sealing through `SecretCipher`, the
-    provisioning URI), `DescribeMfa`, `BeginTotpEnrollment`, `ResumeTotpEnrollment`,
-    `ConfirmTotpEnrollment`, `DisableMfa`, `CompleteSecondFactor` (with `SecondFactorAttempt`
-    and the outcomes `SignedIn`, `SecondFactorRejected`, `ChallengeGone`),
-    `DescribeSecondFactorPage`. `SignInWithPassword` returns `SecondFactorRequired` for an
-    account with a confirmed factor; `RequireSignIn` parks a page behind the login;
-    `ResolveEndUser::bySession()`. Port `MfaChallengeStore`. Management:
-    `Users\{ManagedUser,ResetUserMfa}`.
-  - `Adapter\Primary\Http\Auth\{MfaChallengeHandler,MfaSettingsHandler,MfaPages,QrCodeSvg,ClientAddress}`;
-    `Management\UserMfaHandler` (`DELETE /api/v1/users/{user_id}/mfa`) and `mfa_enrolled` on
-    every user the API returns. Templates `auth/mfa-{challenge,settings,setup,codes}` and
-    `partial/code-field`.
-  - `Adapter\Secondary\Persistence\PhpDb\{PhpDbMfaFactorRepository,PhpDbRecoveryCodeRepository}`,
-    `Adapter\Secondary\Redis\RedisMfaChallengeStore`. Migration `0013_mfa`.
-  - `bacon/bacon-qr-code` draws the QR code; its namespace joins deptrac's `Vendor` layer.
-- **Social login** (Step 8):
-  - `Domain\Identity` — `ProviderName` (the slug in URLs and keys), `AssertedIdentity` (what a
-    provider says: subject, address, whether it vouches for it), `ExternalIdentity` (an account
-    linked by `(provider, subject)`) and `ExternalIdentityRepository`;
-    `User::registerFromProvider()`; `UserRepository::matchingEmail()` (ignoring case).
-    `Domain\Authentication\PendingExternalSignIn` and `AuthenticationMethod::External` (`ext`).
-  - `Application\Authentication\External` — `BeginExternalSignIn`, `CompleteExternalSignIn`
-    (with `ExternalCallback`, `ExternalSignInRefused` + `ExternalSignInFailure`),
-    `ResolveExternalAccount` (the linking rules), `ExternalCallbackUrl`, `ExternalProviderOption`.
-    `SignIn\CompleteFirstFactor`: what follows any first factor — a session, or the second-factor
-    challenge — used by the password and by external sign-in alike. Ports `IdentityProvider`,
-    `IdentityProviders`, `IdentityProviderFailed`, `ExternalSignInStore`. `DescribeLoginPage`
-    lists the configured providers.
-  - `Adapter\Secondary\IdentityProvider\{GoogleIdentityProvider,GitHubIdentityProvider,AuthorizationCodeExchange,ProviderHttp,ConfiguredIdentityProviders}`;
-    `Persistence\PhpDb\PhpDbExternalIdentityRepository`; `Redis\RedisExternalSignInStore`.
-    Migration `0014_external_identities`.
-  - `Adapter\Primary\Http\Auth\{ExternalSignInHandler,ExternalSignInCallbackHandler,ExternalSignInMessages}`;
-    the provider links on the login page.
-  - `guzzlehttp/guzzle` is the PSR-18 client (`Bootstrap\Container\HttpClientFactory`); its
-    namespace joins deptrac's `Vendor` layer.
-- **RP-Initiated Logout and the dashboard** (Step 9):
-  - `Domain\Client\Client::$postLogoutRedirectUris` and `hasPostLogoutRedirectUri()` (exact
-    match, no fragment).
-  - `Application\Oidc\Logout\{EndSession,EndSessionRequest,SignedOut,SignOutConfirmationNeeded}`;
-    port `SignatureVerifier`; `ProviderMetadata::END_SESSION_ENDPOINT`.
-    `Development\{SeedDashboardClient,SeededDashboard}`.
-  - `Adapter\Secondary\Signing\Jose\JoseSignatureVerifier`; `Adapter\Primary\Http\Oidc\EndSessionHandler`
-    and `templates/auth/logout-confirm.phtml`; `post_logout_redirect_uris` in the Management API.
-  - Migration `0015_post_logout_redirect_uris`. `frontend/` (the React dashboard).
-- **The dashboard follows the contract** (after Step 11): `frontend/src/api/types.ts` holds
-  the shapes `docs/openapi/management-api.yaml` defines and nothing else; the pages, fields
-  and calls for what does not exist yet (connections, consents, sessions, linked identities,
-  third-party clients, back-channel logout, the device grant, revocation at sign-out) were
-  removed, and come back with their step. Errors are read as problem details (RFC 9457).
-- **Roles** (Step 10):
-  - `Domain\Rbac\{Role,RoleId,GrantedPermission,RoleRepository}`: a role grants permissions
-    named `(API id, value)`, possibly across APIs; the repository also holds the assignments
-    (`assign`, `unassign`, `replaceRolesOf`, `rolesOf`, `holders`) and answers the one question
-    issuance asks, `permissionsHeld(user, API)`. `ResourceServer::$enforcePolicies` and
-    `enforcingPolicies()` (refused off for a system API: `SystemApiProtected::policies()`).
-  - `Application\Management\Roles\{ReadRoles,CreateRole,UpdateRole,DeleteRole,RoleAssignments,ReadRoleHolders,ReadEffectivePermissions,RolePermissions}`
-    with `NewRole`, `RoleChanges`, `PermissionReference`, `DescribedRole`, `DescribedPermission`,
-    `EffectivePermission`; `Provisioning\{EnsureRole,AssignRole}` for the shell and `seed-dev`.
-    `ManagementPermission` gains `read|create|update|delete:roles`. `ReadUsers::describeAll()`.
-  - `Authorize` refuses `access_denied` to somebody holding nothing on an API that enforces
-    roles; `AuthorizationCodeGrant` narrows the API's permissions to what they hold at
-    redemption (`invalid_grant` if that is now nothing).
-  - `Adapter\Secondary\Persistence\PhpDb\PhpDbRoleRepository`; `PhpDbResourceServerRepository`
-    reconciles permission rows instead of replacing them. Migration `0016_roles`
-    (`roles`, `role_permissions` with a composite foreign key onto `permissions`, `user_roles`,
-    `resource_servers.enforce_policies`).
-  - `Adapter\Primary\Http\Management\{RolesHandler,RoleHandler,RoleUsersHandler,UserRolesHandler,UserPermissionsHandler,RoleFields}`;
-    `ManagementResponder::jsonList()`; `enforce_policies` on resource servers.
-    `Adapter\Primary\Cli\{CreateRoleCommand,AssignRoleCommand,ListRolesCommand}`
-    (`roles:create|assign|list`). `seed-dev` gives the development user an `Administrator` role
-    holding every management permission.
-- **Refresh tokens** (Step 11):
-  - `Domain\OAuth2\{RefreshToken,RefreshTokenId,Refresh,RefreshTokenRepository}`: a family
-    started at code redemption (`startFamily`), each successor `succeededBy` the token it
-    replaces, `examine()` before `spend()`; `GrantType::RefreshToken`, which a client may only
-    hold beside `authorization_code`. `AccessToken::$refreshFamilyId`, `issueFromRefresh()`,
-    `revoked()`; `AccessTokenRepository::revokeFamily()`.
-  - `Application\OAuth2\Token\RefreshTokenGrant`; `UserScope` — what a token issued on a
-    person's behalf may carry now, shared by both user grants (it took over
-    `AuthorizationCodeGrant`'s narrowing). `IssuedToken::$refreshToken`.
-  - `Adapter\Secondary\Persistence\PhpDb\PhpDbRefreshTokenRepository`. Migration
-    `0017_refresh_tokens` (and `oauth2_access_tokens.refresh_family_id`).
-  - `refresh_token` in the token response, discovery and the Management API's `GrantType`;
-    the dashboard is seeded with it.
-- **Ownership and consent** (Step 12):
-  - `Domain\Client\Ownership`, read from the id: `ClientId::THIRD_PARTY_PREFIX` (`tpc_`),
-    `ClientId::generate($secrets, $ownership)`, `Client::isFirstParty()`.
-    `ResourceServer::$allowSkippingConsent` and `allowingConsentSkip()` (refused off for a
-    system API: `SystemApiProtected::consent()`).
-  - `Domain\Consent\{UserConsent,ConsentRepository,ConsentPolicy,PendingConsent}`;
-    `Domain\OAuth2\Prompt` (every value since Step 18); `ErrorCode::LoginRequired|ConsentRequired`.
-  - `Authorize` refuses a third-party application a system API (`access_denied`, before
-    sign-in), answers `prompt=none` with `login_required`/`consent_required`, and puts a
-    request needing consent on hold (`ConsentRequired`). `AuthorizationRequest::resumption()`
-    rebuilds the request as a `GET` from its parameters; `RequestParameters::with()` and
-    `toQueryString()`.
-  - `Application\OAuth2\Consent\{HeldConsents,DescribeConsent,DecideConsent}` with
-    `ConsentScreen`, `ConsentedApi`, `ScopeLine`, `ConsentGiven`; `Port\ConsentStateStore`.
-    `Management\Users\{ReadConsents,WithdrawConsent,DescribedConsent}`. `ClientCredentialsGrant`
-    and `GrantClientAccess` keep third-party machines off system APIs.
-  - `Adapter\Secondary\Redis\RedisConsentStateStore`, `PhpDb\PhpDbConsentRepository`;
-    migration `0018_consent` (`user_consents`, `resource_servers.allow_skipping_consent`).
-  - `Adapter\Primary\Http\Auth\{ConsentHandler,ConsentPages}`, `templates/auth/consent.phtml`
-    and `consent-expired.phtml`; `Management\UserConsentsHandler`; `is_first_party` on
-    clients and `allow_skipping_consent` on APIs in the Management API;
-    `clients:create-m2m --third-party`. The dashboard shows ownership, the API switch and a
-    user's authorized applications again.
-- **Back-channel logout and session management** (Step 17):
-  - `AuthenticationContext::$sid` (carried by the code; `withoutSession()` for a device
-    approval) and the `sid` claim; `Session::$clients`. `Domain\Client\BackChannelLogout` on
-    `Client` (`withBackChannelLogout()`); `Domain\Oidc\LogoutTokenClaims`. Migration
-    `0021_backchannel_logout`.
-  - `SessionStore::recordClient|ofUser|endOfUser`; `Redis\RedisSessionStore` keeps
-    `session-clients:<digest>` beside each session and `user-sessions:<user id>` (sid → digest).
-    `Sessions::recordClient|of|endEverywhere|endBySid`; `Authorize` records the client a code is
-    issued to.
-  - `Port\{DeferredTasks,BackChannelLogoutDelivery,OutboundUrls}`;
-    `Adapter\Secondary\System\AfterResponseTasks` (run by `public/index.php` after
-    `fastcgi_finish_request()`, and by `AcceptanceTestCase` after each request),
-    `Http\HttpBackChannelLogoutDelivery`; `OutboundUrlPolicy` implements `OutboundUrls`.
-    The container's first `aliases`.
-  - `Application\Oidc\Logout\BackChannelLogout` (one deferred delivery per application),
-    `Authentication\SignOutEverywhere`; `SignOut`, `EndSession`, `UpdateUser` (deactivation)
-    and `DeleteUser` notify. `Management\Users\{UserSessions,ManagedSession}`,
-    `Management\Clients\BackChannelLogoutRegistration`.
-  - `Management\UserSessionsHandler`; `backchannel_logout_uri` and
-    `backchannel_logout_session_required` on clients; `backchannel_logout_supported`,
-    `backchannel_logout_session_supported` and `sid` in discovery.
-- **Passwordless sign-in and mail** (Step 16):
-  - `ConnectionStrategy::Passwordless` and the built-in `email` connection
-    (`ConnectionName::email()`, `Connection::isPasswordless()`); `isExternal()` is social or
-    OIDC only. Migration `0020_passwordless` seeds it — on, not a domain connection, given to
-    no existing application.
-  - `Domain\Authentication\{PasswordlessChallenge,PasswordlessMode,OneTimeCode}`: the
-    code's digest is bound to the browser's handle; `PasswordlessChallenge::address()`
-    normalizes an address (trimmed, lower-cased).
-  - `Port\{Mailer,OutgoingMail,MailUnavailable,MailOutbox,PasswordlessChallengeStore}`;
-    `Adapter\Secondary\Mail\{OutboxMailer,SmtpMailer,NoMailer}` (Symfony Mailer's ESMTP
-    transport, STARTTLS required unless switched off, SMTPS on 465),
-    `Redis\{RedisMailOutbox,RedisPasswordlessChallengeStore}`; `MailerFactory` picks by
-    `CLAVIA_EMAIL_BACKEND`, and the settings refuse `smtp` without a host.
-    `Settings::emailSender()`.
-  - `ConnectionAccess` takes the `Mailer`: the passwordless connection is configured, hence
-    usable, only while mail can be sent. `SignInMethods::$email`.
-  - `Application\Authentication\Passwordless\{StartPasswordlessSignIn,AnswerPasswordlessCode,
-    FollowPasswordlessLink,FinishPasswordlessSignIn,DescribePasswordlessChallenge,
-    PasswordlessSendLimit,SignInMail}` with their outcomes (`PasswordlessCodeSent`,
-    `PasswordlessLinkSent`, `PasswordlessCodeRejected`, `PasswordlessRefused` +
-    `PasswordlessFailure`, `PasswordlessPrompt`).
-  - `Adapter\Primary\Http\Auth\{PasswordlessStartHandler,PasswordlessCodeHandler,
-    PasswordlessLinkHandler,PasswordlessPages}`, `templates/auth/passwordless-{code,link}.phtml`,
-    the email form on the login page, the `clavia_passwordless` cookie;
-    `AuthPageResponder::page()` sets extra cookies. CLI `mail:outbox`.
-- **Device authorization** (Step 15):
-  - `Domain\OAuth2\{DeviceAuthorization,DevicePoll,DeviceDecision,UserCode}`;
-    `GrantType::DeviceCode` (`actsForAPerson()`: a refresh token needs the code or the device
-    grant; the device grant is refused to third parties); `ErrorCode::AuthorizationPending|
-    SlowDown|ExpiredToken`. `AccessToken::issueForUser()`, `RefreshToken::startFamilyFor()`,
-    `IdTokenIssuer::issueFor()` — issuance without an authorization code.
-  - `Port\DeviceAuthorizationStore` (`open` refuses a user code already live, `consume` wins
-    once); `Redis\RedisDeviceAuthorizationStore`.
-  - `Application\OAuth2\ReadRequestedAccess` + `RequestedAccess`: `scope` and `audience`,
-    shared by `Authorize` and `Device\RequestDeviceAuthorization`. `Token\DeviceCodeGrant`.
-    `Device\{PendingDeviceRequests,DescribeDeviceRequest,DecideDeviceRequest}` with
-    `DeviceReview`, `DeviceDecided`, `DeviceSignInRequired`. `Consent\ScopeDescriptions`, the
-    words the consent screen and the device page share. `RequireSignIn` takes the client the
-    sign-in is for.
-  - `Adapter\Primary\Http\OAuth2\DeviceAuthorizationHandler`,
-    `Auth\{DeviceHandler,DevicePages}`, `templates/auth/device.phtml`;
-    `device_authorization_endpoint` in discovery. The dashboard registers device clients.
-- **Introspection and revocation** (Step 14):
-  - `Application\OAuth2\TokenManagement\{IntrospectToken,TokenIntrospection,RevokeToken,
-    IssuedTokens,PresentedToken,TokenTypeHint}`; `ErrorCode::UnsupportedTokenType`;
-    `AccessTokenRepository::revoke()`. Each use case names the client authentication methods
-    it accepts (`AUTH_METHODS`), which discovery advertises.
-  - `Adapter\Primary\Http\OAuth2\{IntrospectionHandler,RevocationHandler}`,
-    `OAuth2Responder::done()`; `introspection_endpoint`, `revocation_endpoint` and their
-    `…_auth_methods_supported` in both metadata documents.
-  - The dashboard hands its refresh token back at sign-out (a beacon to `/oauth2/revoke`).
-- **Connections** (Step 13):
-  - `Domain\Connection\{ConnectionName,ConnectionStrategy,Connection,OidcSettings,
-    ConnectionRepository,BuiltInConnection}` (`ProviderName` became `ConnectionName`;
-    `ConnectionName::defaultPool()` is `password`). `User::$connection`, set by `register(…,
-    $pool)` and `registerFromProvider(…, $connection)`; `UserRepository::findByEmail($pool,
-    …)`, `matchingEmail($email, $connections)`, `countIn()`. `Session::$connection` and
-    `MfaChallenge::$connection`; `PendingExternalSignIn::$nonce`. `Client::$connections`,
-    `withConnections()`, `enables()` (refused for a third party).
-    `ExternalIdentityRepository::ofUser()`, `unlink()`, `countThrough()`.
-  - `Application\Connection\{ConnectionAccess,UsableConnection}`: the one place the global
-    switch, "can it work" and the application's list (or, for a third party, the domain flag)
-    are combined — `available()`, `allows()`, `pools()`, `external()`.
-    `Port\IdentityProviders::for(Connection)`, `IdentityProvider::name()` and its `Nonce`
-    arguments; `Port\{OidcDiscovery,DiscoveredProvider,DiscoveryFailed}`.
-  - `SignInWithPassword` looks in the application's pools only (`PasswordSignInUnavailable`
-    when it has none); `BeginExternalSignIn` answers `ExternalSignInUnavailable` for a
-    connection the application does not enable, and sends a nonce; `CompleteExternalSignIn`
-    checks again (`ExternalSignInFailure::NotAvailable`); `ResolveExternalAccount` links by
-    address within the application's pools and the connection itself; a new account belongs
-    to the connection that made it. `Authorize` treats a session established through a
-    connection the client does not allow as nobody signed in. `DescribeLoginPage` describes
-    `SignInMethods` (the password form, the provider links).
-  - `Management\Connections\{ReadConnections,DescribedConnection,NewConnection,
-    CreateConnection,UpdateConnection,DeleteConnection,OidcConfiguration}`,
-    `Management\Clients\ClientConnections`, `Management\Users\{ReadIdentities,UnlinkIdentity}`;
-    `read|create|update|delete:connections`.
-  - `Adapter\Secondary\Http\{OutboundUrlPolicy,OutboundUrlRefused,PinCheckedAddresses}`;
-    `IdentityProvider\{ConnectionIdentityProviders,OidcIdentityProvider,IdTokenVerifier,
-    JwksCache,HttpOidcDiscovery}`, `Redis\RedisJwksCache`, `PhpDb\PhpDbConnectionRepository`.
-    Migration `0019_connections` (`connections`, `client_connections`, `users.connection` with
-    `uq_users_connection_email`, the foreign key from `external_identities.provider`).
-    `PhpDbUserRepository::save()` now stores a changed address, which it silently kept before.
-  - `Management\{ConnectionsHandler,ConnectionHandler,ClientConnectionsHandler,
-    UserIdentitiesHandler}`; `templates/auth/login.phtml` shows only the methods available.
-    The dashboard has a Connections page, a client's connections, a user's pool and
-    linked identities.
-- **Audit trail** (Phase E):
-  - `Domain\Audit` — `AuditEvent` (built by `record()`: detail names snake_case and never a
-    credential, at most sixteen, values cut to 512 bytes, lists to sixteen items), `AuditEventId`,
-    `AuditEventType` (the dotted names: `authentication.failed`, `client.secret_rotated`…),
-    `Actor` + `ActorKind` (a person, through an application or not; an application; the system;
-    nobody yet), `AuditTarget` + `TargetType`, `Outcome`, `AuditQuery`, the `AuditLog` port
-    (`append`, `page`, `purgeBefore`).
-  - Domain events (`Domain\Shared\DomainEvent`, a marker): one readonly class per fact, in an
-    `Event` namespace per context — `Authentication\Event\{SignedIn,SignInRefused (+
-    SignInRefusal),SessionsEnded (+ SessionEndReason),SecondFactorEnrolled,SecondFactorRemoved}`,
-    `Consent\Event\*`, `OAuth2\Event\{AccessTokenIssued,AuthorizationCodeReplayed,
-    RefreshTokenReplayed,AccessTokenRevoked,RefreshTokenRevoked,DeviceRequestApproved,
-    DeviceRequestRefused}`, `Client\Event\*`, `ResourceServer\Event\*`, `Identity\Event\*`,
-    `Rbac\Event\*`, `Connection\Event\*`, `Oidc\Event\{SigningKeyCreated,SigningKeyRotated}`.
-  - `Application\Port\DomainEvents` (`dispatch()`, synchronous) and `Application\Event\EventSubscriber`
-    (`subscriptions()`: event class → closure). `Adapter\Secondary\Events\{Psr14DomainEvents,
-    SynchronousEventDispatcher,SubscriberListenerProvider}` — the port on PSR-14, with a dispatcher
-    and listener provider of our own. Subscribers are listed in `ConfigProvider::EVENT_SUBSCRIBERS`.
-  - `Application\Audit` — `Trail\{AuthenticationTrail,AuthorizationTrail,ConfigurationTrail,
-    DirectoryTrail}` (the subscribers that turn events into audit events: types, targets, actors,
-    details), `Audit` (the recorder they write through: `record()`, `refused()`), `AuditContext`
-    (request-scoped: the client address and user agent, and who the caller is),
-    `ReadAuditEvents`, `PurgeAuditEvents`. `Oidc\Logout\BackChannelLogout` subscribes to
-    `SessionsEnded`; `SignOut`, `EndSession` and `SignOutEverywhere` no longer call it.
-  - `Adapter\Secondary\Persistence\PhpDb\PhpDbAuditLog`; migration `0023_audit_events` (a trigger
-    refuses every `UPDATE`). `Adapter\Primary\Http\Shared\AuditContextMiddleware` (piped after
-    `ErrorHandler`: `REMOTE_ADDR`, `User-Agent`); `ManagementApiMiddleware` sets the actor from
-    `ManagementCaller::actor()`. `Management\AuditEventsHandler` (`GET /api/v1/audit-events`,
-    `read:audit_events`), `Cli\PurgeAuditEventsCommand` (`audit:purge`); setting
-    `CLAVIA_AUDIT_RETENTION_DAYS` (90).
-  - Tests: `AuditTrailTest` (acceptance), `AuditTrailsTest` (the mapping, and that every
-    domain event is recorded by exactly one trail), `AuditEventTest`, `AuditTest`,
-    `AuditLogContract` against `InMemoryAuditLog` and PostgreSQL, `DomainEventsContract` against
-    `Fake\InMemoryDomainEvents` and `Psr14DomainEventsTest`; use-case tests pass
-    `new InMemoryDomainEvents()` (or one wired to a subscriber) and look at `ofType()`.
-- **Error pages for browsers** (after Step 3): `Adapter\Primary\Http\Shared\ClientPreference`
-  (`Accept` negotiation), `ErrorResponder` + `ErrorPage`, `PageRenderer` + `HtmlPage` (the
-  layout, headers and CSP every server-rendered page shares). 404, 405, 500 and the
-  authorization endpoint's non-redirectable errors are a page for a browser and JSON (plain
-  text for 500) for anything else.
+## Commands
 
-Conventions established in Step 0 that later steps keep:
+Everything runs in the `php` container, so the host needs only Docker and mkcert.
 
-- **Two namespaces sit outside the three rings.** `Clavia\Configuration` is the typed settings:
-  plain data with no dependency, readable by adapters and the composition root, never by
-  `Domain` or `Application` (they receive the few values they need as constructor arguments).
-  `Clavia\Bootstrap` is the composition root: the only code that reads the container, the only
-  code allowed to import every layer. `deptrac.yaml` encodes both.
-- **One factory class per service**, in `Bootstrap\Container`, registered in
-  `Bootstrap\ConfigProvider`. No closures in configuration, no autowiring, no service location
-  anywhere else in `src/`.
-- **A new setting is a constructor parameter of `Settings`** — with a default, a doc comment
-  saying why it exists, a `#[Range]` when it is a number, and a test. Nothing else needs editing.
-- **A new console command** is a `symfony/console` command in `Adapter\Primary\Cli`, a factory, and one line
-  in `ConfigProvider::CONSOLE_COMMANDS`. `bin/clavia` refuses to run any command on an invalid
-  configuration (exit 78) and prints `Settings::warnings()` to stderr.
-- **JSON responses use the standard tooling** (Diactoros `JsonResponse`, or a thin PSR-17-based
-  responder injected by interface) with encoding flags chosen for PHP and browsers, not for
-  byte-parity with FastAPI. Generic error bodies are ours to design (consistent, documented in
-  the OpenAPI document); an uncaught error stays a bare 500 that reveals nothing.
-- **An uncaught error never describes itself to the client, in any environment.** The cause is
-  logged (monolog → stderr → the PHP-FPM/container log). Every PHP warning or notice is an error:
-  the entry points set `error_reporting(E_ALL)` and the pipeline turns them into exceptions.
-- **No `X-Forwarded-*` header is trusted by default.** Behind Caddy over FastCGI the scheme and
-  client address come from the web server. `CLAVIA_TRUSTED_PROXIES` names the proxies whose
-  `X-Forwarded-Proto` is believed; the host is never taken from a header.
-- **Caddy owns the files, PHP owns everything else.** `/auth/static/*` and `/favicon.ico` are
-  served from `public/` by Caddy; `php_fastcgi` runs `index.php` and no other script. The host
-  split (`/api/v1/*` only on `management.*`) is still enforced in the `Caddyfile`.
-- **Acceptance tests extend `ClaviaTest\Support\AcceptanceTestCase`**: the real container,
-  pipeline and routes, in-process, with settings built from `TestEnvironment::variables()` —
-  never from the machine's `.env` — and a `RecordingLogger`. PHPUnit lowers `error_reporting`
-  while a test runs; the base class restores `E_ALL`.
-- **Every PHP file starts with the header in `.docheader`** (`LicenseHeaderTest`).
-- **A deliberate difference from the Python server is recorded in `docs/DEVIATIONS.md`** in the
-  same change that introduces it.
-
-Conventions established in Step 1:
-
-- **`RandomSource` lives in `Domain\Shared` next to `Clock`**, not in `Application\Port`: the
-  domain itself mints secrets (`SecretGenerator`), and rule 1 says randomness reaches it
-  through a port. `Application\Port` holds the ports only use cases need.
-- **A value object is built by a named constructor that throws `InvalidValue`** (`fromString`,
-  `fromHex`, `of`); its real constructor is private. Anchored patterns use the `D` modifier —
-  without it `$` accepts a trailing newline.
-- **Never read a value back from an array key.** PHP turns an all-digit string key into an
-  integer (`'10'` → `10`); `ScopeSet` and the migrator keep keys for lookup only.
-- **Every repository goes through `Adapter\Secondary\Persistence\PhpDb\Database`**: SQL written
-  out, named parameters (`:client_id`), plain rows back. `fetchAll` / `fetchOne` / `fetchValue`
-  / `execute` (returns the affected-row count — the answer to "did I win?" for a conditional
-  `UPDATE … WHERE used_at IS NULL`). The library's query builder is reachable through
-  `Database::adapter()` for dynamic filters only. Generated keys are read with
-  `INSERT … RETURNING`, never "last insert id".
-- **A use case that must be atomic wraps itself in `TransactionManager::transactional()`.** A
-  nested call joins the outer transaction; an exception anywhere rolls all of it back; there
-  are no savepoints, and catching a database error inside a transaction to carry on is not
-  possible (PostgreSQL refuses everything after a failed statement). Isolation is READ
-  COMMITTED; exactly-once rests on row locks or conditional writes, not on the isolation level.
-- **Migrations are `migrations/<version>_<name>.sql`** (`0003_refresh_tokens.sql`), forward
-  only, one transaction each, immutable once applied (checksummed), linear (a pending file
-  older than an applied one is refused). A step adds its files in the same change as the code
-  that needs them. No `CREATE INDEX CONCURRENTLY` in a migration: it cannot run in a transaction.
-- **PostgreSQL and Redis connections are lazy.** Building the container opens neither;
-  `/healthz` touches neither (there is a test for it).
-- **Redis keys are `<prefix>:<identifier>`**, built by `Redis\Keys`: `forSecret()` digests
-  whatever a browser could present (session ids, handles, device codes), `forIdentifier()` is
-  for user ids and `sid`s.
-- **Secrets that must be read back go through `SecretCipher`, with a row-specific context**
-  (`kid`, `user:42:totp`). The token format is `base64(nonce ‖ ciphertext ‖ tag)`; a
-  known-answer test pins it, so stored secrets cannot silently become unreadable.
-- **bcrypt takes 72 bytes.** `PasswordHasher::hash()` throws `SecretNotHashable` beyond that
-  (and on a NUL byte) instead of truncating; `verify()` returns false. Password and
-  client-secret validation in later steps must turn that into a proper validation error.
-- **Each port ships with a double and a contract.** `test/Support/Fake/X` plus, where behaviour
-  is shared, an abstract `test/Support/Contract/XContract` that both the double's test and the
-  adapter's test extend. A double that drifts from its adapter fails its own test.
-- **Three test suites, three bases.** `Unit` (no I/O: domain, use cases with doubles, pure
-  adapters such as crypto), `Integration` (`IntegrationTestCase`: one adapter against real
-  PostgreSQL/Redis, with a scratch schema per test for tables of its own), `Acceptance`
-  (`AcceptanceTestCase`: the whole application). The last two wipe every table and Redis
-  database 1 before each test; `TestEnvironment` refuses a database whose name does not end in
-  `_test` and Redis database 0.
-
-Conventions established in Step 2:
-
-- **A use case is an invokable class named for what it does** (`Authorize`, `IssueToken`),
-  taking one request object and returning a result object. Expected outcomes are return values
-  (`CodeIssued | RequestRefused | LoginRequired`); `OAuth2Error` is thrown only where the
-  protocol answers with an error document. The primary adapter turns both into HTTP and decides nothing.
-- **The authorization endpoint settles the client and the redirect URI before anything else,
-  and throws if it cannot** — that error is shown, never redirected. Everything validated
-  afterwards is reported *to* the registered redirect URI with `state` and `iss`. Validation
-  comes before login: an invalid request never sends anyone to the sign-in page.
-- **Redirect URIs match as exact strings** (`Client::hasRedirectUri`). No normalisation, no
-  prefix, no wildcard — and the URI is appended to, never parsed and rebuilt.
-- **`HEAD` is not `GET`.** Mezzio's `ImplicitHeadMiddleware` is deliberately absent: it would
-  answer `HEAD /oauth2/authorize` by running the handler, which mints a code. FastAPI did not
-  answer `HEAD` either.
-- **Any repeated request parameter is refused** (RFC 6749 §3.1). Handlers read parameters
-  with `RequestParameterReader`, never `getQueryParams()` / `getParsedBody()`, which silently
-  keep the last value and rewrite names.
-- **A secret handed to a client is stored as its `Digest` and looked up by it**
-  (`code_hash`, `token_hash`). The aggregate never holds the plain value; the use case returns
-  it once.
-- **Exactly-once is a locked row.** `AuthorizationCodeRepository::lockForRedemption()`
-  (`SELECT … FOR UPDATE`, refuses to run outside a transaction) → `AuthorizationCode::redeem()`
-  → `save()`, all inside one `transactional()`. The code is spent *before* the redirect URI
-  and the verifier are checked, so a wrong guess burns it; a refusal that must survive is
-  returned from the transaction and thrown after commit — throwing inside would roll the
-  spend back. A replay revokes what the code minted; a code presented by another client
-  changes nothing.
-- **Client authentication is one method per request, and it must be the registered one.**
-  The method is read from what the request carries — an `Authorization` header means Basic, a
-  body `client_secret` means `client_secret_post`, a bare `client_id` means `none` — and is
-  never "tried in turn": failed Basic credentials fail the request even if the body names a
-  valid public client, and mixing methods is refused (RFC 6749 §2.3). The method must equal
-  the client's `token_endpoint_auth_method`, so the right secret through the wrong door
-  fails, and a confidential client presenting only its id fails. Every failure is the same
-  `invalid_client`.
-- **A grant is a class implementing `Token\Grant`**, registered in `IssueTokenFactory`.
-  `IssueToken` owns what every grant shares: repetitions, `grant_type`, client authentication,
-  the client's permission to use the grant.
-- **A table holds only the columns the code reads.** `nonce`, `auth_time`, `sid`, `amr`,
-  `audience`, profile fields, `is_first_party`… are added by a migration in the step that
-  introduces them, not ahead of time. Lists are `jsonb`; instants are `timestamptz`, written
-  and read through `Timestamp` (UTC, microseconds).
-- **Entities returned by a repository are copies**: a change exists in storage only once it is
-  saved. The in-memory doubles clone on the way in and out to behave the same.
-- **Identifiers**: UUID v4 value objects extending `UuidId` (`UserId`, `AuthorizationCodeId`,
-  `AccessTokenId`), never equal across kinds. `ClientId` is 1–64 visible ASCII characters
-  without a colon (HTTP Basic could not carry one); generated ids are 32 alphanumerics.
-- **Development-only code checks for itself.** `DevelopmentAutoLogin` and
-  `SeedDevelopmentData` receive `isDevelopment` and throw outside it, on top of the settings
-  validation that already forbids the combination.
-- **OAuth2 responses go through `Adapter\Primary\Http\OAuth2\OAuth2Responder`**, built on Diactoros
-  `JsonResponse` and a PSR-17 `ResponseFactoryInterface`. Token-endpoint errors are 400, or 401
-  with `WWW-Authenticate` for `invalid_client`; an authorization-endpoint error that cannot be
-  redirected is a plain 400 and never a challenge (a browser would prompt for a client secret).
-  A browser gets that last one as a page; see "An error is a page for a person".
-- **Acceptance tests state behaviour, not Python parity.** `AuthorizationCodeFlowTest` and
-  `PkceSecurityTest` cover every behaviour of the Python suites they came from, through
-  `OAuth2Fixtures`; where the RFC-correct answer differs from what Python gave, the test
-  asserts the RFC-correct one and `docs/DEVIATIONS.md` keeps the note.
-
-Conventions established in Step 3:
-
-- **One door per session operation.** `Sessions::establish()` is the only way a browser
-  becomes authenticated (it always rotates: the identifier the browser held is ended),
-  `resolve()` the only way one is read (it slides the idle window, never past the absolute
-  ceiling, and deletes a session found past it), `end()` the only way one stops. Later
-  sign-in flows (second factor, social, passwordless) call `establish()` with their own
-  `AuthenticationMethod`s. The session identifier is a 43-character token stored as its
-  digest; the `sid` is a second, unrelated token.
-- **Sign-in failures are one outcome.** `CredentialsRejected` covers an unknown account, a
-  wrong password, a deactivated account, one without a password and a throttled subject; the
-  page shows one message with one status. Whenever no real hash is checked,
-  `PasswordHasher::simulateVerification()` spends the same time. Throttling counts per account
-  (case-insensitive) and per client address (`REMOTE_ADDR`, never a forwarded header).
-- **`ResolveEndUser` answers "who is this?" for every browser-facing handler**, re-checking
-  that the account is still active on every request.
-- **A `Location` built from anything a client or a store supplied goes through `LocalPath`**
-  (or, for sign-out, an https URL on an origin some client registered). Rejected, never
-  repaired.
-- **Cookies are read from the `Cookie` header** (`RequestCookies`, which keeps every value of a
-  name in the order sent) **and written through `SetCookie`** (`HttpOnly; SameSite=Lax`, never
-  a `Domain`, name and value validated so nothing can split the header). `AuthCookies` owns
-  each cookie's name, path and lifetime, so a cookie is always deleted with the path it was set
-  with.
-- **CSRF is double-submit, per browser.** `AuthPageResponder` reuses the token the browser
-  holds (minting one only when there is none) and refreshes its cookie on every page; every
-  `/auth/*` form posts it and `CsrfToken::isValid()` accepts a match with any held value.
-  Logout and the theme toggle need none (a `SameSite=Lax` session cookie never rides a
-  cross-site POST; a colour scheme is not worth forging).
-- **A server-rendered page is an `HtmlPage` view model rendered by `PageRenderer`** (the
-  `layout::page` layout and the headers every page carries); `AuthPageResponder` adds the
-  CSRF token for auth pages. The handler decides every value (`LoginPages` builds the login
-  page's); templates print and loop. Every page gets `Cache-Control: no-store`,
-  `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: same-origin` and a CSP with no script
-  source and a `form-action` naming the application's redirect origins when the page belongs
-  to an authorization request.
-- **An error is a page for a person and data for a program.** `ClientPreference::prefersHtml()`
-  says which: HTML only when `Accept` names `text/html` (or `text/*`, or
-  `application/xhtml+xml`) at a weight at least as high as JSON's — `*/*` alone, or no
-  `Accept`, is a program. `ErrorResponder::respond()` sends the same status and headers either
-  way with an `ErrorPage` (title, what happened, what to do, an optional reference) or the
-  JSON document. Error text never comes from the request, an error page offers no link or
-  form onwards (the only address a refused request named is the untrusted one) and sets no
-  cookie. Endpoints whose format a specification fixes — `/oauth2/token`, and later
-  introspection, revocation, userinfo — answer JSON whatever `Accept` says. An uncaught error
-  is logged under a 12-character reference, sent in `X-Error-Reference` and shown on the page;
-  if the page itself fails to render, the plain `Internal Server Error` goes out instead.
-- **Every printed value is escaped by the template** with `escapeHtml()` /
-  `escapeHtmlAttr()` — laminas-view does not escape on its own. `AuthPagesEscapingTest`
-  renders every page with hostile values; a new page or template variable gets a case there.
-  A line under the heading goes in the `subtitle` placeholder.
-- **An acceptance test that moves time calls `freezeClock()`** before its first request. The
-  harness drops each test's container in `tearDown()`; PHPUnit keeps finished tests alive,
-  and a container left on one holds a PostgreSQL connection.
-
-Conventions established in Step 4:
-
-- **Signing goes through `TokenSigner` and nothing else.** A caller asks for the active key's
-  reference (`kid`, `alg`), builds the header and claims, and has `CompactJws` sign the
-  signing input; no code outside a signing adapter ever sees a private key, and in the
-  `postgres` backend only `PostgresTokenSigner::sign()` opens one. A later token type (the
-  logout token of Step 17) is `CompactJws::sign()` with its own `typ`.
-- **The JWKS is rendered from stored public keys** (`PublicJwk`, which has no field a private
-  member could go in, and refuses a document carrying one). It is published with
-  `Cache-Control: public, max-age=PublishSigningKeys::CACHE_MAX_AGE`; discovery likewise with
-  `DiscoveryHandler::CACHE_MAX_AGE`. Both numbers are part of the rotation reasoning.
-- **Key lifecycle**: one active key (enforced by the database too), `keys:generate` only when
-  there is none, `keys:rotate` retires the active key with `RotateSigningKey::grace()` — twice
-  the longest token lifetime plus a day — and publishes both. Nothing ever creates a key on
-  first use; issuing without one is `NoActiveSigningKey`, a loud server error.
-- **What a scope releases is `IdentityClaims::of()`**, served by userinfo only — the ID token
-  names the person by `sub` and carries protocol claims alone (OIDC Core §5.4, decided 2026-11-21);
-  an unknown value is left out, never sent as null.
-- **An ID token reports only what this server witnessed.** `auth_time` and `amr` come from
-  the session that approved the code (`EndUser::authentication()`), captured on the code;
-  without a session (the development auto-login) both are omitted.
-- **A protected resource reads its token with `BearerCredentials`** (the `Authorization`
-  header only, one method per request) **and refuses with `BearerChallenger`** (no
-  credentials: a bare challenge; otherwise the RFC 6750 status, challenge and error document;
-  never cacheable). Use cases throw `BearerTokenError`. The Management API (Step 6) reuses both.
-- **Discovery names only what exists**, and states every field whose default differs from
-  the server. `ProviderMetadata` holds the endpoint paths; `OidcTest` fetches each one, and a
-  step that adds an endpoint or a grant adds it there (grants and client authentication
-  methods are read from `IssueToken`, so they cannot drift).
-- **An exchange that cannot be completed is not completed at all**: the ID token is signed
-  inside the redemption's transaction, so a signing failure rolls back the access token and
-  leaves the code unspent.
-
-Conventions established in Step 5:
-
-- **A client holds nothing of its own.** Acting as itself, what it may take from an API is its
-  `ClientGrant` there, read through `grantableOn()` — intersected with the API's permissions
-  *now*, so withdrawing a permission takes effect on the next token. A grant naming a scope
-  the API does not define cannot be created.
-- **A machine token always names its API.** `audience` is required by the grant and stored
-  on the token (`aud`); `openid` is refused before anything else; a scope beyond the grant
-  is refused, never narrowed; an omitted scope is the whole grant. The errors tell the
-  caller what to fix: `invalid_request` (no audience), `invalid_target` (unknown API),
-  `access_denied` (no grant there), `invalid_scope`.
-- **A token without a subject answers no question about a person.** Every surface that
-  describes a user (userinfo now; introspection's `sub`, the Management API's "me" later)
-  refuses a token whose `userId` is null.
-- **Client grants are written from the shell only**, never over HTTP: an endpoint that wrote
-  them would let a caller widen its own access.
-
-Conventions established in Step 6:
-
-- **The Management API is contract-first.** `docs/openapi/management-api.yaml` is written by
-  hand and is the source of truth: `ManagementApiMiddleware` validates every request against
-  it, the scope each route enforces is the one its operation's `security` requirement names
-  (there is no second list), and `ManagementFixtures::api()` checks every response the
-  acceptance tests receive. A new operation is a path in the document, a route in
-  `config/routes.php` behind `ManagementApiMiddleware`, and a handler; `ManagementApiTest`
-  fails if the routes and the document disagree, and `ManagementContractTest` if the
-  document's scopes are not exactly `ManagementPermission::cases()`.
-- **One order of checks**: credentials, the token (live, issued for this API — `aud` before
-  any scope — its subject still active), the scope, then the request: a parameter twice,
-  unreadable JSON or bad percent-encoding (400), not JSON (415), anything the contract or the
-  domain refuses (422) — every violation listed, at most fifty.
-  `NotFound` is 404; `Conflict`, `AlreadyExists` and `SystemApiProtected` are 409.
-- **Errors are RFC 9457 problem documents** (`type: about:blank`, `title`, `status`,
-  `detail`, and `errors[]` with a `pointer` or a `parameter` for a contract violation).
-  Bearer refusals stay RFC 6750 documents. An error never repeats the value at fault.
-  Nothing the Management API answers is cacheable.
-- **Handlers state the success only.** They read a `ManagementRequest` (the caller, the
-  `ValidatedRequest` with its typed parameters, and the body as a `JsonObject`), call one use case and render with `ManagementViews`; the
-  middleware turns the use cases' expected refusals into problems. A `JsonObject` value of
-  the wrong type is a `LogicException`: the contract let something through it should not.
-- **Lists are `ReadX::page(PageRequest)`**, newest first (`created_at DESC, id`), the search a
-  case-insensitive literal (`Search` escapes `%` and `_`), returned as `{items, total, page,
-  per_page}`.
-- **A unique constraint is the arbiter of uniqueness.** A repository turns its violation
-  (SQLSTATE 23505 on the named constraint, `Constraint::isUniqueViolation()`) into
-  `AlreadyExists`; nobody checks first and inserts second.
-- **A system API is the server's own.** The Management API is registered from the shell,
-  marked `is_system`: it can be renamed, never deleted, and its permissions are
-  `ManagementPermission`'s — re-registering after an upgrade brings them up to date. It
-  always enforces roles (Step 10).
-- **`audience` in a user's flow** names the API whose permissions the scope may hold next to
-  the OIDC scopes; an unknown API is `invalid_target`, a malformed one `invalid_request`. It is
-  stored on the code and re-checked at redemption: the scope is cut to what is still defined,
-  and a code for an API that is gone is `invalid_grant`.
-
-Conventions established in Step 7:
-
-- **A correct password is not a session once a factor is confirmed.** It opens a challenge
-  instead — in Redis, keyed by the digest of a handle the browser holds in `clavia_mfa`
-  (`Path=/auth`, `HttpOnly`, as long as the challenge) — and the session is established only
-  by `CompleteSecondFactor`, with `amr` = the first factor's methods + `otp` (an app code)
-  + `mfa`. A pending factor enforces nothing: someone who scans and walks away is not locked
-  out.
-- **A code is spent when it is used.** The factor row is locked (`FOR UPDATE`) for the check
-  and the step recorded; a recovery code is spent by one conditional `UPDATE`. Two requests
-  with one code cannot both succeed.
-- **Guesses are bounded twice**: per challenge (`CLAVIA_MFA_MAX_ATTEMPTS`, counted atomically,
-  the challenge destroyed at the limit) and per account and address by the sign-in throttle,
-  which a throttled attempt does not get past even with the right code. The account is
-  re-read at the second step and must still be active.
-- **Seeds are sealed, never hashed**: `SecretCipher` with `user:<id>:totp` as associated
-  data, so a ciphertext moved onto another account's row does not open. The seed is
-  decrypted only for a check.
-- **Pages that change an account need a real session** (`ResolveEndUser::bySession()`, never
-  the development auto-login); without one, `RequireSignIn` parks the page behind the login and
-  the person comes back to it. Their forms check the CSRF token and, failing it, change nothing.
-- **The QR code is drawn by the HTTP adapter** (`QrCodeSvg`), not behind a `QrRenderer`
-  port: it is presentation, and the use cases hand out the provisioning URI. The SVG is
-  cleaned for the page's policy — no `style`, no background, `fill="currentColor"` so it
-  follows the theme, `role="img"` with a label — and the URI never appears in the markup.
-- **The recovery codes exist in the clear once**, in the response that turns two-factor
-  authentication on; only their digests are stored, and a new set replaces the old one.
-
-Conventions established in Step 8:
-
-- **Outbound HTTP is PSR-18, injected.** Adapters receive `Psr\Http\Client\ClientInterface`
-  with PSR-17 request and stream factories, never a concrete client; the composition root
-  builds Guzzle (`HttpClientFactory`: 5 s to connect, 10 s in all, no redirect followed, no
-  exception on a status). Tests swap in `Fake\FakeHttpClient`, so nothing in the suite reaches
-  a real provider. The PSR interfaces are the port: there is no `OutboundHttp` wrapper.
-- **Clavia as an OAuth 2.0 client holds itself to its own rules**: an opaque `state` in the
-  redirect and in a cookie (`clavia_external_state`, `Path=/auth`), the two compared in
-  constant time before anything is looked up, then claimed with `GETDEL` so it works once;
-  PKCE S256 sent to every provider; the same redirect URI (`ExternalCallbackUrl`, under the
-  issuer) at both ends; the code exchanged server side with the secret in the body.
-- **An identity is `(provider, subject)`, never an address.** `ResolveExternalAccount` applies,
-  in order: a linked subject wins; an address the provider does not vouch for links and creates
-  nothing; a verified address matching one account (ignoring case) links to it when
-  `CLAVIA_SOCIAL_AUTO_LINK` allows, two is no answer; otherwise a password-less, verified account
-  is created. A first sign-in racing with itself is settled by the primary key and resolved again.
-- **Every first factor ends at `CompleteFirstFactor`**, so a second factor turned on is asked
-  for whichever way the person signed in. `amr` is `ext` for an external sign-in: outside the
-  RFC 8176 registry, which has no value for "another provider vouched for them".
-- **A provider's words never reach the page.** Failures are an `ExternalSignInFailure`, worded by
-  `ExternalSignInMessages`; the reason is logged by `ProviderHttp` (endpoint and status, never a
-  body), and the refusal is the login form as if reached directly. An unknown and an
-  unconfigured provider are the same 404.
-
-Conventions established in Step 9:
-
-- **A session ends at an application's request only on proof.** `EndSession` ends it at once
-  when `id_token_hint` verifies against the keys this server publishes (retired ones
-  included), names this issuer, and its `sub` is the session's person; the hint's expiry is
-  not checked (RP-Initiated Logout 1.0 §2). Anything less shows a confirmation page whose
-  form posts back with `confirmed=yes` — a same-site POST, so the `SameSite=Lax` session cookie
-  is with it, while a forged cross-site one arrives without it. `confirmed` is read from a
-  POST only.
-- **Where the browser goes after sign-out is registered, per client, and matched exactly** —
-  `post_logout_redirect_uris`, kept apart from redirect URIs — with `state` appended. The
-  client is the hint's audience (`azp` when there are several) or `client_id`; the two must
-  agree, or neither counts. Anything unregistered is not followed: the browser lands on the
-  login page. `/auth/logout`'s own `next` keeps its origin rule for this server's pages.
-- **Verifying is not signing.** `SignatureVerifier` checks a compact JWS against public keys
-  only; the key is picked by `kid`, and the algorithm is the key's, never the header's.
-  `web-token/jwt-library` does that and nothing else — it still never signs.
-- **The dashboard is an ordinary client**, registered by `seed-dev` with its callback and its
-  signed-out page under `management.{domain}/dashboard/` (a confidential one since it moved to
-  its own repository; see the conventions of that move).
-
-Conventions established in Step 10:
-
-- **A person comes to hold a permission only through a role.** On an API with
-  `enforce_policies`, the authorization endpoint refuses `access_denied` to somebody who holds
-  nothing there (before a code exists, the error sent to the client), and redemption cuts the
-  API's permissions in the scope to what their roles grant *then* — roles are read for every
-  token, never trusted from a code. OIDC scopes pass untouched. Without `enforce_policies`, the
-  API's definitions are the only bound. A machine client is governed by its client grant
-  either way. A system API always enforces roles.
-- **Links are foreign keys onto what they name.** A role grants `(resource_server_id, value)`
-  through a composite key onto `permissions`, so a permission an API stops defining leaves every
-  role; deleting a role or an account takes its assignments. Because of that,
-  `PhpDbResourceServerRepository` reconciles permission rows (delete what went, upsert what
-  stays) — a row deleted and inserted again would take every role's grant of it along. The
-  in-memory doubles apply the same cascades as they read.
-- **Conferring authority needs `update:roles`**, wherever it happens: on the role
-  (`/roles/{id}/users`) or on the account (`PUT /users/{id}/roles`); `update:users` never
-  suffices. The first holder is made at the shell (`roles:create`, `roles:assign`).
-- **Assignments are idempotent and refused whole.** Giving a held role or taking one not held
-  changes nothing; naming one account or role that does not exist is a 404 and changes
-  nothing. A `DELETE` carries no body (OpenAPI 3.0 gives one no meaning): taking a role names the
-  account in the path.
-- **A collection small by nature is a JSON array** (`ManagementResponder::jsonList()`: an
-  account's roles, its effective permissions); anything that grows is a page.
-
-Conventions established in Step 11:
-
-- **A refresh token is good for one refresh.** Every refresh spends it, under the row lock,
-  and issues a new pair; there is no reuse grace period. A spent token presented again is a
-  replay: the family and every access token it minted are revoked (RFC 6749 §10.4). A
-  replayed authorization code revokes the family it started, too.
-- **Only a refresh that succeeds spends the token.** A wider scope (`invalid_scope`), another
-  client, an expired or revoked token, a deactivated account, roles taken away
-  (`invalid_grant`) leave it as it was. Every bad token is the same `invalid_grant`.
-- **What a token may carry is decided at every issuance** by `UserScope`: the API's current
-  permissions, narrowed to the person's roles when it enforces them. A refresh token holds
-  the ceiling — what was authorized, or narrowed by the client since — not what the last
-  access token carried, so a role given back is honoured by the next refresh.
-- **Three lifetimes**: the access token's; the refresh token's idle limit
-  (`CLAVIA_REFRESH_TOKEN_LIFETIME`) from its own issuance; the family's deadline
-  (`CLAVIA_REFRESH_TOKEN_ABSOLUTE_LIFETIME`) fixed at sign-in. No token outlives the family.
-- **A refresh issues no ID token** (OIDC Core §12.2) and ignores `audience`: a family is for
-  one API.
-
-Conventions established in Step 12:
-
-- **Ownership is identity, written in the id.** A third-party application is registered
-  under `tpc_…` and stays third-party; nothing stores it a second time. A third-party
-  application never gets a token for a system API — on anybody's behalf (refused at the
-  authorization endpoint before anyone signs in) or as itself (refused by `clients:grant`
-  and again at the token endpoint, so a grant written around the command mints nothing).
-- **Who is asked is `ConsentPolicy`'s decision**, made after the roles check and before a
-  code exists: `prompt=consent` asks; a first-party application does not ask for no API or
-  an API that allows skipping; otherwise a consent on record must cover every scope for this
-  application on this API. Allowing widens the record; refusing records nothing.
-- **A request waiting for the person is resumed, not replayed from storage.** The login page
-  and the consent screen send the browser back to `/oauth2/authorize` with every parameter
-  (`AuthorizationRequest::resumption()`), minus a `prompt` value that has been satisfied, and
-  the endpoint decides again with everything as it is then.
-- **A handle is the only thing a page's URL or form carries**, for consent as for sign-in; a
-  handle that is unknown, spent, expired, someone else's or names something deleted is the
-  same "expired" page. Showing the screen leaves it; deciding claims it (`GETDEL`).
-
-Conventions established by the dashboard's move to its own repository:
-
-- **The dashboard knows the server only by its contract**: `docs/openapi/management-api.yaml`
-  and the discovery document. It holds a copy of the first and generates its types from it, so
-  a change to the API reaches it as a type error, and the two repositories release apart.
-- **The dashboard is a backend for frontend**, a confidential client (`client_secret_basic`) that
-  keeps every token on its server. Nothing it does crosses to `auth.*` from a browser, so `auth.*`
-  has no CORS allowlist and no dashboard-specific policy of its own.
-- **Caddy forwards `/dashboard` and keeps the `Host` header**: Next.js checks a server action's
-  `Origin` against `Host`. The dashboard runs where `CLAVIA_DASHBOARD_UPSTREAM` points
-  (`host.docker.internal:3000` by default, its `npm run dev` on the host), and sets its own
-  headers, its nonce-based Content-Security-Policy among them.
-- **`seed-dev` registers the dashboard with fixed development credentials** (`clavia-dashboard`
-  and a development secret), so the dashboard's `.env.example` works as it is, and prints the
-  settings for the deployment's domain instead of writing into another repository. It registers
-  back-channel logout with `sid` required, so a sign-out anywhere ends the dashboard's session,
-  and replaces the public client of an earlier seed.
-
-Conventions established by the audit trail:
-
-- **A use case says what happened; it does not decide what follows.** It dispatches a domain
-  event — past tense, typed with domain objects, never a secret — through `DomainEvents`, right
-  after the change it describes, and knows nothing of who listens. What follows (the audit
-  trail, back-channel logout, anything later) is a subscriber, registered in
-  `ConfigProvider::EVENT_SUBSCRIBERS`. A new fact is a new event class and a line in a trail;
-  `AuditTrailsTest` fails while an event is recorded by no trail.
-- **Dispatch is synchronous, inside the use case's transaction**: a change rolled back leaves
-  no audit event, and an event never describes a change that did not happen. A subscriber's
-  failure fails the use case. Work for other servers is deferred by its subscriber
-  (`DeferredTasks`), never by the dispatcher. A refusal worth knowing about (a wrong password,
-  a replayed code or refresh token) is dispatched outside any transaction that would roll it
-  back, so it survives the refusal.
-- **Who acted comes from the request, not from the use case.** `AuditContext` is filled by
-  the HTTP edge (origin by `AuditContextMiddleware`, the Management API caller by
-  `ManagementApiMiddleware`); the shell leaves it empty and the system is the actor. A trail
-  names the actor from the event only where the event says better — the person signing in,
-  the client a token is issued to, nobody for a refusal.
-- **The trail holds facts, never secrets.** The trails alone choose what an audit event says;
-  detail names containing `secret`, `password`, `token`, `credential`, `assertion`, `verifier`,
-  `private` or `cookie` are refused (a `LogicException`: it is this codebase's bug); a change
-  lists the *fields* it touched, not their values; typed input (an address at the login page)
-  is cut, never refused.
-- **The trail is append-only.** No adapter updates a row and the database refuses it; the only
-  deletion is `audit:purge`, by age. `seed-dev`'s own writes (the development user, the
-  dashboard client) are not recorded; what it does through the provisioning use cases is.
-
-Conventions established in Step 17:
-
-- **A session ended is a session reported**, by whatever ends it — the logout endpoints, an
-  operator, deactivation, deletion — to each application that was issued a code through it
-  and registered a back-channel logout URI. A session that runs out, or is replaced when the
-  same browser signs in again, is not reported.
-- **Work for other servers runs after the response** (`DeferredTasks`), one task per
-  recipient, best effort, logged on failure, never retried. Since the audit trail,
-  `BackChannelLogout` is a subscriber to `SessionsEnded`, which every way of ending a session
-  dispatches.
-- **An operator-supplied URL this server sends to is checked twice**: at registration
-  (`OutboundUrls`, a 422), and at every send by the adapter that sends.
-
-Conventions established in Step 16:
-
-- **A mailbox is one factor, and its own connection.** Passwordless accounts belong to
-  `email`, created on first sign-in with the address verified; a password account at the
-  same address is another account. What follows the proof is `CompleteFirstFactor`, like
-  every other first factor, so a second factor still applies. `amr` is `otp`.
-- **A code answers one browser; a link answers whoever opens it — on a POST.** The code is
-  checked against the challenge the browser's cookie names, within a small budget of wrong
-  answers; a link's GET only asks, so a mail scanner spends nothing. A code challenge's
-  handle is never accepted as a link.
-- **Mail is sent synchronously and its failure is said plainly** (`503`); a message that
-  cannot go out leaves nothing pending. A backend that sends nothing (`none`) makes the
-  connection unusable rather than failing on use.
-
-Conventions established in Step 15:
-
-- **A device request is checked like an authorization request**, by the same code, and the
-  person's decision like an authorization: the session counts only through a connection
-  the application enables, and on an API enforcing roles somebody holding nothing there is
-  refused. An approval is a consent on record.
-- **A device code is a secret, and redeemed once**: kept only as a digest, consumed before
-  any token exists. The user code is what a person types, and stands for one live request.
-- **Polling follows RFC 8628 §3.5**: `slow_down` adds five seconds for good; only a pending
-  request is held to the interval; past its life a request says `expired_token` for a minute,
-  then nothing.
-
-Conventions established in Step 14:
-
-- **Introspection answers only a client that proves itself with a secret**, and only about a
-  token it has a stake in: its own, or one issued for an API it holds a client grant on.
-  Everything else — unknown, expired, revoked, spent, a deactivated account's, someone
-  else's — is the same `{"active": false}`.
-- **Revocation is giving back what one holds**: any client, a public one by its id, may
-  revoke a token issued to it; another client's is `invalid_grant`, an unknown one a quiet
-  `200`. A refresh token takes its family — refresh and access tokens — along; an access
-  token goes alone.
-- **The hint says where to look first, never where to look only.**
-
-Conventions established in Step 13:
-
-- **Every account belongs to one connection**, and an address is unique within it: the same
-  address in two pools is two accounts. Accounts are created in a pool; an external
-  connection's are made by signing in through it.
-- **What an application may use is `ConnectionAccess`'s answer, and nobody else's.** The
-  login page, the password post, the provider link, the callback and the authorization
-  endpoint all ask it, so hiding and refusing cannot disagree. No application in play means
-  every usable connection; a first-party application goes by its own list; a third-party
-  one gets the domain connections.
-- **A session remembers its connection**, and counts only for an application that allows it
-  — checked at every authorization request, so taking a connection away takes effect at once.
-- **The code's connections are switched, never created or deleted**: the default pool and
-  the social providers (`BuiltInConnection`, 409). A connection anything depends on — an
-  account, a linked identity — is not deleted either; deleting one stops every application
-  enabling it.
-- **The server fetches an operator's URLs on https only, and never at its own network**:
-  `OutboundUrlPolicy` checks the issuer, the endpoints its document names, and every request
-  again when it is made, at the addresses it checked. An ID token is believed only once its
-  signature, issuer, audience, expiry and nonce check out.
-
-**Known defect in the database library, worked around.** At the pinned commit,
-`php-db/phpdb-pgsql` runs `SELECT LASTVAL()` after every statement to fetch a "last generated
-value". In a session that has not used a sequence that query fails; the library swallows the
-exception, but PostgreSQL has already aborted the surrounding transaction, so its writes are
-silently discarded and the final `COMMIT` becomes a `ROLLBACK`. `PostgresConnection` overrides
-that lookup; `DatabaseTest::testReadingInsideATransactionDoesNotDiscardItsWrites` and the test
-after it fail without the override. **Do not `composer update php-db/*` without running the
-Integration suite**, and report the defect upstream.
-
-**The OpenAPI validator is Clavia's own** (`Adapter\Primary\Http\OpenApi`, replacing
-`phayne-io/openapi-psr7-validator`, whose security and response validation did not work).
-OpenAPI 3.0.x only; it loads a document once and validates PSR-7 messages against it:
-
-- `Document` (`fromYamlFile|fromYaml|fromJson`) → `DocumentReader` checks the whole document
-  on load and builds `Operation`s (`Parameter`, `RequestBody`, `Responses`/`Response`,
-  `Header`, `Content`, `MediaType`, `SecurityRequirement`). `Node` carries each value with its
-  JSON pointer, so every `InvalidDocument` names its place (`#/paths/~1users/get/…`);
-  `References` follows local `$ref`s only, refusing siblings and loops.
-- `Schema\SchemaCompiler` → `Schema` (references through `SchemaSlot`, so recursive schemas
-  work); `Schema\SchemaValidator` collects every violation (`SchemaViolation`: pointer +
-  message), with `Direction` for `readOnly`/`writeOnly`, `Formats` for the formats it knows and
-  `JsonValue` for JSON equality. Instances are decoded with objects as `stdClass`, so `{}` and
-  `[]` differ.
-- `Routing\Router` + `PathTemplate`: exact, case-sensitive methods; literal segments before
-  templated ones; server base paths; unreserved percent-encodings normalised.
-- `Validation\RequestValidator` → `ValidatedRequest` (parameters coerced by
-  `ParameterDecoder`, the body parsed) or a `RequestRejected`: `MalformedRequest`,
-  `UnsupportedMediaType`, `RequestDoesNotMatch`, each with every `Violation` (location, name,
-  pointer, message); `OperationNotFound` otherwise. `Validation\ResponseValidator` throws
-  `ResponseDoesNotMatch`. The HTTP status of each rejection is the adapter's choice
-  (`Management\ContractViolation`).
-
-Its rules: **what it cannot enforce, it refuses at load** — unknown keywords (a misspelt
-`minLenght`), 3.1 forms, external references, non-JSON media types, parameter styles other
-than `form`/`simple`, object parameters, `content` parameters, server variables — rather than
-silently dropping a constraint; **every violation is reported**, never just the first;
-**no message repeats the value at fault**; **coercion is exact** (`"02"` is not an integer);
-**strict where the specification is loose** — a query parameter the operation does not
-describe, a body sent to an operation that takes none, and a single value sent twice are
-all refused.
-
-Running it: `cp .env.example .env`, `./setup-ssl.sh`, `make up install migrate seed`, then
-`https://auth.{domain}/healthz`. Tooling runs in the container: `make check`, `make config`,
-`make migrate`, `make db-status`, `make seed`, `make authorize-url`. To walk the flow, open the
-link `make authorize-url` prints and sign in as `dev@{domain}` / `devpassword`. `make seed`
-also prints the token request for the development machine client, which holds every
-Management API scope.
-
-## How the migration works
-
-- **The Python code is the specification, not the source.** Port *behaviour*, not structure:
-  Authlib subclasses, FastAPI dependencies and SQLAlchemy models do not map onto a hexagonal PHP
-  codebase and must not be transliterated. Read the Python module, its tests and the matching
-  paragraph of `../Clavia Python/clavia/CLAUDE.md`, then design the PHP feature from the domain out.
-- **The Python tests are a checklist of behaviours, not a contract.** Port the *intent* of each
-  test; names, request/response shapes and error bodies follow the best PHP/RFC design. Extra
-  unit tests for the domain come on top.
-- **The HTTP contract is not frozen to Python.** Paths, JSON shapes and error bodies are designed
-  cleanly (OAuth2/OIDC endpoints stay RFC-exact). The dashboard follows the API where the two
-  differ, rather than the API being bent to fit it.
-- **Port the final design, not the history.** The Python project changed its mind along the way
-  (client scope column dropped, `client_id` became the primary key, `audience`/`sid`/`amr` added
-  later). Each step creates its tables and models directly in their final shape.
-- **One step = one end-to-end feature**, merged only when green: acceptance tests, unit tests,
-  Psalm, PHPCS and the architecture check.
-
-## Decisions (made 2026-11-20)
-
-| Topic | Decision |
+| Command | What it does |
 |---|---|
-| Language | PHP 8.5, `declare(strict_types=1)` everywhere |
-| HTTP | **Mezzio** (PSR-7/11/15, laminas-servicemanager, FastRoute) — as a primary adapter only |
-| Architecture | **Strict hexagonal** (ports & adapters) + DDD tactical patterns, enforced by tooling |
-| Adapter naming | `Clavia\Adapter\Primary` (driving: HTTP, CLI) and `Clavia\Adapter\Secondary` (driven: persistence, Redis, crypto…) — Cockburn's terms; no `Ui` / `Infrastructure` |
-| OAuth2/OIDC engine | **Own implementation, inside Clavia**, written from the RFCs in the domain/application layers. No league/oauth2-server, no external protocol library |
-| Persistence | PostgreSQL through **`php-db/phpdb-pgsql`** (on `php-db/phpdb`), behind repository ports |
-| Migrations | Plain SQL files, **written step by step** as each feature needs its tables — no upfront schema |
-| Runtime | **PHP-FPM behind Caddy** (share-nothing; no worker mode) |
-| Short-TTL state | Redis (`ext-redis`), behind store ports |
-| Outbound HTTP | **Guzzle** as the PSR-18 client, injected by interface with PSR-17 factories (decided 2026-11-20) |
-| Outbound mail | **Symfony Mailer**'s ESMTP transport behind the `Mailer` port; console and `none` backends of our own (decided 2026-11-21) |
-| Dashboard | A **Next.js** application in its own repository (`clavia-dashboard`), a backend for frontend served at `management.{domain}/dashboard/`, styled with Tailwind v4 and shadcn/ui in the logo's colours (decided 2026-11-21; it replaced the React dashboard copied from the Python project) |
-| Auth pages | **laminas-view** PHP templates through `mezzio/mezzio-laminasviewrenderer` — no Twig, no other template language, no JavaScript — see "Auth pages" |
-| Namespace / licence | `Clavia\` · BSD-3-Clause |
-| Existing data | None to carry over — the PHP schema is free to be designed cleanly |
+| `make up` / `make down` | Start or stop Caddy, PHP-FPM, PostgreSQL (development and test) and Redis |
+| `make install` | `composer install` |
+| `make migrate` / `make db-status` | Apply pending migrations / list them |
+| `make seed` | Development data: user, clients, the Management API, a signing key, the dashboard client (`clavia seed-dev`) |
+| `make authorize-url` | An authorization URL with a fresh PKCE pair, and the `curl` that redeems the code |
+| `make config` | Every `CLAVIA_*` setting as the server sees it |
+| `make check` | `composer check`: PHPCS, Psalm, deptrac, PHPUnit |
+| `make test` / `lint` / `analyse` / `arch` | One part of `check` |
+| `make shell` | A shell in the PHP container |
 
+`composer check` runs `cs-check` (PHPCS, PSR-12, 120 columns), `static-analysis` (Psalm level 1,
+no baseline), `arch` (deptrac, failing on uncovered classes) and `test` (PHPUnit 12). CI runs
+the same command against PostgreSQL 17 and Redis 7.
 
-## Hexagonal architecture — the rules
+The console is `bin/clavia`:
 
-Three rings. Dependencies point inward only; nothing in an inner ring knows an outer one exists.
+| Command | Purpose |
+|---|---|
+| `config` | Print the settings |
+| `db:migrate`, `db:status` | Schema migrations |
+| `secrets:generate-key` | A value for `CLAVIA_SECRET_ENCRYPTION_KEY` |
+| `keys:generate`, `keys:rotate`, `keys:list` | Signing keys (the `postgres` backend only) |
+| `management-api:register`, `management-api:scopes` | Register the Management API; list its scopes |
+| `clients:create-m2m [--third-party]`, `clients:grant` | Machine clients and their grants on an API |
+| `roles:create`, `roles:assign`, `roles:list` | Roles, including the first administrator |
+| `audit:purge` | Delete audit events older than `CLAVIA_AUDIT_RETENTION_DAYS`; run daily |
+| `mail:outbox` | The last messages of the `console` mail backend (development) |
+| `seed-dev`, `authorize-url` | Development only |
+
+`bin/clavia` refuses every command on an invalid configuration (exit 78), and prints
+`Settings::warnings()` to stderr.
+
+## Repository map
+
+```
+bin/clavia                  console entry point
+config/                     Mezzio entry files: config, container, pipeline, routes
+public/index.php            HTTP entry point (PHP-FPM); public/auth/static/ served by Caddy
+src/
+  Domain/                   pure PHP: aggregates, value objects, policies, repository interfaces
+    Shared/  Identity/  Client/  Connection/  ResourceServer/  Rbac/  Consent/
+    OAuth2/  Oidc/  Authentication/  Audit/
+  Application/              use cases, by context, and the technical ports
+    OAuth2/  Oidc/  Authentication/  Management/  Connection/  Clients/  Audit/
+    Event/  Secrets/  Development/  Port/
+  Adapter/
+    Primary/                what calls the application
+      Http/{OAuth2,Oidc,Auth,Management,OpenApi,Shared}/   Cli/
+    Secondary/              what the application calls
+      Persistence/{PhpDb,Migrations}/  Redis/  Signing/{Postgres,Remote,Jose}/
+      Crypto/  Mail/  Http/  IdentityProvider/  Events/  System/
+  Configuration/            the typed CLAVIA_* settings
+  Bootstrap/                composition root: ConfigProvider and one factory per service
+templates/                  server-rendered pages: layout/, auth/, error/, partial/
+migrations/                 NNNN_name.sql, forward only
+docs/openapi/               management-api.yaml, the Management API's contract
+docs/SECURITY-REVIEW.md     review of every adapter against the invariants
+conformance/                OpenID Foundation conformance: results and how to run them
+test/{Unit,Integration,Acceptance,Support}/
+docker/php/                 the PHP-FPM image
+Caddyfile, docker-compose.yml, setup-ssl.sh, Makefile
+```
+
+## Architecture
+
+### The hexagon
+
+Three rings. Dependencies point inward only, and nothing in an inner ring knows an outer one
+exists.
 
 ```
             primary adapters                                  secondary adapters
  ┌──────────────────────────────┐                    ┌──────────────────────────────┐
- │ Http (Mezzio handlers,       │                    │ Persistence (phpdb-pgsql)    │
- │   middleware, HTML pages)    │                    │ Redis stores                 │
- │ Cli (console commands)       │                    │ Signing (postgres, KMS…)     │
- └──────────────┬───────────────┘                    │ Crypto, Mail, HttpClient,    │
-                │ calls                              │ Clock, Random, Deferred      │
+ │ Http: handlers, middleware,  │                    │ Persistence (phpdb-pgsql)    │
+ │   server-rendered pages      │                    │ Redis stores                 │
+ │ Cli: console commands        │                    │ Signing (postgres, KMS…)     │
+ └──────────────┬───────────────┘                    │ Crypto, Mail, HTTP client,   │
+                │ calls                              │ events, clock, random        │
         ┌───────▼────────────────────────────┐       └──────────────▲───────────────┘
         │ Application                        │                      │ implements
-        │   use cases (inbound ports)        │──── outbound ports ──┘
+        │   use cases                        │──── outbound ports ──┘
         │   ┌────────────────────────────┐   │
         │   │ Domain                     │   │
         │   │ aggregates, value objects, │   │
-        │   │ policies, domain services, │   │
+        │   │ policies, domain events,   │   │
         │   │ repository interfaces      │   │
         │   └────────────────────────────┘   │
         └────────────────────────────────────┘
 ```
 
-### Layout
+Two namespaces sit outside the rings. `Clavia\Configuration` is the typed settings: plain data
+with no dependency, readable by adapters and the composition root but never by the domain or
+the application, which receive the values they need as constructor arguments.
+`Clavia\Bootstrap` is the composition root: the only code that reads the container, and the
+only code allowed to import every layer.
 
-```
-src/
-  Domain/                     # pure PHP. No vendor import at all — not even PSR interfaces.
-    Shared/                   #   Clock, RandomSource, SecretGenerator, Digest, Url, Scope(Set),
-                              #   Audience, InvalidValue
-    Client/                   #   applications: Client, RedirectUri, ClientAuthMethod, ownership
-    Identity/                 #   User, Connection, ExternalIdentity, credentials, linking policy
-    ResourceServer/           #   APIs, Permission, ClientGrant
-    Rbac/                     #   Role, assignments, effective permissions
-    OAuth2/                   #   AuthorizationRequest, Pkce, AuthorizationCode, AccessToken,
-                              #   RefreshToken + family, DeviceAuthorization, Consent, OAuth2Error
-    Oidc/                     #   IdTokenClaims, LogoutToken, SigningKey, Nonce, discovery metadata
-    Authentication/           #   Session, LoginState, Amr, Totp, RecoveryCode, PasswordlessChallenge,
-                              #   throttling policy
-  Application/                # orchestration. Imports Domain only.
-    <Context>/<UseCase>/      #   Command|Query (readonly DTO) + Handler + Result — one folder each
-    Port/                     #   technical outbound ports: TokenSigner, SecretCipher, PasswordHasher,
-                              #   TransactionManager, SchemaMigrator, Mailer, OutboundHttp,
-                              #   OutboundUrlPolicy, DeferredTasks, *Store (Redis-shaped state)
-  Adapter/                    # everything that touches the outside world, in two kinds.
-    Primary/                  #   primary (driving) adapters: what calls the application.
-                              #   Calls Application use cases only.
-      Http/OAuth2/  Http/Oidc/  Http/Auth/  Http/Management/  Http/Shared/ (middleware)
-      Cli/
-    Secondary/                #   secondary (driven) adapters: what the application calls.
-                              #   Implements Domain + Application ports.
-      Persistence/PhpDb/      #     Database (the one door to PostgreSQL), repositories, mappers
-      Persistence/Migrations/ #     SqlFileMigrator
-      Redis/  Signing/  Crypto/  Mail/  HttpClient/  System/ (clock, random, deferred)
-  Configuration/              # the typed CLAVIA_* settings. Plain data; depends on nothing.
-  Bootstrap/                  # composition root: ConfigProvider + one factory per service.
-config/                       # Mezzio entry files: config, container, pipeline, routes
-templates/                    # auth pages: laminas-view layout/, auth/ (one per page), partial/
-public/                       # index.php, auth/static/ (auth.css, icon — served by Caddy)
-migrations/  docs/
-test/
-  Unit/ (Domain, Application with in-memory adapters)   Integration/ (each secondary adapter)
-  Acceptance/ (ported Python tests, through the PSR-15 pipeline)
-  Support/ (Fake/ doubles, Contract/ shared suites, the three base test cases)
-```
+### Hexagonal architecture — the rules
 
-### Rules — a violation is a build failure, not a review comment
+A violation is a build failure, not a review comment.
 
-1. **Domain imports nothing** outside `Clavia\Domain` and PHP core. No Mezzio, PSR-7, phpdb,
-   Redis, `new DateTimeImmutable()` for "now", `random_bytes()`, `getenv()`. Time and randomness arrive
-   through `Clock` and `RandomSource`.
-2. **Application imports Domain only.** Use cases receive a Command/Query of scalars and value
-   objects and return a Result or throw a domain exception. They never see a PSR-7 request, a
-   session cookie, an SQL row or an HTTP status.
-3. **Repository interfaces live with their aggregate in Domain**; purely technical ports live in
-   `Application/Port`. Ports speak the domain's language and express intent, never mechanism:
-   `RefreshTokenRepository::lockForRedemption(Digest)` — not `selectForUpdate()`.
-4. **Adapters never call each other.** An HTTP handler does not touch a repository or Redis; a
-   repository does not sign tokens. Cross-cutting needs go through a use case or a port.
-5. **Primary adapters are translators.** A Mezzio handler does exactly: parse and validate the
-   transport shape → build a Command → call one use case → map Result/exception to a response.
-   Protocol decisions (which OAuth2 error, whether consent is needed, scope narrowing) are domain
-   or application code; *encoding* them (redirect vs JSON, `WWW-Authenticate`) is the adapter's.
-6. **The composition root is the only place that knows everything.** Wiring is in
-   `Clavia\Bootstrap` (ConfigProvider and factories) and the `config/` entry files; nothing
-   else in `src/` reads the container.
-7. **Transactions are an application concern**: `TransactionManager::transactional(callable)`
-   wraps a use case; the adapter decides what that means.
-8. **Domain objects are immutable where they can be** (`readonly` classes, PHP 8.5 `clone with`),
-   always valid (constructors/named constructors enforce invariants), and never anaemic: the rule
-   lives on the aggregate that owns the data.
-9. **Each port has an in-memory fake** in `test/Support`, and each real adapter has a contract
-   test that runs the same suite against the fake and the real thing.
+1. **The domain imports nothing** outside `Clavia\Domain` and PHP's core: no PSR interface,
+   no vendor class, no `new DateTimeImmutable()` for "now", no `random_bytes()`, no
+   `getenv()`. Time and randomness arrive through the `Clock` and `RandomSource` ports in
+   `Domain\Shared`.
+2. **The application imports the domain only.** A use case receives scalars and value
+   objects and returns a result, or throws a domain exception. It never sees a PSR-7 request,
+   a cookie, an SQL row or an HTTP status.
+3. **Repository interfaces live with their aggregate in the domain.** Technical ports live in
+   `Application\Port`. Ports speak the domain's language and express intent, never mechanism:
+   `lockForRedemption(Digest)`, not `selectForUpdate()`.
+4. **Adapters never call each other.** A handler does not touch a repository or Redis; a
+   repository does not sign tokens. A cross-cutting need goes through a use case or a port.
+5. **Primary adapters translate.** A handler parses and validates the transport shape, calls
+   one use case, and maps the result or exception to a response. Protocol decisions (which
+   OAuth error, whether consent is needed, how scope narrows) belong to the domain or the
+   application. Encoding them (redirect or JSON, `WWW-Authenticate`) belongs to the adapter.
+6. **The composition root is the only place that knows everything.** Wiring lives in
+   `Clavia\Bootstrap` and `config/`; nothing else in `src/` reads the container.
+7. **Transactions are an application concern.** A use case that must be atomic wraps itself in
+   `TransactionManager::transactional()`; the adapter decides what that means.
+8. **Domain objects are immutable where they can be** (`readonly`, `clone with`), always valid
+   (named constructors enforce invariants), and never anaemic: a rule lives on the aggregate
+   that owns its data.
+9. **Each port has an in-memory double** in `test/Support/Fake`, and each real adapter passes
+   the same contract suite as its double.
 
 ### Enforcement
 
-- **deptrac** (`deptrac.yaml`; layers Domain, Application, PrimaryAdapter, SecondaryAdapter, Configuration,
-  Bootstrap, plus a Vendor layer that Domain, Application and Configuration may not touch) runs
-  in `composer check` and CI. Adding an exception to its config requires a note in this file.
-- **Psalm** at level 1, no baseline. **PHPCS** PSR-12. **PHPUnit** 12.
-- `DependencyRuleTest` asserts that no file under `src/Domain` has a `use` statement outside
-  `Clavia\Domain` (and likewise for `Application` and `Configuration`) — the cheap, unarguable
-  version of rules 1 and 2.
+- **deptrac** (`deptrac.yaml`): layers Domain, Application, PrimaryAdapter, SecondaryAdapter,
+  Configuration, Bootstrap, and a Vendor layer that Domain, Application and Configuration may
+  not touch. The two kinds of adapter never depend on each other. A new vendor namespace joins
+  the Vendor layer; an exception to the ruleset needs a note here.
+- **`DependencyRuleTest`** checks the `use` statements of `src/Domain`, `src/Application` and
+  `src/Configuration`: the cheap, unarguable version of rules 1 and 2.
+- **Psalm** level 1 with no baseline; **PHPCS** PSR-12.
 
-## What changes from Python, and why it matters
+### Composition root and request lifecycle
 
-| Python | PHP | Consequence |
-|---|---|---|
-| Authlib `AuthorizationServer` + subclasses closing its gaps | Own protocol core in `Domain/OAuth2` | The "Authlib gaps" list becomes plain invariants. No per-request server object, no threadpool. |
-| FastAPI routers + `Depends` | Mezzio handlers + PSR-15 middleware per surface | Four pipelines (`/oauth2`, `/oidc`, `/auth`, `/api/v1`), each with its own authentication middleware. |
-| Pydantic, `extra="forbid"` | OpenAPI document + Clavia's own validator (`Adapter\Primary\Http\OpenApi`, `additionalProperties: false`) at the edge, then typed Commands | The Management API is contract-first: `docs/openapi/management-api.yaml` is the source of truth. Errors are RFC 9457 problem documents, not FastAPI's `{"detail": …}`. |
-| SQLAlchemy models + Alembic | Aggregates + phpdb-pgsql repositories + SQL migrations | Models are not table-shaped; mappers live in the adapter. |
-| `pydantic-settings` | A typed, validated `Settings` object built once in the composition root | Same `CLAVIA_*` names and the same validators (e.g. console mail refused outside development). |
-| Jinja2 | laminas-view PHP templates (layout, pages, partials) behind Mezzio's `TemplateRendererInterface` | No Twig. Escaping is explicit (`escapeHtml`/`escapeHtmlAttr`) and tested. Still **no JavaScript** on the auth origin. |
-| `BackgroundTask` (back-channel logout) | `DeferredTasks` port; FPM adapter runs after `fastcgi_finish_request()` | Must work without a queue; keep the port so a queue adapter can replace it. |
-| `httpx` + `MockTransport` | Guzzle, injected as a PSR-18 `ClientInterface`; `FakeHttpClient` in tests | `OutboundUrlPolicy` (SSRF guard, Step 13) checks every outbound URL, and `PinCheckedAddresses` makes the request to the addresses it checked (`CURLOPT_RESOLVE`). |
-| `cryptography` | `ext-openssl`: RSASSA-PKCS1-v1_5/SHA-256, AES-256-GCM with AAD | JWS assembled by hand, as in Python. |
-| `pwdlib[bcrypt]` | `password_hash(PASSWORD_BCRYPT)` behind `PasswordHasher` | |
-| `joserfc` | `web-token/jwt-library` — **verification and JWK handling only** (`JoseSignatureVerifier`) | Never used to sign. |
-| `qrcode` (SVG) | `bacon/bacon-qr-code` SVG writer | Server-side only. |
-| `smtplib` | `symfony/mailer` — the ESMTP transport and `symfony/mime` only, behind the `Mailer` port | No Messenger, no bus: a sign-in email is sent while the person waits for the answer. |
-| Typer CLI | `symfony/console` commands in `Adapter/Primary/Cli`, run by `bin/clavia` | Same command names: `clavia seed-dev`, `keys rotate`, … |
-| uvicorn `--forwarded-allow-ips` | `CLAVIA_TRUSTED_PROXIES`, applied when the request is built | Empty by default: over FastCGI the web server reports the scheme itself. |
-| pytest, `db-test` :5434, Redis db 1 | PHPUnit, same databases, real migrations | Acceptance tests run the PSR-15 pipeline in-process. |
+- **HTTP**: `public/index.php` builds the container (`config/container.php`,
+  laminas-servicemanager), pipes the middleware (`config/pipeline.php`) and the routes
+  (`config/routes.php`), runs the request, then calls `fastcgi_finish_request()` and runs the
+  deferred tasks (`System\AfterResponseTasks`).
+- **The pipeline**: `ErrorHandler` → `AuditContextMiddleware` → routing → 405 → dispatch →
+  404. There is no implicit `HEAD` or `OPTIONS`: a route answers the methods it lists. Mezzio's
+  `ImplicitHeadMiddleware` is absent on purpose, because it would answer `HEAD
+  /oauth2/authorize` by running the handler, which mints a code.
+- **Per-surface authentication** is attached to route groups in `config/routes.php`, never
+  piped globally. `ManagementApiMiddleware` fronts every `/api/v1/*` route.
+- **Services**: `Bootstrap\ConfigProvider` maps each service to one factory class in
+  `Bootstrap\Container`. No closures in configuration, no autowiring, no service location.
+  Console commands are listed in `ConfigProvider::CONSOLE_COMMANDS`; event subscribers in
+  `ConfigProvider::EVENT_SUBSCRIBERS`.
+- **Settings**: `Configuration\Settings` is a readonly class whose constructor parameters *are*
+  the `CLAVIA_*` variables (`rootDomain` ⇄ `CLAVIA_ROOT_DOMAIN`). `Settings::fromEnvironment()`
+  coerces, bounds-checks (`#[Range]`) and cross-checks them. `Bootstrap\EnvironmentVariables`
+  merges the process environment over `.env`.
+- **Errors**: PHP runs with `error_reporting(E_ALL)`, and the pipeline turns every warning and
+  notice into an exception. An uncaught error is logged (monolog to stderr) under a 12-character
+  reference sent in `X-Error-Reference`, and the client gets a bare 500 that describes nothing,
+  in every environment.
+- **Connections are lazy.** Building the container opens neither PostgreSQL nor Redis, and
+  `/healthz` touches neither.
 
-PHP 8.5 features to use on purpose: the `Uri\Rfc3986\Uri` extension for redirect-URI and issuer
-parsing (exact-match comparison must not depend on `parse_url`), `clone with` for immutable value
-objects, `#[\NoDiscard]` on results that must be checked (signature verification, consume/spend
-operations), the pipe operator where it clarifies a transformation chain.
+## Hosts, surfaces and storage
 
-### Risk to handle first: the database layer
+### Hosts
 
-`php-db/phpdb-pgsql` (https://github.com/php-db/phpdb-pgsql, read 2026-11-20): branch `0.1.x`,
-allows PHP 8.3–8.5, requires `php-db/phpdb ^0.6.0`, has a test suite (PHPUnit + Infection) — but
-it is **pre-1.0 with no tagged release** and `minimum-stability: dev`. Clavia's hardest
-correctness properties (single-use codes, refresh-token rotation under `SELECT … FOR UPDATE`,
-family revocation) sit on it. Step 1 therefore pins an exact commit in `composer.lock`, and
-proves with integration tests that transactions, row locking and `RETURNING` behave as needed
-before anything depends on them. Persistence is behind ports, so an API break in a 0.x release
-touches `Adapter/Secondary/Persistence/PhpDb` and nothing else.
+Clavia never hard-codes a domain. `CLAVIA_ROOT_DOMAIN` names it, and every host is derived from
+it. Two hosts must exist wherever Clavia runs, and their separation is a security property:
 
-## Auth pages
+- **`auth.{domain}`**: OAuth 2.1, OpenID Connect and the sign-in pages. The session cookie is
+  host-only (no `Domain` attribute), and no JavaScript runs on this origin. Credentials are
+  typed and tokens minted here, and nothing else shares it.
+- **`management.{domain}`**: the Management API at `/api/v1/*`, and the dashboard at
+  `/dashboard`. Keeping it apart means an XSS on the sign-in UI cannot reach the administrative
+  session, and the reverse.
 
-The pages on `auth.{domain}` (login now; MFA, consent, device and passwordless later) are
-**server-rendered HTML with no JavaScript**, written as laminas-view PHP templates
-(`.phtml`) and rendered through `mezzio/mezzio-laminasviewrenderer`. No Twig, no other
-template language, no front-end framework. (Decided 2026-11-20, replacing the earlier
-"no template engine" line: laminas-view is PHP itself, used as Mezzio intends.)
+There is no `api.{domain}`: the Management API is a path on the dashboard's origin, so the
+dashboard's calls need no CORS. That does not change who may call it: any client holding a
+valid access token. In development the domain is under `.test` (`clavia.test`), which RFC 6761
+reserves and every resolver answers from `/etc/hosts`. Never `.local`, which macOS resolves
+through Bonjour at seconds per lookup, and never a real suffix such as `.dev`.
 
-- `templates/layout/page.phtml` + one template per page (`templates/auth/*.phtml`, and
-  `templates/error/page.phtml` for every error shown to a browser) + reusable partials
-  (`templates/partial/*.phtml`: `alert`, `csrf`, `field`; later `button`,
-  `connection-list`). A repeated block becomes a partial, never a copy. Names are namespaced:
-  `layout::page`, `auth::login`, `error::page`, `partial::field`.
-- Templates print and loop; the handler passes a ready-made view model (`HtmlPage`, built for
-  the login page by `LoginPages` and for errors by `ErrorPage::toHtmlPage()`).
-- `PageRenderer` in `Adapter/Primary/Http/Shared` renders them with the per-page CSP and the
-  common headers; `AuthPageResponder` adds the CSRF cookie to auth pages. Every value is
-  escaped by the template; `AuthPagesEscapingTest` proves it for every page.
-- One stylesheet, `public/auth/static/auth.css` (served at `/auth/static/auth.css`), copied
-  from the Python project; light/dark through custom properties; the theme toggle is a POST
-  that sets a cookie.
-- No JavaScript on this origin is a security property, not a style choice.
-
-The management dashboard is a separate concern, in its own repository (`clavia-dashboard`; see
-"Dashboard as a Next.js application"). It is a client of the Management API like any other, and
-never shares this origin.
-
-## Invariants carried over
-
-Copied from `../Clavia Python/clavia/CLAUDE.md` and adapted to this codebase. They follow from the
-RFCs and from mistakes already made once; violating one is a security bug, not a style issue.
+**Caddy** terminates TLS (mkcert in development, a wildcard for `*.{domain}`), serves
+`public/auth/static/*` itself, sends everything else on `auth.*` and `/api/v1/*` to PHP-FPM
+(`index.php` is the only script it runs), and reverse-proxies `/dashboard` to
+`CLAVIA_DASHBOARD_UPSTREAM` with the `Host` header kept. No `X-Forwarded-*` header is trusted
+unless `CLAVIA_TRUSTED_PROXIES` names the proxy, and the host never comes from a header.
 
 ### Four surfaces, four authentication mechanisms
 
-| Namespace   | Purpose                                              | Caller authenticates with |
-|-------------|-------------------------------------------------------|---------------------------|
-| `/oauth2/*` | Authorization server (authorize, token, introspect…) | Client credentials / PKCE |
-| `/oidc/*`   | OIDC endpoints (discovery, jwks, userinfo, logout)   | Bearer token, or public   |
-| `/auth/*`   | Interactive login/logout/MFA, serves the login UI    | Browser session cookie    |
-| `/api/v1/*` | Management API (CRUD, RBAC, audit)                   | Bearer access token       |
+| Path | Purpose | The caller proves itself with |
+|---|---|---|
+| `/oauth2/*` | Authorization server: authorize, token, introspect, revoke, device | Client credentials, PKCE |
+| `/oidc/*`, `/.well-known/*` | Discovery, JWKS, userinfo, logout | A bearer token, or nothing |
+| `/auth/*` | Sign-in, second factor, consent, device approval, sign-out | The browser session cookie |
+| `/api/v1/*` | Management API | A bearer access token for the Management API |
 
-Keeping them separate is the central design constraint. The failure mode to avoid: authenticating
-`/api/v1/*` with the `/auth/*` session cookie. The Management API is a machine plane reachable
-only with an access token — the dashboard is an OAuth2 client like any other, not a trusted first
-party with cookie access. In this codebase that means authentication middleware is attached **per
-route group** in `config/routes.php`, never piped globally.
-
-### Protocol invariants
-
-- PKCE is mandatory with `S256`; `plain` does not exist. The one exception is per client and
-  off by default: a confidential client registered with `require_pkce: false` may omit PKCE from
-  an OpenID Connect request carrying a `nonce` (OAuth 2.1 §7.5.1); the code is then bound by the
-  nonce, and a `code_verifier` presented for it is `invalid_grant`. A public client can never be
-  relieved of PKCE (domain rule and database check).
-- Authorization codes are single-use, short-lived, bound to `client_id`, `redirect_uri`, and
-  `code_challenge`. Redirect URIs are pre-registered and matched exactly.
-- Refresh token rotation issues a new token on every use; replay of a consumed token revokes the
-  whole token family. No reuse grace period.
-- Client Credentials is for confidential clients only, issues no refresh token, and a token from
-  it has no subject — every surface that answers questions about a person must refuse it.
-- A scope means nothing without an audience — check `aud` before checking scope.
-- A permission belongs to an API (`read:users` on two different APIs are different permissions),
-  and a client holds none of its own: no scope column on the client. Narrow scope at token
-  issuance — the API's declared permissions, then the user's effective permissions (or, for a
-  machine, its client grant) — and re-check at redemption, not at authorization time.
-- A TOTP code is single-use: spend the matched time step, don't just accept-and-forget.
-- Tokens are signed (RS256/ES256) and verified via JWKS; retired keys stay published until every
-  token they signed has expired.
-- Passwords and client secrets are hashed (bcrypt); authorization codes and access tokens are
-  stored as SHA-256 digests, not encrypted or hashed-with-salt — they need indexed lookup.
-- `prompt`, `max_age`, `request` and `request_uri` are part of the authorize decision, made once:
-  no session, a session through a connection the client does not enable, `prompt=login` /
-  `select_account`, or `max_age` exceeded all mean "the person must be seen";
-  `prompt=none` then answers `login_required`. Request objects are refused
-  (`request_not_supported` / `request_uri_not_supported`).
-- Discovery states every field whose spec default differs from what the server does, and a test
-  fetches every endpoint it advertises.
-
-### Browser-facing invariants
-
-- The login page is on the same origin as `/oauth2/authorize`, the session cookie has no
-  `Domain` attribute, and there is **no JavaScript** on that origin.
-- Never put a post-login redirect target in a URL parameter; hold it server-side (Redis) behind
-  an opaque handle, and re-validate whatever it resolves to before using it as a `Location` —
-  even when it came from our own store.
-- Every `/auth/*` state change is a POST with a CSRF token.
-- **The auth pages' CSP is built per page, not a constant.** Chromium applies `form-action` to a
-  form submission's whole redirect chain, and a successful sign-in ends at the application's
-  `redirect_uri`; a page tied to an authorization request therefore lists that client's origins
-  next to `'self'`, and a page tied to nothing gets `'self'` alone. Leave `'self'` on its own and
-  Chromium/Brave block the final hop, leaving the person on a stale login page whose CSRF token
-  has just been spent.
-- Social login: resolve identity by `(provider, subject)`, never by email; only use a *verified*
-  email to link to an existing account; pair `state` with a cookie so the callback can tell the
-  browser that started the flow from any other. Provider errors are never echoed.
-- Every URL the server fetches on an operator's say-so (OIDC connection discovery and endpoints,
-  back-channel logout URIs) goes through the outbound-URL policy: https only, never a
-  non-global address as a literal or as resolved, checked at registration *and* at send time.
-- Caddy sets `Cache-Control: no-store` on everything under `auth.*` except discovery, the JWKS
-  and static assets, whose cacheability the application owns (the JWKS max-age is a
-  rotation-safety number, not an HTTP detail).
+Keeping them apart is the central design constraint. The failure to avoid is authenticating
+`/api/v1/*` with the `/auth/*` session cookie: the Management API is a machine plane, reachable
+only with an access token, and the dashboard is an OAuth client like any other.
 
 ### Storage split
 
-- **PostgreSQL** — anything that must survive a restart, be auditable, or be consumed exactly once:
-  users, clients, APIs, roles/permissions, authorization codes, access and refresh tokens, audit
-  logs, signing-key metadata.
-- **Redis** — short-TTL material: browser sessions, failed-login counters, pending MFA challenges,
-  the `state`/PKCE verifier of an outbound social login, device/user codes, magic-link/OTP tokens.
+- **PostgreSQL** holds whatever must survive a restart, be audited, or be consumed exactly
+  once: users, clients, APIs, roles, connections, consents, authorization codes, access and
+  refresh tokens, signing keys, the audit trail.
+- **Redis** holds short-lived material: browser sessions, sign-in throttling, pending second
+  factors, sign-in and consent handles, outbound social-login state, device and user codes,
+  passwordless challenges, nonces, cached JWKS and public keys.
 
-Authorization codes and refresh tokens *look* like they belong in Redis and deliberately don't:
-single-use enforcement needs an atomic `SELECT ... FOR UPDATE`, and refresh-token replay detection
-needs to survive longer than any sensible TTL.
+Authorization codes and refresh tokens look like Redis material and deliberately are not:
+single use needs a `SELECT … FOR UPDATE`, and replay detection must outlive any sensible TTL.
 
-Authorization codes and refresh tokens are the reason `TransactionManager` and row locking are
-proven in Step 1 before any feature uses them.
+## The domain
+
+One namespace per bounded context under `src/Domain`, each with its own aggregates, value
+objects, repository interfaces, and an `Event` namespace for its domain events.
+
+| Context | Holds | Key rules |
+|---|---|---|
+| `Shared` | `Clock`, `RandomSource`, `SecretGenerator`, `Digest`, `Scope`/`ScopeSet`, `Audience`, `Url`, `UuidId`, `Base64Url`, `PageRequest`/`Page`, `InvalidValue`, `AlreadyExists`, `DomainEvent` | Secrets are 43-character tokens; codes and tokens are stored as their SHA-256 `Digest`; URLs are kept byte for byte and compared exactly |
+| `Identity` | `User`, `Profile`, `PasswordPolicy`, `ExternalIdentity`, `AssertedIdentity` | Every account belongs to one connection; an address is unique within it; a changed address is unverified |
+| `Client` | `Client`, `ClientId`, `ClientType`, `ClientAuthMethod`, `GrantType`, `ResponseType`, `Ownership`, `BackChannelLogout` | Type, auth method and secret agree; the code flow needs a redirect URI; `client_credentials` needs a confidential client; `tpc_…` ids are third-party |
+| `Connection` | `Connection`, `ConnectionName`, `ConnectionStrategy` (database, social, OIDC, passwordless), `OidcSettings`, `BuiltInConnection` | The default pool, social providers and `email` are switched, never created or deleted |
+| `ResourceServer` | `ResourceServer` (an API: `rs_…` id, audience, permissions), `Permission`, `ClientGrant` | A system API (the Management API) can be renamed, never deleted, always enforces roles |
+| `Rbac` | `Role`, `GrantedPermission`, `RoleRepository` (also the assignments) | A person holds a permission only through a role; `permissionsHeld(user, API)` is the question issuance asks |
+| `Consent` | `UserConsent`, `ConsentPolicy`, `PendingConsent` | `ConsentPolicy` alone decides who is asked |
+| `OAuth2` | `AuthorizationCode`, `AccessToken`, `RefreshToken` (families), `DeviceAuthorization`, `UserCode`, `CodeChallenge`/`CodeVerifier` (S256), `Prompt`, `MaxAge`, `OAuth2Error`/`ErrorCode`, `BearerTokenError` | Single use, exact matching, rotation with replay revocation |
+| `Oidc` | `SigningKey`, `SigningAlgorithm`, `PublicJwk`, `Nonce`, `OidcScope`, `IdentityClaims`, `IdTokenClaims`, `LogoutTokenClaims` | One active key; retired keys stay published until their tokens expire |
+| `Authentication` | `Session`, `AuthenticationMethod` (RFC 8176 `amr`), `AuthenticationContext`, `LocalPath`, `LoginState`, `MfaChallenge`, `Mfa\*` (`Totp`, `RecoveryCode`, `MfaFactor`), `PasswordlessChallenge`, `PendingExternalSignIn` | Sessions have idle and absolute lifetimes and a `sid`; a TOTP step is spent once |
+| `Audit` | `AuditEvent`, `AuditEventType`, `Actor`, `AuditTarget`, `Outcome`, `AuditQuery`, `AuditLog` | Append-only; facts, never secrets |
+
+The application mirrors these contexts (`Application\OAuth2`, `Authentication`, `Oidc`,
+`Management`, `Connection`, `Audit`…). `Application\Port` holds the technical ports: signing
+(`TokenSigner`, `SigningKeyStore`, `SignatureVerifier`), secrets (`PasswordHasher`,
+`SecretCipher`), persistence (`TransactionManager`, `SchemaMigrator`), the Redis stores
+(`SessionStore`, `LoginStateStore`, `MfaChallengeStore`, `ConsentStateStore`,
+`DeviceAuthorizationStore`, `PasswordlessChallengeStore`, `ExternalSignInStore`,
+`NonceRegistry`, `AttemptCounter`), mail (`Mailer`, `MailOutbox`), identity providers
+(`IdentityProvider[s]`, `OidcDiscovery`), outbound URLs (`OutboundUrls`), deferred work
+(`DeferredTasks`, `BackChannelLogoutDelivery`) and events (`DomainEvents`).
+
+## Flows
+
+### Authorization code with PKCE
+
+`GET|POST /oauth2/authorize` runs `Application\OAuth2\Authorize\Authorize`, which returns
+`CodeIssued`, `RequestRefused`, `LoginRequired` or `ConsentRequired`. It throws `OAuth2Error`
+only when the error must not be redirected. The order is fixed:
+
+1. **Settle the client and the redirect URI**, or throw. That error is shown to the person,
+   never redirected. Redirect URIs match as exact strings.
+2. **Refuse repeated parameters** (RFC 6749 §3.1) and request objects (`request`,
+   `request_uri`).
+3. **Validate everything else**: response type, PKCE (S256), scope, `audience` (the API whose
+   permissions the scope may hold; unknown is `invalid_target`), `nonce`, `prompt`, `max_age`.
+   Failures are sent *to* the redirect URI with `state` and `iss`. An invalid request never
+   reaches the sign-in page.
+4. **A third-party application asking for a system API** is refused here, before anyone signs
+   in.
+5. **Decide once whether the person must be seen**: no session, a session through a connection
+   the client does not enable, `prompt=login` or `select_account`, or `max_age` exceeded.
+   `prompt=none` then answers `login_required`. Otherwise the request is held behind an opaque
+   handle (`LoginStateStore`) and the browser goes to `/auth/login`.
+6. **Roles**: on an API that enforces them, somebody holding nothing there gets `access_denied`.
+7. **Consent** (`ConsentPolicy`): `prompt=consent` asks; a first-party client is not asked for
+   no API, or an API allowing skipping; otherwise a consent on record must cover every scope.
+   A request needing consent is held behind a handle, and `/auth/consent` shows the screen.
+8. **Issue the code**: bound to the client, redirect URI, challenge, nonce, audience and the
+   session's `AuthenticationContext` (`auth_time`, `amr`, `sid`). The client is recorded on the
+   session for back-channel logout.
+
+A held request is **resumed, not replayed**: the sign-in page and the consent screen send the
+browser back to `/oauth2/authorize` with every parameter (`AuthorizationRequest::resumption()`),
+minus a `prompt` value already satisfied, and the endpoint decides again with everything as it
+is then.
+
+`POST /oauth2/token` runs `Token\IssueToken`, which owns what every grant shares (repeated
+parameters, `grant_type`, client authentication, the client's right to the grant) and
+dispatches to a `Token\Grant`. `AuthorizationCodeGrant`, inside one transaction:
+
+1. locks the code (`lockForRedemption`, `FOR UPDATE`) and **spends it before checking the
+   redirect URI and the verifier**, so a wrong guess burns it;
+2. on replay, revokes everything the code minted, including its refresh family;
+3. re-checks the audience, and narrows the scope with `UserScope`: the API's current
+   permissions, cut to the person's roles when the API enforces them;
+4. issues the access token, the refresh token (when the client holds the grant) and, for an
+   OpenID Connect request, the ID token, signed inside the same transaction, so a signing
+   failure leaves the code unspent.
+
+A refusal that must survive (a replay) is returned from the transaction and thrown after
+commit, because throwing inside would roll the spend back.
+
+### Client authentication
+
+One method per request, read from what the request carries: an `Authorization` header is
+Basic, a body `client_secret` is `client_secret_post`, a bare `client_id` is `none`. Methods are
+never tried in turn, and mixing them is refused. The method must equal the client's registered
+`token_endpoint_auth_method`, so the right secret through the wrong door fails. Every failure
+is the same `invalid_client` (401 with `WWW-Authenticate` at the token endpoint).
+
+### Sign-in
+
+All first factors end at `SignIn\CompleteFirstFactor`, which either establishes the session or,
+when a factor is confirmed, opens the second-factor challenge. A second factor therefore
+applies however the person signed in.
+
+- **Password** (`SignInWithPassword`): looks only in the pools the application enables. An
+  unknown account, wrong password, deactivated account, missing password and throttled subject
+  are one outcome (`CredentialsRejected`), one message, one status. `simulateVerification()`
+  spends the same time when no hash is checked. Throttling counts per account and per client
+  address (`REMOTE_ADDR` only).
+- **Second factor** (`CompleteSecondFactor`): the challenge lives in Redis behind the
+  `clavia_mfa` cookie (`Path=/auth`). A TOTP code (RFC 6238: SHA-1, six digits, thirty seconds,
+  one step either side) is checked with the factor row locked, and its step is recorded; a
+  recovery code is spent by one conditional `UPDATE`. Guesses are bounded per challenge
+  (`CLAVIA_MFA_MAX_ATTEMPTS`) and by the sign-in throttle. Seeds are sealed with `SecretCipher`
+  (`user:<id>:totp` as associated data), never hashed. `amr` gains `otp` and `mfa`.
+- **External** (`BeginExternalSignIn`, `CompleteExternalSignIn`): Google, GitHub, or an
+  operator-registered OpenID Connect provider. Clavia holds itself to its own rules: an opaque
+  `state` in the redirect and in the `clavia_external_state` cookie, compared in constant time
+  and claimed with `GETDEL`; PKCE S256; a nonce; the code exchanged server-side. An identity
+  is `(connection, subject)`, never an address. `ResolveExternalAccount` links a known subject;
+  links a verified address matching exactly one account when `CLAVIA_SOCIAL_AUTO_LINK` allows;
+  otherwise creates a verified, password-less account. A provider's words never reach the page.
+  `amr` is `ext`.
+- **Passwordless** (`Passwordless\*`): the built-in `email` connection. A six-digit code
+  answers the browser whose `clavia_passwordless` cookie names the challenge, within
+  `CLAVIA_PASSWORDLESS_MAX_ATTEMPTS`. A link answers whoever opens it, and only on a POST, so a
+  mail scanner's GET spends nothing. Sends are limited per address and client address. Mail is
+  sent synchronously; a failure is a 503, and the `none` backend makes the connection
+  unusable. `amr` is `otp`.
+
+**Sessions** have one door per operation. `Sessions::establish()` is the only way a browser
+becomes authenticated, and it always rotates the identifier. `resolve()` is the only way to read
+one: it slides the idle window up to the absolute ceiling. `end()` is the only way to stop one.
+The session identifier is stored as its digest; the `sid` is a second, unrelated token.
+`ResolveEndUser` answers "who is this?" for every browser-facing handler, and re-checks that the
+account is still active.
+
+### Refresh tokens
+
+A family starts at code redemption (or device approval). **Every refresh spends the token**
+under the row lock and issues a new pair; there is no reuse grace. A spent token presented again
+is a replay: the family and every access token it minted are revoked (RFC 6749 §10.4). Only a
+successful refresh spends: a wider scope, another client, an expired or revoked token, a
+deactivated account or roles taken away all leave it untouched, and every bad token is the same
+`invalid_grant`. The refresh token carries the ceiling of what was authorized; `UserScope`
+recomputes the access token's scope at every refresh. A family has an idle lifetime per token
+(`CLAVIA_REFRESH_TOKEN_LIFETIME`) and an absolute deadline fixed at sign-in
+(`CLAVIA_REFRESH_TOKEN_ABSOLUTE_LIFETIME`). A refresh issues no ID token, and ignores `audience`.
+
+### Client credentials
+
+A machine token always names its API: `audience` is required. `openid` is refused first; then a
+scope beyond the client's `ClientGrant` is refused, never narrowed; and an omitted scope is the
+whole grant. `grantableOn()` intersects the grant with the API's permissions now, so withdrawing
+a permission takes effect on the next token. The token has no subject, so every surface that
+describes a person (userinfo, introspection's `sub`) refuses it. Client grants are written
+from the shell only (`clients:grant`): an endpoint writing them would let a caller widen its own
+access. A third-party client never gets a token for a system API.
+
+### Device authorization (RFC 8628)
+
+`POST /oauth2/device/code` validates like an authorization request (`ReadRequestedAccess` is
+shared) and stores the request in Redis: the device code as its digest, the user code as what a
+person types. The person approves at `/auth/device`, where the session must come through a
+connection the application enables, and roles are checked. An approval is a consent on record.
+Polling follows §3.5: `authorization_pending`; `slow_down` adds five seconds for good;
+`expired_token` for a minute past expiry. The device code is consumed before any token exists.
+User-code guesses are throttled (`UserCodeThrottle`, §5.1).
+
+### Introspection and revocation
+
+- `POST /oauth2/introspect` (RFC 7662) answers only a client authenticating with a secret, and
+  only about a token it has a stake in: its own, or one for an API it holds a grant on.
+  Everything else, including unknown, expired, revoked and someone else's, is `{"active":
+  false}`.
+- `POST /oauth2/revoke` (RFC 7009) lets any client, a public one by its id, give back a token
+  issued to it. Another client's token is `invalid_grant`; an unknown one a quiet 200. A refresh
+  token takes its family along; an access token goes alone. `token_type_hint` says where to look
+  first, never where to look only.
+
+### OpenID Connect
+
+- **ID tokens** carry `sub` and protocol claims only (`iss`, `aud`, `exp`, `iat`, `nonce`,
+  `auth_time`, `amr`, `sid`, `at_hash`). What a scope releases (`IdentityClaims::of()`) is
+  served by `/oidc/userinfo` alone; an unknown value is left out, never null. `auth_time` and
+  `amr` come from the session that approved the code.
+- **Discovery** (`/.well-known/openid-configuration` and `/.well-known/oauth-authorization-server`)
+  names only what exists, and states every field whose default differs from the server.
+  `ProviderMetadata` holds the paths; grant types and client authentication methods are read
+  from `IssueToken`, so they cannot drift. `OidcTest` fetches every endpoint advertised.
+- **Signing**: see [Signing keys](#signing-keys).
+
+### Sign-out
+
+- **RP-Initiated Logout** (`/oidc/logout`, `EndSession`): the session ends at once when
+  `id_token_hint` verifies against the published keys (retired ones included), names this
+  issuer, and its `sub` is the session's person; the hint's expiry is not checked. Anything less
+  shows a confirmation page whose form posts back (`confirmed=yes`, read from a POST only). The
+  browser then goes to a registered `post_logout_redirect_uri` of the client (exact match, with
+  `state`), or to the sign-in page.
+- **Back-channel logout**: a session ended by any means (the logout endpoints, an operator,
+  deactivation, deletion) dispatches `SessionsEnded`. The `BackChannelLogout` subscriber
+  queues one delivery per application that was issued a code through that session and
+  registered a `backchannel_logout_uri`. A logout token (`typ: logout+jwt`, `sid`, `events`) is
+  posted after the response, best effort, logged on failure, never retried. A session that
+  expires, or is replaced by a new sign-in, is not reported.
+
+### Management API
+
+Contract-first. `docs/openapi/management-api.yaml` (OpenAPI 3.0.3, written by hand) is the
+source of truth. `ManagementApiMiddleware` checks every request in one order:
+
+1. credentials (`BearerCredentials`, the `Authorization` header only);
+2. the token: live, issued for the Management API (`aud` before any scope), its subject still
+   active;
+3. the scope named by the operation's `security` requirement (there is no second list);
+4. the request against the contract: a parameter twice, unreadable JSON or bad
+   percent-encoding is 400; not JSON is 415; anything the contract or the domain refuses is
+   422, with every violation listed (at most fifty).
+
+Handlers then read a `ManagementRequest`, call one use case and render with `ManagementViews`.
+The middleware maps expected refusals: `NotFound` is 404; `Conflict`, `AlreadyExists` and
+`SystemApiProtected` are 409. Errors are RFC 9457 problem documents (`type`, `title`, `status`,
+`detail`, `errors[]` with a `pointer` or `parameter`); bearer refusals stay RFC 6750 documents.
+No error repeats the value at fault, and nothing is cacheable. Lists are
+`{items, total, page, per_page}`, newest first, with a case-insensitive literal search. A
+collection small by nature (an account's roles) is a plain array. Acceptance tests check every
+response against the document (`ManagementFixtures::api()`).
+
+The validator is Clavia's own (`Adapter\Primary\Http\OpenApi`). What it cannot enforce, it
+refuses at load (unknown keywords, OpenAPI 3.1 forms, external references, non-JSON media
+types, unsupported parameter styles). It reports every violation, never repeats a value,
+coerces exactly (`"02"` is not an integer), and is strict where the specification is loose
+(undescribed query parameters, a body sent to an operation without one, a single value sent
+twice).
+
+### Domain events and the audit trail
+
+A use case says what happened; it does not decide what follows. It dispatches a domain event
+(past tense, typed with domain objects, never a secret) through `DomainEvents`, right after the
+change. Subscribers (`Application\Event\EventSubscriber`, listed in
+`ConfigProvider::EVENT_SUBSCRIBERS`) do the rest: the four audit trails
+(`Application\Audit\Trail\{Authentication,Authorization,Configuration,Directory}Trail`) and
+back-channel logout. The port is implemented on PSR-14 (`Adapter\Secondary\Events`).
+
+- **Dispatch is synchronous, inside the use case's transaction**, so a rolled-back change leaves
+  no event, and a subscriber's failure fails the use case. Work for other servers is deferred by
+  its subscriber (`DeferredTasks`). A refusal worth recording (a wrong password, a replayed code)
+  is dispatched outside any transaction that would roll it back.
+- **Who acted comes from the request.** `AuditContext` is filled at the edge: origin and user
+  agent by `AuditContextMiddleware`, the Management API caller by `ManagementApiMiddleware`. The
+  shell leaves it empty, so the system is the actor.
+- **The trail holds facts, never secrets.** Detail names containing `secret`, `password`,
+  `token`, `credential`, `assertion`, `verifier`, `private` or `cookie` are refused with a
+  `LogicException`. A change lists the fields it touched, not their values.
+- **The trail is append-only**: a database trigger refuses `UPDATE`, and the only deletion is
+  `audit:purge`, by age. It is read at `GET /api/v1/audit-events` (`read:audit_events`).
+- **Every domain event is recorded by exactly one trail.** `AuditTrailsTest` fails otherwise.
 
 ### Signing keys
 
-The load-bearing decision from the prior attempt, carried over as-is: the port everything
-issuing a token goes through is **sign**, not **fetch the key**.
+The port everything that issues a token goes through is **sign**, never **fetch the key**:
 
 ```php
 interface TokenSigner
 {
-    public function activeKey(): SigningKeyReference;                        // kid + alg, for the header
-
-    public function sign(SigningKeyReference $key, string $signingInput): string; // raw signature bytes
-
+    public function activeKey(): SigningKeyReference;                             // kid + alg
+    public function sign(SigningKeyReference $key, string $signingInput): string; // raw signature
     /** @return list<PublicJwk> */
-    public function publicKeys(): array;                                     // what the JWKS publishes
+    public function publicKeys(): array;                                          // the JWKS
 }
 ```
 
-That shape is the whole design, decided before any signing code is written. An interface that
-returns a private key can only be implemented by backends that let key material into application
-memory, which excludes every non-extractable option — cloud KMS, Vault Transit, a PKCS#11 HSM.
-Those are the ones worth having in production, because an IdP signing key mints valid tokens for
-any user and forgeries are indistinguishable from real tokens.
+An interface returning a private key could only be implemented by backends that let key material
+into memory, which excludes every non-extractable option (cloud KMS, Vault Transit, an HSM), and
+those are the ones worth having in production.
 
-Consequences worth knowing before touching the OIDC/signing code:
-
-- **No JOSE library signs.** Every one of them wants the private key in-process. The compact JWS
-  is assembled by hand — header, claims, `base64url`, then `TokenSigner::sign()`.
-  `web-token/jwt-library` is for JWK handling and *verification* (tests, external ID tokens) only.
-- **There is no "load the private key" helper, ever, even temporarily.** Exactly one class reads
-  a private key (or a reference to one): the signing adapter's own `sign`. For the postgres
-  backend that is `PostgresTokenSigner::sign()`, the only code that ever decrypts one;
-  `PostgresSigningKeyStore` generates and seals keys and never reads them back.
-- **RS256 is spelled out as RSASSA-PKCS1-v1_5 over SHA-256** (`openssl_sign(…, OPENSSL_ALGO_SHA256)`)
-  rather than delegated to a generic helper, because a remote backend has to name the same
-  primitive precisely — AWS KMS's `RSASSA_PKCS1_V1_5_SHA_256`. Get it wrong and signatures verify
-  locally and nowhere else.
-- **Every remote key is handed a digest, never the message.** AWS can hash a message itself (up
-  to 4 KB); GCP and Azure only sign a digest. `RemoteTokenSigner` hashes the signing input and
-  every provider signs that (AWS with `MessageType=DIGEST`), so there is one shape and no 4 KB
-  ceiling. Send the wrong shape and the signature covers the wrong bytes — which is why
+- **No JOSE library signs.** The compact JWS is assembled by hand (`CompactJws`) and signed by
+  `TokenSigner::sign()`. `web-token/jwt-library` verifies (`JoseSignatureVerifier`: the key
+  picked by `kid`, the algorithm the key's, never the header's) and handles JWKs, nothing more.
+- **Exactly one class reads a private key**: the backend's own `sign()`. For `postgres` that is
+  `PostgresTokenSigner::sign()`; `PostgresSigningKeyStore` generates and seals keys and never
+  reads them back.
+- **RS256 is spelled out** as RSASSA-PKCS1-v1_5 over SHA-256, because a remote backend must name
+  the same primitive: AWS `RSASSA_PKCS1_V1_5_SHA_256`, GCP `RSA_SIGN_PKCS1_*_SHA256`, Azure
+  `RS256`.
+- **Every remote key is handed a digest**, never the message (AWS with `MessageType=DIGEST`).
   `RemoteTokenSigner` verifies each signature against the published key before returning it.
-  The same primitive has three names: `RS256` is AWS's `RSASSA_PKCS1_V1_5_SHA_256`, GCP's
-  `RSA_SIGN_PKCS1_*_SHA256`, and Azure's own `RS256`.
-- **`kid` is the RFC 7638 thumbprint of the public key**, for every backend. An AWS ARN carries the
-  account number, a GCP resource name the project, a vault URL the vault — none of it is
-  published. A reference names one immutable key version (key ARN or id, `cryptoKeyVersions/N`,
-  a versioned vault URL); an alias or an unversioned key is refused at boot, because repointing
-  it would change the key under every token issued — and under the cached public key.
-- **`CLAVIA_SIGNING_BACKEND`** selects `postgres`, `aws-kms`, `gcp-kms`, `azure-key-vault`, or the
-  name of a class implementing `RemoteSigningKey` (built from the key reference alone), with
-  `CLAVIA_SIGNING_KEY_REF` naming the provider's key and `CLAVIA_SIGNING_RETIRED_KEY_REFS` the
-  retired ones still published. AWS uses `aws/aws-sdk-php`, GCP `google/auth` for its
-  credentials and REST for the calls; Azure has no PHP SDK for Key Vault and is REST throughout
-  (managed identity by default; an Entra application with a secret or a federated token file
-  when `CLAVIA_AZURE_*` name one). They are Composer suggestions so a deployment installs one,
-  not three. Nothing calls a provider at boot. `postgres` (the key stored,
-  AES-256-GCM-encrypted with `kid` as associated data, in the database) is the only extractable
-  option and the only one needing no external service: right for development, a warning in
-  production. `CLAVIA_SECRET_ENCRYPTION_KEY` is required by it; there is no plaintext fallback.
-- **Production runs on `aws-kms`.** KMS does not rotate an asymmetric key itself; rotation means
-  creating a second key, making it `CLAVIA_SIGNING_KEY_REF` and moving the old one to
-  `CLAVIA_SIGNING_RETIRED_KEY_REFS` until every token it signed has expired. The task role needs
-  only `kms:Sign` and `kms:GetPublicKey`.
+- **`kid` is the RFC 7638 thumbprint** for every backend: no ARN, project or vault URL is
+  published. A remote reference names one immutable key version; an alias is refused at boot.
+- **Backends** (`CLAVIA_SIGNING_BACKEND`): `postgres` (the default; the key sealed with
+  AES-256-GCM under `CLAVIA_SECRET_ENCRYPTION_KEY`, `kid` as associated data; extractable, so a
+  warning in production), `aws-kms`, `gcp-kms`, `azure-key-vault`, or the class name of a
+  `RemoteSigningKey` implementation. `CLAVIA_SIGNING_KEY_REF` names the key version,
+  `CLAVIA_SIGNING_RETIRED_KEY_REFS` the retired ones still published. The SDKs (`aws/aws-sdk-php`,
+  `google/auth`) are Composer suggestions; Azure is REST. Nothing calls a provider at boot.
+- **Lifecycle**: one active key (the database enforces it). `keys:generate` only when there is
+  none; `keys:rotate` retires the active key for `RotateSigningKey::grace()` (twice the longest
+  token lifetime plus a day). Nothing creates a key on first use: issuing without one is
+  `NoActiveSigningKey`, a loud error. With a remote backend, rotation is a new key made the
+  reference and the old one listed as retired until its tokens expire. The JWKS and discovery
+  cache lifetimes (`PublishSigningKeys::CACHE_MAX_AGE`, `DiscoveryHandler::CACHE_MAX_AGE`) are
+  part of that reasoning.
 
-### Domain configuration
+## Security invariants
 
-Clavia must not hard-code a domain. The prior attempt bound everything to `clavia.local` in
-development and `clavia.io` in production — a `Caddyfile` full of literal hostnames and a CDK stack
-that provisions `*.clavia.io` (see `../Clavia Python/clavia-old/Caddyfile` and `docs/DEPLOYMENT.md`). That pattern
-is right; the literal domain baked into it is what needs generalizing so any operator can point
-their own domain at Clavia.
+These follow from the RFCs and from mistakes already made once. Breaking one is a security bug.
 
-A single setting — e.g. `CLAVIA_ROOT_DOMAIN` — names the deployment's domain (`clavia.io`,
-`acme-idp.com`, whatever DNS an operator controls), and every host Clavia needs is derived from it
-rather than written down anywhere. In development the domain is under `.test` (`clavia.test`), which
-RFC 6761 reserves for this and every resolver answers from `/etc/hosts` alone; never `.local`, which
-macOS resolves through Bonjour (mDNS) at a cost of seconds per lookup — enough for the dashboard's
-parallel server-side calls to the Management API to time out — and never a real suffix such as
-`.dev`. Two subdomains are non-negotiable and must exist wherever Clavia runs:
+**Protocol**
 
-- **`auth.{domain}`** — the OAuth2/OIDC/login origin. This is the same load-bearing origin the prior
-  attempt's login design depends on: a host-only session cookie with no `Domain` attribute, so it is
-  never shared with any other subdomain, and `redirect_uri`s that are validated against this origin
-  specifically. Whatever `{domain}` is, this subdomain is where credentials get typed and tokens get
-  minted — nothing else should share it.
-- **`management.{domain}`** — the dashboard *and* the Management API. Kept on its own origin,
-  separate from `auth.*` and from the apex, for the same reason as before: an XSS in the end-user
-  login UI must not be able to reach the administrative dashboard's session, and vice versa.
+- PKCE is mandatory with S256; `plain` does not exist. The single exception is per client and
+  off by default: a confidential client registered with `require_pkce: false` may omit PKCE
+  from an OpenID Connect request carrying a `nonce` (OAuth 2.1 §7.5.1); a verifier presented for
+  such a code is `invalid_grant`. A public client can never be relieved of PKCE (domain rule and
+  database check).
+- Authorization codes are single use, short-lived, and bound to the client, the redirect URI and
+  the challenge. Redirect URIs are registered and matched exactly: no normalisation, prefix or
+  wildcard, and a URI is appended to, never parsed and rebuilt.
+- Refresh tokens rotate on every use; a replay revokes the family. No grace period.
+- Client credentials: confidential clients only, no refresh token, no subject.
+- A scope means nothing without an audience: check `aud` before any scope.
+- A permission belongs to an API, and a client holds none of its own. Scope is narrowed at
+  issuance (the API's permissions, then the person's roles or the machine's grant) and
+  re-checked at redemption.
+- A TOTP code is spent with its time step.
+- Tokens are signed and verified through the JWKS; retired keys stay published until every token
+  they signed has expired.
+- Passwords and client secrets are bcrypt hashes (cost 12; more than 72 bytes or a NUL is
+  refused, never truncated). Codes and tokens are stored as SHA-256 digests, for indexed lookup.
+- `prompt`, `max_age`, `request` and `request_uri` are one decision at the authorization
+  endpoint (see the flow above).
+- Any repeated request parameter is refused.
 
-**There is deliberately no `api.{domain}` subdomain.** The Management API is served at
-`management.{domain}/api/v1/*` — a path on the same origin as the dashboard — rather than its own
-host; the prior attempt's `api.clavia.local` is not carried forward. Same-origin means the
-dashboard's calls to `/api/v1/*` need no CORS at all, and since the dashboard redeems its codes
-and refreshes its tokens from its own server, nothing on `management.*` calls `auth.*` from a
-browser either. This
-doesn't change *who* may call `/api/v1/*` — it's still the bearer-token-only machine plane described
-in "Four surfaces" above, reachable by any client holding a valid access token regardless of
-the origin it calls from. Putting it under `management.*` only fixes where the first-party dashboard
-finds it, not who else is allowed to call it.
+**Browser**
 
-Other hosts (a landing page at the apex, per-tenant `{slug}.{domain}` if multi-tenancy is built) can
-be added, merged toward the apex, or reshaped per deployment — those are conveniences. `auth.*` and
-`management.*` are the two whose *separation* is a security property, not a routing choice, and a
-deployment config that collapses them onto one origin is a regression regardless of what domain it's
-for.
+- The sign-in pages share an origin with `/oauth2/authorize`; the session cookie has no
+  `Domain`; there is no JavaScript on that origin.
+- A post-sign-in target never travels in a URL. It is held server-side behind an opaque handle,
+  and whatever it resolves to is re-validated before becoming a `Location` (`LocalPath`, or for
+  sign-out an https URL on an origin some client registered). Rejected, never repaired.
+- Every `/auth/*` state change is a POST with a CSRF token (double-submit, per browser). Sign-out
+  and the theme toggle need none: a `SameSite=Lax` cookie never rides a cross-site POST.
+- **The auth pages' CSP is built per page.** Chromium applies `form-action` to a form's whole
+  redirect chain, and a successful sign-in ends at the client's `redirect_uri`. A page tied to an
+  authorization request therefore lists that client's redirect origins next to `'self'`.
+- An identity from another provider is `(connection, subject)`; only a *verified* address links
+  to an existing account; `state` is paired with a cookie; provider errors are never echoed.
+- Every URL fetched on an operator's say-so (OIDC discovery and endpoints, back-channel logout
+  URIs) goes through `OutboundUrlPolicy`: https only, never a non-global address (as written or as
+  resolved), checked at registration and again at send time, connecting to the addresses checked
+  (`PinCheckedAddresses`). `CLAVIA_OUTBOUND_ALLOW_PRIVATE_ADDRESSES` waives this in development.
+- Caddy sets `Cache-Control: no-store` on `auth.*` except discovery, the JWKS and static files,
+  whose caching the application owns.
 
-Consequences of making the domain a variable rather than a constant:
+## Conventions
 
-- **TLS has to cover whatever `{domain}` turns out to be** — a wildcard certificate for `*.{domain}`
-  (plus the apex if it serves anything), issued per deployment rather than assumed to be
-  `*.clavia.io`. Locally this is `mkcert` against a domain the operator has put in `/etc/hosts`; in
-  production it's ACME/a CDK-managed certificate against whatever's actually registered.
-- **Reserved subdomain labels must be domain-agnostic constants, not project-name coincidences.**
-  The prior attempt reserved the tenant slug `clavia` because the deployment happened to be named
-  `clavia.io` — a slug that collides with the project's own name, not with a real subdomain risk.
-  The general rule that has to survive the rename is: `auth`, `management`, `www`, and any other
-  infrastructure subdomain Clavia itself uses are reserved, on *any* `{domain}`, and tenant or client
-  provisioning must check against that list rather than a single hard-coded string. `api` is not on
-  it — it's a path under `management.*`, not a subdomain, so it needs no reservation of its own.
-- **Provisioning a new host should stay a database row, not a redeploy**, on whatever domain is
-  configured — the prior attempt's DEPLOYMENT.md already establishes this for `*.clavia.io`
-  specifically (wildcard cert + `Host`-header routing); the requirement is the same mechanism, just
-  parameterized by `{domain}` instead of assuming it.
+### PHP
 
-## Migration plan
+- `declare(strict_types=1)` everywhere; PSR-12 at 120 columns; Psalm level 1 clean.
+- **Value objects** are built by named constructors (`fromString`, `of`, `generate`) that throw
+  `InvalidValue`; the real constructor is private. Prefer `readonly` classes, and `clone with`
+  for a changed copy. Enums for closed sets (`GrantType`, `ErrorCode`, `ConnectionStrategy`).
+- **Identifiers** are typed: UUID v4 value objects extending `UuidId`, never equal across kinds.
+  `ClientId` is 1–64 visible ASCII characters without a colon (HTTP Basic cannot carry one).
+- **Regular expressions** that anchor use the `D` modifier: without it, `$` accepts a trailing
+  newline.
+- **Never read a value back from an array key**: PHP turns `'10'` into `10`. Keys are for
+  lookup.
+- **Use PHP 8.5 on purpose**: `Uri\Rfc3986\Uri` for URIs that must compare exactly (never
+  `parse_url`), `#[\NoDiscard]` on results that must be checked (verification, spending), the
+  pipe operator where it clarifies a chain.
+- Document every public class, and every non-obvious decision with the RFC section it follows.
 
-Each step lists: the Python sources to read, what to build per ring, and the tests to port.
-Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests are green.
+### Use cases
 
-### Phase A — Foundations
+- **An invokable class named for what it does** (`Authorize`, `RotateClientSecret`), taking a
+  request object or value objects, returning a result object.
+- **Expected outcomes are return values**, typically a union of result classes
+  (`SignedIn | CredentialsRejected | SecondFactorRequired`). Exceptions are for the
+  exceptional, and for protocol errors the specification answers with an error document
+  (`OAuth2Error`, `BearerTokenError`).
+- **A secret handed out is returned once** by the use case and stored only as its digest.
+- **Development-only code checks for itself** (`DevelopmentAutoLogin`, `SeedDevelopmentData`
+  receive `isDevelopment` and throw outside it), on top of the settings that forbid the
+  combination.
 
-#### [x] Step 0 — Repository and toolchain
-- `composer.json` (PHP 8.5, Mezzio, servicemanager, FastRoute, symfony/console, monolog;
-  BSD-3-Clause, header enforced by `LicenseHeaderTest`), `Clavia\` PSR-4, `public/index.php`,
-  `config/`, the rings under `src/` plus `Configuration` and `Bootstrap`.
-- QA: PHPCS, Psalm level 1, PHPUnit, **deptrac with the full ruleset from day one**, `composer check`, CI.
-- Infra: `docker-compose.yml` (Postgres :5433, `db-test` :5434, Redis, Caddy, **php-fpm 8.5**),
-  `Caddyfile` ported to `php_fastcgi` (same hosts, same `Cache-Control` rules), `setup-ssl.sh`,
-  `Makefile`, `.env.example`.
-- `Settings`: every `CLAVIA_*` field of `config.py` with its validators; `clavia config`.
-- Proxy trust (`CLAVIA_TRUSTED_PROXIES`); error handling that leaks nothing; FastAPI-shaped 404/405.
-- `static/auth.css` and the icon under `public/auth/static/`; the invariant sections copied below.
-- Python: `config.py`, `main.py`, `Caddyfile`, `docker-compose.yml`, `Makefile`.
-- Verified: `GET /healthz` through Caddy over HTTPS (FastCGI to PHP-FPM 8.5), `composer check` green.
-  Not yet exercised: the Docker image build itself and the GitHub workflow.
+### Persistence
 
-#### [x] Step 1 — Shared kernel, technical ports, persistence base
-- Domain/Shared: `Clock`, `RandomSource`, `SecretGenerator`, `Digest` (SHA-256), `Url`,
-  `Scope`/`ScopeSet`, `Audience`. Typed ids arrive with the aggregate they identify.
-- Ports + adapters: `PasswordHasher` (bcrypt), `SecretCipher` (AES-256-GCM, AAD context, no
-  plaintext fallback), `TransactionManager`, Redis connection + key-prefix convention.
-- **Database adapter on `php-db/phpdb-pgsql`**, pinned in `composer.lock` (`phpdb-pgsql`
-  `deddafa`, `phpdb` `008de26`): `Database`, `PostgresUrl`, `PhpDbTransactionManager`, and
-  integration tests for parameters, types, transactions, `FOR UPDATE` (`NOWAIT`, `SKIP LOCKED`),
-  conditional updates and `RETURNING`. One library defect found and worked around
-  (`PostgresConnection`, see "Current state").
-- Migrations: `SqlFileMigrator` behind the `SchemaMigrator` port; `clavia db:migrate`,
-  `db:status`, a `schema_migrations` table. **The runner is built; no migration exists yet.**
-  Each later step adds the files for the tables it introduces, in their final shape.
-- Test kit: doubles for every port, contract suites, `IntegrationTestCase` with scratch schemas,
-  storage reset through the real migrations, Redis database 1 flushed.
-- `clavia secrets:generate-key` (moved here from Step 4: the cipher it serves lands here).
-- Python: `security/*`, `redis_store.py`, `db/session.py`, `tests/conftest.py`.
-- Verified against PostgreSQL 16 and Redis 7 outside Docker; the plan targets PostgreSQL 17.
-  The acceptance harness's cookie jar arrived with the first cookie, in Step 3.
+- **One door to PostgreSQL**: `Adapter\Secondary\Persistence\PhpDb\Database`. SQL written out,
+  named parameters, plain rows back (`fetchAll`, `fetchOne`, `fetchValue`, `execute`, which
+  returns the affected-row count: the answer to "did my conditional `UPDATE` win?"). The query
+  builder (`Database::adapter()`) is for dynamic filters only. Generated keys come from
+  `INSERT … RETURNING`.
+- **Transactions**: `transactional()` nests by joining the outer one; any exception rolls all of
+  it back; there are no savepoints, and a database error cannot be caught to carry on (PostgreSQL
+  refuses everything after a failed statement). Isolation is READ COMMITTED: exactly-once rests on
+  row locks or conditional writes.
+- **A unique constraint is the arbiter of uniqueness.** A repository turns SQLSTATE 23505 on the
+  named constraint into `AlreadyExists`; nobody checks first and inserts second.
+- **Repositories return copies**: a change exists only once saved. In-memory doubles clone on the
+  way in and out.
+- **Links are foreign keys**, cascading where the domain says so. A permission is a row a role
+  references, so `PhpDbResourceServerRepository` reconciles permission rows instead of replacing
+  them; the doubles apply the same cascades.
+- **Columns**: only what the code reads. Lists are `jsonb`; instants are `timestamptz`, written
+  and read through `Timestamp` (UTC, microseconds).
+- **Migrations** are `migrations/NNNN_name.sql`: forward only, one transaction each, immutable once
+  applied (checksummed), linear. No `CREATE INDEX CONCURRENTLY` (it cannot run in a transaction).
+  A migration ships with the code that needs it.
+- **Secrets that must be read back** go through `SecretCipher` with a row-specific context (`kid`,
+  `user:42:totp`). The format is `base64(nonce ‖ ciphertext ‖ tag)`, pinned by a known-answer
+  test.
 
-### Phase B — The original build order (Python steps 1–6)
+### Redis
 
-#### [x] Step 2 — Authorization Code + PKCE
-- Domain: `Client` (final shape: `client_id` PK, auth method, grant types, redirect URIs, no
-  scope column), `AuthorizationRequest` validation, `Pkce` (S256 only), `AuthorizationCode`,
-  opaque `AccessToken`, `OAuth2Error` taxonomy (RFC 6749 §4.1.2.1/§5.2).
-- Application: `Authorize`, `IssueToken` + `AuthorizationCodeGrant`, `ClientAuthenticator`.
-- Primary adapters: `GET /oauth2/authorize`, `POST /oauth2/token`; `state` echoed on every error redirect;
-  RFC 9207 `iss`; `WWW-Authenticate` on 401; exact redirect-URI match; a replayed code revokes
-  what it issued. Dev auto-login (`CLAVIA_DEV_AUTOLOGIN_EMAIL`) as a development-only adapter.
-- CLI: `seed-dev` (first version), `authorize-url`. First migrations: `users`, `oauth2_clients`,
-  `oauth2_authorization_codes`, `oauth2_access_tokens`.
-- Python: `oauth2/{server,grants,requests,router}.py`, `db/models/{client,oauth2,user}.py`.
-- Tests: `test_authorization_code_flow` (9), `test_pkce_security` (16) — ported as
-  `AuthorizationCodeFlowTest` and `PkceSecurityTest`, plus unit, contract and integration tests.
-- Deviations are recorded in `docs/DEVIATIONS.md` ("OAuth2 endpoints"). Left for the
-  steps that own them: the login page behind `LoginRequired` (3), `nonce`/`openid` handling and
-  the ID token (4), consent (15), per-client scopes and audiences (5, 16).
+Keys are `<prefix>:<identifier>`, built by `Redis\Keys`: `forSecret()` digests anything a browser
+could present (session ids, handles, device codes); `forIdentifier()` is for user ids and `sid`s.
+A handle is claimed with `GETDEL`, so it works once. A handle that is unknown, spent, expired,
+someone else's or names something deleted gives the same "expired" page.
 
-#### [x] Step 3 — Login page and sessions
-- Domain: `Session` (idle + absolute lifetime, `sid`, `amr`, `connection`), `LoginState`,
-  throttling policy, redirect-target validation.
-- Ports: `SessionStore`, `LoginStateStore`, `AttemptCounter` (Redis adapters).
-- Primary adapters: `GET/POST /auth/login`, `POST /auth/logout`, `POST /auth/theme`; `templates/` layout + `login` page, page renderer;
-  per-page CSP builder; per-browser CSRF double-submit; host-only cookie; session rotation.
-- Python: `auth/{router,sessions,login_state,throttle,redirects,pages,current_user}.py`,
-  `forms.py`, `templates/`.
-- Tests: `test_login` (35) — ported as `LoginTest` (42 cases), plus `AuthPagesEscapingTest`,
-  unit tests for every new class and contracts run against the doubles and Redis.
-- Left for the steps that own them: `connection` on the session and the per-application
-  connection check (13), the user→sessions and session→clients indexes (17), the second
-  factor between password and session (7).
+### HTTP adapters
 
-#### [x] Step 4 — JWKS, ID token, discovery, userinfo
-- Domain: `IdTokenClaims` (incl. `at_hash`, `nonce`, `auth_time`, `amr`), shared
-  `IdentityClaims` for userinfo, `SigningKey` lifecycle (active/retired + grace),
-  `PublicJwk` (RFC 7638 `kid`), `Nonce`, `Profile`, `AuthenticationContext`.
-- Ports: `TokenSigner` (`activeKey`, `sign`, `publicKeys`), `SigningKeyStore`, `NonceRegistry`.
-  Adapters: the postgres backend (RSA-2048, RS256, private key sealed with the `kid` as
-  associated data), Redis nonce registry; compact JWS built by hand (`CompactJws`).
-- Primary adapters: both `/.well-known/*` documents, `/oidc/jwks.json`, `/oidc/userinfo`
-  (GET and POST, RFC 6750 challenges); nonce replay guard at the authorization endpoint.
-- CLI: `keys:generate|rotate|list`; `seed-dev` creates a key when none is active.
-- Python: `oidc/{router,grant,claims,keys,nonce}.py`, `oidc/signing/{__init__,_core,postgres}.py`.
-- Tests: `test_oidc` (26) — ported as `OidcTest` (32 cases), the postgres part of
-  `test_signing_backends` as `PostgresSigningBackendTest` (with `SigningBackendContract`,
-  run against the in-memory double too), plus unit tests for every new class.
-- ID tokens are checked with `web-token/jwt-library` (a dev dependency, verification only)
-  against the JWKS as served. Left for the steps that own them: `sid` in the ID token (17),
-  `prompt`/`max_age` (18), remote signing backends (19).
+- **Parameters** are read with `RequestParameterReader`, never `getQueryParams()` or
+  `getParsedBody()`, which keep the last of repeated values and rewrite names.
+- **Cookies** are read from the `Cookie` header (`RequestCookies`, every value kept) and written
+  through `SetCookie` (`HttpOnly; SameSite=Lax`, never a `Domain`, name and value validated).
+  `AuthCookies` owns each cookie's name, path and lifetime, so a cookie is deleted with the path
+  it was set with.
+- **OAuth responses** go through `OAuth2Responder` (Diactoros `JsonResponse` on a PSR-17 factory).
+  Token-endpoint errors are 400, or 401 with `WWW-Authenticate` for `invalid_client`. An
+  authorization-endpoint error that cannot be redirected is a plain 400, never a challenge.
+- **Protected resources** read tokens with `BearerCredentials` and refuse with
+  `BearerChallenger` (RFC 6750 status, challenge and error document; never cacheable).
+- **Pages** are server-rendered laminas-view templates (`templates/`), with no JavaScript. A
+  handler builds an `HtmlPage` view model; templates print and loop; a repeated block becomes a
+  partial (`layout::page`, `auth::login`, `error::page`, `partial::field`). `PageRenderer` adds
+  the layout and the headers every page carries (`no-store`, `X-Frame-Options: DENY`, `nosniff`,
+  `Referrer-Policy: same-origin`, the per-page CSP); `AuthPageResponder` adds the CSRF token.
+  One stylesheet (`public/auth/static/auth.css`), light and dark through custom properties; the
+  theme toggle is a POST setting a cookie.
+- **Every printed value is escaped** with `escapeHtml()` or `escapeHtmlAttr()`: laminas-view does
+  not escape on its own. `AuthPagesEscapingTest` renders every page with hostile values; a new
+  page or variable gets a case there.
+- **Errors are a page for a person and data for a program.** `ClientPreference::prefersHtml()`
+  decides from `Accept` (HTML only when `text/html` weighs at least as much as JSON; `*/*` alone
+  is a program). `ErrorResponder` sends the same status either way. Error text never comes from
+  the request, an error page links nowhere onwards and sets no cookie. Endpoints whose format a
+  specification fixes (token, introspection, revocation, userinfo) always answer JSON.
+- **The QR code** for TOTP enrolment is drawn by the HTTP adapter (`QrCodeSvg`), sanitised for the
+  page's CSP; the provisioning URI never appears in the markup.
 
-#### [x] Step 5 — Client Credentials
-- Confidential only, no refresh token, refuses `openid`, subject-less tokens refused by userinfo.
-- Domain brought forward from Step 6, because the final design gives a client no scope of
-  its own: `ResourceServer`, `Permission` keyed `(resource_server, value)`, `ClientGrant`, and
-  their storage; the token's `audience`.
-- CLI: `clients:create-m2m`.
-- Python: `oauth2/grants.py` (`ClaviaClientCredentialsGrant`), `db/models/resource_server.py`,
-  `api/provisioning.py` (`grant_client`), `cli.py` (`clients create-m2m`).
-- Tests: `test_client_credentials` (19) — ported as `ClientCredentialsTest` (23 cases), plus
-  unit tests and `ResourceServerRepositoryContract` run against the doubles and PostgreSQL.
-- Left for Step 6: registering APIs and writing grants from the shell (`management-api
-  register|scopes`, `clients grant`), `audience` at the authorization endpoint, system APIs.
+### Outbound HTTP
 
-#### [x] Step 6 — Management API, resource servers, audiences
-- Domain (the rest of it): `is_system` APIs, audience rules at the authorization endpoint
-  (scopes of the named API), grant provisioning (`GrantClientAccess`); paging, uniqueness
-  (`AlreadyExists`), the password policy, user and client changes, the client coherence rules.
-- Primary adapter (`Http/Management`): `ManagementApiMiddleware` (bearer token, `aud` checked
-  before scope, RFC 6750 challenges with the Management API as realm), OpenAPI validation,
-  RFC 9457 problems, pagination, `/api/v1/{users,clients,resource-servers}`, secret rotation.
-- `docs/openapi/management-api.yaml`, written from `api/schemas.py`: it validates requests
-  *and* is asserted against every response in the acceptance tests.
-- CLI: `management-api:register|scopes`, `clients:grant`; `seed-dev` registers the Management
-  API and a machine client holding every management scope.
-- Python: `api/*`, `db/models/resource_server.py`.
-- Tests: `test_management_api` (36) — ported as `ManagementApiTest` (47 cases),
-  `test_audience` (12) — ported as `AudienceTest` (16 cases); `ManagementContractTest`, unit
-  tests for every new use case, the domain rules and the commands; the repository contracts
-  gained paging, deletion and uniqueness.
-- Left for the steps that own them: roles and the RBAC narrowing that replaces the
-  system-API refusal (10), the connection scopes and endpoints (13), `refresh_token` and the
-  device grant on registrations (11, 15), `is_first_party` (12).
+PSR-18 is the port: adapters receive `Psr\Http\Client\ClientInterface` and PSR-17 factories,
+never a concrete client. The composition root builds Guzzle (`HttpClientFactory`: 5 s to connect,
+10 s in all, no redirects followed, no exception on a status). Tests use `Fake\FakeHttpClient`,
+so the suite never reaches a real provider. Providers' failures are logged by endpoint and
+status, never by body.
 
-#### [x] Step 7 — MFA (TOTP)
-- Domain: own RFC 6238 `Totp` (single-use by time step), `Base32`, `TotpSecret`,
-  `RecoveryCode` digests, `MfaFactor` (pending → confirmed), `MfaChallenge`.
-- Port: `MfaChallengeStore` (Redis, attempts counted by a Lua script). Seeds sealed through
-  `SecretCipher`. No `QrRenderer` port: the QR code is presentation, drawn by the HTTP
-  adapter (see the Step 7 conventions).
-- Primary adapters: `/auth/mfa`, `/auth/mfa/enroll`, `/enroll/confirm`, `/disable`;
-  `DELETE /api/v1/users/{user_id}/mfa` and `mfa_enrolled` in the Management API contract.
-- Python: `mfa/*`, `db/models/mfa.py`.
-- Tests: `test_mfa` (17) — ported as `MfaTest` (20 cases); unit tests for `Totp` (the RFC 6238
-  vectors), `Base32` (RFC 4648), `MfaFactor`, `RecoveryCode`, the enrollment use cases,
-  `CompleteSecondFactor` and `QrCodeSvg`; `MfaRepositoriesContract` and
-  `MfaChallengeStoreContract` run against the fakes, PostgreSQL and Redis; the new pages are in
-  `AuthPagesEscapingTest`.
-- Left for the steps that own them: `ext` as a first factor (social login, 8), the
-  challenge's connection (13).
+## Testing
 
-#### [x] Step 8 — Social login
-- Domain: `ExternalIdentity` keyed `(provider, subject)`, `AssertedIdentity`, `ProviderName`,
-  `PendingExternalSignIn`; the linking rules in `ResolveExternalAccount` (verified address
-  only, case-insensitive, ambiguity refused, `CLAVIA_SOCIAL_AUTO_LINK`).
-- Ports: `IdentityProvider` (`authorizationUrl()`, `identify()`), `IdentityProviders`,
-  `ExternalSignInStore` (Redis, `GETDEL`). Adapters Google (userinfo) and GitHub (`/user` +
-  `/user/emails`, the primary verified address), over PSR-18 with Guzzle behind it.
-- Primary adapters: `GET /auth/social/{provider}` and `/callback`; `state` paired with a
-  cookie; provider errors never echoed; the providers offered on the login page.
-- `CompleteFirstFactor` extracted from `SignInWithPassword`, so an external sign-in meets the
-  same second factor.
-- Python: `social/*`, `db/models/identity.py`. Tests: `test_social_login` (18) — ported as
-  `SocialLoginTest` (18 cases); unit tests for the domain values, both adapters against a fake
-  wire, and the use cases; `ExternalIdentityRepositoryContract` and
-  `ExternalSignInStoreContract` run against the fakes, PostgreSQL and Redis.
-- Step 13 then made the providers connections a client enables, added operator-registered
-  OIDC providers and pools, and unlinking.
+Three suites, three base classes, all under `test/`:
 
-#### [x] Step 9 — RP-Initiated Logout and the dashboard  ← first usable milestone
-- `GET|POST /oidc/logout` (OpenID Connect RP-Initiated Logout 1.0): `id_token_hint` verified
-  against the published keys (`SignatureVerifier`, on `web-token/jwt-library`, now a runtime
-  dependency for verification only); `post_logout_redirect_uris` registered per client and
-  matched exactly, `state` returned; without proof, a confirmation page. `end_session_endpoint`
-  in discovery.
-- Clients gain `post_logout_redirect_uris` (domain, migration `0015`, the Management API
-  contract).
-- `frontend/` copied unchanged from the Python project; `seed-dev` registers the dashboard as a
-  public code-flow client (`SeedDashboardClient`) and writes `frontend/.env.local`; the
-  `Caddyfile` already serves it at `management.{domain}/dashboard/`.
-- Tests: `test_rp_logout` (6) — ported as `RpLogoutTest` (11 cases); `EndSessionTest`,
-  `JoseSignatureVerifierTest`, the client contract and Management API cases for the new field,
-  the confirmation page in `AuthPagesEscapingTest`.
-- **Not yet usable end to end:** the dashboard asks for Management API permissions in a user's
-  flow, which stays `access_denied` until roles exist (Step 10, done), and it renews tokens with
-  a refresh token (Step 11). It signs in once both land; pages whose API arrives later
-  (connections, consents, sessions) light up with their step.
+| Suite | Base | Scope |
+|---|---|---|
+| `Unit` | PHPUnit `TestCase` | No I/O: domain rules, use cases with doubles, pure adapters (crypto, OpenAPI), architecture tests |
+| `Integration` | `IntegrationTestCase` | One adapter against real PostgreSQL or Redis, with a scratch schema per test for tables of its own |
+| `Acceptance` | `AcceptanceTestCase` | The whole application in-process: the real container, pipeline and routes |
 
-### Phase C — Everything built after the chain
+- **Doubles and contracts**: every port has a double in `test/Support/Fake`. Where behaviour is
+  shared, an abstract `test/Support/Contract/XContract` runs against both the double and the real
+  adapter, so a double that drifts fails its own test.
+- **Isolation**: integration and acceptance tests wipe every table and Redis database 1 before
+  each test. `TestEnvironment` refuses a database whose name does not end in `_test`, and Redis
+  database 0. Settings come from `TestEnvironment::variables()`, never the machine's `.env`.
+- **Acceptance harness**: `get()`/`post()`, a cookie jar, `freezeClock()` (call it before the
+  first request when a test moves time), deferred tasks run after each request, an active signing
+  key installed before every test, a `RecordingLogger`. PHPUnit lowers `error_reporting`; the base
+  class restores `E_ALL`.
+- **Fixtures**: `OAuth2Fixtures` (users, clients, PKCE pairs, whole flows), `LoginFixtures`,
+  `OidcFixtures` (`completeFlow`, `verifiedIdToken` checked against the JWKS fetched over HTTP),
+  `MachineFixtures`, `ManagementFixtures` (`adminToken()`, `api()`, with every response checked
+  against the OpenAPI document), `TestSigningKeys`, `Clients`, `Audits`, `BackChannelLogouts`.
+- **Use cases** take `new InMemoryDomainEvents()` and assert on `ofType()`.
+- **Conformance**: the OpenID Foundation suite passes the Config OP plan and, but for one test
+  OAuth 2.1 forbids passing (a code flow without a nonce or PKCE), the Basic OP plan.
+  `conformance/README.md` explains how to run it.
 
-#### [x] Step 10 — RBAC
-- `Role`, `user_roles`, `role_permissions` with a composite foreign key onto `permissions`
-  (migration `0016`); `enforce_policies` on APIs, always on for a system API; `access_denied`
-  at the authorization endpoint for somebody holding nothing, narrowing at redemption
-  (`invalid_grant` once nothing is held).
-- `/api/v1/roles` (CRUD), `/roles/{id}/users` (`GET`, `POST`), `/roles/{id}/users/{user_id}`
-  (`DELETE`), `/users/{id}/roles` (`GET`, `PUT`), `/users/{id}/permissions`; the four `roles`
-  scopes. CLI `roles:create|assign|list`; `seed-dev` gives the development user an
-  Administrator role.
-- Python: `db/models/rbac.py`, `api/roles.py`. Tests: `test_rbac` (17) — ported as `RbacTest`
-  (17 cases); `RoleTest`, `RolesTest`, `RoleCommandsTest`, `RoleRepositoryContract` against the
-  fakes and PostgreSQL, and the resource-server, seeding and contract cases for the new field.
-- The dashboard now gets a token for the Management API, and keeps one with refresh tokens
-  since Step 11.
+Tests state behaviour from the specifications, and name the RFC section where it matters.
 
-#### [x] Step 11 — Refresh token rotation
-- `RefreshToken` + `family_id`, spent under lock, a replay revokes the family and its access
-  tokens (and a replayed code the family it started); idle + absolute lifetimes; every refusal
-  checked before the spend. `UserScope` decides, at code redemption and at every refresh, what
-  a person's token carries.
-- Migration `0017`; `refresh_token` in discovery, the token response and client registrations
-  (only beside `authorization_code`); the dashboard is seeded with it.
-- Tests: `test_refresh_token` (15) — ported as `RefreshTokenTest` (16 cases); unit tests for
-  `RefreshToken`, `RefreshTokenGrant` and the code grant's family; `RefreshTokenRepositoryContract`
-  and the access token contract's family revocation against the fakes and PostgreSQL. The
-  concurrent-refresh case is the row lock: the in-memory and PostgreSQL contracts lock inside a
-  transaction, and only one spend can see the token unspent.
+## Recipes
 
-#### [x] Step 12 — Application ownership and consent
-- Ownership in the client id (`tpc_`), `UserConsent` (migration `0018`), the consent decision
-  table (`prompt=consent`, third-party, `allow_skipping_consent`), `ConsentStateStore`,
-  `/auth/consent`, `/users/{id}/consents`; `prompt=none` answers `login_required` and
-  `consent_required`. Third-party applications never reach a system API.
-- Python: `oauth2/consent.py`, `auth/consent.py`. Tests: `test_consent` (23) — ported as
-  `ConsentTest` (26 cases); `ConsentPolicyTest`, `UserConsentTest`, `PromptTest`,
-  `ConsentScreenTest`, the consent cases of `AuthorizeTest`, `ConsentRepositoryContract`
-  and `ConsentStateStoreContract` against the fakes, PostgreSQL and Redis.
+- **A setting**: a constructor parameter of `Configuration\Settings`, with a default, a doc
+  comment saying why it exists, a `#[Range]` for a number, and a test. Nothing else needs editing.
+- **A console command**: a `symfony/console` command in `Adapter\Primary\Cli`, a factory in
+  `Bootstrap\Container`, one line in `ConfigProvider::CONSOLE_COMMANDS`.
+- **A port and its adapter**: the interface in the domain (a repository) or `Application\Port`;
+  the double in `test/Support/Fake`; a contract in `test/Support/Contract` run by both the
+  double's test and the adapter's integration test; a factory; the alias in `ConfigProvider`.
+- **A table**: a new migration file, the repository through `Database`, an integration test.
+- **A grant**: a class implementing `Token\Grant`, registered in `IssueTokenFactory`; discovery
+  picks it up.
+- **An endpoint**: a route in `config/routes.php` (with the methods it answers), a handler that
+  translates, one use case. If it is advertised, add it to `ProviderMetadata`; `OidcTest` fetches
+  it.
+- **A Management API operation**: the path in `docs/openapi/management-api.yaml`, a route behind
+  `ManagementApiMiddleware`, a handler, a use case. `ManagementApiTest` fails if the routes and the
+  document disagree; `ManagementContractTest` if the document's scopes differ from
+  `ManagementPermission::cases()`. The dashboard regenerates its types from the document.
+- **A domain event**: a readonly class in the context's `Event` namespace, dispatched by the use
+  case, recorded by one trail. `AuditTrailsTest` fails until it is.
+- **A page**: a template in `templates/auth`, an `HtmlPage` built by the handler, an
+  `AuthPagesEscapingTest` case.
+- **A vendor library**: its namespace in deptrac's Vendor layer; reachable from adapters only.
 
-#### [x] Step 13 — Connections
-- Database pools, built-in social, operator-registered OIDC connections (discovery, nonce + PKCE,
-  ID-token verification, JWKS cache), per-application enablement, `OutboundUrlPolicy`.
-- `/api/v1/connections/*`, `PUT /clients/{id}/connections`, identity unlinking.
-- Python: `auth/connections.py`, `api/connections.py`, `social/providers.py`,
-  `db/models/connection.py`. Tests: `test_connections` (29) — ported as `ConnectionsTest`
-  (29 cases); `test_oidc_connection` (16) — ported as `OidcConnectionTest` (14 tests, 25 cases
-  with their data sets); `ConnectionTest`, `ConnectionAccessTest`, `OutboundUrlPolicyTest`,
-  `PinCheckedAddressesTest`, `HttpOidcDiscoveryTest`, `OidcIdentityProviderTest` (the ID-token
-  checks), the connection cases of `AuthorizeTest`, `SignInWithPasswordTest`,
-  `ExternalSignInTest`, `DescribeLoginPageTest`, `ClientsTest` and `UsersTest`;
-  `ConnectionRepositoryContract` and the per-pool cases of the user, client and identity
-  contracts against the fakes and PostgreSQL; `RedisJwksCacheTest`.
+## Definition of done
 
-#### [x] Step 14 — Introspection and revocation
-- RFC 7662 / RFC 7009, per-endpoint client-auth methods, permission rules, family revocation.
-- Tests: `test_introspection_revocation` (17) — ported as `IntrospectionRevocationTest`
-  (18 cases, with a deactivated account's token); `PresentedTokenTest` (the request and the
-  hint), the single revocation case of `AccessTokenRepositoryContract`.
+1. The behaviour is covered by acceptance tests; domain rules by unit tests with no adapter.
+2. Each new port has a double and a contract test, and each new adapter passes it.
+3. `composer check` is green: PHPCS, Psalm level 1, deptrac, PHPUnit.
+4. Public classes and every non-obvious decision are documented, with the RFC section cited.
+5. A change to the Management API is in the OpenAPI document; a change to discovery is in
+   `ProviderMetadata`.
+6. This file is updated when a rule, a flow or the architecture changes.
 
-#### [x] Step 15 — Device authorization
-- RFC 8628: `/oauth2/device/code`, the device grant, polling (`slow_down`, `expired_token`),
-  `/auth/device` review page. Python: `oauth2/device.py`, `auth/device.py`.
-- Tests: `test_device_authorization` (22) — ported as `DeviceAuthorizationTest` (26 cases:
-  another device client, the refresh token, the CSRF check, a code decided twice);
-  `DeviceAuthorizationRulesTest` (the user code, polling, deciding),
-  `DeviceAuthorizationStoreContract` against the fake and Redis, the device cases of
-  `ClientTest`.
+## Known issues and decisions
 
-#### [x] Step 16 — Passwordless and mail
-- `Mailer` port (console/outbox, SMTP, none); code and link challenges; send limits; the built-in
-  `email` connection; CLI `mail:outbox`.
-- Python: `auth/passwordless.py`, `mail.py`. Tests: `test_passwordless` (19) — ported as
-  `PasswordlessTest` (25 cases: mail that cannot leave, the CSRF check, a second factor, the
-  ID token's `amr`, a code handle presented as a link, the code page without a challenge);
-  `PasswordlessSignInTest` (the use cases on fakes), `PasswordlessChallengeTest`,
-  `SignInMailTest`, `MailersTest`, `MailOutboxCommandTest`, `PasswordlessChallengeStoreContract`
-  against the fake and Redis, `RedisMailOutboxTest`.
-
-#### [x] Step 17 — Back-channel logout and session management
-- Logout token (`typ: logout+jwt`), `sid` on codes and ID tokens, session→clients index,
-  `DeferredTasks`, `/users/{id}/sessions`.
-- Python: `oidc/backchannel.py`. Tests: `test_backchannel_logout` (22) — ported as
-  `BackChannelLogoutTest` (26 cases: the session cookie presented again, the `events` claim
-  an object, the failures logged; the discovery case lives in `OidcTest`);
-  `BackChannelLogoutTest` (unit: one deferred task per application, the token's claims),
-  `HttpBackChannelLogoutDeliveryTest`, `AfterResponseTasksTest`, the account and client cases
-  of `SessionStoreContract` against the fake and Redis, the back-channel cases of
-  `ClientsTest`, `ClientRepositoryContract` and `AuthorizeTest`.
-
-#### [x] Step 18 — Authentication-request parameters and complete metadata
-- `prompt`, `max_age`, `request`/`request_uri` refusal; discovery states every non-default
-  field; a test fetches every endpoint the document advertises.
-- Python: `oauth2/prompt.py`. Tests: `test_authorize_prompt` (15).
-- Done: `Domain\OAuth2\Prompt` knows `login` and `select_account` (`demandsSignIn()`,
-  `SUPPORTED`, variadic `without()`); `Domain\OAuth2\MaxAge` (`fromParameter`, `isZero`,
-  `isExceededBy` — an unknown sign-in time is too old); `ErrorCode::RequestNotSupported|
-  RequestUriNotSupported`. `Authorize` refuses request objects first (after the client and
-  redirect URI), then decides once whether the person must be seen again; the request the
-  login page resumes drops `login`/`select_account` and a zero `max_age`, keeps a positive
-  one. Discovery: `prompt_values_supported`.
-- Tests: `AuthorizePromptTest` (18 acceptance cases), `MaxAgeTest`, the `login`/`max_age`/
-  request-object cases of `AuthorizeTest` and `PromptTest`, `OidcTest` (the prompt values).
-
-#### [x] Step 19 — Remote signing backends
-- `aws-kms`, `gcp-kms`, `azure-key-vault` and custom-class adapters behind `TokenSigner`
-  (message-vs-digest semantics per provider); SDKs as optional Composer suggestions.
-- Tests: rest of `test_signing_backends` (15), against fakes.
-- Done: `Adapter\Secondary\Signing\Remote\` — `RemoteSigningKey` (the SPI, also a custom
-  backend's contract: `reference()`, `sign($digest, $alg)`, `publicKey($alg)`),
-  `RemoteTokenSigner` (kid = thumbprint, retired keys published, every signature verified before
-  it leaves, public keys memoised and cached), `PublicKeyCache` (`Redis\RedisPublicKeyCache`, a
-  day), `SubjectPublicKeyInfo`, `JsonApi`, `AccessTokens`/`IssuedToken`, `InvalidKeyReference`;
-  `Aws\AwsKmsKey` (SDK, `MessageType=DIGEST`), `Gcp\{GcpKmsKey,GoogleCredentials}` (REST, CRC32C
-  both ways; `google/auth`), `Azure\{AzureKeyVaultKey,ManagedIdentity,EntraApplication}` (REST,
-  no SDK). `Bootstrap\{SigningBackend,RemoteSigningKeys}`, `SigningHttpClientFactory` (no SSRF
-  pin: IMDS is link-local). Settings `signingRetiredKeyRefs`, `azureTenantId`, `azureClientId`,
-  `azureClientSecret`, `azureFederatedTokenFile`. `SigningKeyStore` and `keys:*` refuse a remote
-  backend; `seed-dev` leaves its keys alone. `aws/aws-sdk-php` and `google/auth` are
-  `require-dev` (so the adapters are analysed) and `suggest`.
-- Tests: `RemoteSigningKeyContract` against `AwsKmsKeyTest`, `GcpKmsKeyTest`,
-  `AzureKeyVaultKeyTest`; `AzureCredentialsTest`, `RemoteTokenSignerTest`,
-  `RemoteSigningSupportTest`, `RedisPublicKeyCacheTest`, `RemoteSigningTest` (acceptance: boot
-  refusals, and a custom backend end to end through the JWKS); fakes `LocalHsm`, `FakeKms` (the
-  real SDK on `Aws\MockHandler`), `FakeCloudKms`, `FakeKeyVault`, `LocalSigningKey`.
-
-### Phase D — Parity and cut-over
-
-#### [x] Step 20 — Parity gate
-- Parity matrix: every Python test mapped to its PHP counterpart (404/404).
-- Run the OpenID Foundation conformance suite (Basic OP, Config OP) against both servers.
-- Black-box diff: the same scripted flows against Python and PHP, responses compared.
-- README, deployment docs, `docs/DEVIATIONS.md` reviewed; security review of every adapter.
-- Done: `docs/PARITY.md` maps all 404 Python tests (two gaps filled on the way:
-  `PhpDbAccessTokenRepositoryTest::testTwoRefreshesOfOneTokenAtOnceLetExactlyOneWin`, two real
-  sessions racing for one refresh token; `RemoteSigningTest::testThePostgresBackendIsTheDefault`).
-  Conformance against PHP only, and no black-box diff (decided 2026-11-21: Python compatibility
-  is not a goal, and `DEVIATIONS.md` already lists every difference): Config OP passes; Basic OP
-  passes but for `oidcc-ensure-request-without-nonce-succeeds-for-code-flow`, which OAuth 2.1
-  forbids passing — `conformance/README.md` (results, warnings, how to run, `provision.py`).
-  For the suite, `require_pkce` per client (migration `0022_optional_pkce`;
-  `Client::$requiresPkce`/`withPkceRequired()`, `AuthorizationCode::$challenge` nullable, a
-  verifier for a code without a challenge is `invalid_grant`). `docs/SECURITY-REVIEW.md`; its
-  finding fixed: `Application\OAuth2\Device\UserCodeThrottle` (RFC 8628 §5.1).
-
-#### [ ] Step 21 — Cut-over
-- Publish the repository; archive the Python project as reference.
-
-### Phase E — Beyond the Python project
-- [x] Audit logs: the `AuditLog` port, recorded by every use case that changes access, read at
-  `GET /api/v1/audit-events`, trimmed by `audit:purge` (see "Current state").
-- [x] Dashboard as a Next.js application, in the `clavia-dashboard` repository; below.
-- [ ] Multi-tenancy, if it turns out to be worth the complexity (see `clavia-old/CLAUDE.md`).
-
-#### [x] Dashboard as a Next.js application
-
-The dashboard becomes what the server already treats it as — one first-party client of the
-Management API among others — and stops living inside the server's repository.
-
-- **Its own repository** (`clavia-dashboard`), built against the published contract only:
-  `docs/openapi/management-api.yaml` and the discovery document. TypeScript types are generated
-  from the OpenAPI document, not mirrored by hand (today's `types.ts`, `scopes.ts`). Nothing of the
-  server's internals is reachable from it, which proves the API sufficient on its own; the two
-  release independently.
-- **Same address as today: `https://management.{domain}/dashboard/`.** Next.js runs with
-  `basePath: '/dashboard'`; Caddy reverse-proxies `management.{domain}/dashboard/*` to the Next.js
-  server and keeps `/api/v1/*` on PHP-FPM. Dashboard and Management API stay one origin, separate
-  from `auth.*` ("Domain configuration"): the dashboard's server-side calls to `/api/v1/*` and the
-  browser's requests to the dashboard never cross an origin. The dashboard's cookies are scoped to
-  `Path=/dashboard`, `Secure`, `HttpOnly`, `SameSite=Lax`.
-- **A backend for frontend, no token in the browser** (IETF "OAuth 2.0 for Browser-Based
-  Applications", the BFF pattern). The dashboard is a **confidential** first-party client:
-  authorization code + PKCE with `client_secret_basic`; the access, refresh and ID tokens are kept
-  server-side in an encrypted session the browser holds only a cookie for; refresh happens on the
-  server; every Management API call is made by the Next.js server (route handlers / server
-  actions) with the operator's access token. The browser talks to the dashboard only.
-- **Architecture** (asked 2026-11-21: "clean, robust, state of the art; clean code, hexagonal
-  if suitable"): App Router with React Server Components; the Management API, the OIDC client
-  and the session store behind ports (`core/`: domain types and use cases, no Next.js or
-  `fetch` in it), adapters at the edge (`adapters/`: the generated OpenAPI client, the token
-  endpoint, the encrypted session), `app/` routes and server actions as the primary adapters.
-  Mutations are server actions validated with zod; reads are server components with
-  streaming and `loading.tsx` skeletons; optimistic updates and toasts so the UI stays fluid.
-- **Look and feel**: professional and smooth — the palette taken from the logo
-  (`public/auth/static/clavia-icon.svg`: green `#52B788`, gold `#D4A843`) as the shadcn/ui theme
-  tokens, light and dark.
-- **Styling: Tailwind v4 and shadcn/ui** (decided 2026-11-21) — shadcn's components (Radix
-  primitives, code owned in the repository) for tables, dialogs, commands, toasts, with its theme
-  tokens set to the logo's palette in OKLCH, light and dark, every pair WCAG AA. Panda CSS was
-  weighed and set aside: typed tokens and recipes, but a far smaller component ecosystem. Worth
-  reopening only for a design system shared by several Clavia front ends.
-- **Authority stays the operator's**: the dashboard asks for the Management API scopes and gets
-  what the operator's roles grant (Step 10), as today; a page offers only what the token holds.
-- **Sign-out**: RP-Initiated Logout as today, the refresh token revoked server-side (Step 14), and
-  a `backchannel_logout_uri` (Step 17) so a sign-out anywhere ends the dashboard's session too.
-- **The audit trail** (the step before) gets its pages from the start.
-- **On this side**: `frontend/` is removed, with Caddy's static `/dashboard/` handling (replaced by
-  the reverse proxy to `CLAVIA_DASHBOARD_UPSTREAM`), its Content-Security-Policy snippets (the
-  dashboard sets its own) and the CORS allowlist of `auth.*` (its token, refresh and revocation
-  requests are server-to-server); `seed-dev` registers the dashboard as a confidential client —
-  redirect, post-logout and back-channel logout URIs under `management.{domain}/dashboard/` — and
-  prints its settings. The dashboard runs on the host in development (`npm run dev`), not as a
-  compose service: Turbopack's file watching and reloads are faster there.
-- **Tests**: the OpenAPI contract is the only shared artefact, so the server keeps checking every
-  response against it. The dashboard repository carries its own unit tests and a Playwright smoke
-  suite that signs in through this server's login page; running it against a tagged image in CI
-  waits for the image to be published.
-
-## Definition of done for a step
-
-1. Every listed Python test has a passing PHP acceptance test of the same name.
-2. Domain rules have unit tests that use no adapter.
-3. Each new port has a fake and a contract test; each new adapter passes it.
-4. `composer check` is green: PHPCS, Psalm level 1, deptrac, PHPUnit.
-5. Public classes and every non-obvious decision are documented, with the RFC section cited.
-6. "Current state" in this file is updated.
-
-## Open questions
-
-None at the moment. Record new ones here as they come up.
+- **The database library is pinned, with a workaround.** At the pinned commit,
+  `php-db/phpdb-pgsql` runs `SELECT LASTVAL()` after every statement. In a session that has not
+  used a sequence, that query fails; the library swallows the exception, but PostgreSQL has
+  already aborted the transaction, so its writes are silently discarded and `COMMIT` becomes a
+  `ROLLBACK`. `PostgresConnection` overrides the lookup;
+  `DatabaseTest::testReadingInsideATransactionDoesNotDiscardItsWrites` fails without it. The
+  library is pre-1.0; persistence is behind ports, so a break touches
+  `Adapter/Secondary/Persistence/PhpDb` alone.
+- **Own OAuth 2.1 / OIDC engine.** The protocol is implemented from the RFCs in the domain and
+  application layers; there is no external OAuth server library.
+- **PHP-FPM behind Caddy**, share-nothing: no worker mode, no long-lived state in PHP. Work after
+  the response runs through `DeferredTasks` after `fastcgi_finish_request()`; a queue adapter can
+  replace it behind the same port.
+- **Mail** goes through Symfony Mailer's ESMTP transport (`smtp`, STARTTLS required unless turned
+  off, SMTPS on 465), plus `console` (development) and `none`. No queue: a sign-in email is sent
+  while the person waits.
+- **Libraries**: Mezzio (PSR-7/11/15, laminas-servicemanager, FastRoute) as the HTTP adapter;
+  laminas-view for pages; symfony/console; Guzzle as the PSR-18 client; `web-token/jwt-library`
+  for verification only; `bacon/bacon-qr-code`; monolog. No Twig, no front-end framework.
+- **The dashboard** is the Next.js application of the
+  [clavia-dashboard](https://github.com/clavia-auth/clavia-dashboard) repository: a confidential
+  client (a backend for frontend) that knows this server only by the OpenAPI document and
+  discovery, and calls `auth.*` from its own server, never from a browser. `seed-dev` registers
+  it with fixed development credentials and back-channel logout (`sid` required), and prints its
+  settings. Caddy forwards `/dashboard` to `CLAVIA_DASHBOARD_UPSTREAM` (its dev server on the host,
+  port 3000, by default).
+- **Not built**: multi-tenancy. If it comes, the infrastructure subdomains (`auth`,
+  `management`, `www`…) are reserved labels on any domain, and a new host stays a database row,
+  not a redeploy.

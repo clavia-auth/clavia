@@ -22,5 +22,8 @@ certs/*.pem
 # Browser automation output
 .playwright-mcp/
 
+# Files the Claude app saves beside the project when it hands one over.
+/Claude outputs/
+
 # Output of `composer check` captured for review; never part of the repository.
 /check-output.txt
