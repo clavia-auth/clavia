@@ -421,4 +421,100 @@ final class SettingsTest extends TestCase
         self::assertSame(['auth', 'management', 'www'], Settings::RESERVED_SUBDOMAIN_LABELS);
         self::assertNotContains('api', Settings::RESERVED_SUBDOMAIN_LABELS);
     }
+
+    // ── Passkeys ────────────────────────────────────────────────────────────────
+
+    public function testPasskeysAreOnAndBoundToTheSignInHostByDefault(): void
+    {
+        $settings = Settings::fromEnvironment(self::MINIMAL);
+
+        self::assertTrue($settings->passkeysEnabled);
+        self::assertSame('auth.acme.com', $settings->webauthnRpId);
+        self::assertSame('acme.com', $settings->webauthnRpName);
+        self::assertSame('https://auth.acme.com', $settings->webauthnOrigin());
+        self::assertSame(300, $settings->webauthnCeremonyLifetime);
+        self::assertSame(10, $settings->passkeyMaxPerUser);
+        self::assertSame(600, $settings->passkeyReauthWindow);
+    }
+
+    public function testTheRelyingPartyFollowsAnExplicitIssuerPortIncluded(): void
+    {
+        $settings = Settings::fromEnvironment(self::MINIMAL + ['CLAVIA_ISSUER_URL' => 'https://login.acme.com:8443']);
+
+        self::assertSame('login.acme.com', $settings->webauthnRpId);
+        self::assertSame('https://login.acme.com:8443', $settings->webauthnOrigin());
+    }
+
+    public function testTheRelyingPartyMayBeTheRootDomainAndKeepsItsName(): void
+    {
+        $settings = Settings::fromEnvironment(self::MINIMAL + [
+            'CLAVIA_WEBAUTHN_RP_ID' => 'ACME.com.',
+            'CLAVIA_WEBAUTHN_RP_NAME' => ' Acme Inc. ',
+        ]);
+
+        self::assertSame('acme.com', $settings->webauthnRpId);
+        self::assertSame('Acme Inc.', $settings->webauthnRpName);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function relyingPartiesThatAreRefused(): iterable
+    {
+        yield 'another domain' => ['evil.example'];
+        yield 'a public suffix' => ['com'];
+        yield 'below the sign-in host' => ['sso.auth.acme.com'];
+        yield 'a sibling of the sign-in host' => ['management.acme.com'];
+        yield 'not a domain' => ['https://auth.acme.com'];
+    }
+
+    #[DataProvider('relyingPartiesThatAreRefused')]
+    public function testARelyingPartyNoBrowserWouldAcceptIsRefusedAtStartup(string $rpId): void
+    {
+        $this->expectException(InvalidSettings::class);
+        $this->expectExceptionMessageIsOrContains('CLAVIA_WEBAUTHN_RP_ID');
+
+        Settings::fromEnvironment(self::MINIMAL + ['CLAVIA_WEBAUTHN_RP_ID' => $rpId]);
+    }
+
+    public function testWithPasskeysOffTheRelyingPartyIsNotChecked(): void
+    {
+        $settings = Settings::fromEnvironment(self::MINIMAL + [
+            'CLAVIA_PASSKEYS_ENABLED' => 'false',
+            'CLAVIA_WEBAUTHN_RP_ID' => 'evil.example',
+        ]);
+
+        self::assertFalse($settings->passkeysEnabled);
+    }
+
+    #[DataProvider('loopbackIssuers')]
+    public function testAPlaintextLoopbackIssuerTurnsPasskeysOffAndSaysSo(string $issuer): void
+    {
+        $settings = Settings::fromEnvironment(self::MINIMAL + ['CLAVIA_ISSUER_URL' => $issuer]);
+
+        self::assertFalse($settings->passkeysEnabled);
+        self::assertCount(1, $settings->warnings());
+        self::assertStringContainsString('Passkeys are off', $settings->warnings()[0]);
+    }
+
+    #[DataProvider('passkeyBounds')]
+    public function testPasskeyNumbersAreBounded(string $variable, string $value): void
+    {
+        $this->expectException(InvalidSettings::class);
+
+        Settings::fromEnvironment(self::MINIMAL + [$variable => $value]);
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function passkeyBounds(): iterable
+    {
+        yield 'a ceremony too short' => ['CLAVIA_WEBAUTHN_CEREMONY_LIFETIME', '59'];
+        yield 'a ceremony too long' => ['CLAVIA_WEBAUTHN_CEREMONY_LIFETIME', '601'];
+        yield 'no passkey at all' => ['CLAVIA_PASSKEY_MAX_PER_USER', '0'];
+        yield 'too many passkeys' => ['CLAVIA_PASSKEY_MAX_PER_USER', '51'];
+        yield 'a window too short' => ['CLAVIA_PASSKEY_REAUTH_WINDOW', '59'];
+        yield 'a window too long' => ['CLAVIA_PASSKEY_REAUTH_WINDOW', '86401'];
+    }
 }

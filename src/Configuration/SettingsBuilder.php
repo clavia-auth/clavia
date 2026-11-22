@@ -190,10 +190,16 @@ final class SettingsBuilder
     private function derive(Settings $settings): Settings
     {
         $rootDomain = $this->rootDomain($settings->rootDomain);
+        $issuer = $this->issuer($settings, $rootDomain);
 
         return $settings->with([
             'rootDomain' => $rootDomain,
-            'issuerUrl' => $this->issuer($settings, $rootDomain),
+            'issuerUrl' => $issuer,
+            // A plaintext issuer is only ever loopback in development (see issuer()); passkeys need
+            // https, so they are off there, and warnings() says why.
+            'passkeysEnabled' => $settings->passkeysEnabled && parse_url($issuer, PHP_URL_SCHEME) === 'https',
+            'webauthnRpId' => $this->relyingPartyId($settings, $issuer, $rootDomain),
+            'webauthnRpName' => trim($settings->webauthnRpName) !== '' ? trim($settings->webauthnRpName) : $rootDomain,
             'trustedProxies' => $this->trustedProxies($settings->trustedProxies),
             'databaseUrl' => $settings->databaseUrl !== '' ? $settings->databaseUrl : sprintf(
                 'postgresql://%s:%s@%s:%d/%s',
@@ -270,6 +276,38 @@ final class SettingsBuilder
                     $this->quote($candidate),
                 ));
             }
+        }
+
+        return $candidate;
+    }
+
+    /**
+     * The WebAuthn relying party id, derived as the sign-in host and checked against it.
+     *
+     * WebAuthn Level 3 §5.1.3 lets a page use its own host or a registrable domain suffix of it. A
+     * suffix outside CLAVIA_ROOT_DOMAIN could be a public suffix (`com`) or someone else's domain,
+     * so the id must be the sign-in host or a parent of it within the root domain. With passkeys off
+     * the id is not checked: nothing uses it.
+     *
+     * @throws InvalidSettings
+     */
+    private function relyingPartyId(Settings $settings, string $issuer, string $rootDomain): string
+    {
+        $host = strtolower((string) parse_url($issuer, PHP_URL_HOST));
+        $candidate = rtrim(strtolower(trim($settings->webauthnRpId)), '.');
+        $candidate = $candidate === '' ? $host : $candidate;
+        if (! $settings->passkeysEnabled || parse_url($issuer, PHP_URL_SCHEME) !== 'https') {
+            return $candidate;
+        }
+        $withinHost = $candidate === $host || str_ends_with($host, '.' . $candidate);
+        $withinRoot = $candidate === $rootDomain || str_ends_with($candidate, '.' . $rootDomain);
+        if (preg_match(self::DOMAIN_PATTERN, $candidate) !== 1 || ! $withinHost || ! $withinRoot) {
+            throw new InvalidSettings(sprintf(
+                'CLAVIA_WEBAUTHN_RP_ID must be the sign-in host %s or a parent of it within %s, got %s.',
+                $this->quote($host),
+                $this->quote($rootDomain),
+                $this->quote($candidate),
+            ));
         }
 
         return $candidate;

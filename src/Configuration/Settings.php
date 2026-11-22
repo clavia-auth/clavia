@@ -239,6 +239,33 @@ final readonly class Settings
         #[Range(min: 1, max: 1000)]
         public int $signUpLimit = 10,
         // ------------------------------------------------------------------
+        // Passkeys (docs/design/passkeys.md)
+        // ------------------------------------------------------------------
+        /** Turns every passkey page and flow on or off. */
+        public bool $passkeysEnabled = true,
+        /**
+         * The WebAuthn relying party id: the domain every passkey is bound to. Derived as the
+         * sign-in host; it may be a parent of it within CLAVIA_ROOT_DOMAIN, and nothing else, or
+         * no browser would accept it. Changing it orphans every passkey already registered, so it
+         * is decided once, per deployment.
+         */
+        public string $webauthnRpId = '',
+        /** The name authenticators show beside a passkey. Derived as CLAVIA_ROOT_DOMAIN. */
+        public string $webauthnRpName = '',
+        /** How long a WebAuthn ceremony may take, seconds: from the options sent to the response. */
+        #[Range(min: 60, max: 600)]
+        public int $webauthnCeremonyLifetime = 300,
+        /** Passkeys one account may hold. */
+        #[Range(min: 1, max: 50)]
+        public int $passkeyMaxPerUser = 10,
+        /**
+         * Seconds since sign-in within which a person may add or remove a passkey. Later, they sign
+         * in again first: a browser left signed in should not be enough to change how the account
+         * is protected.
+         */
+        #[Range(min: 60, max: 86400)]
+        public int $passkeyReauthWindow = 600,
+        // ------------------------------------------------------------------
         // OAuth2
         // ------------------------------------------------------------------
         /** Authorization codes are single-use and short-lived; OAuth 2.1 recommends one minute at most. */
@@ -339,6 +366,19 @@ final readonly class Settings
         return $this->emailFrom ?? 'no-reply@' . $this->rootDomain;
     }
 
+    /**
+     * The origin a WebAuthn ceremony must come from: the issuer's scheme, host and port. The sign-in
+     * pages are served there, and a browser reports exactly this.
+     */
+    public function webauthnOrigin(): string
+    {
+        $scheme = (string) parse_url($this->issuerUrl, PHP_URL_SCHEME);
+        $host = (string) parse_url($this->issuerUrl, PHP_URL_HOST);
+        $port = parse_url($this->issuerUrl, PHP_URL_PORT);
+
+        return $scheme . '://' . $host . (is_int($port) ? ':' . $port : '');
+    }
+
     /** The issuer identifier: the exact value of every `iss` claim. */
     public function issuer(): string
     {
@@ -355,6 +395,10 @@ final readonly class Settings
     {
         $warnings = [];
 
+        if (! $this->passkeysEnabled && parse_url($this->issuerUrl, PHP_URL_SCHEME) !== 'https') {
+            $warnings[] = 'Passkeys are off: they need the sign-in pages on https, and the issuer is '
+                . $this->issuerUrl . '.';
+        }
         if ($this->signingBackend === 'postgres' && $this->env === Environment::Production) {
             $warnings[] = 'CLAVIA_SIGNING_BACKEND=postgres in production keeps the private signing key in the '
                 . 'database, where anyone holding both a backup and CLAVIA_SECRET_ENCRYPTION_KEY can mint '
