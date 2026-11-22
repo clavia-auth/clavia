@@ -6,6 +6,60 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-23
+
+Passkeys: as a second factor, and as the way in (`docs/design/passkeys.md`, phases 1 and 2).
+
+### Added
+
+- **Passkeys as a second factor.** People add, rename and remove passkeys at `/auth/passkeys`, after
+  a recent sign-in (`CLAVIA_PASSKEY_REAUTH_WINDOW`). An account with a passkey is asked for it after
+  its password, at `/auth/mfa`; a recovery code works instead, for either kind of second factor.
+  The first passkey of an account with no authenticator app and no recovery codes brings a set,
+  shown once.
+- **Signing in with a passkey.** The login page offers passkeys in the address field's autofill and
+  behind a "Sign in with a passkey" button, wherever the application lets anybody in: no address is
+  typed. A passkey whose authenticator verified the person (a biometric or a PIN) is multi-factor
+  by itself (`CLAVIA_PASSKEY_SATISFIES_MFA`, on by default). Every refusal looks like a wrong
+  password.
+- **`amr`** carries `hwk` for a device-bound passkey and `swk` for a synced one (RFC 8176), with
+  `user` when nobody was verified, then `mfa`.
+- **Management API**: `GET /api/v1/users/{user_id}/passkeys` and
+  `DELETE /api/v1/users/{user_id}/passkeys/{passkey_id}`; users gain `passkey_count`. No new scope.
+- **Audit**: `passkey.registered`, `passkey.renamed`, `passkey.removed` and
+  `passkey.counter_regressed`; failed sign-ins gain the reasons `unknown_passkey`,
+  `invalid_passkey` and `passkey_counter_regressed`. Nothing records a credential id or a key.
+- **Settings**: `CLAVIA_PASSKEYS_ENABLED`, `CLAVIA_WEBAUTHN_RP_ID`, `CLAVIA_WEBAUTHN_RP_NAME`,
+  `CLAVIA_WEBAUTHN_CEREMONY_LIFETIME`, `CLAVIA_PASSKEY_MAX_PER_USER`, `CLAVIA_PASSKEY_REAUTH_WINDOW`
+  and `CLAVIA_PASSKEY_SATISFIES_MFA`, documented in `src/Configuration/Settings.php`. Every default
+  is ready to use; the relying party id is the sign-in host.
+- **Migration `0025_passkeys`**: the `passkeys` table. Run `clavia db:migrate` when upgrading.
+
+### Changed
+
+- **The sign-in origin runs one script**, `/auth/static/passkeys.js`, on the pages that need it: the
+  login page, the second-factor page and the passkey pages. Those pages allow `script-src 'self'`
+  with Trusted Types and no policy (no inline script, no `eval`, no other origin); every other page
+  still allows no script. Every page now sends `Permissions-Policy` confining WebAuthn to this
+  origin. With `CLAVIA_PASSKEYS_ENABLED=false` no page runs script.
+- **`mfa_enrolled`** on a user is true for a confirmed authenticator app *or* a passkey, and
+  **`passkey_count` is a new required field** of `User`: clients that generate types from
+  `docs/openapi/management-api.yaml` regenerate them.
+- **Turning the authenticator app off** keeps the recovery codes while a passkey remains. An
+  operator's reset (`DELETE /api/v1/users/{user_id}/mfa`) still removes them.
+
+### Security
+
+- Passkeys are bound to the sign-in origin, matched exactly. A ceremony is single-use, short-lived
+  and bound to what it answers. A signature counter that goes back refuses the sign-in and is
+  audited.
+- After a passkey sign-in, a passkey is never accepted as the second factor, so one device cannot
+  count twice.
+- Passkeys need the sign-in pages on https: an issuer that is not (loopback in development) turns
+  them off, with a warning.
+- Verification uses `web-auth/webauthn-lib` 5.3, behind one adapter. Attestation is `none`: the
+  make of an authenticator labels a passkey and never decides anything.
+
 ## [0.1.0] - 2026-11-22
 
 The first release: an OAuth 2.1 / OpenID Connect authorization server with interactive sign-in,
@@ -102,5 +156,6 @@ forbids passing (a code flow with neither PKCE nor a `nonce`); see
 - Request objects (`request`, `request_uri`) and the `address` and `phone` scopes.
 - A queue for mail: a sign-in email is sent while the person waits.
 
-[Unreleased]: https://github.com/clavia-auth/clavia/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/clavia-auth/clavia/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/clavia-auth/clavia/releases/tag/v0.2.0
 [0.1.0]: https://github.com/clavia-auth/clavia/releases/tag/v0.1.0
