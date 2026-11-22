@@ -36,7 +36,7 @@ gh api repos/clavia-auth/clavia/issues/<pr>/comments  --jq '.[] | "\(.user.login
 # a reply in an inline thread
 gh api repos/clavia-auth/clavia/pulls/<pr>/comments/<comment-id>/replies -f body="Done in <sha>: …"
 # then ask for review again
-gh api repos/clavia-auth/clavia/pulls/<pr>/requested_reviewers -f "reviewers[]=jguittard"
+gh api repos/clavia-auth/clavia/pulls/<pr>/requested_reviewers -f "reviewers[]=jguittard"   # skip when the pull request is opened as jguittard: GitHub refuses (422)
 ```
 
 Each reply says what changed and in which commit, or why not. When the pull request is approved
