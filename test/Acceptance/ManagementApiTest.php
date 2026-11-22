@@ -359,6 +359,28 @@ final class ManagementApiTest extends AcceptanceTestCase
         self::assertSame(303, $this->submitLogin('real@clavia.dev', 'a-good-password')->getStatusCode());
     }
 
+    public function testAUserCreatedWithoutAPasswordCannotSignInWithOne(): void
+    {
+        $this->adminToken();
+
+        $created = $this->api('POST', self::USERS, ['email' => 'invited@clavia.dev']);
+
+        self::assertSame(201, $created->getStatusCode(), (string) $created->getBody());
+        self::assertFalse(self::document($created)['has_password']);
+        self::assertSame(401, $this->submitLogin('invited@clavia.dev', '')->getStatusCode());
+        self::assertSame(401, $this->submitLogin('invited@clavia.dev', 'a-good-password')->getStatusCode());
+    }
+
+    public function testAPasswordGivenWithNoValueIsNotTheSameAsNone(): void
+    {
+        $this->adminToken();
+
+        $response = $this->api('POST', self::USERS, ['email' => 'null@clavia.dev', 'password' => null]);
+
+        self::assertSame(422, $response->getStatusCode());
+        self::assertSame('/password', self::document($response)['errors'][0]['pointer'] ?? null);
+    }
+
     public function testChangingTheEmailResetsVerification(): void
     {
         $this->adminToken();

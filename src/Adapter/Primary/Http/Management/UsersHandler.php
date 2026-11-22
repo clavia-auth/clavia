@@ -50,7 +50,7 @@ final readonly class UsersHandler implements RequestHandlerInterface
     {
         $user = ($this->create)(new NewUser(
             $body->string('email') ?? throw new LogicException("The contract requires 'email'."),
-            $body->string('password') ?? throw new LogicException("The contract requires 'password'."),
+            $body->string('password'),
             $body->bool('email_verified') ?? false,
             $body->bool('is_active') ?? true,
             UserFields::profile($body),

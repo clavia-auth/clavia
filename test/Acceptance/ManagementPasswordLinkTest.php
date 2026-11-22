@@ -94,6 +94,32 @@ final class ManagementPasswordLinkTest extends AcceptanceTestCase
         self::assertSame(303, $this->signIn(self::PASSWORD)->getStatusCode());
     }
 
+    public function testAnAccountCreatedThroughTheApiWithoutAPasswordIsInvitedAndSignsIn(): void
+    {
+        $this->adminToken();
+        $created = $this->api('POST', '/api/v1/users', ['email' => self::EMAIL]);
+        self::assertSame(201, $created->getStatusCode(), (string) $created->getBody());
+        $id = self::document($created)['id'];
+        self::assertIsString($id);
+        self::assertSame(401, $this->signIn(self::PASSWORD)->getStatusCode(), 'There is no password yet.');
+
+        $invited = $this->api('POST', '/api/v1/users/' . $id . '/password-reset');
+
+        self::assertSame(202, $invited->getStatusCode(), (string) $invited->getBody());
+        self::assertSame(['kind' => 'invitation'], self::document($invited));
+        $link = self::linkIn($this->lastMail());
+        $form = $this->get($link);
+        $changed = $this->post('/auth/password/reset', [
+            'token' => self::tokenOf($link),
+            'password' => self::PASSWORD,
+            'csrf_token' => self::csrfTokenFrom($form),
+        ]);
+        self::assertSame(200, $changed->getStatusCode(), (string) $changed->getBody());
+        self::assertTrue(self::document($this->api('GET', '/api/v1/users/' . $id))['has_password']);
+        $this->clearCookies();
+        self::assertSame(303, $this->signIn(self::PASSWORD)->getStatusCode());
+    }
+
     public function testTheLinkDiesOnceThePasswordIsChosen(): void
     {
         $user = $this->account(null);
