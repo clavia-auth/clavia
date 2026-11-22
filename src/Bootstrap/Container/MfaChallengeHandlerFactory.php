@@ -14,6 +14,8 @@ namespace Clavia\Bootstrap\Container;
 use Clavia\Adapter\Primary\Http\Auth\AuthCookies;
 use Clavia\Adapter\Primary\Http\Auth\AuthPageResponder;
 use Clavia\Adapter\Primary\Http\Auth\MfaChallengeHandler;
+use Clavia\Application\Authentication\Mfa\BeginPasskeySecondFactor;
+use Clavia\Application\Authentication\Mfa\CompletePasskeySecondFactor;
 use Clavia\Application\Authentication\Mfa\CompleteSecondFactor;
 use Clavia\Application\Authentication\Mfa\DescribeSecondFactorPage;
 use Psr\Container\ContainerInterface;
@@ -26,11 +28,15 @@ final class MfaChallengeHandlerFactory
         $describe = $container->get(DescribeSecondFactorPage::class);
         /** @var CompleteSecondFactor $complete */
         $complete = $container->get(CompleteSecondFactor::class);
+        /** @var BeginPasskeySecondFactor $beginPasskey */
+        $beginPasskey = $container->get(BeginPasskeySecondFactor::class);
+        /** @var CompletePasskeySecondFactor $completePasskey */
+        $completePasskey = $container->get(CompletePasskeySecondFactor::class);
         /** @var AuthPageResponder $responder */
         $responder = $container->get(AuthPageResponder::class);
         /** @var AuthCookies $cookies */
         $cookies = $container->get(AuthCookies::class);
 
-        return new MfaChallengeHandler($describe, $complete, $responder, $cookies);
+        return new MfaChallengeHandler($describe, $complete, $beginPasskey, $completePasskey, $responder, $cookies);
     }
 }

@@ -29,6 +29,7 @@ use ClaviaTest\Support\Fake\FakeSecretCipher;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
+use ClaviaTest\Support\Fake\InMemoryPasskeyRepository;
 use ClaviaTest\Support\Fake\InMemoryRecoveryCodeRepository;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
@@ -160,6 +161,7 @@ final class TotpEnrollmentTest extends TestCase
         $disable = new DisableMfa(
             $this->factors,
             $this->recoveryCodes,
+            new InMemoryPasskeyRepository(),
             $this->transactions,
             new InMemoryDomainEvents(),
         );
@@ -193,7 +195,13 @@ final class TotpEnrollmentTest extends TestCase
 
     private function describe(): ?MfaStatus
     {
-        return (new DescribeMfa($this->users, $this->factors, $this->recoveryCodes))($this->user->id);
+        return new DescribeMfa(
+            $this->users,
+            $this->factors,
+            $this->recoveryCodes,
+            new InMemoryPasskeyRepository(),
+            true,
+        )($this->user->id);
     }
 
     private function resume(): ?TotpEnrollment

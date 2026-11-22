@@ -16,6 +16,7 @@ use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
+use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
 use Psr\Container\ContainerInterface;
 
 final class DisableMfaFactory
@@ -26,11 +27,13 @@ final class DisableMfaFactory
         $factors = $container->get(MfaFactorRepository::class);
         /** @var RecoveryCodeRepository $recoveryCodes */
         $recoveryCodes = $container->get(RecoveryCodeRepository::class);
+        /** @var PasskeyRepository $passkeys */
+        $passkeys = $container->get(PasskeyRepository::class);
         /** @var TransactionManager $transactions */
         $transactions = $container->get(TransactionManager::class);
         /** @var DomainEvents $events */
         $events = $container->get(DomainEvents::class);
 
-        return new DisableMfa($factors, $recoveryCodes, $transactions, $events);
+        return new DisableMfa($factors, $recoveryCodes, $passkeys, $transactions, $events);
     }
 }

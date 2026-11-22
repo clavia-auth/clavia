@@ -101,6 +101,9 @@ return static function (Application $app, ContainerInterface $container): void {
     $app->post('/auth/theme', ThemeHandler::class, 'auth.theme');
     // The second step of a sign-in, and the account holder's own two-factor settings.
     $app->route('/auth/mfa', MfaChallengeHandler::class, ['GET', 'POST'], 'auth.mfa');
+    if ($settings->passkeysEnabled) {
+        $app->post('/auth/mfa/passkey', MfaChallengeHandler::class, 'auth.mfa.passkey');
+    }
     $app->route('/auth/mfa/enroll', MfaSettingsHandler::class, ['GET', 'POST'], 'auth.mfa.enroll');
     $app->post('/auth/mfa/enroll/confirm', MfaSettingsHandler::class, 'auth.mfa.enroll.confirm');
     $app->post('/auth/mfa/disable', MfaSettingsHandler::class, 'auth.mfa.disable');

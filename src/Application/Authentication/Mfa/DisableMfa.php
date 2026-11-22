@@ -16,17 +16,24 @@ use Clavia\Application\Port\TransactionManager;
 use Clavia\Domain\Authentication\Event\SecondFactorRemoved;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
+use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
 use Clavia\Domain\Identity\UserId;
 
 /**
- * Turn two-factor authentication off: every factor and every recovery code goes.
- * Idempotent — afterwards it is off, however many times it was asked.
+ * Turn the authenticator app off. Idempotent: afterwards it is off, however many times it was
+ * asked.
+ *
+ * Recovery codes are the way back for every second factor, so when the account holder turns the
+ * app off but keeps passkeys, the codes stay with the passkeys. An operator's reset is for
+ * somebody who lost their device and their codes alike, and takes the codes as well; passkeys
+ * are removed one by one, so the operator sees what they remove.
  */
 final readonly class DisableMfa
 {
     public function __construct(
         private MfaFactorRepository $factors,
         private RecoveryCodeRepository $recoveryCodes,
+        private PasskeyRepository $passkeys,
         private TransactionManager $transactions,
         private DomainEvents $events,
     ) {
@@ -40,7 +47,9 @@ final readonly class DisableMfa
     {
         $this->transactions->transactional(function () use ($userId, $byTheirOwner): void {
             $this->factors->removeAll($userId);
-            $this->recoveryCodes->removeAll($userId);
+            if (! $byTheirOwner || $this->passkeys->countOf($userId) === 0) {
+                $this->recoveryCodes->removeAll($userId);
+            }
             $this->events->dispatch(new SecondFactorRemoved($userId, $byTheirOwner));
         });
     }

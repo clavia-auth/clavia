@@ -13,7 +13,9 @@ namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
 use Clavia\Application\Authentication\Mfa\MfaStatus;
+use Clavia\Application\Authentication\Mfa\SecondFactorPage;
 use Clavia\Application\Authentication\Mfa\TotpEnrollment;
+use Clavia\Application\Authentication\Passkey\AssertionOptions;
 
 /**
  * The view models of the two-factor pages: the second step of a sign-in, and the
@@ -26,6 +28,8 @@ final class MfaPages
     public const string SETTINGS_PATH = '/auth/mfa/enroll';
 
     public const string INVALID_CODE = 'That code is not valid.';
+
+    public const string INVALID_PASSKEY = 'That passkey did not work. Try again, or use a code.';
 
     public const string INVALID_SETUP_CODE = 'That code is not valid. Check your device clock and try again.';
 
@@ -41,24 +45,35 @@ final class MfaPages
     }
 
     /**
-     * The second step: a code from the app, or a recovery code.
-     *
-     * @param list<string> $formOrigins Where the finished sign-in may go on to.
+     * The second step: a passkey when the account holds one, a code from the app when it uses
+     * one, and a recovery code either way. With a passkey the page loads `passkeys.js`, and
+     * carries the ceremony's options in an escaped attribute.
      */
-    public static function challenge(array $formOrigins, ?string $error = null, int $status = 200): HtmlPage
-    {
+    public static function challenge(
+        SecondFactorPage $page,
+        ?AssertionOptions $passkey = null,
+        ?string $error = null,
+        int $status = 200,
+    ): HtmlPage {
         return new HtmlPage(
             template: 'auth::mfa-challenge',
             title: 'Two-factor authentication',
-            heading: 'Check your authenticator',
+            heading: $passkey !== null ? 'Confirm it is you' : 'Check your authenticator',
             returnTo: self::CHALLENGE_PATH,
+            variables: [
+                'authenticatorApp' => $page->authenticatorApp,
+                'passkeyOptions' => $passkey === null
+                    ? null
+                    : json_encode(PasskeyPages::requestOptions($passkey), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
+            ],
             error: $error,
             status: $status,
-            formOrigins: $formOrigins,
+            formOrigins: $page->formOrigins,
+            script: $passkey === null ? null : PasskeyPages::SCRIPT,
         );
     }
 
-    /** Whether it is on, and the way to change that. */
+    /** Whether it is on, the account's passkeys, and the way to change either. */
     public static function settings(MfaStatus $status, ?string $error = null, int $httpStatus = 200): HtmlPage
     {
         return new HtmlPage(
@@ -70,6 +85,7 @@ final class MfaPages
                 'email' => $status->email,
                 'enabled' => $status->enabled,
                 'recoveryCodesLeft' => $status->recoveryCodesLeft,
+                'passkeys' => $status->passkeys,
             ],
             error: $error,
             status: $httpStatus,

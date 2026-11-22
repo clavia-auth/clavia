@@ -26,14 +26,15 @@ use Clavia\Domain\Shared\DomainEvent;
 final readonly class SignInRefused implements DomainEvent
 {
     /**
-     * @param AuthenticationMethod $method     The factor that was refused.
+     * @param AuthenticationMethod|null $method The factor that was refused; null when it cannot be told, as
+     *                                          for a passkey Clavia does not know.
      * @param UserId|null          $userId     The account aimed at, when exactly one could be told.
      * @param string|null          $email      The address typed, as typed; never a password or a code.
      * @param ClientId|null        $clientId   The application the sign-in was for, if any.
      * @param ConnectionName|null  $connection The connection the attempt went through, when it is not the pool.
      */
     public function __construct(
-        public AuthenticationMethod $method,
+        public ?AuthenticationMethod $method,
         public SignInRefusal $reason,
         public ?UserId $userId = null,
         public ?string $email = null,

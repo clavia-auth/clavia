@@ -50,6 +50,7 @@ use ClaviaTest\Support\Fake\InMemoryConnectionRepository;
 use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryExternalIdentityRepository;
 use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
+use ClaviaTest\Support\Fake\InMemoryPasskeyRepository;
 use ClaviaTest\Support\Fake\InMemoryRecoveryCodeRepository;
 use ClaviaTest\Support\Fake\InMemorySessionStore;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
@@ -218,7 +219,13 @@ final class UsersTest extends TestCase
         $this->recoveryCodes->replaceAll($user->id, [RecoveryCode::digest('aaaa-bbbb-cccc')], $this->clock->now());
         $reset = new ResetUserMfa(
             $this->users,
-            new DisableMfa($this->factors, $this->recoveryCodes, $this->transactions, new InMemoryDomainEvents()),
+            new DisableMfa(
+                $this->factors,
+                $this->recoveryCodes,
+                new InMemoryPasskeyRepository(),
+                $this->transactions,
+                new InMemoryDomainEvents(),
+            ),
         );
 
         $reset($user->id);
@@ -235,7 +242,13 @@ final class UsersTest extends TestCase
 
         $reset = new ResetUserMfa(
             $this->users,
-            new DisableMfa($this->factors, $this->recoveryCodes, $this->transactions, new InMemoryDomainEvents()),
+            new DisableMfa(
+                $this->factors,
+                $this->recoveryCodes,
+                new InMemoryPasskeyRepository(),
+                $this->transactions,
+                new InMemoryDomainEvents(),
+            ),
         );
         $reset(UserId::generate(new SeededRandomSource(9)));
     }

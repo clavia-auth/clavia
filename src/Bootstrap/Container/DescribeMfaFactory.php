@@ -12,8 +12,10 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Authentication\Mfa\DescribeMfa;
+use Clavia\Configuration\Settings;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
+use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
 use Clavia\Domain\Identity\UserRepository;
 use Psr\Container\ContainerInterface;
 
@@ -28,6 +30,11 @@ final class DescribeMfaFactory
         /** @var RecoveryCodeRepository $recoveryCodes */
         $recoveryCodes = $container->get(RecoveryCodeRepository::class);
 
-        return new DescribeMfa($users, $factors, $recoveryCodes);
+        /** @var PasskeyRepository $passkeys */
+        $passkeys = $container->get(PasskeyRepository::class);
+        /** @var Settings $settings */
+        $settings = $container->get(Settings::class);
+
+        return new DescribeMfa($users, $factors, $recoveryCodes, $passkeys, $settings->passkeysEnabled);
     }
 }
