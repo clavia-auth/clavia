@@ -288,7 +288,7 @@ objects, repository interfaces, and an `Event` namespace for its domain events.
 | `Consent` | `UserConsent`, `ConsentPolicy`, `PendingConsent` | `ConsentPolicy` alone decides who is asked |
 | `OAuth2` | `AuthorizationCode`, `AccessToken`, `RefreshToken` (families), `DeviceAuthorization`, `UserCode`, `CodeChallenge`/`CodeVerifier` (S256), `Prompt`, `MaxAge`, `OAuth2Error`/`ErrorCode`, `BearerTokenError` | Single use, exact matching, rotation with replay revocation |
 | `Oidc` | `SigningKey`, `SigningAlgorithm`, `PublicJwk`, `Nonce`, `OidcScope`, `IdentityClaims`, `IdTokenClaims`, `LogoutTokenClaims` | One active key; retired keys stay published until their tokens expire |
-| `Authentication` | `Session`, `AuthenticationMethod` (RFC 8176 `amr`), `AuthenticationContext`, `LocalPath`, `LoginState`, `MfaChallenge`, `Mfa\*` (`Totp`, `RecoveryCode`, `MfaFactor`), `PasswordlessChallenge`, `PendingExternalSignIn` | Sessions have idle and absolute lifetimes and a `sid`; a TOTP step is spent once |
+| `Authentication` | `Session`, `AuthenticationMethod` (RFC 8176 `amr`), `AuthenticationContext`, `LocalPath`, `LoginState`, `MfaChallenge`, `Mfa\*` (`Totp`, `RecoveryCode`, `MfaFactor`), `Passkey\*` (`Passkey`, `CredentialId`, `PasskeyRepository`…), `PasswordlessChallenge`, `PendingExternalSignIn` | Sessions have idle and absolute lifetimes and a `sid`; a TOTP step is spent once; a passkey's signature counter must grow (a synced passkey's stays at zero), and its eligibility for backup never changes |
 | `Audit` | `AuditEvent`, `AuditEventType`, `Actor`, `AuditTarget`, `Outcome`, `AuditQuery`, `AuditLog` | Append-only; facts, never secrets |
 
 The application mirrors these contexts (`Application\OAuth2`, `Authentication`, `Oidc`,

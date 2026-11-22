@@ -19,6 +19,7 @@ use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbConnectionRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbConsentRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbExternalIdentityRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbMfaFactorRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbPasskeyRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbRecoveryCodeRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbResourceServerRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbRoleRepository;
@@ -27,6 +28,13 @@ use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbUserRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PostgresUrl;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
+use Clavia\Domain\Authentication\Passkey\CoseAlgorithm;
+use Clavia\Domain\Authentication\Passkey\CosePublicKey;
+use Clavia\Domain\Authentication\Passkey\CredentialId;
+use Clavia\Domain\Authentication\Passkey\Passkey;
+use Clavia\Domain\Authentication\Passkey\PasskeyId;
+use Clavia\Domain\Authentication\Passkey\PasskeyName;
+use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\ClientId;
@@ -56,6 +64,7 @@ use ClaviaTest\Support\Contract\ConnectionRepositoryContract;
 use ClaviaTest\Support\Contract\ConsentRepositoryContract;
 use ClaviaTest\Support\Contract\ExternalIdentityRepositoryContract;
 use ClaviaTest\Support\Contract\MfaRepositoriesContract;
+use ClaviaTest\Support\Contract\PasskeyRepositoryContract;
 use ClaviaTest\Support\Contract\ResourceServerRepositoryContract;
 use ClaviaTest\Support\Contract\RoleRepositoryContract;
 use ClaviaTest\Support\Contract\UserRepositoryContract;
@@ -78,6 +87,7 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
     use AuthorizationCodeRepositoryContract;
     use ResourceServerRepositoryContract;
     use MfaRepositoriesContract;
+    use PasskeyRepositoryContract;
     use ExternalIdentityRepositoryContract;
     use RoleRepositoryContract;
     use ConsentRepositoryContract;
@@ -111,6 +121,12 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
     protected function identities(): ExternalIdentityRepository
     {
         return new PhpDbExternalIdentityRepository(TestStorage::database());
+    }
+
+    #[\Override]
+    protected function passkeys(): PasskeyRepository
+    {
+        return new PhpDbPasskeyRepository(TestStorage::database());
     }
 
     #[\Override]
@@ -334,6 +350,73 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
 
         self::assertNotNull($row);
         self::assertStringNotContainsString('the-plain-code', implode('|', array_map(strval(...), $row)));
+    }
+
+    public function testAPasskeyGoesWithItsAccount(): void
+    {
+        $owner = UserId::generate(new SeededRandomSource(21));
+        $this->users()->save(User::register($owner, 'ada@example.com', null, new DateTimeImmutable()));
+        $passkey = Passkey::register(
+            PasskeyId::generate(new SeededRandomSource(22)),
+            $owner,
+            CredentialId::fromBytes(str_repeat("\x01", 16)),
+            CosePublicKey::fromBytes('key'),
+            CoseAlgorithm::EdDSA,
+            0,
+            [],
+            null,
+            false,
+            false,
+            PasskeyName::fromString('Key'),
+            new DateTimeImmutable(),
+        );
+        $this->passkeys()->save($passkey);
+
+        $this->users()->delete($owner);
+
+        self::assertNull($this->passkeys()->one($passkey->id));
+        self::assertSame(0, $this->passkeys()->countOf($owner));
+    }
+
+    public function testThePasskeysTableRefusesWhatTheDomainRefuses(): void
+    {
+        $owner = UserId::generate(new SeededRandomSource(31));
+        $this->users()->save(User::register($owner, 'ada@example.com', null, new DateTimeImmutable()));
+        $insert = static fn (string $credentialId, bool $eligible, bool $backedUp, string $name, int $counter): int =>
+            TestStorage::database()->execute(
+                <<<'SQL'
+                    INSERT INTO passkeys (id, user_id, credential_id, public_key, algorithm, sign_count,
+                        backup_eligible, backed_up, name, created_at)
+                    VALUES (:id, :user_id, decode(:credential_id, 'hex'), decode('00', 'hex'), -8, :counter,
+                        :eligible, :backed_up, :name, now())
+                    SQL,
+                [
+                    'id' => PasskeyId::generate(new SeededRandomSource(random_int(1, PHP_INT_MAX)))->value,
+                    'user_id' => $owner->value,
+                    'credential_id' => $credentialId,
+                    'counter' => $counter,
+                    'eligible' => $eligible,
+                    'backed_up' => $backedUp,
+                    'name' => $name,
+                ],
+            );
+        $valid = bin2hex(str_repeat("\x02", 16));
+
+        foreach (
+            [
+                'ck_passkeys_credential_id_length' => [bin2hex('short'), false, false, 'Key', 0],
+                'ck_passkeys_sign_count' => [$valid, false, false, 'Key', -1],
+                'ck_passkeys_name_length' => [$valid, false, false, '', 0],
+                'ck_passkeys_backup' => [$valid, false, true, 'Key', 0],
+            ] as $constraint => $row
+        ) {
+            try {
+                $insert(...$row);
+                self::fail('The table accepted a row that breaks ' . $constraint . '.');
+            } catch (Throwable $refused) {
+                self::assertStringContainsString($constraint, $this->messages($refused));
+            }
+        }
     }
 
     private function messages(Throwable $error): string
