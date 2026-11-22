@@ -12,28 +12,23 @@ declare(strict_types=1);
 namespace Clavia\Application\Authentication\Mfa;
 
 use Clavia\Application\Authentication\LoginThrottle;
+use Clavia\Application\Authentication\Passkey\PasskeyRefusal;
+use Clavia\Application\Authentication\Passkey\PasskeyUsed;
+use Clavia\Application\Authentication\Passkey\UsePasskey;
 use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Authentication\SignIn\SignedIn;
 use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\MfaChallengeStore;
-use Clavia\Application\Port\PasskeyRejected;
-use Clavia\Application\Port\PasskeyVerifier;
 use Clavia\Application\Port\WebAuthnChallengeStore;
 use Clavia\Domain\Authentication\AuthenticationMethod;
-use Clavia\Domain\Authentication\Event\PasskeyCounterRegressed;
 use Clavia\Domain\Authentication\Event\SignInRefusal;
 use Clavia\Domain\Authentication\Event\SignInRefused;
-use Clavia\Domain\Authentication\MfaChallenge;
-use Clavia\Domain\Authentication\Passkey\CounterRegressed;
 use Clavia\Domain\Authentication\Passkey\Passkey;
-use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
-use Clavia\Domain\Authentication\Passkey\RelyingParty;
 use Clavia\Domain\Authentication\Passkey\WebAuthnChallenge;
 use Clavia\Domain\Authentication\Passkey\WebAuthnPurpose;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\Shared\Clock;
-use Clavia\Domain\Shared\InvalidValue;
 
 /**
  * Finish a sign-in with a passkey as its second factor (docs/design/passkeys.md §6.3).
@@ -61,12 +56,10 @@ final readonly class CompletePasskeySecondFactor
         private MfaChallengeStore $challenges,
         private WebAuthnChallengeStore $ceremonies,
         private UserRepository $users,
-        private PasskeyRepository $passkeys,
-        private PasskeyVerifier $verifier,
+        private UsePasskey $usePasskey,
         private LoginThrottle $throttle,
         private Sessions $sessions,
         private Clock $clock,
-        private RelyingParty $relyingParty,
         private int $maxAttempts,
         private DomainEvents $events,
     ) {
@@ -86,7 +79,7 @@ final readonly class CompletePasskeySecondFactor
         $methods = null;
         $throttled = $user !== null && $this->throttle->isThrottled($user->email, $attempt->clientAddress);
         if ($user !== null && $user->isActive() && ! $throttled) {
-            [$refusal, $passkey, $methods] = $this->verify($user, $challenge, $attempt, $ceremony);
+            [$refusal, $passkey, $methods] = $this->verify($user, $attempt, $ceremony);
         }
 
         if ($user === null || $methods === null) {
@@ -124,57 +117,32 @@ final readonly class CompletePasskeySecondFactor
      */
     private function verify(
         User $user,
-        MfaChallenge $challenge,
         PasskeySecondFactorAttempt $attempt,
         ?WebAuthnChallenge $ceremony,
     ): array {
-        $now = $this->clock->now();
         if (
             $ceremony === null
             || ! $ceremony->isFor(WebAuthnPurpose::SecondFactor, $attempt->challenge)
             || $ceremony->userId === null
             || ! $ceremony->userId->equals($user->id)
-            || $ceremony->isExpired($now)
+            || $ceremony->isExpired($this->clock->now())
         ) {
             return [SignInRefusal::WrongSecondFactor, null, null];
         }
 
-        try {
-            $passkey = $this->passkeys->ofCredentialId($this->verifier->credentialIdOf($attempt->response));
-        } catch (PasskeyRejected) {
-            return [SignInRefusal::WrongSecondFactor, null, null];
-        }
-        if ($passkey === null || ! $passkey->userId->equals($user->id)) {
-            return [SignInRefusal::UnknownPasskey, null, null];
+        $used = ($this->usePasskey)($ceremony, $attempt->response, $user->id);
+        if ($used instanceof PasskeyUsed) {
+            return [SignInRefusal::WrongSecondFactor, $used->passkey, $used->methods()];
         }
 
-        try {
-            $verified = $this->verifier->verifyAssertion($attempt->response, $ceremony, $this->relyingParty, $passkey);
-        } catch (PasskeyRejected) {
-            return [SignInRefusal::WrongSecondFactor, $passkey, null];
-        }
-
-        $previous = $passkey->signCount;
-        try {
-            $passkey->recordUse($verified->signCount, $verified->backedUp, $now);
-        } catch (CounterRegressed) {
-            $this->events->dispatch(new PasskeyCounterRegressed(
-                $passkey->userId,
-                $passkey->id,
-                $passkey->name,
-                $previous,
-                $verified->signCount,
-            ));
-
-            return [SignInRefusal::PasskeyCounterRegressed, $passkey, null];
-        } catch (InvalidValue) {
-            return [SignInRefusal::WrongSecondFactor, $passkey, null];
-        }
-        // Another sign-in moved the counter first: refused as a regression is, but nothing was cloned.
-        if (! $this->passkeys->recordUse($passkey, $previous)) {
-            return [SignInRefusal::WrongSecondFactor, $passkey, null];
-        }
-
-        return [SignInRefusal::WrongSecondFactor, $passkey, $passkey->authenticationMethods($verified->userVerified)];
+        return [
+            match ($used->reason) {
+                PasskeyRefusal::Unknown => SignInRefusal::UnknownPasskey,
+                PasskeyRefusal::CounterRegressed => SignInRefusal::PasskeyCounterRegressed,
+                PasskeyRefusal::Rejected, PasskeyRefusal::Raced => SignInRefusal::WrongSecondFactor,
+            },
+            $used->passkey,
+            null,
+        ];
     }
 }

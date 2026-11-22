@@ -35,6 +35,7 @@ final readonly class DescribeLoginPage
         private ResolveEndUser $resolveEndUser,
         private UserRepository $users,
         private ConnectionAccess $access,
+        private bool $passkeysEnabled = false,
     ) {
     }
 
@@ -97,6 +98,9 @@ final readonly class DescribeLoginPage
             $pool !== null && ($mail || ! $pool->requiresVerifiedEmail),
             // A reset link is mailed: no mail, no "forgot your password".
             $password && $mail,
+            // A passkey signs into the account it belongs to, through that account's connection:
+            // offered wherever the application lets anybody in, and checked against it at the end.
+            $this->passkeysEnabled && ($password || $email || $providers !== []),
         );
     }
 

@@ -14,6 +14,7 @@ namespace Clavia\Adapter\Primary\Http\Auth;
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
 use Clavia\Application\Authentication\External\ExternalProviderOption;
 use Clavia\Application\Authentication\LoginPage\SignInMethods;
+use Clavia\Application\Authentication\Passkey\AssertionOptions;
 
 /**
  * The view models of the login page, shared by the handler that shows it and the one
@@ -45,6 +46,9 @@ final class LoginPages
      * @param list<string> $formOrigins
      * @param SignInMethods $methods    The password form and the email form when they are offered, the
      *                                  external connections as links below them.
+     * @param AssertionOptions|null $passkey The ceremony a passkey answers, when one is offered: the page
+     *                                  then loads `passkeys.js`, which offers it in the address field's
+     *                                  autofill and behind a button.
      */
     public static function form(
         ?string $loginState,
@@ -53,6 +57,7 @@ final class LoginPages
         ?string $email = null,
         ?string $error = null,
         int $status = 200,
+        ?AssertionOptions $passkey = null,
     ): HtmlPage {
         return new HtmlPage(
             template: 'auth::login',
@@ -82,10 +87,14 @@ final class LoginPages
                 'forgotHref' => $methods->passwordReset
                     ? AccountPages::withState(AccountPages::FORGOT_PATH, $loginState)
                     : '',
+                'passkeyOptions' => $passkey === null
+                    ? null
+                    : json_encode(PasskeyPages::requestOptions($passkey), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
             ],
             error: $error,
             status: $status,
             formOrigins: $formOrigins,
+            script: $passkey === null ? null : PasskeyPages::SCRIPT,
         );
     }
 
@@ -108,6 +117,7 @@ final class LoginPages
                 'providers' => [],
                 'signUpHref' => '',
                 'forgotHref' => '',
+                'passkeyOptions' => null,
             ],
         );
     }

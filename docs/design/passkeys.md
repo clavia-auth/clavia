@@ -494,3 +494,23 @@ What phase 1 settled differently from the sections above, so the code and this d
 - **With passkeys off, a passkey asks for nothing**: an account whose only second factor is a
   passkey signs in with its first factor, rather than being asked for something it cannot give.
 
+Phase 2, signing in with a passkey:
+
+- **A login page reached directly binds its ceremony to the ceremony's own handle**, there being
+  no authorization request; it answers once, in the browser that holds it, and signs in to the
+  default destination.
+- **The autofill and the button share one ceremony.** The conditional request is aborted when the
+  person presses the button or submits another form on the page, and the modal one uses the same
+  options.
+- **A passkey without user verification cannot sign in**: the verifier requires it at sign-in, so
+  `CLAVIA_PASSKEY_SATISFIES_MFA` only ever applies to a verified passkey.
+- **A refused passkey sign-in is `authentication.failed`** with `unknown_passkey`,
+  `invalid_passkey`, `passkey_counter_regressed`, `throttled`, `expired`, `account_disabled` or
+  `not_available`, and the page answers as for a wrong password. `UsePasskey` holds what the
+  sign-in and the second factor share.
+- **The last way in** (§6.4) is the last passkey of a pool account with no password and no identity
+  at another provider. Recovery codes do not count: they answer a second factor.
+- **Not built here**: the signal methods (`signalUnknownCredential()` and the others), the dashboard
+  tab (clavia-dashboard#3) and the Playwright test, which belongs to the dashboard's end-to-end
+  suite.
+

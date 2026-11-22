@@ -185,6 +185,7 @@ final readonly class PasskeysHandler implements RequestHandlerInterface
             PasskeyChange::Done => $this->responder->redirect(PasskeyPages::PATH),
             PasskeyChange::NotFound => $this->list($request, $session, PasskeyPages::NOT_FOUND, 404),
             PasskeyChange::InvalidName => $this->list($request, $session, PasskeyPages::INVALID_NAME, 400),
+            PasskeyChange::LastWayIn => $this->list($request, $session, PasskeyPages::LAST_WAY_IN, 409),
             default => $this->signInFirst(),
         };
     }

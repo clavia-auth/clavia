@@ -13,14 +13,12 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Authentication\LoginThrottle;
 use Clavia\Application\Authentication\Mfa\CompletePasskeySecondFactor;
+use Clavia\Application\Authentication\Passkey\UsePasskey;
 use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\MfaChallengeStore;
-use Clavia\Application\Port\PasskeyVerifier;
 use Clavia\Application\Port\WebAuthnChallengeStore;
 use Clavia\Configuration\Settings;
-use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
-use Clavia\Domain\Authentication\Passkey\RelyingParty;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\Shared\Clock;
 use Psr\Container\ContainerInterface;
@@ -35,18 +33,14 @@ final class CompletePasskeySecondFactorFactory
         $ceremonies = $container->get(WebAuthnChallengeStore::class);
         /** @var UserRepository $users */
         $users = $container->get(UserRepository::class);
-        /** @var PasskeyRepository $passkeys */
-        $passkeys = $container->get(PasskeyRepository::class);
-        /** @var PasskeyVerifier $verifier */
-        $verifier = $container->get(PasskeyVerifier::class);
+        /** @var UsePasskey $usePasskey */
+        $usePasskey = $container->get(UsePasskey::class);
         /** @var LoginThrottle $throttle */
         $throttle = $container->get(LoginThrottle::class);
         /** @var Sessions $sessions */
         $sessions = $container->get(Sessions::class);
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
-        /** @var RelyingParty $relyingParty */
-        $relyingParty = $container->get(RelyingParty::class);
         /** @var DomainEvents $events */
         $events = $container->get(DomainEvents::class);
         /** @var Settings $settings */
@@ -58,12 +52,10 @@ final class CompletePasskeySecondFactorFactory
             $challenges,
             $ceremonies,
             $users,
-            $passkeys,
-            $verifier,
+            $usePasskey,
             $throttle,
             $sessions,
             $clock,
-            $relyingParty,
             $maxAttempts,
             $events,
         );

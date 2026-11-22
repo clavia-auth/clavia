@@ -15,6 +15,7 @@ use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
 use Clavia\Application\Authentication\ResolveEndUser;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\Port\LoginStateStore;
+use Clavia\Configuration\Settings;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Identity\UserRepository;
 use Psr\Container\ContainerInterface;
@@ -34,6 +35,16 @@ final class DescribeLoginPageFactory
         /** @var ConnectionAccess $access */
         $access = $container->get(ConnectionAccess::class);
 
-        return new DescribeLoginPage($loginStates, $clients, $resolveEndUser, $users, $access);
+        /** @var Settings $settings */
+        $settings = $container->get(Settings::class);
+
+        return new DescribeLoginPage(
+            $loginStates,
+            $clients,
+            $resolveEndUser,
+            $users,
+            $access,
+            $settings->passkeysEnabled,
+        );
     }
 }

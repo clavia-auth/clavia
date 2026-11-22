@@ -99,8 +99,29 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
                 'providers' => [],
                 'signUpHref' => '',
                 'forgotHref' => '',
+                'passkeyOptions' => null,
             ],
             error: self::HOSTILE,
+        )];
+        yield 'the form with a passkey: state, email, error and options' => [LoginPages::form(
+            self::HOSTILE,
+            [],
+            new SignInMethods(true, false, [], false, false, true),
+            self::HOSTILE,
+            self::HOSTILE,
+            401,
+            new AssertionOptions(
+                self::HOSTILE,
+                RelyingParty::of('auth.clavia.test', 'Clavia', 'https://auth.clavia.test'),
+                WebAuthnChallenge::forSignIn(
+                    new SeededRandomSource(1),
+                    self::HOSTILE,
+                    new DateTimeImmutable('2026-01-15T10:00:00Z'),
+                    300,
+                ),
+                [],
+                300,
+            ),
         )];
         yield 'the sign-up form: state, address and error' => [
             AccountPages::signUp(self::HOSTILE, [], true, self::HOSTILE, self::HOSTILE, 400),

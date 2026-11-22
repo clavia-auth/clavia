@@ -40,13 +40,17 @@ use Clavia\Domain\Authentication\Passkey\Transport;
 use Clavia\Domain\Authentication\Passkey\WebAuthnChallenge;
 use Clavia\Domain\Authentication\Session;
 use Clavia\Domain\Connection\ConnectionName;
+use Clavia\Domain\Identity\AssertedIdentity;
+use Clavia\Domain\Identity\ExternalIdentity;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\SecretGenerator;
 use ClaviaTest\Support\Fake\FakePasskeyVerifier;
 use ClaviaTest\Support\Fake\FrozenClock;
+use ClaviaTest\Support\Fake\InMemoryConnectionRepository;
 use ClaviaTest\Support\Fake\InMemoryDomainEvents;
+use ClaviaTest\Support\Fake\InMemoryExternalIdentityRepository;
 use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
 use ClaviaTest\Support\Fake\InMemoryPasskeyRepository;
 use ClaviaTest\Support\Fake\InMemoryRecoveryCodeRepository;
@@ -71,6 +75,7 @@ final class PasskeyRegistrationTest extends TestCase
     private InMemoryRecoveryCodeRepository $recoveryCodes;
     private FakePasskeyVerifier $verifier;
     private InMemoryDomainEvents $events;
+    private InMemoryExternalIdentityRepository $identities;
     private User $user;
 
     #[\Override]
@@ -85,6 +90,7 @@ final class PasskeyRegistrationTest extends TestCase
         $this->recoveryCodes = new InMemoryRecoveryCodeRepository();
         $this->verifier = new FakePasskeyVerifier();
         $this->events = new InMemoryDomainEvents();
+        $this->identities = new InMemoryExternalIdentityRepository();
         $this->user = User::register(
             UserId::generate(new SeededRandomSource(1)),
             'ada@example.com',
@@ -279,7 +285,7 @@ final class PasskeyRegistrationTest extends TestCase
 
         $rename = new RenamePasskey($this->passkeys, $this->events, $recent);
         $renamed = $rename($this->session(), $passkey->id->value, 'Phone');
-        $removed = new RemovePasskey($this->passkeys, $this->events, $recent)($this->session(), $passkey->id->value);
+        $removed = $this->remove($recent)($this->session(), $passkey->id->value);
 
         self::assertSame(PasskeyChange::Done, $renamed);
         self::assertSame(PasskeyChange::Done, $removed);
@@ -314,7 +320,7 @@ final class PasskeyRegistrationTest extends TestCase
             );
             self::assertSame(
                 PasskeyChange::NotFound,
-                new RemovePasskey($this->passkeys, $this->events, $recent)($this->session(), $id),
+                $this->remove($recent)($this->session(), $id),
             );
         }
         self::assertSame('Theirs', $this->passkeys->one($theirs->id)?->name->value);
@@ -335,12 +341,70 @@ final class PasskeyRegistrationTest extends TestCase
         );
         self::assertInstanceOf(
             SignInAgain::class,
-            new RemovePasskey($this->passkeys, $this->events, $recent)($session, $passkey->id->value),
+            $this->remove($recent)($session, $passkey->id->value),
         );
         self::assertCount(1, $this->passkeys->ofUser($this->user->id));
     }
 
+    public function testTheLastPasskeyOfAnAccountWithNoOtherWayInStays(): void
+    {
+        $this->user = User::register(
+            UserId::generate(new SeededRandomSource(31)),
+            'nopassword@example.com',
+            null,
+            $this->clock->now(),
+        );
+        $this->users->save($this->user);
+        $only = $this->passkey('only');
+        $this->passkeys->save($only);
+        $remove = $this->remove(new RecentSignIn($this->clock, 600));
+
+        self::assertSame(PasskeyChange::LastWayIn, $remove($this->session(), $only->id->value));
+        self::assertCount(1, $this->passkeys->ofUser($this->user->id));
+
+        // With a second passkey, either may go — but then the other is the last.
+        $second = $this->passkey('second');
+        $this->passkeys->save($second);
+        self::assertSame(PasskeyChange::Done, $remove($this->session(), $only->id->value));
+        self::assertSame(PasskeyChange::LastWayIn, $remove($this->session(), $second->id->value));
+    }
+
+    public function testAnIdentityAtAnotherProviderIsAWayIn(): void
+    {
+        $this->user = User::register(
+            UserId::generate(new SeededRandomSource(32)),
+            'linked@example.com',
+            null,
+            $this->clock->now(),
+        );
+        $this->users->save($this->user);
+        $this->identities->add(ExternalIdentity::link(
+            AssertedIdentity::of(ConnectionName::fromString('google'), 'g-1', null, false),
+            $this->user->id,
+            $this->clock->now(),
+        ));
+        $only = $this->passkey('only');
+        $this->passkeys->save($only);
+
+        self::assertSame(
+            PasskeyChange::Done,
+            $this->remove(new RecentSignIn($this->clock, 600))($this->session(), $only->id->value),
+        );
+    }
+
     // ── What the tests above are made of ──────────────────────────────────────────────────────
+
+    private function remove(RecentSignIn $recent): RemovePasskey
+    {
+        return new RemovePasskey(
+            $this->passkeys,
+            $this->users,
+            new InMemoryConnectionRepository(),
+            $this->identities,
+            $this->events,
+            $recent,
+        );
+    }
 
     /** @param positive-int $max */
     private function begin(int $max = 10): BeginPasskeyRegistration

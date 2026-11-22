@@ -13,6 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Adapter\Primary\Http\Auth\AuthCookies;
 use Clavia\Adapter\Primary\Http\Auth\AuthPageResponder;
+use Clavia\Adapter\Primary\Http\Auth\LoginForm;
 use Clavia\Adapter\Primary\Http\Auth\LoginPageHandler;
 use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
 use Psr\Container\ContainerInterface;
@@ -28,6 +29,9 @@ final class LoginPageHandlerFactory
         /** @var AuthCookies $cookies */
         $cookies = $container->get(AuthCookies::class);
 
-        return new LoginPageHandler($describe, $responder, $cookies);
+        /** @var LoginForm $loginForm */
+        $loginForm = $container->get(LoginForm::class);
+
+        return new LoginPageHandler($describe, $loginForm, $responder, $cookies);
     }
 }

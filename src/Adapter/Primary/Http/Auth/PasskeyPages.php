@@ -42,6 +42,9 @@ final class PasskeyPages
 
     public const string NOT_FOUND = 'That passkey is not on this account any more.';
 
+    public const string LAST_WAY_IN = 'This passkey is the only way into your account. '
+        . 'Choose a password first, then remove it.';
+
     private function __construct()
     {
     }

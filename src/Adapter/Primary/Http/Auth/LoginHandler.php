@@ -13,7 +13,6 @@ namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\Shared\RequestCookies;
 use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
-use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
 use Clavia\Application\Authentication\SignIn\EmailVerificationRequired;
 use Clavia\Application\Authentication\SignIn\PasswordSignIn;
 use Clavia\Application\Authentication\SignIn\PasswordSignInUnavailable;
@@ -45,7 +44,7 @@ final readonly class LoginHandler implements RequestHandlerInterface
 {
     public function __construct(
         private SignInWithPassword $signIn,
-        private DescribeLoginPage $describe,
+        private LoginForm $loginForm,
         private AuthPageResponder $responder,
         private AuthCookies $cookies,
     ) {
@@ -106,11 +105,6 @@ final readonly class LoginHandler implements RequestHandlerInterface
         string $error,
         int $status,
     ): ResponseInterface {
-        $origins = $this->describe->formOrigins($loginState);
-
-        return $this->responder->page(
-            $request,
-            LoginPages::form($loginState, $origins, $this->describe->methods($loginState), $email, $error, $status),
-        );
+        return $this->loginForm->render($request, $loginState, $email, $error, $status);
     }
 }
