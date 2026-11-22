@@ -42,4 +42,15 @@ final readonly class MfaChallenge
         public int $attempts = 0,
     ) {
     }
+
+    /**
+     * Whether the first factor was a passkey. A passkey cannot then be the second: one device would
+     * count twice, and `mfa` would be claimed for a single factor. Only an authenticator app or a
+     * recovery code finishes such a sign-in.
+     */
+    public function firstFactorWasAPasskey(): bool
+    {
+        return in_array(AuthenticationMethod::HardwareKey, $this->firstFactor, true)
+            || in_array(AuthenticationMethod::SoftwareKey, $this->firstFactor, true);
+    }
 }

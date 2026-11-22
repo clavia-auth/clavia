@@ -26,7 +26,8 @@ use Clavia\Domain\Shared\SecretGenerator;
  * (docs/design/passkeys.md §6.3): bound to that challenge and its account, naming the account's
  * passkeys.
  *
- * Nothing when there is no challenge, or the account holds no passkey.
+ * Nothing when there is no challenge, the account holds no passkey, or the first factor was a
+ * passkey already (see {@see \Clavia\Domain\Authentication\MfaChallenge::firstFactorWasAPasskey()}).
  */
 final readonly class BeginPasskeySecondFactor
 {
@@ -54,7 +55,7 @@ final readonly class BeginPasskeySecondFactor
             return null;
         }
         $pending = $this->challenges->find($challenge);
-        if ($pending === null) {
+        if ($pending === null || $pending->firstFactorWasAPasskey()) {
             return null;
         }
         $passkeys = $this->passkeys->ofUser($pending->userId);

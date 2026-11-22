@@ -78,7 +78,8 @@ final readonly class CompletePasskeySecondFactor
         $passkey = null;
         $methods = null;
         $throttled = $user !== null && $this->throttle->isThrottled($user->email, $attempt->clientAddress);
-        if ($user !== null && $user->isActive() && ! $throttled) {
+        // A passkey after a passkey is one factor counted twice: refused, as a wrong answer is.
+        if ($user !== null && $user->isActive() && ! $throttled && ! $challenge->firstFactorWasAPasskey()) {
             [$refusal, $passkey, $methods] = $this->verify($user, $attempt, $ceremony);
         }
 

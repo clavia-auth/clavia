@@ -139,6 +139,28 @@ final class PasskeySignInTest extends AcceptanceTestCase
         self::assertNotNull($this->cookie('clavia_mfa'));
     }
 
+    public function testAfterAPasskeyAPasskeyCannotBeTheSecondFactor(): void
+    {
+        $this->boot(['CLAVIA_PASSKEY_SATISFIES_MFA' => 'false']);
+        $this->clock = $this->freezeClock();
+        $authenticator = SoftwareAuthenticator::generate(CoseAlgorithm::ES256);
+        $user = $this->user();
+        $this->passkeyOf($user, $authenticator);
+        $this->signInWithPasskey($authenticator, null, $user->id);
+
+        $page = $this->get('/auth/mfa');
+        self::assertStringNotContainsString('data-webauthn-get', (string) $page->getBody());
+        // Posted anyway, with a ceremony of the login page's kind, the same passkey is refused.
+        $login = $this->get('/auth/login');
+        $again = $this->post('/auth/mfa/passkey', [
+            'credential' => $authenticator->authenticate($this->challengeFrom($login), $this->rp(), $user->id),
+            'csrf_token' => self::csrfTokenFrom($page),
+        ]);
+
+        self::assertSame(401, $again->getStatusCode());
+        self::assertNull($this->cookie(self::SESSION_COOKIE));
+    }
+
     /**
      * Every refusal is the wrong password's answer: one message, one status, a fresh form.
      *
