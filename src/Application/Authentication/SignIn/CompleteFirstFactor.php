@@ -16,6 +16,7 @@ use Clavia\Application\Port\MfaChallengeStore;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\MfaChallenge;
+use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
@@ -23,7 +24,8 @@ use Clavia\Domain\Shared\SecretGenerator;
 
 /**
  * What follows a first factor, however it was satisfied — a password, an external
- * provider: a session, or, for an account with a confirmed second factor, a challenge.
+ * provider: a session, or, for an account with a second factor — a confirmed authenticator app
+ * or a passkey — a challenge.
  *
  * One door, so that no way of signing in can skip the second factor someone turned on.
  * The caller has already authenticated the person and validated `$nextUrl` as a
@@ -32,11 +34,14 @@ use Clavia\Domain\Shared\SecretGenerator;
 final readonly class CompleteFirstFactor
 {
     /**
-     * @param positive-int $challengeLifetimeSeconds How long the second step may take.
+     * @param PasskeyRepository|null $passkeys                 Null when passkeys are off: a passkey then
+     *                                                         asks for nothing it could not be given.
+     * @param positive-int           $challengeLifetimeSeconds How long the second step may take.
      */
     public function __construct(
         private Sessions $sessions,
         private MfaFactorRepository $factors,
+        private ?PasskeyRepository $passkeys,
         private MfaChallengeStore $challenges,
         private SecretGenerator $secrets,
         private int $challengeLifetimeSeconds,
@@ -57,7 +62,7 @@ final readonly class CompleteFirstFactor
         ?ClientId $clientId,
         #[\SensitiveParameter] ?string $replacing,
     ): SignedIn|SecondFactorRequired {
-        if ($this->factors->find($userId)?->isConfirmed() === true) {
+        if ($this->factors->find($userId)?->isConfirmed() === true || ($this->passkeys?->countOf($userId) ?? 0) > 0) {
             $handle = $this->secrets->token();
             $this->challenges->open(
                 $handle,

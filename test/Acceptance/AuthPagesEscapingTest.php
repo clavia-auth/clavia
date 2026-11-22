@@ -24,8 +24,10 @@ use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
 use Clavia\Application\Authentication\External\ExternalProviderOption;
 use Clavia\Application\Authentication\LoginPage\SignInMethods;
 use Clavia\Application\Authentication\Mfa\MfaStatus;
+use Clavia\Application\Authentication\Mfa\SecondFactorPage;
 use Clavia\Application\Authentication\Mfa\TotpEnrollment;
 use Clavia\Application\Authentication\Passkey\AccountPasskeys;
+use Clavia\Application\Authentication\Passkey\AssertionOptions;
 use Clavia\Application\Authentication\Passkey\DescribedPasskey;
 use Clavia\Application\Authentication\Passkey\RegistrationOptions;
 use Clavia\Application\Authentication\Passwordless\PasswordlessPrompt;
@@ -125,7 +127,27 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
         yield 'the changed password: address and handle' => [
             AccountPages::passwordChanged(self::HOSTILE, self::HOSTILE),
         ];
-        yield 'the second step: error' => [MfaPages::challenge([], self::HOSTILE, 401)];
+        yield 'the second step: error' => [
+            MfaPages::challenge(new SecondFactorPage([], true, false), null, self::HOSTILE, 401),
+        ];
+        yield 'the second step with a passkey: error and options' => [MfaPages::challenge(
+            new SecondFactorPage([], false, true),
+            new AssertionOptions(
+                self::HOSTILE,
+                RelyingParty::of('auth.clavia.test', 'Clavia', 'https://auth.clavia.test'),
+                WebAuthnChallenge::forSecondFactor(
+                    new SeededRandomSource(1),
+                    UserId::generate(new SeededRandomSource(2)),
+                    self::HOSTILE,
+                    new DateTimeImmutable('2026-01-15T10:00:00Z'),
+                    300,
+                ),
+                [],
+                300,
+            ),
+            self::HOSTILE,
+            401,
+        )];
         yield 'the code page: address and error' => [
             PasswordlessPages::code(new PasswordlessPrompt(self::HOSTILE, []), self::HOSTILE, 401),
         ];
@@ -156,7 +178,7 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
             heading: self::HOSTILE,
             error: self::HOSTILE,
         )];
-        yield 'the two-factor settings: email' => [MfaPages::settings(new MfaStatus(self::HOSTILE, true, 3))];
+        yield 'the two-factor settings: email' => [MfaPages::settings(new MfaStatus(self::HOSTILE, true, 3, 2))];
         yield 'the two-factor settings, off: email' => [MfaPages::settings(new MfaStatus(self::HOSTILE, false, 0))];
         yield 'the set-up page: seed and error' => [
             MfaPages::setUp(

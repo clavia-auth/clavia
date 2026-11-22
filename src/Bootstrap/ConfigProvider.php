@@ -124,7 +124,9 @@ use Clavia\Application\Authentication\External\CompleteExternalSignIn;
 use Clavia\Application\Authentication\External\ResolveExternalAccount;
 use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
 use Clavia\Application\Authentication\LoginThrottle;
+use Clavia\Application\Authentication\Mfa\BeginPasskeySecondFactor;
 use Clavia\Application\Authentication\Mfa\BeginTotpEnrollment;
+use Clavia\Application\Authentication\Mfa\CompletePasskeySecondFactor;
 use Clavia\Application\Authentication\Mfa\CompleteSecondFactor;
 use Clavia\Application\Authentication\Mfa\ConfirmTotpEnrollment;
 use Clavia\Application\Authentication\Mfa\DescribeMfa;
@@ -486,6 +488,8 @@ final class ConfigProvider
                     ConsentHandler::class => Container\ConsentHandlerFactory::class,
                     MfaSettingsHandler::class => Container\MfaSettingsHandlerFactory::class,
                     PasskeysHandler::class => Container\PasskeysHandlerFactory::class,
+                    BeginPasskeySecondFactor::class => Container\BeginPasskeySecondFactorFactory::class,
+                    CompletePasskeySecondFactor::class => Container\CompletePasskeySecondFactorFactory::class,
                     BeginPasskeyRegistration::class => Container\BeginPasskeyRegistrationFactory::class,
                     CompletePasskeyRegistration::class => Container\CompletePasskeyRegistrationFactory::class,
                     DescribePasskeys::class => Container\DescribePasskeysFactory::class,

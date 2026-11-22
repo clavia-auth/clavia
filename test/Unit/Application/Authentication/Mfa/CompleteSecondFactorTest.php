@@ -38,6 +38,7 @@ use ClaviaTest\Support\Fake\InMemoryClientRepository;
 use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryMfaChallengeStore;
 use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
+use ClaviaTest\Support\Fake\InMemoryPasskeyRepository;
 use ClaviaTest\Support\Fake\InMemoryRecoveryCodeRepository;
 use ClaviaTest\Support\Fake\InMemorySessionStore;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
@@ -269,9 +270,19 @@ final class CompleteSecondFactorTest extends TestCase
 
     public function testThePageIsDescribedOnlyForAnOpenChallenge(): void
     {
-        $describe = new DescribeSecondFactorPage($this->challenges, new InMemoryClientRepository());
+        $passkeys = new InMemoryPasskeyRepository();
+        $describe = new DescribeSecondFactorPage(
+            $this->challenges,
+            new InMemoryClientRepository(),
+            $this->factors,
+            $passkeys,
+        );
 
-        self::assertSame([], $describe(self::HANDLE));
+        $page = $describe(self::HANDLE);
+        self::assertNotNull($page);
+        self::assertSame([], $page->formOrigins);
+        self::assertTrue($page->authenticatorApp);
+        self::assertFalse($page->passkey);
         self::assertNull($describe('unknown'));
         self::assertNull($describe(''));
         self::assertNull($describe(null));

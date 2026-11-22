@@ -13,6 +13,7 @@ namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
 use Clavia\Application\Authentication\Passkey\AccountPasskeys;
+use Clavia\Application\Authentication\Passkey\AssertionOptions;
 use Clavia\Application\Authentication\Passkey\DescribedPasskey;
 use Clavia\Application\Authentication\Passkey\RegistrationOptions;
 use Clavia\Domain\Authentication\Passkey\CoseAlgorithm;
@@ -136,6 +137,31 @@ final class PasskeyPages
             ],
             'attestation' => 'none',
             'hints' => ['client-device', 'hybrid'],
+        ];
+    }
+
+    /**
+     * `PublicKeyCredentialRequestOptionsJSON` (WebAuthn Level 3 §5.5, §5.1.9), which
+     * `PublicKeyCredential.parseRequestOptionsFromJSON()` reads as it is.
+     *
+     * @return array<string, mixed>
+     */
+    public static function requestOptions(AssertionOptions $options): array
+    {
+        return [
+            'challenge' => $options->challenge->toBase64Url(),
+            'rpId' => $options->relyingParty->id,
+            'timeout' => $options->timeoutSeconds * 1000,
+            'allowCredentials' => array_map(
+                static fn (Passkey $passkey): array => [
+                    'type' => 'public-key',
+                    'id' => $passkey->credentialId->toBase64Url(),
+                    'transports' => array_map(static fn (Transport $t): string => $t->value, $passkey->transports),
+                ],
+                $options->allow,
+            ),
+            'userVerification' => $options->requiresUserVerification() ? 'required' : 'preferred',
+            'hints' => ['client-device', 'security-key', 'hybrid'],
         ];
     }
 

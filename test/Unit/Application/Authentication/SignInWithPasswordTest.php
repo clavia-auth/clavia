@@ -51,6 +51,7 @@ use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryLoginStateStore;
 use ClaviaTest\Support\Fake\InMemoryMfaChallengeStore;
 use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
+use ClaviaTest\Support\Fake\InMemoryPasskeyRepository;
 use ClaviaTest\Support\Fake\InMemorySessionStore;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
@@ -116,6 +117,7 @@ final class SignInWithPasswordTest extends TestCase
             new CompleteFirstFactor(
                 $this->sessions,
                 $this->factors,
+                new InMemoryPasskeyRepository(),
                 $this->challenges,
                 new SecretGenerator(new SeededRandomSource(3)),
                 300,

@@ -12,25 +12,30 @@ declare(strict_types=1);
 namespace Clavia\Application\Authentication\Mfa;
 
 use Clavia\Application\Port\MfaChallengeStore;
+use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
+use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
 use Clavia\Domain\Client\ClientRepository;
 
 /**
- * What the second-factor page needs: whether there is a challenge to answer at all, and
- * the origins the sign-in it finishes may end at — the application's redirect origins,
- * for the page's `form-action` (see the auth pages' CSP).
+ * What the second-factor page needs: whether there is a challenge to answer at all, which
+ * second factors the account can answer it with, and the origins the sign-in it finishes may
+ * end at — the application's redirect origins, for the page's `form-action` (see the auth
+ * pages' CSP).
  */
 final readonly class DescribeSecondFactorPage
 {
     public function __construct(
         private MfaChallengeStore $challenges,
         private ClientRepository $clients,
+        private MfaFactorRepository $factors,
+        private ?PasskeyRepository $passkeys,
     ) {
     }
 
     /**
-     * @return list<string>|null The form origins, or null when there is no challenge.
+     * Null when there is no challenge. The passkey repository is null when passkeys are off.
      */
-    public function __invoke(#[\SensitiveParameter] ?string $challenge): ?array
+    public function __invoke(#[\SensitiveParameter] ?string $challenge): ?SecondFactorPage
     {
         $pending = $challenge === null || $challenge === '' ? null : $this->challenges->find($challenge);
         if ($pending === null) {
@@ -38,6 +43,10 @@ final readonly class DescribeSecondFactorPage
         }
         $client = $pending->clientId === null ? null : $this->clients->find($pending->clientId);
 
-        return $client?->redirectOrigins() ?? [];
+        return new SecondFactorPage(
+            $client?->redirectOrigins() ?? [],
+            $this->factors->find($pending->userId)?->isConfirmed() ?? false,
+            ($this->passkeys?->countOf($pending->userId) ?? 0) > 0,
+        );
     }
 }

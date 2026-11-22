@@ -13,6 +13,9 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Authentication\Mfa\DescribeSecondFactorPage;
 use Clavia\Application\Port\MfaChallengeStore;
+use Clavia\Configuration\Settings;
+use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
+use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
 use Clavia\Domain\Client\ClientRepository;
 use Psr\Container\ContainerInterface;
 
@@ -25,6 +28,13 @@ final class DescribeSecondFactorPageFactory
         /** @var ClientRepository $clients */
         $clients = $container->get(ClientRepository::class);
 
-        return new DescribeSecondFactorPage($challenges, $clients);
+        /** @var MfaFactorRepository $factors */
+        $factors = $container->get(MfaFactorRepository::class);
+        /** @var Settings $settings */
+        $settings = $container->get(Settings::class);
+        /** @var PasskeyRepository|null $passkeys */
+        $passkeys = $settings->passkeysEnabled ? $container->get(PasskeyRepository::class) : null;
+
+        return new DescribeSecondFactorPage($challenges, $clients, $factors, $passkeys);
     }
 }

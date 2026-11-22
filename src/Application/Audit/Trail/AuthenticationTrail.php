@@ -76,7 +76,7 @@ final readonly class AuthenticationTrail implements EventSubscriber
             AuditEventType::SignInFailed,
             $event->userId === null ? null : AuditTarget::user($event->userId),
             [
-                'method' => $event->method->value,
+                'method' => $event->method?->value,
                 'reason' => $event->reason->value,
                 'email' => $event->email,
                 'connection' => $connection instanceof ConnectionName ? $connection->value : null,

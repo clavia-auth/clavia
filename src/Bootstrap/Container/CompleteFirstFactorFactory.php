@@ -16,6 +16,7 @@ use Clavia\Application\Authentication\SignIn\CompleteFirstFactor;
 use Clavia\Application\Port\MfaChallengeStore;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
+use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
 use Clavia\Domain\Shared\SecretGenerator;
 use Psr\Container\ContainerInterface;
 
@@ -36,6 +37,9 @@ final class CompleteFirstFactorFactory
         $challengeLifetime = $settings->mfaChallengeLifetime;
         assert($challengeLifetime > 0);
 
-        return new CompleteFirstFactor($sessions, $factors, $challenges, $secrets, $challengeLifetime);
+        /** @var PasskeyRepository|null $passkeys */
+        $passkeys = $settings->passkeysEnabled ? $container->get(PasskeyRepository::class) : null;
+
+        return new CompleteFirstFactor($sessions, $factors, $passkeys, $challenges, $secrets, $challengeLifetime);
     }
 }

@@ -8,6 +8,7 @@
  * @var string $email
  * @var bool   $enabled
  * @var int    $recoveryCodesLeft
+ * @var int|null $passkeys   How many passkeys the account holds; null when passkeys are off.
  */
 ?>
 <?php $this->placeholder('subtitle')->captureStart() ?>
@@ -28,13 +29,37 @@
       <button type="submit" class="danger">Turn off</button>
     </form>
 <?php else: ?>
+<?php if (($passkeys ?? 0) > 0): ?>
+    <p class="status status-on">On, with a passkey</p>
+    <p class="hint">
+      You can also use a code from an authenticator app such as Google Authenticator,
+      1Password or Aegis.
+    </p>
+<?php else: ?>
     <p class="status status-off">Off</p>
     <p class="hint">
       Add a second step to your sign-in: a code from an authenticator app such as
-      Google Authenticator, 1Password or Aegis.
+      Google Authenticator, 1Password or Aegis, or a passkey.
     </p>
+<?php endif ?>
     <form method="post" action="/auth/mfa/enroll">
 <?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => '']) ?>
       <button type="submit">Set up</button>
+    </form>
+<?php endif ?>
+<?php if ($passkeys !== null): ?>
+    <h2 class="section">Passkeys</h2>
+    <p class="hint">
+<?php if ($passkeys === 0): ?>
+      Sign in with your fingerprint, your face or a security key instead of a code.
+<?php else: ?>
+      You have <?= $this->escapeHtml((string) $passkeys) ?> <?= $passkeys === 1 ? 'passkey' : 'passkeys' ?>. Signing in asks for one.
+<?php if (! $enabled): ?>
+      You have <?= $this->escapeHtml((string) $recoveryCodesLeft) ?> unused recovery <?= $recoveryCodesLeft === 1 ? 'code' : 'codes' ?>.
+<?php endif ?>
+<?php endif ?>
+    </p>
+    <form method="get" action="/auth/passkeys">
+      <button type="submit" class="secondary">Manage passkeys</button>
     </form>
 <?php endif ?>

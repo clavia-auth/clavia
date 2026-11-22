@@ -13,6 +13,7 @@ namespace Clavia\Application\Authentication\Mfa;
 
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
+use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
 
@@ -25,6 +26,8 @@ final readonly class DescribeMfa
         private UserRepository $users,
         private MfaFactorRepository $factors,
         private RecoveryCodeRepository $recoveryCodes,
+        private PasskeyRepository $passkeys,
+        private bool $passkeysEnabled,
     ) {
     }
 
@@ -36,7 +39,9 @@ final readonly class DescribeMfa
             return null;
         }
         $enabled = $this->factors->find($userId)?->isConfirmed() ?? false;
+        $passkeys = $this->passkeysEnabled ? $this->passkeys->countOf($userId) : null;
+        $codes = $enabled || ($passkeys ?? 0) > 0 ? $this->recoveryCodes->unusedCount($userId) : 0;
 
-        return new MfaStatus($user->email, $enabled, $enabled ? $this->recoveryCodes->unusedCount($userId) : 0);
+        return new MfaStatus($user->email, $enabled, $codes, $passkeys);
     }
 }

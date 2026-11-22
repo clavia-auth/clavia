@@ -374,12 +374,18 @@ applies however the person signed in.
   are one outcome (`CredentialsRejected`), one message, one status. `simulateVerification()`
   spends the same time when no hash is checked. Throttling counts per account and per client
   address (`REMOTE_ADDR` only).
-- **Second factor** (`CompleteSecondFactor`): the challenge lives in Redis behind the
+- **Second factor** (`CompleteSecondFactor`, `CompletePasskeySecondFactor`): asked of an account
+  with a confirmed authenticator app or a passkey. The challenge lives in Redis behind the
   `clavia_mfa` cookie (`Path=/auth`). A TOTP code (RFC 6238: SHA-1, six digits, thirty seconds,
   one step either side) is checked with the factor row locked, and its step is recorded; a
-  recovery code is spent by one conditional `UPDATE`. Guesses are bounded per challenge
-  (`CLAVIA_MFA_MAX_ATTEMPTS`) and by the sign-in throttle. Seeds are sealed with `SecretCipher`
-  (`user:<id>:totp` as associated data), never hashed. `amr` gains `otp` and `mfa`.
+  recovery code, which answers for either kind of factor, is spent by one conditional `UPDATE`.
+  A passkey answers a ceremony the page opens each time it renders, bound to the challenge
+  (`POST /auth/mfa/passkey`); presence is enough, its counter must grow, and its use is a
+  conditional write. Guesses of every kind are bounded per challenge (`CLAVIA_MFA_MAX_ATTEMPTS`)
+  and by the sign-in throttle. Seeds are sealed with `SecretCipher` (`user:<id>:totp` as
+  associated data), never hashed. `amr` gains `otp`, or `hwk`/`swk` (and `user` when nobody was
+  verified), then `mfa`. Turning the app off keeps the recovery codes while a passkey remains; an
+  operator's reset takes them.
 - **External** (`BeginExternalSignIn`, `CompleteExternalSignIn`): Google, GitHub, or an
   operator-registered OpenID Connect provider. Clavia holds itself to its own rules: an opaque
   `state` in the redirect and in the `clavia_external_state` cookie, compared in constant time
@@ -416,8 +422,7 @@ applies however the person signed in.
   authenticated, so unlike the public form it is told how it went: `202`, `429` when the send
   limit is reached, `503` when no mail can be sent.
 
-- **Passkeys** (`Passkey\*`, design in `docs/design/passkeys.md`; phase 1, a second factor, in
-  progress). The account page `/auth/passkeys` lists them; `POST /auth/passkeys/new` opens a
+- **Passkeys** (`Passkey\*`, design in `docs/design/passkeys.md`; phase 1, a second factor). The account page `/auth/passkeys` lists them; `POST /auth/passkeys/new` opens a
   registration ceremony (`BeginPasskeyRegistration`) and shows the page that runs `passkeys.js`,
   whose form posts the browser's `toJSON()` to `POST /auth/passkeys`
   (`CompletePasskeyRegistration`): claimed, verified (`PasskeyVerifier`), saved and announced in one

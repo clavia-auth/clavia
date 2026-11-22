@@ -50,6 +50,7 @@ use ClaviaTest\Support\Fake\InMemoryExternalSignInStore;
 use ClaviaTest\Support\Fake\InMemoryLoginStateStore;
 use ClaviaTest\Support\Fake\InMemoryMfaChallengeStore;
 use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
+use ClaviaTest\Support\Fake\InMemoryPasskeyRepository;
 use ClaviaTest\Support\Fake\InMemorySessionStore;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
@@ -494,6 +495,7 @@ final class ExternalSignInTest extends TestCase
             new CompleteFirstFactor(
                 $this->sessions,
                 $this->factors,
+                new InMemoryPasskeyRepository(),
                 new InMemoryMfaChallengeStore($this->clock),
                 new SecretGenerator(new SeededRandomSource(5)),
                 300,

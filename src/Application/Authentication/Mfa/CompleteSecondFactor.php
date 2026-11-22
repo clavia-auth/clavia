@@ -111,16 +111,15 @@ final readonly class CompleteSecondFactor
         return $this->transactions->transactional(function () use ($user, $attempt): ?array {
             $now = $this->clock->now();
             $factor = $this->factors->lockForVerification($user->id);
-            if ($factor === null || ! $factor->isConfirmed()) {
-                return null;
-            }
-
-            if ($factor->accept($this->seeds->open($factor), $attempt->code, $now)) {
-                $this->factors->save($factor);
+            $app = $factor !== null && $factor->isConfirmed() ? $factor : null;
+            if ($app !== null && $app->accept($this->seeds->open($app), $attempt->code, $now)) {
+                $this->factors->save($app);
 
                 return [AuthenticationMethod::OneTimePassword];
             }
 
+            // A recovery code answers whatever the second factor is: an authenticator app or a
+            // passkey, whose loss is what the codes are for.
             return $this->recoveryCodes->spend($user->id, RecoveryCode::digest($attempt->code), $now) ? [] : null;
         });
     }

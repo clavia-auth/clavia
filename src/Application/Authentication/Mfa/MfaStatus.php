@@ -11,16 +11,21 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Authentication\Mfa;
 
-/** Whose account this is, whether its sign-in asks for a second factor, and its fallback left. */
+/**
+ * Whose account this is, whether its authenticator app is on, its passkeys, and the recovery
+ * codes left for either.
+ */
 final readonly class MfaStatus
 {
     /**
      * @param non-negative-int $recoveryCodesLeft
+     * @param int|null         $passkeys          How many passkeys the account holds; null when passkeys are off.
      */
     public function __construct(
         public string $email,
         public bool $enabled,
         public int $recoveryCodesLeft,
+        public ?int $passkeys = null,
     ) {
     }
 }

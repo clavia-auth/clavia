@@ -481,4 +481,16 @@ What phase 1 settled differently from the sections above, so the code and this d
 - **Removing the last passkey is not guarded yet** (§6.4): while a passkey is only a second
   factor, removing one never removes the way in. The guard comes with signing in by passkey.
 - **`user` in `amr` is added to `hwk`/`swk`**, not used instead of them, when nobody was verified.
+- **The second-factor page opens a ceremony each time it renders** (`GET /auth/mfa`, and again
+  after a wrong answer), since a ceremony answers once; the page carries its options and
+  `passkeys.js` posts to `POST /auth/mfa/passkey`. A recovery code answers for an account whose
+  only second factor is a passkey.
+- **A refused passkey is a refused second factor** (`authentication.failed`), with the reason
+  `wrong_second_factor`, `unknown_passkey` or `passkey_counter_regressed`; a counter that went back
+  is also `passkey.counter_regressed`. The loser of two racing uses is `wrong_second_factor`. The
+  refusal names the passkey's method when the passkey is known, and none otherwise.
+- **Turning the authenticator app off keeps the recovery codes while a passkey remains**; an
+  operator's reset (`DELETE /api/v1/users/{id}/mfa`) still takes them, as §9 says.
+- **With passkeys off, a passkey asks for nothing**: an account whose only second factor is a
+  passkey signs in with its first factor, rather than being asked for something it cannot give.
 

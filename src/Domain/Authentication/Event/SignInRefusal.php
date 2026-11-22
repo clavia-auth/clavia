@@ -26,8 +26,14 @@ enum SignInRefusal: string
 
     case WrongPassword = 'wrong_password';
 
-    /** The authenticator app's code or the recovery code did not match. */
+    /** The authenticator app's code or the recovery code did not match, or a passkey did not verify. */
     case WrongSecondFactor = 'wrong_second_factor';
+
+    /** A passkey Clavia does not know, or one of another account. */
+    case UnknownPasskey = 'unknown_passkey';
+
+    /** A passkey's signature counter did not grow: its authenticator may be cloned. */
+    case PasskeyCounterRegressed = 'passkey_counter_regressed';
 
     /** The code sent by email did not match. */
     case WrongCode = 'wrong_code';
