@@ -46,6 +46,24 @@ enum AuthenticationMethod: string
     case MultipleFactors = 'mfa';
 
     /**
+     * A passkey held in hardware proved possession of its key (RFC 8176 §2: "proof-of-possession
+     * of a hardware-secured key"): a device-bound credential, such as a security key.
+     */
+    case HardwareKey = 'hwk';
+
+    /**
+     * A passkey held in software proved possession of its key (RFC 8176 §2: "proof-of-possession
+     * of a software-secured key"): a synced credential, kept by a credential manager.
+     */
+    case SoftwareKey = 'swk';
+
+    /**
+     * Somebody was present at the authenticator and nothing more was checked (RFC 8176 §2: "user
+     * presence test"): a passkey used without user verification.
+     */
+    case UserPresence = 'user';
+
+    /**
      * The first factor followed by a second: each method once, in order, then `mfa`.
      *
      * @param list<self> $firstFactor

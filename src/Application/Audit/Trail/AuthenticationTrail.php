@@ -17,6 +17,10 @@ use Clavia\Domain\Audit\Actor;
 use Clavia\Domain\Audit\AuditEventType;
 use Clavia\Domain\Audit\AuditTarget;
 use Clavia\Domain\Authentication\AuthenticationMethod;
+use Clavia\Domain\Authentication\Event\PasskeyCounterRegressed;
+use Clavia\Domain\Authentication\Event\PasskeyRegistered;
+use Clavia\Domain\Authentication\Event\PasskeyRemoved;
+use Clavia\Domain\Authentication\Event\PasskeyRenamed;
 use Clavia\Domain\Authentication\Event\SecondFactorEnrolled;
 use Clavia\Domain\Authentication\Event\SecondFactorRemoved;
 use Clavia\Domain\Authentication\Event\SessionsEnded;
@@ -25,7 +29,7 @@ use Clavia\Domain\Authentication\Event\SignInRefused;
 use Clavia\Domain\Connection\ConnectionName;
 
 /**
- * Sign-ins, refusals, sessions ended, second factors — in the audit trail.
+ * Sign-ins, refusals, sessions ended, second factors and passkeys — in the audit trail.
  *
  * A refusal names nobody as its actor: whoever typed the password is not known to be the
  * account's owner. Ending a session is the person's act when they signed out, and the
@@ -48,6 +52,10 @@ final readonly class AuthenticationTrail implements EventSubscriber
             SessionsEnded::class => $this->sessionsEnded(...),
             SecondFactorEnrolled::class => $this->secondFactorEnrolled(...),
             SecondFactorRemoved::class => $this->secondFactorRemoved(...),
+            PasskeyRegistered::class => $this->passkeyRegistered(...),
+            PasskeyRenamed::class => $this->passkeyRenamed(...),
+            PasskeyRemoved::class => $this->passkeyRemoved(...),
+            PasskeyCounterRegressed::class => $this->passkeyCounterRegressed(...),
         ];
     }
 
@@ -106,6 +114,56 @@ final readonly class AuthenticationTrail implements EventSubscriber
             AuditTarget::user($event->userId),
             ['factor' => self::TOTP, 'reset' => ! $event->byTheirOwner],
             $event->byTheirOwner ? Actor::person($event->userId) : null,
+        );
+    }
+
+    /** The passkey is named and described, never its credential id or its key. */
+    private function passkeyRegistered(PasskeyRegistered $event): void
+    {
+        $this->audit->record(AuditEventType::PasskeyRegistered, AuditTarget::user($event->userId), [
+            'passkey' => $event->passkeyId->value,
+            'name' => $event->name->value,
+            'synced' => $event->synced,
+            'aaguid' => $event->aaguid?->value,
+        ], Actor::person($event->userId));
+    }
+
+    private function passkeyRenamed(PasskeyRenamed $event): void
+    {
+        $this->audit->record(AuditEventType::PasskeyRenamed, AuditTarget::user($event->userId), [
+            'passkey' => $event->passkeyId->value,
+            'name' => $event->name->value,
+        ], Actor::person($event->userId));
+    }
+
+    /** An operator's removal is the request's caller's, and says so. */
+    private function passkeyRemoved(PasskeyRemoved $event): void
+    {
+        $this->audit->record(
+            AuditEventType::PasskeyRemoved,
+            AuditTarget::user($event->userId),
+            [
+                'passkey' => $event->passkeyId->value,
+                'name' => $event->name->value,
+                'by_operator' => ! $event->byTheirOwner,
+            ],
+            $event->byTheirOwner ? Actor::person($event->userId) : null,
+        );
+    }
+
+    /** Whoever presented it is not known to be the account's owner: no actor, as for a wrong password. */
+    private function passkeyCounterRegressed(PasskeyCounterRegressed $event): void
+    {
+        $this->audit->refused(
+            AuditEventType::PasskeyCounterRegressed,
+            AuditTarget::user($event->userId),
+            [
+                'passkey' => $event->passkeyId->value,
+                'name' => $event->name->value,
+                'stored' => $event->storedCounter,
+                'presented' => $event->presentedCounter,
+            ],
+            Actor::anonymous(),
         );
     }
 }
