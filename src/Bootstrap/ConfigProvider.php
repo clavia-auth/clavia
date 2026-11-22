@@ -237,6 +237,7 @@ use Clavia\Application\Port\MfaChallengeStore;
 use Clavia\Application\Port\NonceRegistry;
 use Clavia\Application\Port\OidcDiscovery;
 use Clavia\Application\Port\OutboundUrls;
+use Clavia\Application\Port\PasskeyVerifier;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Application\Port\PasswordlessChallengeStore;
 use Clavia\Application\Port\SchemaMigrator;
@@ -246,6 +247,7 @@ use Clavia\Application\Port\SignatureVerifier;
 use Clavia\Application\Port\SigningKeyStore;
 use Clavia\Application\Port\TokenSigner;
 use Clavia\Application\Port\TransactionManager;
+use Clavia\Application\Port\WebAuthnChallengeStore;
 use Clavia\Application\Secrets\GenerateEncryptionKey;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Audit\AuditLog;
@@ -532,6 +534,8 @@ final class ConfigProvider
                     ConsentRepository::class => Container\ConsentRepositoryFactory::class,
                     LoginStateStore::class => Container\LoginStateStoreFactory::class,
                     ConsentStateStore::class => Container\ConsentStateStoreFactory::class,
+                    WebAuthnChallengeStore::class => Container\WebAuthnChallengeStoreFactory::class,
+                    PasskeyVerifier::class => Container\PasskeyVerifierFactory::class,
                     DeviceAuthorizationStore::class => Container\DeviceAuthorizationStoreFactory::class,
                     SessionStore::class => Container\SessionStoreFactory::class,
                     AttemptCounter::class => Container\AttemptCounterFactory::class,

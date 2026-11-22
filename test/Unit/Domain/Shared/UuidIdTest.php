@@ -47,6 +47,37 @@ final class UuidIdTest extends TestCase
         self::assertTrue(UserId::fromString($id->toString())->equals($id));
     }
 
+    public function testItIsSixteenBytesAndComesBackFromThem(): void
+    {
+        $id = UserId::fromString('3f2b8c1e-0a4d-4c6b-9e2f-1a2b3c4d5e6f');
+
+        self::assertSame(16, strlen($id->toBytes()));
+        self::assertSame('3f2b8c1e0a4d4c6b9e2f1a2b3c4d5e6f', bin2hex($id->toBytes()));
+        self::assertTrue(UserId::fromBytes($id->toBytes())->equals($id));
+        self::assertTrue(
+            UserId::fromBytes(UserId::generate(new SeededRandomSource(3))->toBytes())->equals(
+                UserId::generate(new SeededRandomSource(3)),
+            ),
+        );
+    }
+
+    #[DataProvider('notSixteenBytes')]
+    public function testSomethingThatIsNotSixteenBytesIsNoId(string $bytes): void
+    {
+        $this->expectException(InvalidValue::class);
+
+        UserId::fromBytes($bytes);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function notSixteenBytes(): iterable
+    {
+        yield 'nothing' => [''];
+        yield 'fifteen' => [str_repeat("\x01", 15)];
+        yield 'seventeen' => [str_repeat("\x01", 17)];
+        yield 'the text of a UUID' => ['3f2b8c1e-0a4d-4c6b-9e2f-1a2b3c4d5e6f'];
+    }
+
     public function testIdsOfDifferentKindsAreNeverEqual(): void
     {
         $value = '3f2b8c1e-0a4d-4c6b-9e2f-1a2b3c4d5e6f';

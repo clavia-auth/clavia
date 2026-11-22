@@ -53,6 +53,7 @@
         "symfony/dotenv": "^8.1",
         "symfony/mailer": "^8.1",
         "symfony/yaml": "^8.1",
+        "web-auth/webauthn-lib": "^5.3",
         "web-token/jwt-library": "^4.0"
     },
     "require-dev": {

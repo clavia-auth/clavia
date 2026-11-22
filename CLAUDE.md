@@ -267,7 +267,8 @@ only with an access token, and the dashboard is an OAuth client like any other.
   refresh tokens, signing keys, the audit trail.
 - **Redis** holds short-lived material: browser sessions, sign-in throttling, pending second
   factors, sign-in and consent handles, outbound social-login state, device and user codes,
-  passwordless challenges, verification and reset links, nonces, cached JWKS and public keys.
+  passwordless challenges, verification and reset links, WebAuthn ceremonies, nonces, cached JWKS
+  and public keys.
 
 Authorization codes and refresh tokens look like Redis material and deliberately are not:
 single use needs a `SELECT … FOR UPDATE`, and replay detection must outlive any sensible TTL.
@@ -288,7 +289,7 @@ objects, repository interfaces, and an `Event` namespace for its domain events.
 | `Consent` | `UserConsent`, `ConsentPolicy`, `PendingConsent` | `ConsentPolicy` alone decides who is asked |
 | `OAuth2` | `AuthorizationCode`, `AccessToken`, `RefreshToken` (families), `DeviceAuthorization`, `UserCode`, `CodeChallenge`/`CodeVerifier` (S256), `Prompt`, `MaxAge`, `OAuth2Error`/`ErrorCode`, `BearerTokenError` | Single use, exact matching, rotation with replay revocation |
 | `Oidc` | `SigningKey`, `SigningAlgorithm`, `PublicJwk`, `Nonce`, `OidcScope`, `IdentityClaims`, `IdTokenClaims`, `LogoutTokenClaims` | One active key; retired keys stay published until their tokens expire |
-| `Authentication` | `Session`, `AuthenticationMethod` (RFC 8176 `amr`), `AuthenticationContext`, `LocalPath`, `LoginState`, `MfaChallenge`, `Mfa\*` (`Totp`, `RecoveryCode`, `MfaFactor`), `Passkey\*` (`Passkey`, `CredentialId`, `PasskeyRepository`…), `PasswordlessChallenge`, `PendingExternalSignIn` | Sessions have idle and absolute lifetimes and a `sid`; a TOTP step is spent once; a passkey's signature counter must grow (a synced passkey's stays at zero), and its eligibility for backup never changes |
+| `Authentication` | `Session`, `AuthenticationMethod` (RFC 8176 `amr`), `AuthenticationContext`, `LocalPath`, `LoginState`, `MfaChallenge`, `Mfa\*` (`Totp`, `RecoveryCode`, `MfaFactor`), `Passkey\*` (`Passkey`, `CredentialId`, `PasskeyRepository`, `WebAuthnChallenge`, `RelyingParty`…), `PasswordlessChallenge`, `PendingExternalSignIn` | Sessions have idle and absolute lifetimes and a `sid`; a TOTP step is spent once; a passkey's signature counter must grow (a synced passkey's stays at zero), and its eligibility for backup never changes |
 | `Audit` | `AuditEvent`, `AuditEventType`, `Actor`, `AuditTarget`, `Outcome`, `AuditQuery`, `AuditLog` | Append-only; facts, never secrets |
 
 The application mirrors these contexts (`Application\OAuth2`, `Authentication`, `Oidc`,
@@ -297,7 +298,8 @@ The application mirrors these contexts (`Application\OAuth2`, `Authentication`, 
 `SecretCipher`), persistence (`TransactionManager`, `SchemaMigrator`), the Redis stores
 (`SessionStore`, `LoginStateStore`, `MfaChallengeStore`, `ConsentStateStore`,
 `DeviceAuthorizationStore`, `PasswordlessChallengeStore`, `AccountLinkStore`,
-`ExternalSignInStore`, `NonceRegistry`, `AttemptCounter`), mail (`Mailer`, `MailOutbox`),
+`ExternalSignInStore`, `WebAuthnChallengeStore`, `NonceRegistry`, `AttemptCounter`), passkeys
+(`PasskeyVerifier`), mail (`Mailer`, `MailOutbox`),
 identity providers (`IdentityProvider[s]`, `OidcDiscovery`), outbound URLs (`OutboundUrls`), deferred work
 (`DeferredTasks`, `BackChannelLogoutDelivery`) and events (`DomainEvents`).
 
@@ -831,7 +833,13 @@ Tests state behaviour from the specifications, and name the RFC section where it
   while the person waits.
 - **Libraries**: Mezzio (PSR-7/11/15, laminas-servicemanager, FastRoute) as the HTTP adapter;
   laminas-view for pages; symfony/console; Guzzle as the PSR-18 client; `web-token/jwt-library`
-  for verification only; `bacon/bacon-qr-code`; monolog. No Twig, no front-end framework.
+  for verification only; `web-auth/webauthn-lib` behind `PasskeyVerifier` (one adapter,
+  `WebAuthn\WebAuthnLibPasskeyVerifier`); `bacon/bacon-qr-code`; monolog. No Twig, no front-end
+  framework.
+- **The passkey verifier has no double that runs its contract.** `PasskeyVerifierContract` feeds
+  it genuine responses from `test/Support/SoftwareAuthenticator` (real EdDSA, ES256 and RS256 keys,
+  real CBOR), which a double could only pass by being the adapter again. Use cases are tested with
+  `FakePasskeyVerifier`, which answers what it is told; the exception to rule 9 is this one port.
 - **The dashboard** is the Next.js application of the
   [clavia-dashboard](https://github.com/clavia-auth/clavia-dashboard) repository: a confidential
   client (a backend for frontend) that knows this server only by the OpenAPI document and
