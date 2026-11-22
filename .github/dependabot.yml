@@ -1,5 +1,6 @@
 # Weekly update pull requests, grouped so a week's updates are one review.
-# php-db/* is pinned on purpose (CLAUDE.md, "Known issues"): never bumped here.
+# Major versions of packages are planned as issues (they need migration work), so only minor
+# and patch updates come from here. php-db/* is pinned on purpose (CLAUDE.md, "Known issues").
 version: 2
 updates:
   - package-ecosystem: composer
@@ -11,6 +12,8 @@ updates:
     labels: ["area: operations"]
     ignore:
       - dependency-name: "php-db/*"
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       composer:
         update-types: [minor, patch]
