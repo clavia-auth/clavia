@@ -12,13 +12,6 @@ certs/*.pem
 .phpcs-cache
 .deptrac.cache
 
-# Node
-node_modules/
-frontend/dist/
-# Written by `clavia seed-dev`: the dashboard's client id for this machine.
-frontend/.env.local
-frontend/*.tsbuildinfo
-
 # IDE
 .idea/
 .vscode/
@@ -28,9 +21,6 @@ frontend/*.tsbuildinfo
 
 # Browser automation output
 .playwright-mcp/
-
-# Files Claude hands back that could not be written in place
-/Claude outputs/
 
 # Output of `composer check` captured for review; never part of the repository.
 /check-output.txt

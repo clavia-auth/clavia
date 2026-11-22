@@ -27,13 +27,6 @@
 	tls /etc/caddy/certs/{$CLAVIA_ROOT_DOMAIN}.pem /etc/caddy/certs/{$CLAVIA_ROOT_DOMAIN}-key.pem
 }
 
-# Browser origins allowed to call the APIs cross-origin: the login UI and the
-# backoffice. The Origin header is echoed back only after being matched here —
-# never reflected blindly, which would authorize anyone.
-(cors_origins) {
-	@allowed_origin header_regexp Origin ^https://(auth|management)\.{$CLAVIA_ROOT_DOMAIN}$
-}
-
 # The application: one front controller, public/index.php, for every path that
 # is not a file under public/. The root is the path inside the php container —
 # docker-compose.yml mounts ./public at the same place in this one, so the
@@ -45,18 +38,6 @@
 		# executed, and a directory there never triggers a redirect.
 		try_files index.php
 	}
-}
-
-# ── Management dashboard Content-Security-Policy ──────────────
-# Chosen by CLAVIA_MANAGEMENT_CSP (default csp_dev). The only difference is
-# the Vite dev server's inline React Refresh preamble, which needs
-# 'unsafe-inline'; a production build emits no inline script or style.
-(csp_dev) {
-	header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://auth.{$CLAVIA_ROOT_DOMAIN} https://management.{$CLAVIA_ROOT_DOMAIN} ws://management.{$CLAVIA_ROOT_DOMAIN} wss://management.{$CLAVIA_ROOT_DOMAIN}; frame-ancestors 'none'; base-uri 'none'; object-src 'none'"
-}
-
-(csp_production) {
-	header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self' https://auth.{$CLAVIA_ROOT_DOMAIN} https://management.{$CLAVIA_ROOT_DOMAIN}; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
 }
 
 # ── HTTP → HTTPS redirect ─────────────────────────────────────
@@ -96,21 +77,9 @@ auth.{$CLAVIA_ROOT_DOMAIN} {
 		defer
 	}
 
-	# CORS for public PKCE clients calling POST /oauth2/token cross-origin.
-	# No credentials: a PKCE client proves itself with code_verifier, not a
-	# cookie, so Access-Control-Allow-Credentials is deliberately absent.
-	import cors_origins
-	@options method OPTIONS
-	handle @options {
-		header @allowed_origin Access-Control-Allow-Origin "{header.Origin}"
-		header {
-			Access-Control-Allow-Methods "GET, POST, OPTIONS"
-			Access-Control-Allow-Headers "Content-Type, Authorization"
-			Access-Control-Max-Age "600"
-			Vary "Origin"
-		}
-		respond 204
-	}
+	# No CORS: no browser origin calls this one. The dashboard is a backend for
+	# frontend whose server redeems codes and refreshes tokens itself, and a
+	# third-party single-page application is not offered cross-origin access.
 
 	# The Management API lives on management.*, not here. The application serves
 	# every surface from one front controller, so the host split is enforced at
@@ -140,8 +109,6 @@ auth.{$CLAVIA_ROOT_DOMAIN} {
 	}
 
 	handle {
-		header @allowed_origin Access-Control-Allow-Origin "{header.Origin}"
-		header Vary "Origin"
 		import clavia_app
 	}
 }
@@ -149,10 +116,11 @@ auth.{$CLAVIA_ROOT_DOMAIN} {
 # ── Backoffice + Management API — https://management.{CLAVIA_ROOT_DOMAIN} ─
 # One origin, two upstreams, each under its own prefix. /api/v1/* is the
 # Management API, served by the same PHP application as auth.* — the split
-# between the two hosts is Caddy's, not the application's. /dashboard/* is the
-# dashboard SPA (Vite in development; the prefix is Vite's `base`, and
-# `clavia seed-dev` registers the matching redirect URI). Anything else on this
-# host — the root included — has nothing to show and is sent to the dashboard.
+# between the two hosts is Caddy's, not the application's. /dashboard is the
+# dashboard: the Next.js server of the clavia-dashboard repository, a backend for
+# frontend whose `basePath` is /dashboard (`clavia seed-dev` registers its redirect,
+# post-logout and back-channel logout URIs under it). Anything else on this host —
+# the root included — has nothing to show and is sent to the dashboard.
 # Same origin means the dashboard's own calls to /api/v1/* need no CORS at all,
 # and there is deliberately no separate api.* host — see "Domain configuration"
 # in CLAUDE.md.
@@ -178,13 +146,14 @@ management.{$CLAVIA_ROOT_DOMAIN} {
 		import clavia_app
 	}
 
-	# The dashboard. Vite serves the bundle, its dev client and HMR socket all
-	# under the same prefix, so one matcher covers everything it needs.
-	handle /dashboard/* {
-		import {$CLAVIA_MANAGEMENT_CSP:csp_dev}
-		reverse_proxy host.docker.internal:5174 {
-			header_up Host {upstream_hostport}
-		}
+	# The dashboard, on the host in development (`npm run dev`, port 3000) or
+	# wherever CLAVIA_DASHBOARD_UPSTREAM points. It sets its own headers — a
+	# Content-Security-Policy with a nonce per response among them — and the Host
+	# header reaches it unchanged: its server actions refuse a request whose Origin
+	# does not match the Host it was sent to.
+	@dashboard path /dashboard /dashboard/*
+	handle @dashboard {
+		reverse_proxy {$CLAVIA_DASHBOARD_UPSTREAM:host.docker.internal:3000}
 	}
 
 	# Everything else — "/", "/dashboard" without its slash, an old bookmark —
@@ -194,6 +163,6 @@ management.{$CLAVIA_ROOT_DOMAIN} {
 	handle {
 		# The explicit `*` matters: a first argument starting with "/" would be
 		# read as a path matcher, not as the destination.
-		redir * /dashboard/ 302
+		redir * /dashboard 302
 	}
 }

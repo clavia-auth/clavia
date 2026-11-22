@@ -39,8 +39,10 @@ the social providers and operator-registered OpenID Connect providers, enabled p
 application — token introspection and revocation, device authorization, passwordless sign-in by email, and
 back-channel logout with session management, and the authentication-request parameters
 (`prompt`, `max_age`, request objects refused), and remote signing backends (AWS KMS, Google
-Cloud KMS, Azure Key Vault, a class of the operator's own); the dashboard is in `frontend/`.
-Phase E has begun with the audit trail (`GET /api/v1/audit-events`, `clavia audit:purge`).**
+Cloud KMS, Azure Key Vault, a class of the operator's own). Phase E has brought the audit
+trail (`GET /api/v1/audit-events`, `clavia audit:purge`) and the dashboard as a Next.js
+application in its own repository (`clavia-dashboard`), which Caddy serves at
+`management.{domain}/dashboard/`.**
 The application answers `GET /healthz`,
 `GET|POST /oauth2/authorize`, `POST /oauth2/token`, `POST /oauth2/introspect`, `POST /oauth2/revoke`,
 `POST /oauth2/device/code`, `GET|POST /auth/device`,
@@ -828,9 +830,9 @@ Conventions established in Step 9:
 - **Verifying is not signing.** `SignatureVerifier` checks a compact JWS against public keys
   only; the key is picked by `kid`, and the algorithm is the key's, never the header's.
   `web-token/jwt-library` does that and nothing else — it still never signs.
-- **The dashboard is an ordinary public client**, registered by `seed-dev` with its callback
-  and its signed-out page under `management.{domain}/dashboard/`; `frontend/.env.local` is
-  written from the same values.
+- **The dashboard is an ordinary client**, registered by `seed-dev` with its callback and its
+  signed-out page under `management.{domain}/dashboard/` (a confidential one since it moved to
+  its own repository; see the conventions of that move).
 
 Conventions established in Step 10:
 
@@ -894,6 +896,24 @@ Conventions established in Step 12:
 - **A handle is the only thing a page's URL or form carries**, for consent as for sign-in; a
   handle that is unknown, spent, expired, someone else's or names something deleted is the
   same "expired" page. Showing the screen leaves it; deciding claims it (`GETDEL`).
+
+Conventions established by the dashboard's move to its own repository:
+
+- **The dashboard knows the server only by its contract**: `docs/openapi/management-api.yaml`
+  and the discovery document. It holds a copy of the first and generates its types from it, so
+  a change to the API reaches it as a type error, and the two repositories release apart.
+- **The dashboard is a backend for frontend**, a confidential client (`client_secret_basic`) that
+  keeps every token on its server. Nothing it does crosses to `auth.*` from a browser, so `auth.*`
+  has no CORS allowlist and no dashboard-specific policy of its own.
+- **Caddy forwards `/dashboard` and keeps the `Host` header**: Next.js checks a server action's
+  `Origin` against `Host`. The dashboard runs where `CLAVIA_DASHBOARD_UPSTREAM` points
+  (`host.docker.internal:3000` by default, its `npm run dev` on the host), and sets its own
+  headers, its nonce-based Content-Security-Policy among them.
+- **`seed-dev` registers the dashboard with fixed development credentials** (`clavia-dashboard`
+  and a development secret), so the dashboard's `.env.example` works as it is, and prints the
+  settings for the deployment's domain instead of writing into another repository. It registers
+  back-channel logout with `sid` required, so a sign-out anywhere ends the dashboard's session,
+  and replaces the public client of an earlier seed.
 
 Conventions established by the audit trail:
 
@@ -1053,8 +1073,8 @@ Management API scope.
   test; names, request/response shapes and error bodies follow the best PHP/RFC design. Extra
   unit tests for the domain come on top.
 - **The HTTP contract is not frozen to Python.** Paths, JSON shapes and error bodies are designed
-  cleanly (OAuth2/OIDC endpoints stay RFC-exact). The React dashboard (`frontend/`) is adapted
-  to the PHP API where the two differ, rather than the API being bent to fit it.
+  cleanly (OAuth2/OIDC endpoints stay RFC-exact). The dashboard follows the API where the two
+  differ, rather than the API being bent to fit it.
 - **Port the final design, not the history.** The Python project changed its mind along the way
   (client scope column dropped, `client_id` became the primary key, `audience`/`sid`/`amr` added
   later). Each step creates its tables and models directly in their final shape.
@@ -1076,7 +1096,7 @@ Management API scope.
 | Short-TTL state | Redis (`ext-redis`), behind store ports |
 | Outbound HTTP | **Guzzle** as the PSR-18 client, injected by interface with PSR-17 factories (decided 2026-11-20) |
 | Outbound mail | **Symfony Mailer**'s ESMTP transport behind the `Mailer` port; console and `none` backends of our own (decided 2026-11-21) |
-| Dashboard | The existing **React** dashboard (`frontend/`), copied, changed only where the API it calls is designed differently — until Phase E replaces it with a **Next.js** application in its own repository, still served at `management.{domain}/dashboard/`, styled with Tailwind v4 and shadcn/ui (decided 2026-11-21) |
+| Dashboard | A **Next.js** application in its own repository (`clavia-dashboard`), a backend for frontend served at `management.{domain}/dashboard/`, styled with Tailwind v4 and shadcn/ui in the logo's colours (decided 2026-11-21; it replaced the React dashboard copied from the Python project) |
 | Auth pages | **laminas-view** PHP templates through `mezzio/mezzio-laminasviewrenderer` — no Twig, no other template language, no JavaScript — see "Auth pages" |
 | Namespace / licence | `Clavia\` · BSD-3-Clause |
 | Existing data | None to carry over — the PHP schema is free to be designed cleanly |
@@ -1142,7 +1162,6 @@ src/
 config/                       # Mezzio entry files: config, container, pipeline, routes
 templates/                    # auth pages: laminas-view layout/, auth/ (one per page), partial/
 public/                       # index.php, auth/static/ (auth.css, icon — served by Caddy)
-frontend/                     # the React dashboard, copied from the Python project
 migrations/  docs/
 test/
   Unit/ (Domain, Application with in-memory adapters)   Integration/ (each secondary adapter)
@@ -1248,9 +1267,9 @@ template language, no front-end framework. (Decided 2026-11-20, replacing the ea
   that sets a cookie.
 - No JavaScript on this origin is a security property, not a style choice.
 
-The management dashboard is a separate concern: the React app in `frontend/`, kept as is until
-Phase E replaces it (see "Dashboard as a Next.js application"). Until then it is maintained, not
-extended: new API features reach it only where a page would otherwise break.
+The management dashboard is a separate concern, in its own repository (`clavia-dashboard`; see
+"Dashboard as a Next.js application"). It is a client of the Management API like any other, and
+never shares this origin.
 
 ## Invariants carried over
 
@@ -1416,23 +1435,27 @@ their own domain at Clavia.
 
 A single setting — e.g. `CLAVIA_ROOT_DOMAIN` — names the deployment's domain (`clavia.io`,
 `acme-idp.com`, whatever DNS an operator controls), and every host Clavia needs is derived from it
-rather than written down anywhere. Two subdomains are non-negotiable and must exist wherever Clavia
-runs:
+rather than written down anywhere. In development the domain is under `.test` (`clavia.test`), which
+RFC 6761 reserves for this and every resolver answers from `/etc/hosts` alone; never `.local`, which
+macOS resolves through Bonjour (mDNS) at a cost of seconds per lookup — enough for the dashboard's
+parallel server-side calls to the Management API to time out — and never a real suffix such as
+`.dev`. Two subdomains are non-negotiable and must exist wherever Clavia runs:
 
 - **`auth.{domain}`** — the OAuth2/OIDC/login origin. This is the same load-bearing origin the prior
   attempt's login design depends on: a host-only session cookie with no `Domain` attribute, so it is
   never shared with any other subdomain, and `redirect_uri`s that are validated against this origin
   specifically. Whatever `{domain}` is, this subdomain is where credentials get typed and tokens get
   minted — nothing else should share it.
-- **`management.{domain}`** — the backoffice SPA *and* the Management API. Kept on its own origin,
+- **`management.{domain}`** — the dashboard *and* the Management API. Kept on its own origin,
   separate from `auth.*` and from the apex, for the same reason as before: an XSS in the end-user
-  login UI must not be able to reach the administrative dashboard's token, and vice versa.
+  login UI must not be able to reach the administrative dashboard's session, and vice versa.
 
 **There is deliberately no `api.{domain}` subdomain.** The Management API is served at
 `management.{domain}/api/v1/*` — a path on the same origin as the dashboard — rather than its own
 host; the prior attempt's `api.clavia.local` is not carried forward. Same-origin means the
-dashboard's own calls to `/api/v1/*` need no CORS at all; the only cross-origin concern left on
-`management.*` is the OAuth2/PKCE exchange against `auth.*`, not a second API host to whitelist. This
+dashboard's calls to `/api/v1/*` need no CORS at all, and since the dashboard redeems its codes
+and refreshes its tokens from its own server, nothing on `management.*` calls `auth.*` from a
+browser either. This
 doesn't change *who* may call `/api/v1/*` — it's still the bearer-token-only machine plane described
 in "Four surfaces" above, reachable by any client holding a valid access token regardless of
 the origin it calls from. Putting it under `management.*` only fixes where the first-party dashboard
@@ -1793,10 +1816,10 @@ Order is a dependency chain. `[ ]` → `[x]` when the step's acceptance tests ar
 ### Phase E — Beyond the Python project
 - [x] Audit logs: the `AuditLog` port, recorded by every use case that changes access, read at
   `GET /api/v1/audit-events`, trimmed by `audit:purge` (see "Current state").
-- [ ] Dashboard as a Next.js application — right after audit logs (decided 2026-11-21); below.
+- [x] Dashboard as a Next.js application, in the `clavia-dashboard` repository; below.
 - [ ] Multi-tenancy, if it turns out to be worth the complexity (see `clavia-old/CLAUDE.md`).
 
-#### [ ] Dashboard as a Next.js application
+#### [x] Dashboard as a Next.js application
 
 The dashboard becomes what the server already treats it as — one first-party client of the
 Management API among others — and stops living inside the server's repository.
@@ -1828,28 +1851,27 @@ Management API among others — and stops living inside the server's repository.
 - **Look and feel**: professional and smooth — the palette taken from the logo
   (`public/auth/static/clavia-icon.svg`: green `#52B788`, gold `#D4A843`) as the shadcn/ui theme
   tokens, light and dark.
-- **Styling: Tailwind v4, kept from the current dashboard** (decided 2026-11-21) — its `@theme`
-  tokens (light and dark, as CSS variables) and its `@utility` components (`btn-*`, `badge-*`,
-  `card`, `input`) carry over, so the move changes the architecture, not the look. Components
-  from **shadcn/ui** (Radix primitives, code owned in the repository) for what a back office
-  needs beyond that — tables, dialogs, comboboxes, toasts; variants with `cva`. Panda CSS was
-  weighed and set aside: typed tokens and recipes, but a rewrite of every page and a far smaller
-  component ecosystem, for a dashboard whose design is settled. Worth reopening only for a
-  design system shared by several Clavia front ends.
+- **Styling: Tailwind v4 and shadcn/ui** (decided 2026-11-21) — shadcn's components (Radix
+  primitives, code owned in the repository) for tables, dialogs, commands, toasts, with its theme
+  tokens set to the logo's palette in OKLCH, light and dark, every pair WCAG AA. Panda CSS was
+  weighed and set aside: typed tokens and recipes, but a far smaller component ecosystem. Worth
+  reopening only for a design system shared by several Clavia front ends.
 - **Authority stays the operator's**: the dashboard asks for the Management API scopes and gets
   what the operator's roles grant (Step 10), as today; a page offers only what the token holds.
 - **Sign-out**: RP-Initiated Logout as today, the refresh token revoked server-side (Step 14), and
   a `backchannel_logout_uri` (Step 17) so a sign-out anywhere ends the dashboard's session too.
 - **The audit trail** (the step before) gets its pages from the start.
 - **On this side**: `frontend/` is removed, with Caddy's static `/dashboard/` handling (replaced by
-  the reverse proxy) and the dashboard origin's entry in the CORS allowlist of `auth.*` (its token,
-  refresh and revocation requests become server-to-server); `seed-dev` registers the
-  dashboard as a confidential client — redirect, post-logout and back-channel logout URIs under
-  `management.{domain}/dashboard/` — and hands its credentials to the dashboard's `.env.local` as
-  it does today; `docker-compose.yml` gains the Next.js service for development.
+  the reverse proxy to `CLAVIA_DASHBOARD_UPSTREAM`), its Content-Security-Policy snippets (the
+  dashboard sets its own) and the CORS allowlist of `auth.*` (its token, refresh and revocation
+  requests are server-to-server); `seed-dev` registers the dashboard as a confidential client —
+  redirect, post-logout and back-channel logout URIs under `management.{domain}/dashboard/` — and
+  prints its settings. The dashboard runs on the host in development (`npm run dev`), not as a
+  compose service: Turbopack's file watching and reloads are faster there.
 - **Tests**: the OpenAPI contract is the only shared artefact, so the server keeps checking every
-  response against it. The dashboard repository carries its own tests and a small end-to-end
-  smoke suite run against a server started from a tagged image.
+  response against it. The dashboard repository carries its own unit tests and a Playwright smoke
+  suite that signs in through this server's login page; running it against a tagged image in CI
+  waits for the image to be published.
 
 ## Definition of done for a step
 

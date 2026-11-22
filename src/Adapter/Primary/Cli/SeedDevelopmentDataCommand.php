@@ -38,8 +38,6 @@ final class SeedDevelopmentDataCommand extends Command
      * @param string      $rootDomain       The deployment's domain, for the default email address.
      * @param string      $issuer           The issuer, for the sign-in URL printed at the end.
      * @param string      $managementHost   `management.{domain}`, where the dashboard is served.
-     * @param string|null $dashboardEnvFile Where the dashboard reads its build configuration
-     *                                      (`frontend/.env.local`); written only when its directory exists.
      */
     public function __construct(
         private readonly SeedDevelopmentData $seed,
@@ -48,7 +46,6 @@ final class SeedDevelopmentDataCommand extends Command
         private readonly string $rootDomain,
         private readonly string $issuer,
         private readonly string $managementHost,
-        private readonly ?string $dashboardEnvFile,
     ) {
         parent::__construct();
     }
@@ -122,8 +119,11 @@ final class SeedDevelopmentDataCommand extends Command
             $dashboard->created ? 'Created' : 'Kept',
             $dashboard->clientId->value,
         ));
-        if ($this->writeDashboardConfiguration($dashboard->clientId->value, $management->managementApi->value)) {
-            $output->writeln("Wrote the dashboard's configuration to {$this->dashboardEnvFile}");
+        $output->writeln('');
+        $output->writeln("The dashboard's .env.local (clavia-dashboard) for this deployment:");
+        $output->writeln('');
+        foreach ($this->dashboardSettings($management->managementApi->value) as $line) {
+            $output->writeln('  ' . $line, OutputInterface::OUTPUT_RAW);
         }
         $output->writeln('');
         $output->writeln("Seeded. Sign in at {$this->issuer}/auth/login as {$email} / {$password}");
@@ -142,25 +142,20 @@ final class SeedDevelopmentDataCommand extends Command
     }
 
     /**
-     * Write what the dashboard is built with (Vite reads `VITE_*` from `.env.local`).
-     * Nothing in it is a secret: the dashboard is a public client.
+     * The settings the dashboard needs to reach this deployment: its development client's
+     * credentials, and where the issuer, the Management API and the dashboard itself are.
+     *
+     * @return list<string>
      */
-    private function writeDashboardConfiguration(string $clientId, string $audience): bool
+    private function dashboardSettings(string $managementApi): array
     {
-        if ($this->dashboardEnvFile === null || ! is_dir(dirname($this->dashboardEnvFile))) {
-            return false;
-        }
-
-        $written = file_put_contents($this->dashboardEnvFile, implode("\n", [
-            '# Written by `clavia seed-dev`. The dashboard reads these at build time.',
-            'VITE_CLAVIA_ISSUER=' . $this->issuer,
-            'VITE_CLAVIA_CLIENT_ID=' . $clientId,
-            'VITE_CLAVIA_AUDIENCE=' . $audience,
-            'VITE_CLAVIA_MANAGEMENT_HOST=' . $this->managementHost,
-            '',
-        ]));
-
-        return $written !== false;
+        return [
+            'CLAVIA_ISSUER=' . $this->issuer,
+            'CLAVIA_CLIENT_ID=' . SeedDashboardClient::CLIENT_ID,
+            'CLAVIA_CLIENT_SECRET=' . SeedDashboardClient::CLIENT_SECRET,
+            'CLAVIA_MANAGEMENT_API=' . $managementApi,
+            'DASHBOARD_URL=' . SeedDashboardClient::url($this->managementHost),
+        ];
     }
 
     private function option(InputInterface $input, string $name): ?string

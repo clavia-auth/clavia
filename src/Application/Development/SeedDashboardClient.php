@@ -11,34 +11,44 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Development;
 
+use Clavia\Application\Port\PasswordHasher;
+use Clavia\Domain\Client\BackChannelLogout;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\GrantType;
-use Clavia\Domain\Client\Ownership;
 use Clavia\Domain\Client\ResponseType;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\InvalidValue;
-use Clavia\Domain\Shared\SecretGenerator;
 use Clavia\Domain\Shared\Url;
 use LogicException;
 
 /**
- * Registers the management dashboard (`frontend/`) as what it is: an ordinary public
- * client using the code flow with PKCE, and refresh tokens. It holds nothing of its own; what a signed-in
- * operator may do is whatever they hold on the Management API.
+ * Registers the management dashboard (the `clavia-dashboard` repository) as what it is: a
+ * confidential, first-party client — a backend for frontend that redeems codes and keeps
+ * tokens server-side — using the code flow with PKCE, refresh tokens, RP-Initiated Logout
+ * and back-channel logout. It holds nothing of its own; what a signed-in operator may do is
+ * whatever their roles grant on the Management API.
  *
- * Idempotent by name. A rerun brings its URIs up to date — they follow the management
- * host, which a developer may have changed since.
+ * Its id and secret are fixed development values, like the development machine client's,
+ * so the dashboard's `.env.example` works as it is. A rerun brings its URIs up to date —
+ * they follow the management host, which a developer may have changed since — and keeps
+ * the connections it enables. A public dashboard client an earlier seed registered under a
+ * generated id is removed.
  */
 final readonly class SeedDashboardClient
 {
+    public const string CLIENT_ID = 'clavia-dashboard';
+
     public const string CLIENT_NAME = 'Clavia dashboard';
 
-    /** The prefix the dashboard is served under on `management.{domain}`: Vite's `base`, and Caddy's route. */
+    /** A development secret, printed by `seed-dev`; a real deployment registers its own. */
+    public const string CLIENT_SECRET = 'dev-dashboard-secret-for-local-development-only';
+
+    /** The prefix the dashboard is served under on `management.{domain}`: its `basePath`, and Caddy's route. */
     public const string PATH = '/dashboard';
 
     /** The code flow, and rotating refresh tokens so a session outlives one access token. */
@@ -46,10 +56,16 @@ final readonly class SeedDashboardClient
 
     public function __construct(
         private ClientRepository $clients,
-        private SecretGenerator $secrets,
+        private PasswordHasher $hasher,
         private Clock $clock,
         private bool $isDevelopment,
     ) {
+    }
+
+    /** The dashboard's address on `$managementHost`: `https://management.{domain}/dashboard`. */
+    public static function url(string $managementHost): string
+    {
+        return 'https://' . $managementHost . self::PATH;
     }
 
     /**
@@ -64,37 +80,32 @@ final readonly class SeedDashboardClient
             throw new LogicException('Refusing to seed development data outside a development deployment.');
         }
 
-        $base = 'https://' . $managementHost . self::PATH;
-        $callback = Url::fromString($base . '/callback');
-        $signedOut = Url::fromString($base . '/signed-out');
+        $base = self::url($managementHost);
+        $id = ClientId::fromString(self::CLIENT_ID);
 
-        $existing = $this->clients->findByName(self::CLIENT_NAME);
-        $client = $existing === null
-            ? Client::register(
-                ClientId::generate($this->secrets, Ownership::FirstParty),
-                self::CLIENT_NAME,
-                ClientType::Public,
-                ClientAuthMethod::None,
-                null,
-                [$callback],
-                self::GRANT_TYPES,
-                [ResponseType::Code],
-                $this->clock->now(),
-                [$signedOut],
-                // Operators sign in to it with a password; other connections are enabled
-                // through the API.
-                [ConnectionName::defaultPool()],
-            )
-            : $existing->reconfigure(
-                self::CLIENT_NAME,
-                [$callback],
-                self::GRANT_TYPES,
-                [ResponseType::Code],
-                ClientAuthMethod::None,
-                [$signedOut],
-            );
-        $this->clients->save($client);
+        $earlier = $this->clients->findByName(self::CLIENT_NAME);
+        if ($earlier !== null && ! $earlier->id->equals($id)) {
+            // The single-page dashboard this one replaces: a public client under a generated id.
+            $this->clients->delete($earlier->id);
+        }
 
-        return new SeededDashboard($client->id, $existing === null);
+        $existing = $this->clients->find($id);
+        $this->clients->save(Client::register(
+            $id,
+            self::CLIENT_NAME,
+            ClientType::Confidential,
+            ClientAuthMethod::ClientSecretBasic,
+            $this->hasher->hash(self::CLIENT_SECRET),
+            [Url::fromString($base . '/auth/callback')],
+            self::GRANT_TYPES,
+            [ResponseType::Code],
+            $existing?->createdAt ?? $this->clock->now(),
+            [Url::fromString($base . '/signed-out')],
+            // Operators sign in with a password; other connections are enabled through the API.
+            $existing?->connections ?? [ConnectionName::defaultPool()],
+            new BackChannelLogout(Url::fromString($base . '/auth/backchannel-logout'), sessionRequired: true),
+        ));
+
+        return new SeededDashboard($id, $existing === null);
     }
 }

@@ -12,10 +12,10 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Development\SeedDashboardClient;
+use Clavia\Application\Port\PasswordHasher;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Shared\Clock;
-use Clavia\Domain\Shared\SecretGenerator;
 use Psr\Container\ContainerInterface;
 
 final class SeedDashboardClientFactory
@@ -24,13 +24,13 @@ final class SeedDashboardClientFactory
     {
         /** @var ClientRepository $clients */
         $clients = $container->get(ClientRepository::class);
-        /** @var SecretGenerator $secrets */
-        $secrets = $container->get(SecretGenerator::class);
+        /** @var PasswordHasher $hasher */
+        $hasher = $container->get(PasswordHasher::class);
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
         /** @var Settings $settings */
         $settings = $container->get(Settings::class);
 
-        return new SeedDashboardClient($clients, $secrets, $clock, $settings->isDevelopment());
+        return new SeedDashboardClient($clients, $hasher, $clock, $settings->isDevelopment());
     }
 }

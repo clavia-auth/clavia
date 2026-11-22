@@ -2,8 +2,8 @@ services:
   # ── Caddy — reverse proxy / TLS termination ──────────────────
   # Terminates mkcert TLS for auth.{CLAVIA_ROOT_DOMAIN} and
   # management.{CLAVIA_ROOT_DOMAIN}, serves the static assets itself and hands
-  # everything else to PHP-FPM over FastCGI. The dashboard's Vite dev server
-  # runs on the host.
+  # everything else to PHP-FPM over FastCGI. The dashboard (the Next.js app in
+  # the clavia-dashboard repository) runs on the host, `npm run dev` on port 3000.
   caddy:
     image: caddy:2-alpine
     container_name: clavia-caddy
@@ -13,7 +13,7 @@ services:
       - "${CLAVIA_HTTPS_PORT:-443}:443"
     environment:
       CLAVIA_ROOT_DOMAIN: ${CLAVIA_ROOT_DOMAIN:?set CLAVIA_ROOT_DOMAIN in .env}
-      CLAVIA_MANAGEMENT_CSP: ${CLAVIA_MANAGEMENT_CSP:-csp_dev}
+      CLAVIA_DASHBOARD_UPSTREAM: ${CLAVIA_DASHBOARD_UPSTREAM:-host.docker.internal:3000}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./certs:/etc/caddy/certs:ro

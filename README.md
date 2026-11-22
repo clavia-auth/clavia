@@ -50,10 +50,11 @@ network (`CLAVIA_OUTBOUND_ALLOW_PRIVATE_ADDRESSES` waives that in development). 
 an external connection linked to a user are listed and unlinked under
 `/api/v1/users/{user_id}/identities`.
 
-The dashboard (`frontend/`, React) is registered by `clavia seed-dev` as a public client, which
-also writes its build configuration to `frontend/.env.local`. Run it with
-`cd frontend && npm install && npm run dev`; Caddy serves it at
-`https://management.{domain}/dashboard/`.
+The dashboard lives in its own repository,
+[clavia-dashboard](https://github.com/clavia-auth/clavia-dashboard). `clavia seed-dev` registers
+it as a confidential client and prints its settings; run it with `npm run dev` there, and Caddy
+serves it at `https://management.{domain}/dashboard/` (forwarded to `CLAVIA_DASHBOARD_UPSTREAM`,
+port 3000 on the host by default).
 
 An API checks a token presented to it at `/oauth2/introspect` (RFC 7662), through a machine
 client holding a grant on it; a client gives a token back at `/oauth2/revoke` (RFC 7009) —
@@ -148,12 +149,18 @@ Strict hexagonal (ports and adapters), enforced by the build:
 Requirements: Docker, and [mkcert](https://github.com/FiloSottile/mkcert) for local TLS.
 
 ```sh
-cp .env.example .env     # set CLAVIA_ROOT_DOMAIN (e.g. clavia.local)
+cp .env.example .env     # set CLAVIA_ROOT_DOMAIN (e.g. clavia.test)
 ./setup-ssl.sh           # certificate for *.{CLAVIA_ROOT_DOMAIN} + /etc/hosts entries
 make up install migrate  # Caddy, PHP-FPM, PostgreSQL, Redis; composer install; schema
 make seed                # a development user, clients, the Management API and a key
-curl https://auth.clavia.local/healthz
+curl https://auth.clavia.test/healthz
 ```
+
+Pick a root domain under `.test`, which is reserved for exactly this (RFC 6761) and resolved
+from `/etc/hosts` alone. Avoid `.local`: macOS sends those names to Bonjour (mDNS), which adds
+seconds to every lookup, enough to make the dashboard's parallel calls to the Management API
+time out. Avoid real suffixes such as `.dev`, which a machine without your hosts entries would
+resolve on the internet. The examples below use `clavia.test`.
 
 | Command | What it does |
 |---|---|
@@ -169,7 +176,7 @@ curl https://auth.clavia.local/healthz
 
 ```sh
 make seed
-make authorize-url       # open the link and sign in as dev@clavia.local / devpassword,
+make authorize-url       # open the link and sign in as dev@clavia.test / devpassword,
                          # copy ?code=… from the address bar, then run the printed curl
 ```
 
@@ -177,11 +184,11 @@ make authorize-url       # open the link and sign in as dev@clavia.local / devpa
 
 ```sh
 make seed                # prints the machine client and the token request below
-TOKEN=$(curl -s https://auth.clavia.local/oauth2/token \
+TOKEN=$(curl -s https://auth.clavia.test/oauth2/token \
   -u '<client_id>:dev-m2m-secret-for-local-development-only' \
   -d grant_type=client_credentials \
-  -d audience=https://management.clavia.local/api/v1/ | jq -r .access_token)
-curl -s -H "Authorization: Bearer $TOKEN" https://management.clavia.local/api/v1/users
+  -d audience=https://management.clavia.test/api/v1/ | jq -r .access_token)
+curl -s -H "Authorization: Bearer $TOKEN" https://management.clavia.test/api/v1/users
 ```
 
 Differences from the Python server are listed in [`docs/DEVIATIONS.md`](docs/DEVIATIONS.md).

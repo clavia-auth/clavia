@@ -20,9 +20,6 @@ use Psr\Container\ContainerInterface;
 
 final class SeedDevelopmentDataCommandFactory
 {
-    /** The dashboard's build configuration, beside the checkout's `frontend/`. */
-    public const string DASHBOARD_ENV_FILE = __DIR__ . '/../../../frontend/.env.local';
-
     public function __invoke(ContainerInterface $container): SeedDevelopmentDataCommand
     {
         /** @var SeedDevelopmentData $seed */
@@ -41,7 +38,6 @@ final class SeedDevelopmentDataCommandFactory
             $settings->rootDomain,
             $settings->issuer(),
             $settings->managementHost(),
-            self::DASHBOARD_ENV_FILE,
         );
     }
 }

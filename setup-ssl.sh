@@ -31,8 +31,8 @@ load_env_file() {
 }
 load_env_file "$REPO_ROOT/.env"
 
-# Precedence: first argument, then CLAVIA_ROOT_DOMAIN (environment or .env), then clavia.local.
-CLAVIA_ROOT_DOMAIN="${1:-${CLAVIA_ROOT_DOMAIN:-clavia.local}}"
+# Precedence: first argument, then CLAVIA_ROOT_DOMAIN (environment or .env), then clavia.test.
+CLAVIA_ROOT_DOMAIN="${1:-${CLAVIA_ROOT_DOMAIN:-clavia.test}}"
 
 DOMAIN="$CLAVIA_ROOT_DOMAIN"
 # The two subdomains CLAUDE.md ("Domain configuration") makes non-negotiable,
