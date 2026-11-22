@@ -1,0 +1,49 @@
+name: Image
+
+# The container image a release publishes is built here too, without pushing it, whenever something
+# that goes into it changes: a release then never meets a Dockerfile that was not built before.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docker/php/**'
+      - 'composer.json'
+      - 'composer.lock'
+      - '.github/workflows/image.yml'
+      - '.github/workflows/release.yml'
+  pull_request:
+    paths:
+      - 'docker/php/**'
+      - 'composer.json'
+      - 'composer.lock'
+      - '.github/workflows/image.yml'
+      - '.github/workflows/release.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Production image builds and starts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: docker/php
+          build-contexts: app=.
+          target: production
+          load: true
+          push: false
+          tags: clavia:ci
+
+      # The application is in the image and starts: the console boots the container and reads its
+      # configuration from the environment, and the Management API's contract is part of it.
+      - name: The application is in the image
+        run: |
+          docker run --rm -e CLAVIA_ROOT_DOMAIN=ci.test clavia:ci php bin/clavia config
+          docker run --rm clavia:ci test -f /app/docs/openapi/management-api.yaml
+          docker run --rm clavia:ci sh -c '! test -e /app/vendor/bin/phpunit'
