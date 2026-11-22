@@ -23,9 +23,15 @@ use Psr\Http\Message\ServerRequestInterface;
  *
  * - **Never cached.** Pages carry CSRF tokens, prefilled emails, and later TOTP seeds and
  *   recovery codes; an error page describes one person's request.
- * - **No script, ever.** `default-src 'none'` with nothing loosening it for scripts.
- *   Styles come from `/auth/static` with no inline `style` attribute, which is what lets
- *   `style-src` stay at `'self'`.
+ * - **No script, unless the page loads one module of this server's.** `default-src 'none'`
+ *   with nothing loosening it, except on a page that names its module ({@see HtmlPage::$script}):
+ *   that page allows `script-src 'self'` and nothing more — no inline script, no `eval`, no other
+ *   origin — and Trusted Types with no policy, so the module cannot write HTML from a string.
+ *   Data for the module travels in escaped `data-` attributes, never in a script block. Styles come
+ *   from `/auth/static` with no inline `style` attribute, which is what lets `style-src` stay at
+ *   `'self'`.
+ * - **WebAuthn on this origin only** (`Permissions-Policy`): no frame may create or use a passkey
+ *   for this site, whoever embeds it.
  * - **`form-action` per page.** Every form posts to this origin, but a successful post
  *   may redirect onwards — to `/oauth2/authorize` and from there to the application's
  *   redirect URI — and Chromium applies `form-action` to a submission's whole redirect
@@ -47,6 +53,7 @@ final readonly class PageRenderer
         'X-Content-Type-Options' => 'nosniff',
         'X-Frame-Options' => 'DENY',
         'Referrer-Policy' => 'same-origin',
+        'Permissions-Policy' => 'publickey-credentials-create=(self), publickey-credentials-get=(self)',
     ];
 
     public function __construct(private TemplateRendererInterface $templates)
@@ -66,6 +73,7 @@ final readonly class PageRenderer
                 'theme' => self::theme($request),
                 'returnTo' => $page->returnTo,
                 'wide' => $page->wide,
+                'script' => $page->script,
             ], 'layout::page'),
             ...$page->variables,
             ...$variables,
@@ -74,7 +82,7 @@ final readonly class PageRenderer
         return new HtmlResponse(
             $html,
             $page->status,
-            self::HEADERS + ['Content-Security-Policy' => self::policy($page->formOrigins)],
+            self::HEADERS + ['Content-Security-Policy' => self::policy($page->formOrigins, $page->script !== null)],
         );
     }
 
@@ -92,11 +100,12 @@ final readonly class PageRenderer
     /**
      * @param list<string> $formOrigins
      */
-    private static function policy(array $formOrigins): string
+    private static function policy(array $formOrigins, bool $script): string
     {
         $formAction = implode(' ', array_values(array_unique(["'self'", ...$formOrigins])));
 
         return "default-src 'none'; style-src 'self'; img-src 'self'; form-action {$formAction}; "
-            . "frame-ancestors 'none'; base-uri 'none'";
+            . "frame-ancestors 'none'; base-uri 'none'"
+            . ($script ? "; script-src 'self'; require-trusted-types-for 'script'; trusted-types 'none'" : '');
     }
 }

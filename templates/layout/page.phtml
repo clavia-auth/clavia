@@ -10,13 +10,15 @@
  * @var string|null $theme    The forced colour scheme, or null to follow the system.
  * @var string|null $returnTo Where the theme toggle comes back to; null leaves the toggle out.
  * @var bool        $wide     A wider card, for a QR code or a list of codes.
+ * @var string|null $script   A module of this server's the page loads; null for none.
  * @var string      $content  The page itself, already rendered.
  *
  * A page puts the line under the heading in the `subtitle` placeholder; it is rendered
  * before the layout, so the layout prints whatever the page captured.
  *
- * No JavaScript anywhere on these pages, by design: a credential-entry surface whose
- * policy forbids script cannot run an injected one either.
+ * No script on these pages but one module of this server's, and only on the page that needs
+ * it (`$script`): every other page's policy forbids script, so it cannot run an injected one
+ * either, and the one that allows it allows that module and nothing more (see PageRenderer).
  */
 ?>
 <!DOCTYPE html>
@@ -28,6 +30,9 @@
   <title><?= $this->escapeHtml($title) ?> · Clavia</title>
   <link rel="icon" href="/auth/static/clavia-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/auth/static/auth.css">
+<?php if ($script !== null): ?>
+  <script type="module" src="<?= $this->escapeHtmlAttr($script) ?>"></script>
+<?php endif ?>
 </head>
 <body>
   <main class="card<?php if ($wide): ?> card-wide<?php endif ?>">

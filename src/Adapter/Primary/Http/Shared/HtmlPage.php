@@ -31,6 +31,9 @@ final readonly class HtmlPage
      * @param list<string>                   $formOrigins Origins a form submission on this page may end
      *                                                    at, besides this server; see {@see PageRenderer}.
      * @param bool                           $wide        A wider card, for a QR code or a list of codes.
+     * @param string|null                    $script      A module this server serves (`/auth/static/…`) that
+     *                                                    the page loads: the only way a page runs script,
+     *                                                    and what lets its CSP allow it.
      */
     public function __construct(
         public string $template,
@@ -42,6 +45,7 @@ final readonly class HtmlPage
         public int $status = 200,
         public array $formOrigins = [],
         public bool $wide = false,
+        public ?string $script = null,
     ) {
     }
 }
