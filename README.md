@@ -237,6 +237,14 @@ and how Claude works the backlog with the `ticket-*` skills. In short:
 5. **Open a pull request** that explains what changes and why, citing the RFC where the protocol
    is involved.
 
+## Releasing
+
+Each milestone is a version, published as a git tag, a GitHub release whose notes are the
+[changelog](CHANGELOG.md) section, and a container image,
+`ghcr.io/clavia-auth/clavia:X.Y.Z`: the application and its runtime dependencies, PHP-FPM alone,
+configured entirely by `CLAVIA_*` variables. Pushing the tag `vX.Y.Z` runs the Release workflow;
+[`docs/RELEASING.md`](docs/RELEASING.md) lists what comes before and after.
+
 ## Security
 
 Please do not report vulnerabilities in public issues. Use GitHub's

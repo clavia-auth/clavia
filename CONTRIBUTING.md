@@ -76,6 +76,12 @@ Claude picks the skill from the request; `/ticket-work 12` names one explicitly.
 
 Claude's pull requests are reviewed like anyone else's.
 
+## Releasing
+
+A milestone is a version. Claude prepares the release pull request (changelog and version); the
+maintainer merges it and pushes the tag, and the Release workflow publishes the container image and
+the GitHub release. The steps are in [docs/RELEASING.md](docs/RELEASING.md).
+
 ## Security
 
 Never report a vulnerability in a public issue: see [SECURITY.md](SECURITY.md).

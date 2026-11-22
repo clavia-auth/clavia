@@ -41,7 +41,7 @@ open to a better design.
   `.claude/skills/`: `ticket-pick`, `ticket-work`, `ticket-review`, `ticket-triage`,
   `ticket-design`, `ticket-release`; `CONTRIBUTING.md` describes the board they move issues on.
 - **Files the maintainer owns**, changed only on request: `.env.example`, `setup-ssl.sh`,
-  the `Makefile` and `.github/workflows/ci.yml`. Report what they need instead.
+  the `Makefile` and `.github/workflows/ci.yml`. (`release.yml` is new and ordinary.) Report what they need instead.
 - **`php-db/*` is pinned. Never `composer update` it** (see
   [Known issues](#known-issues-and-decisions)).
 - **Every PHP file starts with the BSD-3 header in `.docheader`.** `LicenseHeaderTest`
@@ -111,11 +111,13 @@ templates/                  server-rendered pages: layout/, auth/, error/, parti
 migrations/                 NNNN_name.sql, forward only
 docs/openapi/               management-api.yaml, the Management API's contract
 docs/SECURITY-REVIEW.md     review of every adapter against the invariants
+docs/RELEASING.md           how a release is made: changelog, version, tag, the Release workflow
+CHANGELOG.md                what each release changed, for operators
 conformance/                OpenID Foundation conformance: results and how to run them
 test/{Unit,Integration,Acceptance,Support}/
-docker/php/                 the PHP-FPM image
+docker/php/                 the PHP-FPM image: `development` (default) and `production` (published)
 .claude/                    the ticket-* skills and board.sh, which move work through the backlog
-.github/                    CI, the @claude workflow, issue forms, the pull request template
+.github/                    CI, the release workflow, the @claude workflow, issue forms, the pull request template
 Caddyfile, docker-compose.yml, setup-ssl.sh, Makefile
 ```
 
