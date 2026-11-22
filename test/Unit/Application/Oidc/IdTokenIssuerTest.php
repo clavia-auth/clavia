@@ -101,7 +101,7 @@ final class IdTokenIssuerTest extends TestCase
         $this->keys->create(SigningAlgorithm::RS256, $this->clock->now());
         $jws = new CompactJws($this->keys);
 
-        $token = $jws->sign($this->keys->activeKey(), ['url' => 'https://a.example/x', 'name' => 'Zoë']);
+        $token = $jws->sign($this->keys->activeKey(), ['url' => 'https://a.example/x', 'name' => 'Zoë'], 'JWT');
 
         self::assertSame(
             '{"url":"https://a.example/x","name":"Zoë"}',

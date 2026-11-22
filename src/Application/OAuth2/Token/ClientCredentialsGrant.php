@@ -18,7 +18,6 @@ use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\OAuth2\AccessToken;
 use Clavia\Domain\OAuth2\AccessTokenId;
-use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\Event\AccessTokenIssued;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use Clavia\Domain\Oidc\OidcScope;
@@ -28,9 +27,7 @@ use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\InvalidValue;
-use Clavia\Domain\Shared\RandomSource;
 use Clavia\Domain\Shared\ScopeSet;
-use Clavia\Domain\Shared\SecretGenerator;
 
 /**
  * `grant_type=client_credentials` (RFC 6749 §4.4): a confidential client authenticating
@@ -67,9 +64,7 @@ final readonly class ClientCredentialsGrant implements Grant
     public function __construct(
         private ResourceServerRepository $resourceServers,
         private ClientGrantRepository $clientGrants,
-        private AccessTokenRepository $tokens,
-        private SecretGenerator $secrets,
-        private RandomSource $random,
+        private AccessTokenMinter $accessTokens,
         private Clock $clock,
         private int $accessTokenLifetimeSeconds,
         private DomainEvents $events,
@@ -113,17 +108,19 @@ final readonly class ClientCredentialsGrant implements Grant
         }
 
         $now = $this->clock->now();
-        $value = $this->secrets->token();
-        $token = AccessToken::issueToClient(
-            AccessTokenId::generate($this->random),
-            Digest::of($value),
-            $client->id,
-            $resourceServer->identifier,
-            $scope,
-            $now,
-            $this->accessTokenLifetimeSeconds,
+        $minted = $this->accessTokens->mint(
+            fn (AccessTokenId $id, Digest $digest): AccessToken => AccessToken::issueToClient(
+                $id,
+                $digest,
+                $client->id,
+                $resourceServer->identifier,
+                $scope,
+                $now,
+                $this->accessTokenLifetimeSeconds,
+            ),
         );
-        $this->tokens->add($token);
+        $token = $minted->token;
+        $value = $minted->value;
         $this->events->dispatch(new AccessTokenIssued($token, GrantType::ClientCredentials, false));
 
         return new IssuedToken($value, AccessToken::TOKEN_TYPE, $token->lifetimeFrom($now), $token->scope);

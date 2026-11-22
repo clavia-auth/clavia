@@ -11,15 +11,13 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Application\OAuth2\Token\AccessTokenMinter;
 use Clavia\Application\OAuth2\Token\ClientCredentialsGrant;
 use Clavia\Application\Port\DomainEvents;
 use Clavia\Configuration\Settings;
-use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\ResourceServer\ClientGrantRepository;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\Shared\Clock;
-use Clavia\Domain\Shared\RandomSource;
-use Clavia\Domain\Shared\SecretGenerator;
 use Psr\Container\ContainerInterface;
 
 final class ClientCredentialsGrantFactory
@@ -30,12 +28,8 @@ final class ClientCredentialsGrantFactory
         $resourceServers = $container->get(ResourceServerRepository::class);
         /** @var ClientGrantRepository $clientGrants */
         $clientGrants = $container->get(ClientGrantRepository::class);
-        /** @var AccessTokenRepository $tokens */
-        $tokens = $container->get(AccessTokenRepository::class);
-        /** @var SecretGenerator $secrets */
-        $secrets = $container->get(SecretGenerator::class);
-        /** @var RandomSource $random */
-        $random = $container->get(RandomSource::class);
+        /** @var AccessTokenMinter $accessTokens */
+        $accessTokens = $container->get(AccessTokenMinter::class);
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
         /** @var Settings $settings */
@@ -50,9 +44,7 @@ final class ClientCredentialsGrantFactory
         return new ClientCredentialsGrant(
             $resourceServers,
             $clientGrants,
-            $tokens,
-            $secrets,
-            $random,
+            $accessTokens,
             $clock,
             $lifetime,
             $events,

@@ -44,7 +44,21 @@ final class JoseSignatureVerifierTest extends TestCase
 
         self::assertSame(
             ['iss' => 'https://auth.clavia.test', 'sub' => 'u-1', 'aud' => 'spa'],
-            $this->verifier->verifiedClaims($token, $this->keys->publicKeys()),
+            $this->verifier->verifiedClaims($token, $this->keys->publicKeys(), 'JWT'),
+        );
+    }
+
+    public function testATokenOfAnotherTypeIsRefused(): void
+    {
+        // RFC 8725 §3.11: the same keys sign ID tokens, logout tokens and access tokens;
+        // only `typ` tells them apart.
+        $claims = ['iss' => 'https://auth.clavia.test', 'sub' => 'u-1', 'aud' => 'https://api.test/'];
+        $accessToken = new CompactJws($this->keys)->sign($this->keys->activeKey(), $claims, 'at+jwt');
+
+        self::assertNull($this->verifier->verifiedClaims($accessToken, $this->keys->publicKeys(), 'JWT'));
+        self::assertSame(
+            $claims,
+            $this->verifier->verifiedClaims($accessToken, $this->keys->publicKeys(), 'at+jwt'),
         );
     }
 
@@ -54,8 +68,8 @@ final class JoseSignatureVerifierTest extends TestCase
         // The store's first key is test key 0; key 1 is any other key.
         $otherKey = TestSigningKeys::publicJwk(1);
 
-        self::assertNull($this->verifier->verifiedClaims($token, [$otherKey]));
-        self::assertNull($this->verifier->verifiedClaims($token, []));
+        self::assertNull($this->verifier->verifiedClaims($token, [$otherKey], 'JWT'));
+        self::assertNull($this->verifier->verifiedClaims($token, [], 'JWT'));
     }
 
     public function testAnAlteredTokenIsRefused(): void
@@ -64,7 +78,7 @@ final class JoseSignatureVerifierTest extends TestCase
 
         $altered = $header . '.' . Base64Url::encode('{"sub":"u-2"}') . '.' . $signature;
 
-        self::assertNull($this->verifier->verifiedClaims($altered, $this->keys->publicKeys()));
+        self::assertNull($this->verifier->verifiedClaims($altered, $this->keys->publicKeys(), 'JWT'));
     }
 
     public function testTheAlgorithmIsTheKeysNotTheHeaders(): void
@@ -73,17 +87,22 @@ final class JoseSignatureVerifierTest extends TestCase
         $kid = $this->keys->activeKey()->kid;
 
         foreach (['none', 'HS256', 'RS512'] as $algorithm) {
-            $header = Base64Url::encode((string) json_encode(['alg' => $algorithm, 'kid' => $kid]));
+            $header = Base64Url::encode((string) json_encode(['alg' => $algorithm, 'typ' => 'JWT', 'kid' => $kid]));
 
             self::assertNull(
-                $this->verifier->verifiedClaims($header . '.' . $claims . '.' . $signature, $this->keys->publicKeys()),
+                $this->verifier->verifiedClaims(
+                    $header . '.' . $claims . '.' . $signature,
+                    $this->keys->publicKeys(),
+                    'JWT',
+                ),
                 $algorithm,
             );
         }
         self::assertNull(
             $this->verifier->verifiedClaims(
-                Base64Url::encode('{"alg":"none"}') . '.' . $claims . '.',
+                Base64Url::encode('{"alg":"none","typ":"JWT"}') . '.' . $claims . '.',
                 $this->keys->publicKeys(),
+                'JWT',
             ),
         );
     }
@@ -91,16 +110,20 @@ final class JoseSignatureVerifierTest extends TestCase
     public function testWhatIsNotACompactJwsOrNotAnObjectIsRefused(): void
     {
         foreach (['', 'abc', 'a.b', 'a.b.c.d', '...'] as $garbage) {
-            self::assertNull($this->verifier->verifiedClaims($garbage, $this->keys->publicKeys()), $garbage);
+            self::assertNull($this->verifier->verifiedClaims($garbage, $this->keys->publicKeys(), 'JWT'), $garbage);
         }
 
         $key = $this->keys->activeKey();
-        $header = Base64Url::encode((string) json_encode(['alg' => 'RS256', 'kid' => $key->kid]));
+        $header = Base64Url::encode((string) json_encode(['alg' => 'RS256', 'typ' => 'JWT', 'kid' => $key->kid]));
         $payload = Base64Url::encode('[1,2]');
         $signature = Base64Url::encode($this->keys->sign($key, $header . '.' . $payload));
 
         self::assertNull(
-            $this->verifier->verifiedClaims($header . '.' . $payload . '.' . $signature, $this->keys->publicKeys()),
+            $this->verifier->verifiedClaims(
+                $header . '.' . $payload . '.' . $signature,
+                $this->keys->publicKeys(),
+                'JWT',
+            ),
         );
     }
 
@@ -109,6 +132,6 @@ final class JoseSignatureVerifierTest extends TestCase
      */
     private function signed(array $claims): string
     {
-        return new CompactJws($this->keys)->sign($this->keys->activeKey(), $claims);
+        return new CompactJws($this->keys)->sign($this->keys->activeKey(), $claims, 'JWT');
     }
 }

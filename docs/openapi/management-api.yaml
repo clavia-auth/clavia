@@ -2318,7 +2318,7 @@ components:
       type: object
       additionalProperties: false
       required: [id, identifier, name, permissions, is_system, enforce_policies, allow_skipping_consent,
-        created_at]
+        access_token_format, created_at]
       properties:
         id:
           type: string
@@ -2338,6 +2338,8 @@ components:
           $ref: '#/components/schemas/EnforcePolicies'
         allow_skipping_consent:
           $ref: '#/components/schemas/AllowSkippingConsent'
+        access_token_format:
+          $ref: '#/components/schemas/AccessTokenFormat'
         created_at:
           type: string
           format: date-time
@@ -2356,6 +2358,22 @@ components:
         behalf may do without the consent screen: the operator runs both, so signing in is
         the consent. A third-party application asks whatever this says. Always on for a
         system API, which no third-party application reaches.
+
+    AccessTokenFormat:
+      type: string
+      enum: [opaque, jwt]
+      description: |
+        The form of the access tokens issued for this API, from the next token on.
+
+        - `opaque`: a random string the API resolves at the introspection endpoint
+          (RFC 7662), which reports a revocation the moment it happens.
+        - `jwt`: a JWT access token (RFC 9068, `typ: at+jwt`) signed with the keys published
+          at the JWKS, which the API validates on its own. Revocation cannot reach it: a
+          revoked JWT is accepted by an API that validates it locally until it expires, so the
+          access token lifetime bounds how long that lasts. This server still refuses it
+          wherever it is presented here (introspection, userinfo, this API).
+
+        A token naming no API is always opaque.
 
     ResourceServerCreate:
       type: object
@@ -2384,6 +2402,11 @@ components:
           type: boolean
           default: true
           description: See `ResourceServer.allow_skipping_consent`.
+        access_token_format:
+          type: string
+          enum: [opaque, jwt]
+          default: opaque
+          description: See `ResourceServer.access_token_format`.
 
     ResourceServerUpdate:
       type: object
@@ -2406,6 +2429,8 @@ components:
           type: boolean
         allow_skipping_consent:
           type: boolean
+        access_token_format:
+          $ref: '#/components/schemas/AccessTokenFormat'
 
     ConnectionName:
       type: string

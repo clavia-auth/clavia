@@ -155,6 +155,7 @@ final class ManagementViews
             'is_system' => $api->isSystem,
             'enforce_policies' => $api->enforcePolicies,
             'allow_skipping_consent' => $api->allowSkippingConsent,
+            'access_token_format' => $api->accessTokenFormat->value,
             'created_at' => self::instant($api->createdAt),
         ];
     }

@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Application\OAuth2\Token\AccessTokenMinter;
 use Clavia\Application\OAuth2\Token\AuthorizationCodeGrant;
 use Clavia\Application\OAuth2\Token\UserScope;
 use Clavia\Application\Oidc\IdTokenIssuer;
@@ -34,6 +35,8 @@ final class AuthorizationCodeGrantFactory
         $codes = $container->get(AuthorizationCodeRepository::class);
         /** @var AccessTokenRepository $tokens */
         $tokens = $container->get(AccessTokenRepository::class);
+        /** @var AccessTokenMinter $accessTokens */
+        $accessTokens = $container->get(AccessTokenMinter::class);
         /** @var RefreshTokenRepository $refreshTokens */
         $refreshTokens = $container->get(RefreshTokenRepository::class);
         /** @var UserRepository $users */
@@ -66,6 +69,7 @@ final class AuthorizationCodeGrantFactory
         return new AuthorizationCodeGrant(
             $codes,
             $tokens,
+            $accessTokens,
             $refreshTokens,
             $users,
             $transactions,

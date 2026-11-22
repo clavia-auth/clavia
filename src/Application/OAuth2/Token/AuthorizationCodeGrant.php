@@ -72,6 +72,7 @@ final readonly class AuthorizationCodeGrant implements Grant
     public function __construct(
         private AuthorizationCodeRepository $codes,
         private AccessTokenRepository $tokens,
+        private AccessTokenMinter $accessTokens,
         private RefreshTokenRepository $refreshTokens,
         private UserRepository $users,
         private TransactionManager $transactions,
@@ -229,17 +230,19 @@ final readonly class AuthorizationCodeGrant implements Grant
             $this->refreshTokens->add($refreshToken);
         }
 
-        $value = $this->secrets->token();
-        $token = AccessToken::issueFromCode(
-            AccessTokenId::generate($this->random),
-            Digest::of($value),
-            $code,
-            $scope,
-            $now,
-            $this->accessTokenLifetimeSeconds,
-            $refreshToken?->familyId,
+        $minted = $this->accessTokens->mint(
+            fn (AccessTokenId $id, Digest $digest): AccessToken => AccessToken::issueFromCode(
+                $id,
+                $digest,
+                $code,
+                $scope,
+                $now,
+                $this->accessTokenLifetimeSeconds,
+                $refreshToken?->familyId,
+            ),
         );
-        $this->tokens->add($token);
+        $token = $minted->token;
+        $value = $minted->value;
         $this->events->dispatch(new AccessTokenIssued($token, GrantType::AuthorizationCode, $refreshToken !== null));
 
         $idToken = $scope->contains(OidcScope::OPENID)

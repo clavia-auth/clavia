@@ -35,11 +35,14 @@ final readonly class CompactJws
     /**
      * @param array<non-empty-string, mixed> $claims
      * @param non-empty-string               $type   The `typ` header (RFC 7515 §4.1.9): `JWT` for an
-     *                                               ID token, `logout+jwt` for a logout token.
+     *                                               ID token, `logout+jwt` for a logout token,
+     *                                               `at+jwt` for an access token (RFC 9068 §2.1).
+     *
+     * @return non-empty-string
      *
      * @throws SigningFailed
      */
-    public function sign(SigningKeyReference $key, array $claims, string $type = 'JWT'): string
+    public function sign(SigningKeyReference $key, array $claims, string $type): string
     {
         $header = ['alg' => $key->algorithm->value, 'typ' => $type, 'kid' => $key->kid];
 

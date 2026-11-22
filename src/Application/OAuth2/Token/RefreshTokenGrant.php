@@ -66,6 +66,7 @@ final readonly class RefreshTokenGrant implements Grant
     public function __construct(
         private RefreshTokenRepository $refreshTokens,
         private AccessTokenRepository $tokens,
+        private AccessTokenMinter $accessTokens,
         private UserRepository $users,
         private TransactionManager $transactions,
         private SecretGenerator $secrets,
@@ -169,16 +170,18 @@ final readonly class RefreshTokenGrant implements Grant
         );
         $this->refreshTokens->add($successor);
 
-        $value = $this->secrets->token();
-        $token = AccessToken::issueFromRefresh(
-            AccessTokenId::generate($this->random),
-            Digest::of($value),
-            $successor,
-            $scope,
-            $now,
-            $this->accessTokenLifetimeSeconds,
+        $minted = $this->accessTokens->mint(
+            fn (AccessTokenId $id, Digest $digest): AccessToken => AccessToken::issueFromRefresh(
+                $id,
+                $digest,
+                $successor,
+                $scope,
+                $now,
+                $this->accessTokenLifetimeSeconds,
+            ),
         );
-        $this->tokens->add($token);
+        $token = $minted->token;
+        $value = $minted->value;
         $this->events->dispatch(new AccessTokenIssued($token, GrantType::RefreshToken, true));
 
         return new IssuedToken(

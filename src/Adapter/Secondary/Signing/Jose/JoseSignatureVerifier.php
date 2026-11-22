@@ -26,12 +26,13 @@ use Throwable;
  *
  * The key is chosen by the token's `kid` among the keys given, and the algorithm is the
  * key's own, never the header's: a token claiming `none`, or HS256 with the public key
- * as the secret, finds no key to match.
+ * as the secret, finds no key to match. A token of another type than the one asked for
+ * is refused before any key is looked at (RFC 8725 §3.11).
  */
 final readonly class JoseSignatureVerifier implements SignatureVerifier
 {
     #[\Override]
-    public function verifiedClaims(string $compactJws, array $keys): ?array
+    public function verifiedClaims(string $compactJws, array $keys, string $type): ?array
     {
         try {
             $jws = new CompactSerializer()->unserialize($compactJws);
@@ -39,6 +40,9 @@ final readonly class JoseSignatureVerifier implements SignatureVerifier
                 return null;
             }
             $header = $jws->getSignature(0)->getProtectedHeader();
+            if (($header['typ'] ?? null) !== $type) {
+                return null;
+            }
             /** @var mixed $kid */
             $kid = $header['kid'] ?? null;
             /** @var mixed $algorithm */

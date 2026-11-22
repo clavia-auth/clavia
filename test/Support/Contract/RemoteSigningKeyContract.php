@@ -39,11 +39,12 @@ trait RemoteSigningKeyContract
         $signer = new RemoteTokenSigner($this->key(), [], SigningAlgorithm::RS256, new InMemoryPublicKeyCache());
         $active = $signer->activeKey();
 
-        $token = new CompactJws($signer)->sign($active, ['iss' => 'https://issuer.test', 'sub' => 'conformance']);
+        $claims = ['iss' => 'https://issuer.test', 'sub' => 'conformance'];
+        $token = new CompactJws($signer)->sign($active, $claims, 'JWT');
 
         self::assertSame(
-            ['iss' => 'https://issuer.test', 'sub' => 'conformance'],
-            new JoseSignatureVerifier()->verifiedClaims($token, $signer->publicKeys()),
+            $claims,
+            new JoseSignatureVerifier()->verifiedClaims($token, $signer->publicKeys(), 'JWT'),
         );
     }
 

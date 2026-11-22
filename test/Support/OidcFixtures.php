@@ -64,11 +64,23 @@ trait OidcFixtures
     {
         self::assertIsString($idToken, 'no ID token in the response');
 
-        $jws = new CompactSerializer()->unserialize($idToken);
+        return $this->verifiedJwt($idToken);
+    }
+
+    /**
+     * Verify any JWT this server signed — an ID token, a JWT access token — the way its
+     * recipient does: RS256 against the published JWKS. Returns its protected header and
+     * claims; fails the test when no published key verifies it.
+     *
+     * @return array{header: array<string, mixed>, claims: array<string, mixed>}
+     */
+    protected function verifiedJwt(string $jwt): array
+    {
+        $jws = new CompactSerializer()->unserialize($jwt);
         $verifier = new JWSVerifier(new AlgorithmManager([new RS256()]));
         self::assertTrue(
             $verifier->verifyWithKeySet($jws, $this->publishedKeySet(), 0),
-            'the ID token does not verify against the published JWKS',
+            'the JWT does not verify against the published JWKS',
         );
 
         /** @var array<string, mixed> $claims */

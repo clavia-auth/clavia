@@ -49,6 +49,7 @@ final readonly class ResourceServer
         public bool $isSystem,
         public bool $enforcePolicies,
         public bool $allowSkippingConsent,
+        public AccessTokenFormat $accessTokenFormat,
     ) {
     }
 
@@ -70,6 +71,8 @@ final readonly class ResourceServer
      *                                               is the consent. A third-party application asks
      *                                               whatever this says. Always on for a system API, which
      *                                               no third-party application can reach.
+     * @param AccessTokenFormat $accessTokenFormat Opaque, checked by introspection, or a JWT the API
+     *                                             validates on its own (RFC 9068).
      *
      * @throws InvalidValue When the identifier is longer than 255 bytes, the name longer than
      *                      120 characters, a permission is defined twice, or a system API would
@@ -84,6 +87,7 @@ final readonly class ResourceServer
         bool $isSystem = false,
         bool $enforcePolicies = false,
         bool $allowSkippingConsent = true,
+        AccessTokenFormat $accessTokenFormat = AccessTokenFormat::Opaque,
     ): self {
         if (strlen($identifier->value) > self::MAX_IDENTIFIER_LENGTH) {
             throw new InvalidValue('An API identifier is at most 255 bytes.');
@@ -119,6 +123,7 @@ final readonly class ResourceServer
             $isSystem,
             $enforcePolicies,
             $allowSkippingConsent,
+            $accessTokenFormat,
         );
     }
 
@@ -138,6 +143,7 @@ final readonly class ResourceServer
             $this->isSystem,
             $this->enforcePolicies,
             $this->allowSkippingConsent,
+            $this->accessTokenFormat,
         );
     }
 
@@ -164,6 +170,7 @@ final readonly class ResourceServer
             $this->isSystem,
             $enforce,
             $this->allowSkippingConsent,
+            $this->accessTokenFormat,
         );
     }
 
@@ -191,6 +198,7 @@ final readonly class ResourceServer
             $this->isSystem,
             $this->enforcePolicies,
             $allow,
+            $this->accessTokenFormat,
         );
     }
 
@@ -221,6 +229,7 @@ final readonly class ResourceServer
             false,
             $this->enforcePolicies,
             $this->allowSkippingConsent,
+            $this->accessTokenFormat,
         );
     }
 
@@ -235,7 +244,37 @@ final readonly class ResourceServer
      */
     public function asSystem(string $name, array $permissions): self
     {
-        return self::register($this->id, $this->identifier, $name, $permissions, $this->createdAt, true, true, true);
+        return self::register(
+            $this->id,
+            $this->identifier,
+            $name,
+            $permissions,
+            $this->createdAt,
+            true,
+            true,
+            true,
+            $this->accessTokenFormat,
+        );
+    }
+
+    /**
+     * The same API, issued access tokens of `$format` from the next token on. Tokens
+     * already issued keep the form they were issued in. Allowed for a system API too: the
+     * form is a matter between this server and the API, and either is checked here alike.
+     */
+    public function issuingAccessTokensAs(AccessTokenFormat $format): self
+    {
+        return new self(
+            $this->id,
+            $this->identifier,
+            $this->name,
+            $this->permissions,
+            $this->createdAt,
+            $this->isSystem,
+            $this->enforcePolicies,
+            $this->allowSkippingConsent,
+            $format,
+        );
     }
 
     /**

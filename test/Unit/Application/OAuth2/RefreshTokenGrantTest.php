@@ -13,7 +13,10 @@ namespace ClaviaTest\Unit\Application\OAuth2;
 
 use Clavia\Application\OAuth2\RequestParameters;
 use Clavia\Application\OAuth2\Token\IssuedToken;
+use Clavia\Application\OAuth2\Token\AccessTokenMinter;
 use Clavia\Application\OAuth2\Token\RefreshTokenGrant;
+use Clavia\Application\Oidc\CompactJws;
+use ClaviaTest\Support\Fake\InMemorySigningKeys;
 use Clavia\Application\OAuth2\Token\UserScope;
 use Clavia\Domain\Authentication\AuthenticationContext;
 use Clavia\Domain\Client\Client;
@@ -69,6 +72,15 @@ final class RefreshTokenGrantTest extends TestCase
         $this->grant = new RefreshTokenGrant(
             $this->refreshTokens,
             $this->tokens,
+            new AccessTokenMinter(
+                $this->tokens,
+                $apis,
+                new InMemorySigningKeys($this->clock),
+                new CompactJws(new InMemorySigningKeys($this->clock)),
+                new SecretGenerator($random),
+                $random,
+                'https://auth.clavia.test',
+            ),
             $this->users,
             $transactions,
             new SecretGenerator($random),

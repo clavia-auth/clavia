@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Application\OAuth2\Token\AccessTokenMinter;
 use Clavia\Application\OAuth2\Token\DeviceCodeGrant;
 use Clavia\Application\OAuth2\Token\UserScope;
 use Clavia\Application\Oidc\IdTokenIssuer;
@@ -18,7 +19,6 @@ use Clavia\Application\Port\DeviceAuthorizationStore;
 use Clavia\Application\Port\DomainEvents;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Identity\UserRepository;
-use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\RefreshTokenRepository;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\RandomSource;
@@ -31,8 +31,8 @@ final class DeviceCodeGrantFactory
     {
         /** @var DeviceAuthorizationStore $requests */
         $requests = $container->get(DeviceAuthorizationStore::class);
-        /** @var AccessTokenRepository $tokens */
-        $tokens = $container->get(AccessTokenRepository::class);
+        /** @var AccessTokenMinter $accessTokens */
+        $accessTokens = $container->get(AccessTokenMinter::class);
         /** @var RefreshTokenRepository $refreshTokens */
         $refreshTokens = $container->get(RefreshTokenRepository::class);
         /** @var UserRepository $users */
@@ -61,7 +61,7 @@ final class DeviceCodeGrantFactory
 
         return new DeviceCodeGrant(
             $requests,
-            $tokens,
+            $accessTokens,
             $refreshTokens,
             $users,
             $secrets,
