@@ -68,6 +68,7 @@ use Clavia\Adapter\Primary\Http\Management\UserConsentsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserHandler;
 use Clavia\Adapter\Primary\Http\Management\UserIdentitiesHandler;
 use Clavia\Adapter\Primary\Http\Management\UserMfaHandler;
+use Clavia\Adapter\Primary\Http\Management\UserPasskeysHandler;
 use Clavia\Adapter\Primary\Http\Management\UserPasswordLinkHandler;
 use Clavia\Adapter\Primary\Http\Management\UserPermissionsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserRolesHandler;
@@ -193,7 +194,9 @@ use Clavia\Application\Management\Users\CreateUser;
 use Clavia\Application\Management\Users\DeleteUser;
 use Clavia\Application\Management\Users\ReadConsents;
 use Clavia\Application\Management\Users\ReadIdentities;
+use Clavia\Application\Management\Users\ReadUserPasskeys;
 use Clavia\Application\Management\Users\ReadUsers;
+use Clavia\Application\Management\Users\RemoveUserPasskey;
 use Clavia\Application\Management\Users\ResetUserMfa;
 use Clavia\Application\Management\Users\SendPasswordLink;
 use Clavia\Application\Management\Users\UnlinkIdentity;
@@ -498,6 +501,9 @@ final class ConfigProvider
                     RecentSignIn::class => Container\RecentSignInFactory::class,
                     RelyingParty::class => Container\RelyingPartyFactory::class,
                     UserMfaHandler::class => Container\UserMfaHandlerFactory::class,
+                    UserPasskeysHandler::class => Container\UserPasskeysHandlerFactory::class,
+                    ReadUserPasskeys::class => Container\ReadUserPasskeysFactory::class,
+                    RemoveUserPasskey::class => Container\RemoveUserPasskeyFactory::class,
                     UserPasswordLinkHandler::class => Container\UserPasswordLinkHandlerFactory::class,
                     ReadUsers::class => Container\ReadUsersFactory::class,
                     CreateUser::class => Container\CreateUserFactory::class,

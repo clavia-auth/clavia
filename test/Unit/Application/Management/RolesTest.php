@@ -45,6 +45,7 @@ use Clavia\Domain\Shared\SecretGenerator;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
+use ClaviaTest\Support\Fake\InMemoryPasskeyRepository;
 use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
 use ClaviaTest\Support\Fake\InMemoryRoleRepository;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
@@ -230,7 +231,11 @@ final class RolesTest extends TestCase
         $holders = new ReadRoleHolders(
             $this->roles,
             $this->users,
-            new ReadUsers($this->users, new InMemoryMfaFactorRepository($this->transactions)),
+            new ReadUsers(
+                $this->users,
+                new InMemoryMfaFactorRepository($this->transactions),
+                new InMemoryPasskeyRepository(),
+            ),
         );
 
         $page = $holders($role->id, PageRequest::of());

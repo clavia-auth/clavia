@@ -58,5 +58,16 @@ interface PasskeyRepository
     /** Remove it. Removing what is not there is removing nothing. */
     public function delete(PasskeyId $id): void;
 
+    /** @return non-negative-int */
     public function countOf(UserId $userId): int;
+
+    /**
+     * How many passkeys each of `$userIds` holds, in one look-up: for listing accounts without a
+     * query each. An account without passkeys is absent.
+     *
+     * @param list<UserId> $userIds
+     *
+     * @return array<string, positive-int> By user id.
+     */
+    public function countsAmong(array $userIds): array;
 }

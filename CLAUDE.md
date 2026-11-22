@@ -429,6 +429,9 @@ applies however the person signed in.
   transaction. The first passkey of an account with no authenticator app and no recovery codes
   brings a set, shown once. Rename and remove are `POST /auth/passkeys/{id}/name|remove`. With
   `CLAVIA_PASSKEYS_ENABLED=false`, or an issuer that is not https, the routes do not exist.
+  Operators list a user's passkeys (`GET /api/v1/users/{id}/passkeys`, never a credential id or
+  key) and remove them one by one (`DELETE …/passkeys/{passkey_id}`); a user's `mfa_enrolled`
+  counts passkeys, and `passkey_count` says how many.
 
 **Sessions** have one door per operation. `Sessions::establish()` is the only way a browser
 becomes authenticated, and it always rotates the identifier. `resolve()` is the only way to read

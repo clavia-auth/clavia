@@ -13,6 +13,7 @@ namespace Clavia\Application\Management\Users;
 
 use Clavia\Application\Management\NotFound;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
+use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
@@ -27,6 +28,7 @@ final readonly class ReadUsers
     public function __construct(
         private UserRepository $users,
         private MfaFactorRepository $factors,
+        private PasskeyRepository $passkeys,
     ) {
     }
 
@@ -49,13 +51,16 @@ final readonly class ReadUsers
      */
     public function describeAll(array $users): array
     {
-        $enrolled = array_map(
-            static fn (UserId $id): string => $id->value,
-            $this->factors->confirmedAmong(array_map(static fn (User $user): UserId => $user->id, $users)),
-        );
+        $ids = array_map(static fn (User $user): UserId => $user->id, $users);
+        $enrolled = array_map(static fn (UserId $id): string => $id->value, $this->factors->confirmedAmong($ids));
+        $passkeys = $this->passkeys->countsAmong($ids);
 
         return array_map(
-            static fn (User $user): ManagedUser => new ManagedUser($user, in_array($user->id->value, $enrolled, true)),
+            static fn (User $user): ManagedUser => new ManagedUser(
+                $user,
+                in_array($user->id->value, $enrolled, true),
+                $passkeys[$user->id->value] ?? 0,
+            ),
             $users,
         );
     }
@@ -71,6 +76,10 @@ final readonly class ReadUsers
     /** The account with what lives beside it. */
     public function describe(User $user): ManagedUser
     {
-        return new ManagedUser($user, $this->factors->find($user->id)?->isConfirmed() ?? false);
+        return new ManagedUser(
+            $user,
+            $this->factors->find($user->id)?->isConfirmed() ?? false,
+            $this->passkeys->countOf($user->id),
+        );
     }
 }

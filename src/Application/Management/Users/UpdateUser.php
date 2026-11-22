@@ -16,6 +16,7 @@ use Clavia\Application\Management\NotFound;
 use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
+use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
 use Clavia\Domain\Identity\Event\UserChanged;
 use Clavia\Domain\Identity\PasswordPolicy;
 use Clavia\Domain\Identity\UserId;
@@ -38,6 +39,7 @@ final readonly class UpdateUser
         private PasswordHasher $hasher,
         private Clock $clock,
         private MfaFactorRepository $factors,
+        private PasskeyRepository $passkeys,
         private SignOutEverywhere $signOut,
         private DomainEvents $events,
     ) {
@@ -88,6 +90,10 @@ final readonly class UpdateUser
             ($this->signOut)($user->id);
         }
 
-        return new ManagedUser($user, $this->factors->find($id)?->isConfirmed() ?? false);
+        return new ManagedUser(
+            $user,
+            $this->factors->find($id)?->isConfirmed() ?? false,
+            $this->passkeys->countOf($id),
+        );
     }
 }

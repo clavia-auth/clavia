@@ -15,13 +15,22 @@ use Clavia\Domain\Identity\User;
 
 /**
  * An account as the Management API describes it: the user, and what an operator needs
- * to know about it that lives elsewhere — whether it has a confirmed second factor.
+ * to know about it that lives elsewhere — its second factors.
  */
 final readonly class ManagedUser
 {
+    /** Whether signing in asks for a second factor: a confirmed authenticator app, or a passkey. */
+    public bool $mfaEnrolled;
+
+    /**
+     * @param bool             $authenticatorApp Whether it has a confirmed authenticator app.
+     * @param non-negative-int $passkeyCount     How many passkeys it holds.
+     */
     public function __construct(
         public User $user,
-        public bool $mfaEnrolled,
+        bool $authenticatorApp,
+        public int $passkeyCount = 0,
     ) {
+        $this->mfaEnrolled = $authenticatorApp || $passkeyCount > 0;
     }
 }

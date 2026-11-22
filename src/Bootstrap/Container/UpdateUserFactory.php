@@ -16,6 +16,7 @@ use Clavia\Application\Management\Users\UpdateUser;
 use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
+use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\Shared\Clock;
 use Psr\Container\ContainerInterface;
@@ -37,6 +38,9 @@ final class UpdateUserFactory
         /** @var DomainEvents $events */
         $events = $container->get(DomainEvents::class);
 
-        return new UpdateUser($users, $hasher, $clock, $factors, $signOut, $events);
+        /** @var PasskeyRepository $passkeys */
+        $passkeys = $container->get(PasskeyRepository::class);
+
+        return new UpdateUser($users, $hasher, $clock, $factors, $passkeys, $signOut, $events);
     }
 }

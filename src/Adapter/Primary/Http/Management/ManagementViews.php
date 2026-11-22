@@ -21,6 +21,7 @@ use Clavia\Application\Management\Users\ManagedSession;
 use Clavia\Application\Management\Users\ManagedUser;
 use Clavia\Domain\Audit\AuditEvent;
 use Clavia\Domain\Authentication\AuthenticationMethod;
+use Clavia\Domain\Authentication\Passkey\Passkey;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\ResponseType;
@@ -83,6 +84,7 @@ final class ManagementViews
             'is_active' => $user->isActive(),
             'has_password' => $user->passwordHash() !== null,
             'mfa_enrolled' => $managed->mfaEnrolled,
+            'passkey_count' => $managed->passkeyCount,
             'name' => $profile->name,
             'given_name' => $profile->givenName,
             'family_name' => $profile->familyName,
@@ -267,6 +269,25 @@ final class ManagementViews
             'subject' => $identity->subject,
             'email' => $identity->email,
             'linked_at' => self::instant($identity->linkedAt),
+        ];
+    }
+
+    /**
+     * A passkey as an operator sees it: what it is called, synced or device-bound, its maker, and
+     * when it was added and used. Never its credential id or its key.
+     *
+     * @return array<string, mixed>
+     */
+    public static function passkey(Passkey $passkey): array
+    {
+        return [
+            'id' => $passkey->id->value,
+            'name' => $passkey->name->value,
+            'synced' => $passkey->isSynced(),
+            'backed_up' => $passkey->backedUp,
+            'aaguid' => $passkey->aaguid?->value,
+            'created_at' => self::instant($passkey->createdAt),
+            'last_used_at' => $passkey->lastUsedAt === null ? null : self::instant($passkey->lastUsedAt),
         ];
     }
 
