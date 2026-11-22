@@ -33,8 +33,7 @@ use ClaviaTest\Support\TestStorage;
 use Mezzio\Router\RouteCollector;
 
 /**
- * The Management API (`/api/v1/*`), end to end — ported from the Python suite's
- * `test_management_api.py`, with the contract checks this implementation adds.
+ * The Management API (`/api/v1/*`), end to end, with the contract checks.
  *
  * Two halves. The first is about who gets in at all: this surface is a machine plane,
  * authenticated by a token for *this* API and by nothing else. The second is the CRUD,

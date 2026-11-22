@@ -29,8 +29,7 @@ use DateTimeImmutable;
 use Psr\Http\Message\ResponseInterface;
 
 /**
- * The OpenID Connect layer: discovery, the JWKS, ID tokens and userinfo — ported from
- * the Python suite's `test_oidc.py`.
+ * The OpenID Connect layer: discovery, the JWKS, ID tokens and userinfo.
  *
  * A relying party trusts nothing but the JWKS, so ID tokens are verified the way one
  * would: with the keys published over HTTP, never by reading the database.
@@ -493,7 +492,7 @@ final class OidcTest extends AcceptanceTestCase
         self::assertStringContainsString('scope="openid"', $response->getHeaderLine('WWW-Authenticate'));
     }
 
-    // ── Beyond the Python suite ─────────────────────────────────────────────────
+    // ── Userinfo, JWKS and discovery details ────────────────────────────────────────────────────────────
 
     public function testUserinfoAnswersAPostAsWellAsAGet(): void
     {

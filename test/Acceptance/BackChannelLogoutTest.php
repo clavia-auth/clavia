@@ -34,8 +34,7 @@ use Psr\Http\Message\ResponseInterface;
 use RuntimeException;
 
 /**
- * OpenID Connect Back-Channel Logout 1.0, ported from the Python suite's
- * `test_backchannel_logout.py`.
+ * OpenID Connect Back-Channel Logout 1.0.
  *
  * Two halves. ID tokens carry `sid`, so a relying party can tie a later logout token to
  * the sign-in it belongs to; and every way a session is ended — the two logout endpoints,

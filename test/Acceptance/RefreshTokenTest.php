@@ -31,8 +31,7 @@ use DateTimeImmutable;
 use Psr\Http\Message\ResponseInterface;
 
 /**
- * The refresh token grant (RFC 6749 §6), with rotation — ported from the Python suite's
- * `test_refresh_token.py`.
+ * The refresh token grant (RFC 6749 §6), with rotation.
  *
  * What matters is not that a refresh works but what happens when a token is seen twice.
  * Rotation makes every refresh token single-use; a replay is evidence that two parties

@@ -31,8 +31,8 @@ migrate:
 db-status:
 	$(PHP) bin/clavia db:status
 
-# A development user and a public PKCE client. Safe to run again; refuses outside
-# CLAVIA_ENVIRONMENT=development.
+# Development data: a user, clients, the Management API, a signing key and the dashboard
+# client. Safe to run again; refuses outside CLAVIA_ENVIRONMENT=development.
 seed:
 	$(PHP) bin/clavia seed-dev
 

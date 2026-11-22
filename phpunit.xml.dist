@@ -19,7 +19,7 @@
         <testsuite name="Integration">
             <directory>test/Integration</directory>
         </testsuite>
-        <!-- The ported Python tests: whole features through the PSR-15 pipeline. -->
+        <!-- Whole features through the PSR-15 pipeline. -->
         <testsuite name="Acceptance">
             <directory>test/Acceptance</directory>
         </testsuite>

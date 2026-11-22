@@ -32,7 +32,7 @@ use DateTimeImmutable;
 use Psr\Http\Message\ResponseInterface;
 
 /**
- * Roles and permissions — ported from the Python suite's `test_rbac.py`.
+ * Roles and permissions.
  *
  * Two halves. Issuance, the part that matters: an API that enforces roles narrows a
  * person's token to what their roles grant, refuses somebody who holds nothing, and reads

@@ -18,8 +18,6 @@ use ClaviaTest\Support\TestEnvironment;
 
 /**
  * The Authorization Code + PKCE flow, end to end.
- *
- * Ported from `tests/test_authorization_code_flow.py`, test for test.
  */
 final class AuthorizationCodeFlowTest extends AcceptanceTestCase
 {

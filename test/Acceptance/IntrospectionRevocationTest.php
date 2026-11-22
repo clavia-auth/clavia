@@ -20,8 +20,7 @@ use ClaviaTest\Support\TestStorage;
 use Psr\Http\Message\ResponseInterface;
 
 /**
- * Token introspection (RFC 7662) and revocation (RFC 7009) — ported from the Python
- * suite's `test_introspection_revocation.py`.
+ * Token introspection (RFC 7662) and revocation (RFC 7009).
  *
  * Introspection is a question only a client holding a secret may ask, answered truthfully
  * only about tokens it has a stake in: its own, or those issued for an API it holds a

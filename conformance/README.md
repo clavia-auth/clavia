@@ -4,7 +4,7 @@ Clavia is run against the [OpenID Foundation conformance suite](https://gitlab.c
 (release `v5.1.36`): the **Config OP** plan (`oidcc-config-certification-test-plan`) and the
 **Basic OP** plan (`oidcc-basic-certification-test-plan[server_metadata=discovery][client_registration=static_client]`).
 
-## Results (2026-11-21, Step 20)
+## Results (2026-11-21)
 
 | Plan | Modules | Conditions | Outcome |
 |---|---|---|---|

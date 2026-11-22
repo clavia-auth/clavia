@@ -38,8 +38,7 @@ use ClaviaTest\Support\OidcFixtures;
 use Psr\Http\Message\ResponseInterface;
 
 /**
- * Passwordless sign-in — a one-time code or a sign-in link sent by email — ported from the
- * Python suite's `test_passwordless.py`.
+ * Passwordless sign-in — a one-time code or a sign-in link sent by email.
  *
  * The test environment's mail backend is the console one: every message lands in the
  * development outbox, where each test reads the code or the link as a person would read

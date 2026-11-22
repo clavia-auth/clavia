@@ -45,8 +45,7 @@ use DateTimeImmutable;
 use Psr\Http\Message\ResponseInterface;
 
 /**
- * Application ownership and the consent screen — ported from the Python suite's
- * `test_consent.py`.
+ * Application ownership and the consent screen.
  *
  * First-party applications are the operator's own: signing in is the consent. A
  * third-party application is a stranger's: every scope it asks for is put to the person,
