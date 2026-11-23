@@ -12,7 +12,8 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Oidc;
 
 use Clavia\Adapter\Primary\Http\Shared\BearerChallenger;
-use Clavia\Adapter\Primary\Http\Shared\BearerCredentials;
+use Clavia\Adapter\Primary\Http\Shared\AccessTokenCredentials;
+use Clavia\Application\OAuth2\ProtectedResource\TokenScheme;
 use Clavia\Application\Oidc\UserInfo\ReadUserInfo;
 use Clavia\Domain\OAuth2\BearerTokenError;
 use Laminas\Diactoros\Response\JsonResponse;
@@ -23,9 +24,9 @@ use Psr\Http\Server\RequestHandlerInterface;
 /**
  * The userinfo endpoint (OIDC Core §5.3), on `GET` and `POST` as §5.3.1 requires.
  *
- * A protected resource: it takes a bearer access token in the `Authorization` header
- * and answers with RFC 6750 challenges. Always JSON, whatever `Accept` says, and never
- * cacheable — the answer is about one person.
+ * A protected resource: it takes an access token in the `Authorization` header — `Bearer`, or
+ * `DPoP` with its proof (RFC 9449 §7.1) — and answers with challenges in the same scheme.
+ * Always JSON, whatever `Accept` says, and never cacheable — the answer is about one person.
  */
 final readonly class UserInfoHandler implements RequestHandlerInterface
 {
@@ -38,15 +39,18 @@ final readonly class UserInfoHandler implements RequestHandlerInterface
     #[\Override]
     public function handle(ServerRequestInterface $request): ResponseInterface
     {
+        $credentials = null;
         try {
-            $token = BearerCredentials::fromRequest($request);
-            if ($token === null) {
+            $credentials = AccessTokenCredentials::fromRequest($request);
+            if ($credentials === null) {
                 return $this->challenger->missing();
             }
 
-            $claims = ($this->readUserInfo)($token);
+            $method = $request->getMethod();
+            assert($method !== '');
+            $claims = ($this->readUserInfo)($credentials, $method);
         } catch (BearerTokenError $error) {
-            return $this->challenger->refuse($error);
+            return $this->challenger->refuse($error, $credentials->scheme ?? TokenScheme::Bearer);
         }
 
         return new JsonResponse(

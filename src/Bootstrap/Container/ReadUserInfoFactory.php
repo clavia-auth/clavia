@@ -11,7 +11,10 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Application\OAuth2\ProtectedResource\CheckSenderConstraint;
+use Clavia\Application\Oidc\Discovery\ProviderMetadata;
 use Clavia\Application\Oidc\UserInfo\ReadUserInfo;
+use Clavia\Configuration\Settings;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\Shared\Clock;
@@ -28,6 +31,17 @@ final class ReadUserInfoFactory
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
 
-        return new ReadUserInfo($tokens, $users, $clock);
+        /** @var CheckSenderConstraint $senderConstraint */
+        $senderConstraint = $container->get(CheckSenderConstraint::class);
+        /** @var Settings $settings */
+        $settings = $container->get(Settings::class);
+
+        return new ReadUserInfo(
+            $tokens,
+            $users,
+            $clock,
+            $senderConstraint,
+            $settings->issuer() . ProviderMetadata::USERINFO_ENDPOINT,
+        );
     }
 }

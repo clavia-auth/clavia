@@ -1671,6 +1671,11 @@ components:
         challenge names the `acr_values` to ask for, and the client sends the person back to
         `/oauth2/authorize` with them to step up. Checked after the audience and before the
         scope. A token a client obtained as itself is never refused for this.
+
+        A token bound to a DPoP key (RFC 9449) is presented as `Authorization: DPoP <token>`
+        with a fresh proof in the `DPoP` header, for this method and URL and naming the token.
+        Presented as `Bearer`, it is `invalid_token`; without a good proof, `invalid_dpop_proof`.
+        A DPoP request is challenged with `WWW-Authenticate: DPoP`, naming the `algs` accepted.
       headers:
         WWW-Authenticate:
           schema:
@@ -1824,14 +1829,14 @@ components:
 
     BearerError:
       description: |
-        An RFC 6750 §3 error. Empty when the request carried no credentials at all: there
-        is nothing yet to be wrong with.
+        An RFC 6750 §3 error (or RFC 9449 §7.1's `invalid_dpop_proof`). Empty when the
+        request carried no credentials at all: there is nothing yet to be wrong with.
       type: object
       additionalProperties: false
       properties:
         error:
           type: string
-          enum: [invalid_request, invalid_token, insufficient_scope, insufficient_user_authentication]
+          enum: [invalid_request, invalid_token, insufficient_scope, insufficient_user_authentication, invalid_dpop_proof]
         error_description:
           type: string
 

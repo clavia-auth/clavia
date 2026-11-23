@@ -404,6 +404,14 @@ a proof from its key is `invalid_grant`, and spent. A **public** client's refres
 the key it started with; a refresh without it is `invalid_grant` and spends nothing. A
 confidential client's family is not bound (RFC 9449 §5): its authentication binds it.
 
+This server's own protected resources, userinfo and the Management API, check the binding
+(`CheckSenderConstraint`, RFC 9449 §7): a bound token comes as `Authorization: DPoP` with a fresh
+proof for the method and the URL this server knows (never the `Host`), naming the token (`ath`)
+and signed by its key; no server nonce is asked there, the proof's age and the `jti` bound replay.
+A bound token sent as `Bearer` is `invalid_token`, so binding is not optional for a thief; a
+bearer token sent as `DPoP` is `invalid_token` too. A bad proof is `invalid_dpop_proof`, and a
+DPoP request is challenged with `WWW-Authenticate: DPoP` and the `algs` accepted.
+
 ### Client authentication
 
 One method per request, read from what the request carries: an `Authorization` header is
@@ -638,7 +646,8 @@ OpenAPI document says so where the format is chosen.
 Contract-first. `docs/openapi/management-api.yaml` (OpenAPI 3.0.3, written by hand) is the
 source of truth. `ManagementApiMiddleware` checks every request in one order:
 
-1. credentials (`BearerCredentials`, the `Authorization` header only);
+1. credentials (`AccessTokenCredentials`, the `Authorization` header only: `Bearer`, or `DPoP` with
+   its proof);
 2. the token: live, issued for the Management API (`aud` before any scope), its subject still
    active, and — when the Management API's own `mfa_policy` is `required` — a person's token
    from a sign-in meeting MFA, or `401 insufficient_user_authentication` with the `acr_values`
@@ -886,7 +895,7 @@ someone else's or names something deleted gives the same "expired" page.
 - **OAuth responses** go through `OAuth2Responder` (Diactoros `JsonResponse` on a PSR-17 factory).
   Token-endpoint errors are 400, or 401 with `WWW-Authenticate` for `invalid_client`. An
   authorization-endpoint error that cannot be redirected is a plain 400, never a challenge.
-- **Protected resources** read tokens with `BearerCredentials` and refuse with
+- **Protected resources** read tokens with `AccessTokenCredentials` and refuse with
   `BearerChallenger` (RFC 6750 status, challenge and error document; never cacheable).
 - **Pages** are server-rendered laminas-view templates (`templates/`), with no script but a page's
   own module where it needs one (`public/auth/static/passkeys.js`: no build step, no dependency). A

@@ -30,4 +30,7 @@ enum BearerErrorCode: string
      * (RFC 9470 §3): the client asks for a new one with the `acr_values` the challenge names.
      */
     case InsufficientUserAuthentication = 'insufficient_user_authentication';
+
+    /** RFC 9449 §7.1: the DPoP proof is missing, malformed or not for this request and token. */
+    case InvalidDpopProof = 'invalid_dpop_proof';
 }

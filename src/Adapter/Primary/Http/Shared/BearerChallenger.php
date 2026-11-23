@@ -11,14 +11,17 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Shared;
 
+use Clavia\Application\OAuth2\ProtectedResource\TokenScheme;
 use Clavia\Domain\OAuth2\BearerErrorCode;
 use Clavia\Domain\OAuth2\BearerTokenError;
+use Clavia\Domain\OAuth2\Dpop\DpopAlgorithm;
 use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\ResponseInterface;
 
 /**
- * Encodes a protected resource's refusal of a bearer token (RFC 6750 §3): the status,
- * the `WWW-Authenticate: Bearer` challenge, and an error document saying the same.
+ * Encodes a protected resource's refusal of an access token (RFC 6750 §3): the status, the
+ * `WWW-Authenticate` challenge — `Bearer`, or `DPoP` with the algorithms for a DPoP request
+ * (RFC 9449 §7.1) — and an error document saying the same.
  *
  * None of it may be cached: whether a request is refused depends on the token it
  * carried.
@@ -55,7 +58,7 @@ final readonly class BearerChallenger
      * request, 401 for a token that is not valid, 403 for one lacking the scope
      * (RFC 6750 §3.1).
      */
-    public function refuse(BearerTokenError $error): ResponseInterface
+    public function refuse(BearerTokenError $error, TokenScheme $scheme = TokenScheme::Bearer): ResponseInterface
     {
         $parameters = [
             'realm' => $this->realm,
@@ -69,18 +72,26 @@ final readonly class BearerChallenger
             // RFC 9470 §3: the levels that would do, for the client's next authorization request.
             $parameters['acr_values'] = implode(' ', $error->requiredAuthentication->acrValues());
         }
+        if ($scheme === TokenScheme::Dpop || $error->error === BearerErrorCode::InvalidDpopProof) {
+            // RFC 9449 §7.1: a DPoP request is answered in its scheme, naming the algorithms.
+            $parameters['algs'] = implode(' ', DpopAlgorithm::supported());
+        }
 
         $status = match ($error->error) {
             BearerErrorCode::InvalidRequest => 400,
-            BearerErrorCode::InvalidToken => 401,
+            BearerErrorCode::InvalidToken,
+            BearerErrorCode::InsufficientUserAuthentication,
+            BearerErrorCode::InvalidDpopProof => 401,
             BearerErrorCode::InsufficientScope => 403,
-            BearerErrorCode::InsufficientUserAuthentication => 401,
         };
+        $challenge = $scheme === TokenScheme::Dpop || $error->error === BearerErrorCode::InvalidDpopProof
+            ? 'DPoP '
+            : 'Bearer ';
 
         return new JsonResponse(
             ['error' => $error->error->value, 'error_description' => $error->description],
             $status,
-            self::NO_STORE + ['WWW-Authenticate' => 'Bearer ' . self::parameters($parameters)],
+            self::NO_STORE + ['WWW-Authenticate' => $challenge . self::parameters($parameters)],
         );
     }
 

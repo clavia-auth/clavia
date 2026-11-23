@@ -43,6 +43,8 @@ final class ManagementApiMiddlewareFactory
             new BearerChallenger($settings->managementApiAudience()),
             $responder,
             $audit,
+            // The origin a DPoP proof's `htu` names: this API's host, never the request's.
+            'https://' . $settings->managementHost(),
         );
     }
 }
