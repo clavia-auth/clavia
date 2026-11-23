@@ -15,6 +15,7 @@ use Clavia\Adapter\Secondary\Signing\Remote\AccessTokens;
 use Clavia\Adapter\Secondary\Signing\Remote\IssuedToken;
 use Clavia\Adapter\Secondary\Signing\Remote\JsonApi;
 use Clavia\Application\Port\SigningFailed;
+use Clavia\Configuration\LocalFilePath;
 use Clavia\Domain\Shared\Clock;
 
 /**
@@ -93,7 +94,9 @@ final class EntraApplication implements AccessTokens
             return ['client_secret' => $this->secret];
         }
 
-        $assertion = $this->federatedTokenFile === null ? false : @file_get_contents($this->federatedTokenFile);
+        $assertion = $this->federatedTokenFile === null
+            ? false
+            : @file_get_contents(self::local($this->federatedTokenFile));
         if ($assertion === false || trim($assertion) === '') {
             throw new SigningFailed(sprintf(
                 'The federated token file %s cannot be read.',
@@ -102,5 +105,28 @@ final class EntraApplication implements AccessTokens
         }
 
         return ['client_assertion_type' => self::JWT_BEARER, 'client_assertion' => trim($assertion)];
+    }
+
+    /**
+     * The federated token file, as a path on this host and nothing else. It is the operator's
+     * setting (CLAVIA_AZURE_FEDERATED_TOKEN_FILE, refused at boot when it is not one), and reading
+     * the file it names is the point: once it is a local absolute path, it can neither reach the
+     * network nor a stream wrapper, nor be part of a URL.
+     *
+     * @psalm-taint-escape ssrf
+     * @psalm-taint-escape file
+     * @psalm-taint-escape url_component
+     * @psalm-taint-escape url_path
+     * @psalm-taint-escape url_scheme
+     *
+     * @throws SigningFailed
+     */
+    private static function local(string $path): string
+    {
+        if (! LocalFilePath::isAbsolute($path)) {
+            throw new SigningFailed('The federated token file must be an absolute local path.');
+        }
+
+        return $path;
     }
 }

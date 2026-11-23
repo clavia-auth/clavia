@@ -402,6 +402,13 @@ final class SettingsBuilder
                     'Signing in to Azure as an application needs CLAVIA_AZURE_TENANT_ID and CLAVIA_AZURE_CLIENT_ID.',
                 );
             }
+            // A file in the pod, where AKS projects it: never a URL, which file_get_contents() would fetch.
+            $file = $settings->azureFederatedTokenFile;
+            if ($file !== null && ! LocalFilePath::isAbsolute($file)) {
+                throw new InvalidSettings(
+                    'CLAVIA_AZURE_FEDERATED_TOKEN_FILE is an absolute path to a local file, never a URL.',
+                );
+            }
         }
 
         if ($settings->emailBackend === EmailBackend::Smtp && ($settings->smtpHost ?? '') === '') {

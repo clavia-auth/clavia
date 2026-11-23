@@ -186,16 +186,7 @@ final class RemoteSigningKeys
      */
     private function custom(string $class, string $reference): RemoteSigningKey
     {
-        if (! class_exists($class) || ! is_subclass_of($class, RemoteSigningKey::class)) {
-            throw new InvalidSettings(sprintf(
-                "CLAVIA_SIGNING_BACKEND='%s' is neither a built-in backend (%s) nor a class implementing %s.",
-                $class,
-                implode(', ', SigningBackend::BUILT_IN),
-                RemoteSigningKey::class,
-            ));
-        }
-
-        $type = new ReflectionClass($class);
+        $type = new ReflectionClass(self::implementation($class));
         if (! $type->isInstantiable()) {
             throw new InvalidSettings(sprintf('The signing backend %s cannot be instantiated.', $class));
         }
@@ -209,6 +200,30 @@ final class RemoteSigningKeys
                 $error->getMessage(),
             ), previous: $error);
         }
+    }
+
+    /**
+     * The operator's class, once it is known to implement {@see RemoteSigningKey}: only then is
+     * building it from the setting no different from building a built-in backend.
+     *
+     * @return class-string<RemoteSigningKey>
+     *
+     * @psalm-taint-escape callable
+     *
+     * @throws InvalidSettings
+     */
+    private static function implementation(string $class): string
+    {
+        if (! class_exists($class) || ! is_subclass_of($class, RemoteSigningKey::class)) {
+            throw new InvalidSettings(sprintf(
+                "CLAVIA_SIGNING_BACKEND='%s' is neither a built-in backend (%s) nor a class implementing %s.",
+                $class,
+                implode(', ', SigningBackend::BUILT_IN),
+                RemoteSigningKey::class,
+            ));
+        }
+
+        return $class;
     }
 
     /**
