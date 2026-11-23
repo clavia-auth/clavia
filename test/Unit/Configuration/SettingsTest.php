@@ -325,10 +325,20 @@ final class SettingsTest extends TestCase
         $identity = Settings::fromEnvironment(self::MINIMAL + ['CLAVIA_AZURE_CLIENT_ID' => 'client']);
         self::assertSame('client', $identity->azureClientId);
 
+        $federated = ['CLAVIA_AZURE_TENANT_ID' => 'tenant', 'CLAVIA_AZURE_CLIENT_ID' => 'client'];
         $refusals = [
             'not both' => $application + ['CLAVIA_AZURE_FEDERATED_TOKEN_FILE' => '/var/run/token'],
             'needs CLAVIA_AZURE_TENANT_ID and CLAVIA_AZURE_CLIENT_ID' => ['CLAVIA_AZURE_CLIENT_SECRET' => 'secret'],
+            // file_get_contents() would fetch a URL: the token file is a file in the pod, or nothing.
+            'never a URL' => $federated + [
+                'CLAVIA_AZURE_FEDERATED_TOKEN_FILE' => 'https://attacker.example/token',
+            ],
+            'an absolute path' => $federated + ['CLAVIA_AZURE_FEDERATED_TOKEN_FILE' => 'token'],
         ];
+        $pod = Settings::fromEnvironment(self::MINIMAL + $federated + [
+            'CLAVIA_AZURE_FEDERATED_TOKEN_FILE' => '/var/run/secrets/azure/tokens/azure-identity-token',
+        ]);
+        self::assertSame('/var/run/secrets/azure/tokens/azure-identity-token', $pod->azureFederatedTokenFile);
         foreach ($refusals as $message => $variables) {
             try {
                 Settings::fromEnvironment($variables + self::MINIMAL);

@@ -163,6 +163,28 @@ final class AzureCredentialsTest extends TestCase
         $_ = $tokens->token();
     }
 
+    public function testAFederatedTokenFileThatIsAUrlIsNeverFetched(): void
+    {
+        // file_get_contents() would fetch it. The settings refuse it at boot; the read refuses it
+        // again, so no request is made, to Entra or to the URL.
+        $tokens = EntraApplication::withFederatedToken(
+            $this->api(),
+            $this->clock,
+            self::SCOPE,
+            'tenant-1',
+            'client-1',
+            'https://attacker.example/token',
+        );
+
+        try {
+            $_ = $tokens->token();
+            self::fail('The token file was read.');
+        } catch (SigningFailed $refused) {
+            self::assertStringContainsString('absolute local path', $refused->getMessage());
+        }
+        self::assertSame([], $this->http->requests);
+    }
+
     public function testARefusedSignInSaysWhy(): void
     {
         $this->http->answerWith(static fn (RequestInterface $request): JsonResponse => new JsonResponse(
