@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Application\OAuth2\Authorize;
 
 use Clavia\Application\Authentication\EndUser;
+use Clavia\Application\Authentication\Mfa\BeginStepUp;
 use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\OAuth2\ReadRequestedAccess;
@@ -19,6 +20,7 @@ use Clavia\Application\OAuth2\RequestParameters;
 use Clavia\Application\Port\ConsentStateStore;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Application\Port\NonceRegistry;
+use Clavia\Domain\Authentication\AuthenticationRequirement;
 use Clavia\Domain\Authentication\LoginState;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientId;
@@ -65,11 +67,16 @@ use Clavia\Domain\Shared\SecretGenerator;
  *    a connection the application does not enable counts for nothing here: the person
  *    signs in again, through one it does. So does somebody the client asked to see
  *    again: `prompt=login` or `select_account`, or a sign-in older than `max_age`.
+ *    A person signed in less strongly than `acr_values` asks (docs/design/mfa-policies.md
+ *    §5.1) steps up: one more factor on the second-factor page, and the request is decided
+ *    again. Someone who holds no factor that would be enough is refused with
+ *    `unmet_authentication_requirements`.
  * 4. **Then their consent**, when {@see ConsentPolicy} says the request has to be put to
  *    them: the request goes on hold, and the browser to the consent screen.
  *
  * With `prompt=none` nothing may be shown: where step 3 or 4 would show a page, the
- * client is told `login_required` or `consent_required` instead (OIDC Core §3.1.2.6).
+ * client is told `login_required`, `interaction_required` (a step-up) or `consent_required`
+ * instead (OIDC Core §3.1.2.6).
  */
 final readonly class Authorize
 {
@@ -90,6 +97,7 @@ final readonly class Authorize
         private ConsentStateStore $consentStates,
         private ConnectionAccess $connections,
         private Sessions $sessions,
+        private BeginStepUp $beginStepUp,
         private SecretGenerator $secrets,
         private RandomSource $random,
         private Clock $clock,
@@ -119,6 +127,7 @@ final readonly class Authorize
             $challenge = self::challenge($parameters, $client, $nonce);
             $prompt = Prompt::fromParameter($parameters->get('prompt'));
             $maxAge = MaxAge::fromParameter($parameters->get('max_age'));
+            $requirement = self::requirement($parameters);
         } catch (OAuth2Error $refusal) {
             return new RequestRefused($redirectUri, $refusal, $state);
         }
@@ -151,6 +160,10 @@ final readonly class Authorize
             $this->loginStates->put($handle, new LoginState($request->resumption($resumed), $client->id));
 
             return new LoginRequired($handle);
+        }
+
+        if (! $requirement->isMetBy($endUser->session?->methods ?? [])) {
+            return $this->stepUp($request, $endUser, $client, $redirectUri, $state, $requirement, $prompt);
         }
 
         // On an API that enforces roles, somebody holding nothing there is refused now —
@@ -221,6 +234,62 @@ final readonly class Authorize
     {
         return $prompt->demandsSignIn()
             || ($maxAge?->isExceededBy($endUser->session?->authenticatedAt, $this->clock->now()) ?? false);
+    }
+
+    /**
+     * What the request asks of the sign-in: `acr_values`, of which only the levels this server
+     * knows count (docs/design/mfa-policies.md §2).
+     *
+     * @throws OAuth2Error
+     */
+    private static function requirement(RequestParameters $parameters): AuthenticationRequirement
+    {
+        try {
+            return AuthenticationRequirement::fromAcrValues($parameters->get('acr_values'));
+        } catch (InvalidValue) {
+            throw OAuth2Error::invalidRequest("'acr_values' must name at least one value.");
+        }
+    }
+
+    /**
+     * A signed-in person who falls short of the requirement: asked for one more factor, unless
+     * nothing may be shown, or nothing they hold would be enough. The request is resumed as it
+     * is, `acr_values` included, so the endpoint decides again once the session is raised.
+     */
+    private function stepUp(
+        AuthorizationRequest $request,
+        EndUser $endUser,
+        Client $client,
+        string $redirectUri,
+        ?string $state,
+        AuthenticationRequirement $requirement,
+        Prompt $prompt,
+    ): StepUpRequired|RequestRefused {
+        if ($prompt->forbidsInteraction()) {
+            return new RequestRefused(
+                $redirectUri,
+                OAuth2Error::interactionRequired("The sign-in must be stronger, and 'prompt=none' forbids asking."),
+                $state,
+            );
+        }
+
+        // Without a session (the development auto-login) there is nothing to raise.
+        $challenge = $endUser->session === null ? null : ($this->beginStepUp)(
+            $endUser->session,
+            $requirement,
+            $request->resumption($request->parameters),
+            $client->id,
+        );
+
+        return $challenge === null
+            ? new RequestRefused(
+                $redirectUri,
+                OAuth2Error::unmetAuthenticationRequirements(
+                    'The person cannot sign in as strongly as the request asks.',
+                ),
+                $state,
+            )
+            : new StepUpRequired($challenge);
     }
 
     /**

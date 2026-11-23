@@ -129,6 +129,7 @@ use Clavia\Application\Authentication\External\ResolveExternalAccount;
 use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
 use Clavia\Application\Authentication\LoginThrottle;
 use Clavia\Application\Authentication\Mfa\BeginPasskeySecondFactor;
+use Clavia\Application\Authentication\Mfa\BeginStepUp;
 use Clavia\Application\Authentication\Mfa\BeginTotpEnrollment;
 use Clavia\Application\Authentication\Mfa\CompletePasskeySecondFactor;
 use Clavia\Application\Authentication\Mfa\CompleteSecondFactor;
@@ -137,6 +138,7 @@ use Clavia\Application\Authentication\Mfa\DescribeMfa;
 use Clavia\Application\Authentication\Mfa\DescribeSecondFactorPage;
 use Clavia\Application\Authentication\Mfa\DisableMfa;
 use Clavia\Application\Authentication\Mfa\ResumeTotpEnrollment;
+use Clavia\Application\Authentication\Mfa\SecondFactors;
 use Clavia\Application\Authentication\Mfa\TotpSeeds;
 use Clavia\Application\Authentication\Passkey\BeginPasskeyRegistration;
 use Clavia\Application\Authentication\Passkey\CompletePasskeyRegistration;
@@ -497,6 +499,8 @@ final class ConfigProvider
                     DisableMfa::class => Container\DisableMfaFactory::class,
                     CompleteSecondFactor::class => Container\CompleteSecondFactorFactory::class,
                     DescribeSecondFactorPage::class => Container\DescribeSecondFactorPageFactory::class,
+                    SecondFactors::class => Container\SecondFactorsFactory::class,
+                    BeginStepUp::class => Container\BeginStepUpFactory::class,
                     RequireSignIn::class => Container\RequireSignInFactory::class,
                     ResetUserMfa::class => Container\ResetUserMfaFactory::class,
                     SendPasswordLink::class => Container\SendPasswordLinkFactory::class,

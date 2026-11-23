@@ -22,11 +22,17 @@ final readonly class SecondFactorPage
      * @param list<string> $formOrigins
      * @param bool         $authenticatorApp Whether a code from an authenticator app answers.
      * @param bool         $passkey          Whether a passkey does.
+     * @param bool         $recoveryCode     Whether a recovery code does.
+     * @param bool         $stepUp           Whether a signed-in person is asked for more, rather than signing in.
+     * @param string|null  $application      The name of the application asking, when there is one.
      */
     public function __construct(
         public array $formOrigins,
         public bool $authenticatorApp,
         public bool $passkey,
+        public bool $recoveryCode = true,
+        public bool $stepUp = false,
+        public ?string $application = null,
     ) {
     }
 }

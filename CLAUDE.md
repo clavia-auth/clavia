@@ -325,7 +325,12 @@ only when the error must not be redirected. The order is fixed:
 5. **Decide once whether the person must be seen**: no session, a session through a connection
    the client does not enable, `prompt=login` or `select_account`, or `max_age` exceeded.
    `prompt=none` then answers `login_required`. Otherwise the request is held behind an opaque
-   handle (`LoginStateStore`) and the browser goes to `/auth/login`.
+   handle (`LoginStateStore`) and the browser goes to `/auth/login`. A signed-in session that
+   falls short of `acr_values` (`AuthenticationRequirement`: known levels only, any one
+   accepted) **steps up** (`docs/design/mfa-policies.md` §5.1): `prompt=none` answers
+   `interaction_required`; a person who holds a factor that would be enough is sent to
+   `/auth/mfa` with a step-up challenge (`BeginStepUp`, the request resumed as it is); anyone
+   else gets `unmet_authentication_requirements`.
 6. **Roles**: on an API that enforces them, somebody holding nothing there gets `access_denied`.
 7. **Consent** (`ConsentPolicy`): `prompt=consent` asks; a first-party client is not asked for
    no API, or an API allowing skipping; otherwise a consent on record must cover every scope.
@@ -468,6 +473,12 @@ applies however the person signed in.
 **Sessions** have one door per operation. `Sessions::establish()` is the only way a browser
 becomes authenticated, and it always rotates the identifier. `resolve()` is the only way to read
 one: it slides the idle window up to the absolute ceiling. `end()` is the only way to stop one.
+`stepUp()` is the only way one gains a factor: only the browser's own session, named by the
+`sid` the step-up challenge holds; `amr` gains the factor and `mfa`, `auth_time` becomes now, the
+identifier rotates, and the `sid`, the clients signed in through it and the absolute expiry stay.
+A step-up challenge (`MfaChallenge::stepUp()`) is answered only by a factor that makes the
+session meet the request (`isAnsweredBy()`, `SecondFactors`): an app's code or a recovery code
+never answers a request for `phr`.
 The session identifier is stored as its digest; the `sid` is a second, unrelated token.
 `ResolveEndUser` answers "who is this?" for every browser-facing handler, and re-checks that the
 account is still active.

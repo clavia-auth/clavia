@@ -151,6 +151,9 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
         yield 'the second step: error' => [
             MfaPages::challenge(new SecondFactorPage([], true, false), null, self::HOSTILE, 401),
         ];
+        yield 'a step-up, for an application named by an operator' => [
+            MfaPages::challenge(new SecondFactorPage([], true, false, true, true, self::HOSTILE), null, self::HOSTILE),
+        ];
         yield 'the second step with a passkey: error and options' => [MfaPages::challenge(
             new SecondFactorPage([], false, true),
             new AssertionOptions(

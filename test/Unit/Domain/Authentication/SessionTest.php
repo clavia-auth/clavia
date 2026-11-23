@@ -13,6 +13,7 @@ namespace ClaviaTest\Unit\Domain\Authentication;
 
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\Session;
+use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\InvalidValue;
@@ -137,5 +138,38 @@ final class SessionTest extends TestCase
             new DateTimeImmutable($at),
             self::WEEK,
         );
+    }
+
+    public function testASteppedUpSessionKeepsWhatItIsAndMovesOnlyWhenAndHow(): void
+    {
+        $session = Session::reconstitute(
+            UserId::fromString('0190a4f2-7c1e-4b3a-9c2d-5e6f7a8b9c0d'),
+            new DateTimeImmutable('2026-01-15T10:00:00Z'),
+            new DateTimeImmutable('2026-01-15T18:00:00Z'),
+            [AuthenticationMethod::Password],
+            'the-sid',
+            ConnectionName::defaultPool(),
+            [ClientId::fromString('spa')],
+        );
+
+        $raised = $session->steppedUp(
+            [AuthenticationMethod::OneTimePassword],
+            new DateTimeImmutable('2026-01-15T12:00:00Z'),
+        );
+
+        self::assertSame(
+            [
+                AuthenticationMethod::Password,
+                AuthenticationMethod::OneTimePassword,
+                AuthenticationMethod::MultipleFactors,
+            ],
+            $raised->methods,
+        );
+        self::assertEquals(new DateTimeImmutable('2026-01-15T12:00:00Z'), $raised->authenticatedAt);
+        // Never a longer life, never another session to the applications signed in through it.
+        self::assertEquals($session->expiresAt, $raised->expiresAt);
+        self::assertSame('the-sid', $raised->sid);
+        self::assertEquals($session->clients, $raised->clients);
+        self::assertTrue($raised->connection->equals($session->connection));
     }
 }

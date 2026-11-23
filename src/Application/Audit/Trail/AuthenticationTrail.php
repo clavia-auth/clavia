@@ -23,6 +23,7 @@ use Clavia\Domain\Authentication\Event\PasskeyRemoved;
 use Clavia\Domain\Authentication\Event\PasskeyRenamed;
 use Clavia\Domain\Authentication\Event\SecondFactorEnrolled;
 use Clavia\Domain\Authentication\Event\SecondFactorRemoved;
+use Clavia\Domain\Authentication\Event\SessionSteppedUp;
 use Clavia\Domain\Authentication\Event\SessionsEnded;
 use Clavia\Domain\Authentication\Event\SignedIn;
 use Clavia\Domain\Authentication\Event\SignInRefused;
@@ -48,6 +49,7 @@ final readonly class AuthenticationTrail implements EventSubscriber
     {
         return [
             SignedIn::class => $this->signedIn(...),
+            SessionSteppedUp::class => $this->sessionSteppedUp(...),
             SignInRefused::class => $this->signInRefused(...),
             SessionsEnded::class => $this->sessionsEnded(...),
             SecondFactorEnrolled::class => $this->secondFactorEnrolled(...),
@@ -65,6 +67,16 @@ final readonly class AuthenticationTrail implements EventSubscriber
         $this->audit->record(AuditEventType::SignedIn, AuditTarget::user($session->userId), [
             'amr' => array_map(static fn (AuthenticationMethod $method): string => $method->value, $session->methods),
             'connection' => $session->connection->value,
+            'sid' => $session->sid,
+        ], Actor::person($session->userId));
+    }
+
+    private function sessionSteppedUp(SessionSteppedUp $event): void
+    {
+        $session = $event->session;
+        $this->audit->record(AuditEventType::SessionSteppedUp, AuditTarget::user($session->userId), [
+            'added' => array_map(static fn (AuthenticationMethod $method): string => $method->value, $event->added),
+            'amr' => array_map(static fn (AuthenticationMethod $method): string => $method->value, $session->methods),
             'sid' => $session->sid,
         ], Actor::person($session->userId));
     }

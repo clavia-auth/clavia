@@ -14,6 +14,7 @@ namespace Clavia\Application\Authentication;
 use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\SessionStore;
 use Clavia\Domain\Authentication\AuthenticationMethod;
+use Clavia\Domain\Authentication\Event\SessionSteppedUp;
 use Clavia\Domain\Authentication\Event\SignedIn;
 use Clavia\Domain\Authentication\Session;
 use Clavia\Domain\Client\ClientId;
@@ -86,6 +87,45 @@ final readonly class Sessions
         $this->events->dispatch(new SignedIn($session));
 
         return $sessionId;
+    }
+
+    /**
+     * Raise the browser's session by one more factor, in place (docs/design/mfa-policies.md
+     * §2): the only way a session gains a factor.
+     *
+     * Only the session the step-up was opened for: the browser's identifier must name a
+     * current session with that `sid`, so a step-up cannot be finished with another browser's
+     * session, or after a new sign-in replaced the one it was for. The identifier rotates —
+     * a privilege change, and a cookie captured before it opens nothing after — while the
+     * `sid`, and with it the applications signed in through the session, stays: back-channel
+     * logout still reaches them.
+     *
+     * @param list<AuthenticationMethod> $added What the new factor adds to `amr`.
+     *
+     * @return non-empty-string|null The new identifier; null when the browser's session is not the one.
+     */
+    public function stepUp(#[\SensitiveParameter] ?string $sessionId, string $sid, array $added): ?string
+    {
+        $session = $this->resolve($sessionId);
+        if ($sessionId === null || $session === null || $session->sid !== $sid) {
+            return null;
+        }
+
+        $now = $this->clock->now();
+        $raised = $session->steppedUp($added, $now);
+        $newId = $this->secrets->token();
+
+        // Removed first: removing a session also removes the entry its `sid` has in the
+        // account's index, which the new one then takes.
+        $this->store->delete($sessionId);
+        $this->store->save($newId, $raised, $raised->idleWindowAt($now, $this->idleLifetime));
+        foreach ($raised->clients as $client) {
+            $this->store->recordClient($raised->userId, $raised->sid, $client);
+        }
+
+        $this->events->dispatch(new SessionSteppedUp($raised, $added));
+
+        return $newId;
     }
 
     /**

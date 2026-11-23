@@ -89,4 +89,16 @@ enum ErrorCode: string
      * gives no code of its own.
      */
     case TemporarilyUnavailable = 'temporarily_unavailable';
+
+    /**
+     * `prompt=none`, and the person is signed in but would have to do more — here, give
+     * another factor (OpenID Connect Core §3.1.2.6).
+     */
+    case InteractionRequired = 'interaction_required';
+
+    /**
+     * The person cannot be authenticated to any level the request accepts (OpenID Connect
+     * Core Error Code `unmet_authentication_requirements` 1.0).
+     */
+    case UnmetAuthenticationRequirements = 'unmet_authentication_requirements';
 }

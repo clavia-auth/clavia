@@ -14,6 +14,7 @@ namespace ClaviaTest\Unit\Application\Authentication;
 use Clavia\Application\Authentication\Sessions;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Connection\ConnectionName;
+use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\SecretGenerator;
 use ClaviaTest\Support\Fake\FrozenClock;
@@ -200,5 +201,46 @@ final class SessionsTest extends TestCase
         self::assertNull($this->sessions->end(null));
         self::assertNull($this->sessions->end(''));
         self::assertNull($this->sessions->end('never-issued'));
+    }
+
+    public function testAStepUpKeepsTheApplicationsSignedInThroughTheSession(): void
+    {
+        // Back-channel logout reaches them by the sid, which a step-up keeps.
+        $id = $this->sessions->establish(
+            $this->userId,
+            [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
+            null,
+        );
+        $session = $this->sessions->resolve($id);
+        self::assertNotNull($session);
+        $this->sessions->recordClient($session, ClientId::fromString('spa'));
+
+        $raised = $this->sessions->stepUp($id, $session->sid, [AuthenticationMethod::OneTimePassword]);
+
+        self::assertNotNull($raised);
+        self::assertNull($this->sessions->resolve($id), 'The old identifier opens nothing.');
+        $after = $this->sessions->resolve($raised);
+        self::assertNotNull($after);
+        self::assertSame($session->sid, $after->sid);
+        self::assertSame(['spa'], array_map(static fn (ClientId $client): string => $client->value, $after->clients));
+    }
+
+    public function testAStepUpNeedsTheSessionItWasOpenedFor(): void
+    {
+        $id = $this->sessions->establish(
+            $this->userId,
+            [AuthenticationMethod::Password],
+            ConnectionName::defaultPool(),
+            null,
+        );
+
+        self::assertNull($this->sessions->stepUp($id, 'another-sid', [AuthenticationMethod::OneTimePassword]));
+        self::assertNull($this->sessions->stepUp(null, 'another-sid', [AuthenticationMethod::OneTimePassword]));
+        self::assertSame(
+            [AuthenticationMethod::Password],
+            $this->sessions->resolve($id)?->methods,
+            'A refused step-up changes nothing.',
+        );
     }
 }

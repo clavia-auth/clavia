@@ -118,6 +118,27 @@ final readonly class Session
         return new self($userId, $authenticatedAt, $expiresAt, $methods, $sid, $connection, array_values($byId));
     }
 
+    /**
+     * The same session, raised by one more factor (docs/design/mfa-policies.md §2): `amr`
+     * gains the factor's methods and `mfa`, and `auth_time` becomes now, since the person has
+     * just authenticated again. The `sid`, the connection, the applications signed in through
+     * it and the absolute expiry are kept: a step-up never makes a session live longer.
+     *
+     * @param list<AuthenticationMethod> $added What the new factor adds to `amr`.
+     */
+    public function steppedUp(array $added, DateTimeImmutable $now): self
+    {
+        return self::reconstitute(
+            $this->userId,
+            $now,
+            $this->expiresAt,
+            AuthenticationMethod::combined($this->methods, $added),
+            $this->sid,
+            $this->connection,
+            $this->clients,
+        );
+    }
+
     public function isExpiredAt(DateTimeImmutable $now): bool
     {
         return $this->expiresAt <= $now;

@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Application\Authentication\Mfa\BeginStepUp;
 use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\OAuth2\Authorize\Authorize;
@@ -69,6 +70,9 @@ final class AuthorizeFactory
         /** @var Sessions $sessions */
         $sessions = $container->get(Sessions::class);
 
+        /** @var BeginStepUp $beginStepUp */
+        $beginStepUp = $container->get(BeginStepUp::class);
+
         return new Authorize(
             $clients,
             $codes,
@@ -80,6 +84,7 @@ final class AuthorizeFactory
             $consentStates,
             $connections,
             $sessions,
+            $beginStepUp,
             $secrets,
             $random,
             $clock,

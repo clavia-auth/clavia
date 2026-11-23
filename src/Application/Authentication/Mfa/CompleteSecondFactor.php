@@ -45,6 +45,10 @@ use Clavia\Domain\Shared\Clock;
  * - The session's `amr` is the first factor's methods, then `otp` for a TOTP code, then
  *   `mfa` (RFC 8176); a recovery code adds `mfa` alone — it is no one-time password
  *   from a device.
+ * - A **step-up** challenge raises the browser's session instead of starting one
+ *   ({@see Sessions::stepUp()}), and takes only a code that makes it meet the request: an
+ *   app's code or a recovery code cannot answer a request for a passkey's level. A code of
+ *   a kind that cannot answer is refused without being looked at.
  */
 final readonly class CompleteSecondFactor
 {
@@ -74,7 +78,7 @@ final readonly class CompleteSecondFactor
         }
 
         $user = $this->users->find($challenge->userId);
-        $secondFactor = $user !== null && $user->isActive() ? $this->verify($user, $attempt) : null;
+        $secondFactor = $user !== null && $user->isActive() ? $this->verify($user, $attempt, $challenge) : null;
 
         if ($user === null || $secondFactor === null) {
             $this->throttle->recordFailure($user?->email ?? '', $attempt->clientAddress);
@@ -102,33 +106,53 @@ final readonly class CompleteSecondFactor
      * @return list<AuthenticationMethod>|null What the second factor adds to `amr`, or null when
      *                                         nothing was accepted.
      */
-    private function verify(User $user, SecondFactorAttempt $attempt): ?array
+    private function verify(User $user, SecondFactorAttempt $attempt, MfaChallenge $challenge): ?array
     {
         if ($this->throttle->isThrottled($user->email, $attempt->clientAddress)) {
             return null;
         }
+        $appAnswers = $challenge->isAnsweredBy(SecondFactors::APP);
+        $recoveryCodeAnswers = $challenge->isAnsweredBy(SecondFactors::RECOVERY_CODE);
+        if (! $appAnswers && ! $recoveryCodeAnswers) {
+            return null;
+        }
 
-        return $this->transactions->transactional(function () use ($user, $attempt): ?array {
+        $codeWorks = [$appAnswers, $recoveryCodeAnswers];
+
+        return $this->transactions->transactional(function () use ($user, $attempt, $codeWorks): ?array {
+            [$appAnswers, $recoveryCodeAnswers] = $codeWorks;
             $now = $this->clock->now();
-            $factor = $this->factors->lockForVerification($user->id);
+            $factor = $appAnswers ? $this->factors->lockForVerification($user->id) : null;
             $app = $factor !== null && $factor->isConfirmed() ? $factor : null;
             if ($app !== null && $app->accept($this->seeds->open($app), $attempt->code, $now)) {
                 $this->factors->save($app);
 
-                return [AuthenticationMethod::OneTimePassword];
+                return SecondFactors::APP;
             }
 
             // A recovery code answers whatever the second factor is: an authenticator app or a
             // passkey, whose loss is what the codes are for.
-            return $this->recoveryCodes->spend($user->id, RecoveryCode::digest($attempt->code), $now) ? [] : null;
+            return $recoveryCodeAnswers
+                && $this->recoveryCodes->spend($user->id, RecoveryCode::digest($attempt->code), $now)
+                ? SecondFactors::RECOVERY_CODE
+                : null;
         });
     }
 
     /**
      * @param list<AuthenticationMethod> $secondFactor
      */
-    private function signIn(MfaChallenge $challenge, array $secondFactor, SecondFactorAttempt $attempt): SignedIn
-    {
+    private function signIn(
+        MfaChallenge $challenge,
+        array $secondFactor,
+        SecondFactorAttempt $attempt,
+    ): SignedIn|ChallengeGone {
+        if ($challenge->stepUpOf !== null) {
+            $raised = $this->sessions->stepUp($attempt->currentSessionId, $challenge->stepUpOf, $secondFactor);
+
+            return $raised === null ? new ChallengeGone() : new SignedIn($raised, $challenge->nextUrl);
+        }
+
         $sessionId = $this->sessions->establish(
             $challenge->userId,
             AuthenticationMethod::combined($challenge->firstFactor, $secondFactor),
