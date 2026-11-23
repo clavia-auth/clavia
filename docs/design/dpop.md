@@ -1,6 +1,6 @@
 # Design: DPoP, sender-constrained tokens
 
-**Status:** proposed · **Date:** 2026-11-23 · **Issue:** clavia-auth/clavia#11 ·
+**Status:** agreed · **Date:** 2026-11-23 · **Issue:** clavia-auth/clavia#11 ·
 **Specifications:** RFC 9449 (OAuth 2.0 Demonstrating Proof of Possession), RFC 7638 (JWK
 thumbprint), RFC 7800 (`cnf`), RFC 9068 (JWT access tokens), RFC 7662 (introspection),
 RFC 9126 (pushed authorization requests), OAuth 2.1 §1.4.3 (sender-constrained tokens)
@@ -246,3 +246,15 @@ proof: the caller is the resource server, authenticated by its secret.
    client, the dashboard included. It can be added per resource later without changing tokens.
 3. **The algorithm list** (§2)? *Recommendation:* `ES256`, `EdDSA`, `RS256`, `PS256`. ES256 is what
    browsers make by default; the others cover platform keystores and older libraries.
+
+## 11. As built
+
+What the slices settled differently from the sections above, so the code and this document agree.
+
+- **No PS256** (§2, question 3). `web-token/jwt-library` implements RSA-PSS in pure PHP, at about a
+  second of CPU per verification, and a proof's signature is checked before anything else: anyone
+  could make the token endpoint burn a second per request with forged PS256 proofs. ES256, EdDSA
+  and RS256 go through OpenSSL or libsodium and cost a millisecond. RS256 covers RSA keys.
+- **`DPoP-Nonce` on every answer to a request that carried a proof** (§5.2 step 7), and with
+  `use_dpop_nonce`: a client without DPoP has no use for it.
+

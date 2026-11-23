@@ -11,11 +11,15 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Application\OAuth2;
 
+use ClaviaTest\Support\Fake\FakeDpopProofVerifier;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryAttemptCounter;
+use ClaviaTest\Support\Fake\InMemoryDpopNonces;
+use ClaviaTest\Support\Fake\InMemoryDpopReplayCache;
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
 use Clavia\Application\OAuth2\ClientAuthentication\ClientFailureThrottle;
 use Clavia\Application\OAuth2\ClientAuthentication\TooManyFailedRequests;
+use Clavia\Application\OAuth2\Dpop\ReadDpopProof;
 use Clavia\Application\OAuth2\RequestParameters;
 use Clavia\Application\OAuth2\Token\Grant;
 use Clavia\Application\OAuth2\Token\IssuedToken;
@@ -24,6 +28,7 @@ use Clavia\Application\OAuth2\Token\TokenRequest;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\GrantType;
+use Clavia\Domain\OAuth2\Dpop\JwkThumbprint;
 use Clavia\Domain\OAuth2\ErrorCode;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use Clavia\Domain\Shared\ScopeSet;
@@ -37,8 +42,11 @@ final class IssueTokenTest extends TestCase
     private InMemoryClientRepository $clients;
     private const string ADDRESS = '203.0.113.7';
 
+    private const string TOKEN_ENDPOINT = 'https://auth.clavia.test/oauth2/token';
+
     private ClientAuthenticator $authenticator;
     private ClientFailureThrottle $throttle;
+    private ReadDpopProof $dpop;
 
     /** @var list<string> The ids of the clients the grant was asked to issue for. */
     private array $issuedFor = [];
@@ -50,6 +58,14 @@ final class IssueTokenTest extends TestCase
         $this->clients->save(Clients::public('spa'));
         $this->clients->save(Clients::public('no-grant', grantTypes: [], responseTypes: []));
         $this->throttle = new ClientFailureThrottle(new InMemoryAttemptCounter(new FrozenClock()), 1000, 300);
+        $clock = new FrozenClock();
+        $this->dpop = new ReadDpopProof(
+            new FakeDpopProofVerifier(),
+            new InMemoryDpopReplayCache($clock),
+            new InMemoryDpopNonces($clock),
+            $clock,
+            60,
+        );
         $this->authenticator = new ClientAuthenticator($this->clients, new FakePasswordHasher(), $this->throttle);
     }
 
@@ -63,7 +79,7 @@ final class IssueTokenTest extends TestCase
 
     public function testARepeatedParameterIsRefusedBeforeAnythingElse(): void
     {
-        $issueToken = new IssueToken($this->authenticator, $this->throttle, $this->aGrant());
+        $issueToken = $this->issuer($this->aGrant());
 
         $error = $this->refusal(static fn (): IssuedToken => $issueToken(new TokenRequest(
             new RequestParameters(['grant_type' => ['authorization_code'], 'code' => ['one', 'two']]),
@@ -92,7 +108,7 @@ final class IssueTokenTest extends TestCase
 
     public function testAKnownGrantTypeTheServerDoesNotOfferIsUnsupported(): void
     {
-        $withoutGrants = new IssueToken($this->authenticator, $this->throttle);
+        $withoutGrants = new IssueToken($this->authenticator, $this->throttle, $this->dpop, self::TOKEN_ENDPOINT);
 
         $error = $this->refusal(static fn (): IssuedToken => $withoutGrants(new TokenRequest(
             RequestParameters::fromMap(['grant_type' => 'authorization_code', 'client_id' => 'spa']),
@@ -128,6 +144,8 @@ final class IssueTokenTest extends TestCase
         $issueToken = new IssueToken(
             $this->authenticator,
             $this->throttle,
+            $this->dpop,
+            self::TOKEN_ENDPOINT,
             $this->aGrant([ClientAuthMethod::ClientSecretBasic]),
         );
 
@@ -140,12 +158,17 @@ final class IssueTokenTest extends TestCase
         self::assertSame(ErrorCode::InvalidClient, $error->error);
     }
 
+    private function issuer(Grant ...$grants): IssueToken
+    {
+        return new IssueToken($this->authenticator, $this->throttle, $this->dpop, self::TOKEN_ENDPOINT, ...$grants);
+    }
+
     /**
      * @param array<string, string> $form
      */
     private function issue(array $form): IssuedToken
     {
-        return new IssueToken($this->authenticator, $this->throttle, $this->aGrant())(
+        return $this->issuer($this->aGrant())(
             new TokenRequest(RequestParameters::fromMap($form), null, self::ADDRESS),
         );
     }
@@ -169,6 +192,8 @@ final class IssueTokenTest extends TestCase
         $issueToken = new IssueToken(
             $this->authenticator,
             $this->throttle,
+            $this->dpop,
+            self::TOKEN_ENDPOINT,
             $this->aGrant([ClientAuthMethod::ClientSecretBasic, ClientAuthMethod::None]),
         );
 
@@ -177,7 +202,7 @@ final class IssueTokenTest extends TestCase
             [ClientAuthMethod::ClientSecretBasic, ClientAuthMethod::None],
             $issueToken->supportedAuthMethods(),
         );
-        self::assertSame([], new IssueToken($this->authenticator, $this->throttle)->supportedGrantTypes());
+        self::assertSame([], $this->issuer()->supportedGrantTypes());
     }
 
     public function testARejectedGrantCountsAndAPendingDeviceDoesNot(): void
@@ -193,8 +218,14 @@ final class IssueTokenTest extends TestCase
             self::ADDRESS,
         );
         $pendingGrant = $this->failingGrant(OAuth2Error::authorizationPending('Wait.'));
-        $pending = new IssueToken($authenticator, $throttle, $pendingGrant);
-        $rejected = new IssueToken($authenticator, $throttle, $this->failingGrant(OAuth2Error::invalidGrant('No.')));
+        $pending = new IssueToken($authenticator, $throttle, $this->dpop, self::TOKEN_ENDPOINT, $pendingGrant);
+        $rejected = new IssueToken(
+            $authenticator,
+            $throttle,
+            $this->dpop,
+            self::TOKEN_ENDPOINT,
+            $this->failingGrant(OAuth2Error::invalidGrant('No.')),
+        );
 
         for ($i = 0; $i < 5; ++$i) {
             $error = $this->refusal(static fn (): IssuedToken => $pending($request));
@@ -228,8 +259,11 @@ final class IssueTokenTest extends TestCase
             }
 
             #[\Override]
-            public function issue(RequestParameters $parameters, Client $client): IssuedToken
-            {
+            public function issue(
+                RequestParameters $parameters,
+                Client $client,
+                ?JwkThumbprint $dpopKey = null,
+            ): IssuedToken {
                 throw $this->error;
             }
         };
@@ -268,8 +302,11 @@ final class IssueTokenTest extends TestCase
             }
 
             #[\Override]
-            public function issue(RequestParameters $parameters, Client $client): IssuedToken
-            {
+            public function issue(
+                RequestParameters $parameters,
+                Client $client,
+                ?JwkThumbprint $dpopKey = null,
+            ): IssuedToken {
                 ($this->record)($client);
 
                 return new IssuedToken('minted', 'Bearer', 3600, ScopeSet::empty());

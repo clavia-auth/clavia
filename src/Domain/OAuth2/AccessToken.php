@@ -14,6 +14,7 @@ namespace Clavia\Domain\OAuth2;
 use Clavia\Domain\Authentication\AuthenticationContext;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\UserId;
+use Clavia\Domain\OAuth2\Dpop\JwkThumbprint;
 use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\ScopeSet;
@@ -35,6 +36,9 @@ final class AccessToken
 {
     public const string TOKEN_TYPE = 'Bearer';
 
+    /** The `token_type` of a token bound to a DPoP key (RFC 9449 §5). */
+    public const string DPOP_TOKEN_TYPE = 'DPoP';
+
     private function __construct(
         public readonly AccessTokenId $id,
         public readonly Digest $digest,
@@ -48,6 +52,7 @@ final class AccessToken
         private ?DateTimeImmutable $revokedAt,
         public readonly ?RefreshTokenId $refreshFamilyId,
         public readonly AuthenticationContext $authentication,
+        public readonly ?JwkThumbprint $dpopJkt = null,
     ) {
     }
 
@@ -197,6 +202,7 @@ final class AccessToken
         ?DateTimeImmutable $revokedAt,
         ?RefreshTokenId $refreshFamilyId = null,
         ?AuthenticationContext $authentication = null,
+        ?JwkThumbprint $dpopJkt = null,
     ): self {
         return new self(
             $id,
@@ -211,6 +217,7 @@ final class AccessToken
             $revokedAt,
             $refreshFamilyId,
             $authentication ?? AuthenticationContext::unknown(),
+            $dpopJkt,
         );
     }
 
@@ -233,6 +240,7 @@ final class AccessToken
             $this->revokedAt,
             $this->refreshFamilyId,
             $this->authentication,
+            $this->dpopJkt,
         );
     }
 
@@ -252,7 +260,41 @@ final class AccessToken
             $this->revokedAt ?? $now,
             $this->refreshFamilyId,
             $this->authentication,
+            $this->dpopJkt,
         );
+    }
+
+    /**
+     * The same token, bound to the key of a DPoP proof (RFC 9449 §6): only a fresh proof from that
+     * key makes it usable, wherever it is presented.
+     */
+    public function boundTo(JwkThumbprint $key): self
+    {
+        return self::reconstitute(
+            $this->id,
+            $this->digest,
+            $this->clientId,
+            $this->userId,
+            $this->authorizationCodeId,
+            $this->audience,
+            $this->scope,
+            $this->issuedAt,
+            $this->expiresAt,
+            $this->revokedAt,
+            $this->refreshFamilyId,
+            $this->authentication,
+            $key,
+        );
+    }
+
+    /**
+     * `DPoP` for a token bound to a key (RFC 9449 §5), `Bearer` otherwise.
+     *
+     * @return non-empty-string
+     */
+    public function tokenType(): string
+    {
+        return $this->dpopJkt === null ? self::TOKEN_TYPE : self::DPOP_TOKEN_TYPE;
     }
 
     public function isRevoked(): bool

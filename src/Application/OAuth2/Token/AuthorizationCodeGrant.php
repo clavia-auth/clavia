@@ -26,6 +26,7 @@ use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\AuthorizationCode;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
 use Clavia\Domain\OAuth2\CodeVerifier;
+use Clavia\Domain\OAuth2\Dpop\JwkThumbprint;
 use Clavia\Domain\OAuth2\Event\AccessTokenIssued;
 use Clavia\Domain\OAuth2\Event\AuthorizationCodeReplayed;
 use Clavia\Domain\OAuth2\OAuth2Error;
@@ -105,7 +106,7 @@ final readonly class AuthorizationCodeGrant implements Grant
     }
 
     #[\Override]
-    public function issue(RequestParameters $parameters, Client $client): IssuedToken
+    public function issue(RequestParameters $parameters, Client $client, ?JwkThumbprint $dpopKey = null): IssuedToken
     {
         $code = $parameters->get('code');
         if ($code === null) {
@@ -113,7 +114,7 @@ final readonly class AuthorizationCodeGrant implements Grant
         }
 
         $result = $this->transactions->transactional(
-            fn (): IssuedToken|OAuth2Error => $this->exchange($code, $parameters, $client),
+            fn (): IssuedToken|OAuth2Error => $this->exchange($code, $parameters, $client, $dpopKey),
         );
 
         return $result instanceof OAuth2Error ? throw $result : $result;
@@ -123,6 +124,7 @@ final readonly class AuthorizationCodeGrant implements Grant
         #[\SensitiveParameter] string $presentedCode,
         RequestParameters $parameters,
         Client $client,
+        ?JwkThumbprint $dpopKey,
     ): IssuedToken|OAuth2Error {
         $now = $this->clock->now();
 
@@ -164,7 +166,7 @@ final readonly class AuthorizationCodeGrant implements Grant
             return $scope;
         }
 
-        return $this->mint($code, $user, $scope, $client->mayUseGrant(GrantType::RefreshToken));
+        return $this->mint($code, $user, $scope, $client->mayUseGrant(GrantType::RefreshToken), $dpopKey);
     }
 
     /**
@@ -208,8 +210,13 @@ final readonly class AuthorizationCodeGrant implements Grant
      * All are written in the redemption's transaction: if the ID token cannot be signed,
      * nothing survives without it, and the code is not spent.
      */
-    private function mint(AuthorizationCode $code, User $user, ScopeSet $scope, bool $refreshable): IssuedToken
-    {
+    private function mint(
+        AuthorizationCode $code,
+        User $user,
+        ScopeSet $scope,
+        bool $refreshable,
+        ?JwkThumbprint $dpopKey,
+    ): IssuedToken {
         $now = $this->clock->now();
 
         $refreshValue = null;
@@ -240,6 +247,7 @@ final readonly class AuthorizationCodeGrant implements Grant
                 $this->accessTokenLifetimeSeconds,
                 $refreshToken?->familyId,
             ),
+            $dpopKey,
         );
         $token = $minted->token;
         $value = $minted->value;
@@ -251,7 +259,7 @@ final readonly class AuthorizationCodeGrant implements Grant
 
         return new IssuedToken(
             $value,
-            AccessToken::TOKEN_TYPE,
+            $token->tokenType(),
             $token->lifetimeFrom($now),
             $token->scope,
             $idToken,

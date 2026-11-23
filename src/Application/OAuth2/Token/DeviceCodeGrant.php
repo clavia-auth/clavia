@@ -25,6 +25,7 @@ use Clavia\Domain\OAuth2\AccessToken;
 use Clavia\Domain\OAuth2\AccessTokenId;
 use Clavia\Domain\OAuth2\DeviceAuthorization;
 use Clavia\Domain\OAuth2\DevicePoll;
+use Clavia\Domain\OAuth2\Dpop\JwkThumbprint;
 use Clavia\Domain\OAuth2\Event\AccessTokenIssued;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use Clavia\Domain\OAuth2\RefreshToken;
@@ -83,7 +84,7 @@ final readonly class DeviceCodeGrant implements Grant
     }
 
     #[\Override]
-    public function issue(RequestParameters $parameters, Client $client): IssuedToken
+    public function issue(RequestParameters $parameters, Client $client, ?JwkThumbprint $dpopKey = null): IssuedToken
     {
         $deviceCode = $parameters->get('device_code');
         if ($deviceCode === null) {
@@ -109,14 +110,14 @@ final readonly class DeviceCodeGrant implements Grant
             )),
             DevicePoll::Expired => throw OAuth2Error::expiredToken('The device code has expired: start again.'),
             DevicePoll::Denied => throw OAuth2Error::accessDenied('The user did not allow the device.'),
-            DevicePoll::Approved => $this->redeem($request, $client),
+            DevicePoll::Approved => $this->redeem($request, $client, $dpopKey),
         };
     }
 
     /**
      * @throws OAuth2Error
      */
-    private function redeem(DeviceAuthorization $request, Client $client): IssuedToken
+    private function redeem(DeviceAuthorization $request, Client $client, ?JwkThumbprint $dpopKey): IssuedToken
     {
         // Consumed before anything is issued: of two concurrent polls, one wins.
         if (! $this->requests->consume($request)) {
@@ -136,11 +137,16 @@ final readonly class DeviceCodeGrant implements Grant
             throw $scope;
         }
 
-        return $this->mint($request, $user, $scope, $client->mayUseGrant(GrantType::RefreshToken));
+        return $this->mint($request, $user, $scope, $client->mayUseGrant(GrantType::RefreshToken), $dpopKey);
     }
 
-    private function mint(DeviceAuthorization $request, User $user, ScopeSet $scope, bool $refreshable): IssuedToken
-    {
+    private function mint(
+        DeviceAuthorization $request,
+        User $user,
+        ScopeSet $scope,
+        bool $refreshable,
+        ?JwkThumbprint $dpopKey,
+    ): IssuedToken {
         $now = $this->clock->now();
 
         $refreshValue = null;
@@ -177,6 +183,7 @@ final readonly class DeviceCodeGrant implements Grant
                 $request->authentication() ?? AuthenticationContext::unknown(),
                 $refreshToken?->familyId,
             ),
+            $dpopKey,
         );
         $token = $minted->token;
         $value = $minted->value;
@@ -195,7 +202,7 @@ final readonly class DeviceCodeGrant implements Grant
 
         return new IssuedToken(
             $value,
-            AccessToken::TOKEN_TYPE,
+            $token->tokenType(),
             $token->lifetimeFrom($now),
             $token->scope,
             $idToken,

@@ -99,9 +99,10 @@ final readonly class IntrospectToken
             $token->audience,
             $token->userId,
             $username,
-            $token instanceof AccessToken ? AccessToken::TOKEN_TYPE : null,
+            $token instanceof AccessToken ? $token->tokenType() : null,
             $token->userId === null ? null : $token->authentication->authenticatedAt,
             $token->userId === null ? null : $token->authentication->acr(),
+            $token instanceof AccessToken ? $token->dpopJkt?->value : null,
         );
     }
 

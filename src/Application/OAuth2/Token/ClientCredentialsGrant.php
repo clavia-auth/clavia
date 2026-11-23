@@ -18,6 +18,7 @@ use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\OAuth2\AccessToken;
 use Clavia\Domain\OAuth2\AccessTokenId;
+use Clavia\Domain\OAuth2\Dpop\JwkThumbprint;
 use Clavia\Domain\OAuth2\Event\AccessTokenIssued;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use Clavia\Domain\Oidc\OidcScope;
@@ -84,7 +85,7 @@ final readonly class ClientCredentialsGrant implements Grant
     }
 
     #[\Override]
-    public function issue(RequestParameters $parameters, Client $client): IssuedToken
+    public function issue(RequestParameters $parameters, Client $client, ?JwkThumbprint $dpopKey = null): IssuedToken
     {
         $requested = $this->requestedScope($parameters);
         $audience = $this->audience($parameters);
@@ -118,12 +119,13 @@ final readonly class ClientCredentialsGrant implements Grant
                 $now,
                 $this->accessTokenLifetimeSeconds,
             ),
+            $dpopKey,
         );
         $token = $minted->token;
         $value = $minted->value;
         $this->events->dispatch(new AccessTokenIssued($token, GrantType::ClientCredentials, false));
 
-        return new IssuedToken($value, AccessToken::TOKEN_TYPE, $token->lifetimeFrom($now), $token->scope);
+        return new IssuedToken($value, $token->tokenType(), $token->lifetimeFrom($now), $token->scope);
     }
 
     /**

@@ -187,6 +187,18 @@ final readonly class Settings
          */
         #[Range(min: 5, max: 600)]
         public int $parLifetime = 60,
+        /**
+         * How old a DPoP proof's `iat` may be, seconds, and how long its `jti` is remembered against
+         * replay (RFC 9449 §11.1): a proof is made for one request and sent at once.
+         */
+        #[Range(min: 5, max: 300)]
+        public int $dpopProofLifetime = 60,
+        /**
+         * How long a DPoP nonce this server provides is current, seconds (RFC 9449 §8); the
+         * previous one is accepted as long again. Each client needs one extra round trip per window.
+         */
+        #[Range(min: 30, max: 3600)]
+        public int $dpopNonceLifetime = 300,
         /** How long the audit trail keeps an event, days; `clavia audit:purge` removes what is older. */
         #[Range(min: 1)]
         public int $auditRetentionDays = 90,

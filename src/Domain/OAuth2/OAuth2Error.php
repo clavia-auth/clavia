@@ -24,11 +24,29 @@ use DomainException;
  */
 final class OAuth2Error extends DomainException
 {
+    /**
+     * @param string|null $dpopNonce The nonce to send in `DPoP-Nonce` (RFC 9449 §8), for `use_dpop_nonce`.
+     * @param string|null $reason    Why, for the log and never the client: a DPoP proof's refusal.
+     */
     private function __construct(
         public readonly ErrorCode $error,
         public readonly string $description,
+        public readonly ?string $dpopNonce = null,
+        public readonly ?string $reason = null,
     ) {
         parent::__construct($error->value . ': ' . $description);
+    }
+
+    /** RFC 9449 §5: one answer, whatever was wrong with the proof; `$reason` is for the log. */
+    public static function invalidDpopProof(string $reason): self
+    {
+        return new self(ErrorCode::InvalidDpopProof, 'The DPoP proof is not valid for this request.', null, $reason);
+    }
+
+    /** RFC 9449 §8: retry with this nonce in the proof. */
+    public static function useDpopNonce(string $nonce): self
+    {
+        return new self(ErrorCode::UseDpopNonce, "The DPoP proof must carry the server's nonce.", $nonce);
     }
 
     public static function invalidRequest(string $description): self

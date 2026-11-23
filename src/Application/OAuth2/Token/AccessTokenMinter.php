@@ -19,6 +19,7 @@ use Clavia\Domain\OAuth2\AccessToken;
 use Clavia\Domain\OAuth2\AccessTokenClaims;
 use Clavia\Domain\OAuth2\AccessTokenId;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
+use Clavia\Domain\OAuth2\Dpop\JwkThumbprint;
 use Clavia\Domain\ResourceServer\AccessTokenFormat;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\Shared\Digest;
@@ -61,14 +62,19 @@ final readonly class AccessTokenMinter
     /**
      * @param Closure(AccessTokenId, Digest): AccessToken $record Builds the token the grant issues,
      *                                                            under the id and digest given.
+     * @param JwkThumbprint|null                         $dpopKey The DPoP key it is bound to, if any:
+     *                                                            `cnf.jkt` in a JWT (RFC 9449 §6.1).
      *
      * @throws NoActiveSigningKey When the token is a JWT and there is no key to sign it.
      * @throws SigningFailed
      */
-    public function mint(Closure $record): MintedAccessToken
+    public function mint(Closure $record, ?JwkThumbprint $dpopKey = null): MintedAccessToken
     {
         $value = $this->secrets->token();
         $token = $record(AccessTokenId::generate($this->random), Digest::of($value));
+        if ($dpopKey !== null) {
+            $token = $token->boundTo($dpopKey);
+        }
 
         if ($this->formatFor($token) === AccessTokenFormat::Jwt) {
             $value = $this->jws->sign(

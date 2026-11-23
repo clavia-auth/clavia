@@ -101,4 +101,10 @@ enum ErrorCode: string
      * Core Error Code `unmet_authentication_requirements` 1.0).
      */
     case UnmetAuthenticationRequirements = 'unmet_authentication_requirements';
+
+    /** RFC 9449 §5: the DPoP proof is missing where required, malformed, or not for this request. */
+    case InvalidDpopProof = 'invalid_dpop_proof';
+
+    /** RFC 9449 §8: the proof must carry the nonce this server provides in `DPoP-Nonce`. */
+    case UseDpopNonce = 'use_dpop_nonce';
 }

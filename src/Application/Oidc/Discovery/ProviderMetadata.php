@@ -18,6 +18,7 @@ use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\ResponseType;
 use Clavia\Domain\OAuth2\CodeChallenge;
+use Clavia\Domain\OAuth2\Dpop\DpopAlgorithm;
 use Clavia\Domain\OAuth2\Prompt;
 use Clavia\Domain\Oidc\SigningAlgorithm;
 use Clavia\Domain\Shared\ScopeSet;
@@ -113,6 +114,8 @@ final readonly class ProviderMetadata
             // RFC 9126 §5. Whether a client must use it is its own registration's to say (§6).
             'pushed_authorization_request_endpoint' => $this->issuer . self::PUSHED_AUTHORIZATION_REQUEST_ENDPOINT,
             'require_pushed_authorization_requests' => false,
+            // RFC 9449 §5.1: the algorithms a DPoP proof may be signed with.
+            'dpop_signing_alg_values_supported' => DpopAlgorithm::supported(),
             'introspection_endpoint_auth_methods_supported' => self::methods(IntrospectToken::AUTH_METHODS),
             'revocation_endpoint' => $this->issuer . self::REVOCATION_ENDPOINT,
             'revocation_endpoint_auth_methods_supported' => self::methods(RevokeToken::AUTH_METHODS),
