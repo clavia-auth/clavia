@@ -13,6 +13,7 @@ namespace Clavia\Adapter\Primary\Http\OAuth2;
 
 use Clavia\Adapter\Primary\Http\Shared\ErrorPage;
 use Clavia\Adapter\Primary\Http\Shared\ErrorResponder;
+use Clavia\Application\Clients\Registration\RegistrationRefused;
 use Clavia\Application\OAuth2\ClientAuthentication\TooManyFailedRequests;
 use Clavia\Domain\OAuth2\ErrorCode;
 use Clavia\Domain\OAuth2\OAuth2Error;
@@ -124,6 +125,36 @@ final readonly class OAuth2Responder
             ],
             429,
             self::NO_STORE + ['Retry-After' => (string) $refusal->retryAfter],
+        );
+    }
+
+    /**
+     * A registration refused for what it asked (RFC 7591 §3.2.2): `400` and the error document.
+     */
+    public function registrationRefused(RegistrationRefused $refusal): ResponseInterface
+    {
+        return new JsonResponse(
+            ['error' => $refusal->error->value, 'error_description' => $refusal->getMessage()],
+            400,
+            self::NO_STORE,
+        );
+    }
+
+    /**
+     * Too many registrations from one client address: `429` with `Retry-After`, worded as
+     * {@see tooManyFailures()} is, for the same reason.
+     *
+     * @param positive-int $retryAfterSeconds
+     */
+    public function tooManyRegistrations(int $retryAfterSeconds): ResponseInterface
+    {
+        return new JsonResponse(
+            [
+                'error' => ErrorCode::TemporarilyUnavailable->value,
+                'error_description' => 'Too many registrations. Retry later.',
+            ],
+            429,
+            self::NO_STORE + ['Retry-After' => (string) $retryAfterSeconds],
         );
     }
 

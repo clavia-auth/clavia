@@ -13,6 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\OAuth2\Token\IssueToken;
 use Clavia\Application\Oidc\Discovery\ProviderMetadata;
+use Clavia\Configuration\ClientRegistration;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Oidc\SigningAlgorithm;
 use Clavia\Domain\Shared\ScopeSet;
@@ -38,6 +39,7 @@ final class ProviderMetadataFactory
             $issueToken->supportedGrantTypes(),
             $issueToken->supportedAuthMethods(),
             [$algorithm],
+            $settings->clientRegistration !== ClientRegistration::Off,
         );
     }
 }

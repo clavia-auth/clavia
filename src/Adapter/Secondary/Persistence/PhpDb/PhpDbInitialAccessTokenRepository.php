@@ -72,6 +72,18 @@ final readonly class PhpDbInitialAccessTokenRepository implements InitialAccessT
     }
 
     #[\Override]
+    public function findByDigest(Digest $digest): ?InitialAccessToken
+    {
+        /** @var TokenRow|null $row */
+        $row = $this->database->fetchOne(
+            'SELECT ' . self::COLUMNS . ' FROM initial_access_tokens WHERE token_hash = :token_hash',
+            ['token_hash' => $digest->toString()],
+        );
+
+        return $row === null ? null : $this->hydrate($row);
+    }
+
+    #[\Override]
     public function save(InitialAccessToken $token): void
     {
         $this->database->execute(

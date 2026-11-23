@@ -585,6 +585,26 @@ uses are spent by one conditional `UPDATE` (`InitialAccessTokenRepository::spend
 written by `save()`, so two registrations cannot share the last. Its state (`active`, `expired`,
 `used_up`, `revoked`) is worked out, never stored.
 
+`POST /oauth2/register` (RFC 7591 §3, `RegisterClientDynamically`) exists only when registration
+is on, and discovery names it (`registration_endpoint`) only then. In order: the client address
+is counted (`CLAVIA_CLIENT_REGISTRATION_MAX_PER_ADDRESS` per `CLAVIA_CLIENT_REGISTRATION_WINDOW`,
+valid or not; `429` past it); the initial access token (`Authorization: Bearer` only) is looked up
+and spends nothing yet: missing is a bare challenge, anything else unusable one `401
+invalid_token`; the JSON object is read by `RegistrationMetadata`, the one place the policy lives
+(`400` with `invalid_redirect_uri`, `invalid_client_metadata` or `invalid_software_statement`,
+the field named, never its value); then one transaction spends a use, registers the client and
+its `ClientRegistration` (the digest of its registration access token, for RFC 7592), and
+dispatches `ClientRegistered` with the client as the actor and the token as `registered_with`.
+**A self-registered client is third-party by construction** (`tpc_…`, generated from nothing in
+the request), so it never reaches a system API. It holds `authorization_code` and
+`refresh_token` only (no machine client, no device flow), authenticates with `none`,
+`client_secret_basic` (the default) or `client_secret_post`, keeps PKCE, has no connections of
+its own, and may set `dpop_bound_access_tokens`; everything else of the operator's
+(`mfa_policy`, PAR, `require_pkce`) and every unknown member is ignored and left out of the
+answer. Redirect and post-logout URIs are https without a fragment, or, for a public client, http
+on `127.0.0.1` or `[::1]` (RFC 8252 §7.3), never `localhost`. The `201` (§3.2.1) carries the
+client secret (`client_secret_expires_at: 0`) and the registration access token, once.
+
 ### Device authorization (RFC 8628)
 
 `POST /oauth2/device/code` validates like an authorization request (`ReadRequestedAccess` is
@@ -777,6 +797,8 @@ These follow from the RFCs and from mistakes already made once. Breaking one is 
   wildcard, and a URI is appended to, never parsed and rebuilt.
 - Refresh tokens rotate on every use; a replay revokes the family. No grace period.
 - Client credentials: confidential clients only, no refresh token, no subject.
+- A client that registered itself (RFC 7591) is third-party: its id is generated so, whatever the
+  request says, and a third-party client never gets a token for a system API.
 - Failures at the machine endpoints are counted per client address, and per client only once it
   has proved itself with a secret: nobody locks a client out by sending its id.
 - A scope means nothing without an audience: check `aud` before any scope.

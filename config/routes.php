@@ -55,6 +55,7 @@ use Clavia\Adapter\Primary\Http\Management\UserRolesHandler;
 use Clavia\Adapter\Primary\Http\Management\UserSessionsHandler;
 use Clavia\Adapter\Primary\Http\Management\UsersHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
+use Clavia\Adapter\Primary\Http\OAuth2\ClientRegistrationHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\DeviceAuthorizationHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\IntrospectionHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\PushedAuthorizationRequestHandler;
@@ -65,6 +66,7 @@ use Clavia\Adapter\Primary\Http\Oidc\EndSessionHandler;
 use Clavia\Adapter\Primary\Http\Oidc\JwksHandler;
 use Clavia\Adapter\Primary\Http\Oidc\UserInfoHandler;
 use Clavia\Adapter\Primary\Http\Shared\HealthHandler;
+use Clavia\Configuration\ClientRegistration;
 use Clavia\Configuration\Settings;
 use Mezzio\Application;
 use Psr\Container\ContainerInterface;
@@ -87,6 +89,10 @@ return static function (Application $app, ContainerInterface $container): void {
     $app->post('/oauth2/introspect', IntrospectionHandler::class, 'oauth2.introspect');
     $app->post('/oauth2/revoke', RevocationHandler::class, 'oauth2.revoke');
     $app->post('/oauth2/device/code', DeviceAuthorizationHandler::class, 'oauth2.device');
+    // RFC 7591: only for a bearer of an initial access token, and only when an operator allows it.
+    if ($settings->clientRegistration !== ClientRegistration::Off) {
+        $app->post('/oauth2/register', ClientRegistrationHandler::class, 'oauth2.register');
+    }
 
     // ── /.well-known/* — the provider's metadata, public and cacheable. One document at
     // both locations: OpenID relying parties and RFC 8414 clients look in different places. ──

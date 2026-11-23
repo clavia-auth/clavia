@@ -11,13 +11,16 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Support;
 
+use ClaviaTest\Support\Contract\ClientRegistrationRepositoryContract;
 use ClaviaTest\Support\Contract\InitialAccessTokenRepositoryContract;
+use ClaviaTest\Support\Fake\InMemoryClientRegistrationRepository;
 use ClaviaTest\Support\Fake\InMemoryInitialAccessTokenRepository;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
 use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
+use Clavia\Domain\Client\Registration\ClientRegistrationRepository;
 use Clavia\Domain\Client\Registration\InitialAccessTokenRepository;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Consent\ConsentRepository;
@@ -71,6 +74,7 @@ final class InMemoryRepositoriesTest extends TestCase
     use ConsentRepositoryContract;
     use ConnectionRepositoryContract;
     use InitialAccessTokenRepositoryContract;
+    use ClientRegistrationRepositoryContract;
 
     private InMemoryRoleRepository $roles;
     private InMemoryUserRepository $users;
@@ -86,6 +90,7 @@ final class InMemoryRepositoriesTest extends TestCase
     private InMemoryConsentRepository $consents;
     private InMemoryConnectionRepository $connections;
     private InMemoryInitialAccessTokenRepository $initialAccessTokens;
+    private InMemoryClientRegistrationRepository $clientRegistrations;
 
     #[\Override]
     protected function setUp(): void
@@ -104,6 +109,7 @@ final class InMemoryRepositoriesTest extends TestCase
         $this->roles = new InMemoryRoleRepository($this->resourceServers, $this->users);
         $this->consents = new InMemoryConsentRepository($this->users, $this->clients, $this->resourceServers);
         $this->initialAccessTokens = new InMemoryInitialAccessTokenRepository();
+        $this->clientRegistrations = new InMemoryClientRegistrationRepository($this->clients);
     }
 
     #[\Override]
@@ -122,6 +128,12 @@ final class InMemoryRepositoriesTest extends TestCase
     protected function initialAccessTokens(): InitialAccessTokenRepository
     {
         return $this->initialAccessTokens;
+    }
+
+    #[\Override]
+    protected function clientRegistrations(): ClientRegistrationRepository
+    {
+        return $this->clientRegistrations;
     }
 
     #[\Override]

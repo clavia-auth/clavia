@@ -40,6 +40,18 @@ final class InMemoryInitialAccessTokenRepository implements InitialAccessTokenRe
     }
 
     #[\Override]
+    public function findByDigest(Digest $digest): ?InitialAccessToken
+    {
+        foreach ($this->tokens as $token) {
+            if ($token->digest->equals($digest)) {
+                return $token;
+            }
+        }
+
+        return null;
+    }
+
+    #[\Override]
     public function save(InitialAccessToken $token): void
     {
         $stored = $this->tokens[$token->id->value] ?? null;
