@@ -52,12 +52,13 @@
       --scalar-background-accent: #52b7881f;
     }
     /*
-      No section before each tag's operations (its description and a list of its operations):
-      the sidebar already lists them, and the reference goes straight to the operations. Those
-      sections are Scalar's tag sections outside an operation list; the operations, inside one,
-      share the "/tag/" prefix of their ids and stay.
+      Each tag keeps its heading and description, without the card listing its operations: the
+      sidebar lists them. The card is the column holding a .scalar-card in a tag's own section
+      (one outside an operation list; the operations, inside one, keep their cards).
     */
-    section.section[id*="/tag/"]:not(.contents section) { display: none; }
+    section.section[id*="/tag/"]:not(.contents section) .section-column:has(> .scalar-card) {
+      display: none;
+    }
     body { margin: 0; }
     .clavia-bar {
       position: sticky;
