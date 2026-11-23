@@ -11,7 +11,6 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Shared;
 
-use Clavia\Adapter\Primary\Http\Auth\ClientAddress;
 use Clavia\Application\Audit\AuditContext;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;

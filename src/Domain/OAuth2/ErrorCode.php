@@ -82,4 +82,11 @@ enum ErrorCode: string
 
     /** OpenID Connect Core §6.2: a request object passed by reference, which this server does not take. */
     case RequestUriNotSupported = 'request_uri_not_supported';
+
+    /**
+     * RFC 6749 §4.1.2.1: the server cannot handle the request for now. Registered for the
+     * authorization endpoint; also the body of the token endpoint's `429`, which RFC 6749
+     * gives no code of its own.
+     */
+    case TemporarilyUnavailable = 'temporarily_unavailable';
 }

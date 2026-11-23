@@ -11,8 +11,11 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Application\OAuth2;
 
+use ClaviaTest\Support\Fake\FrozenClock;
+use ClaviaTest\Support\Fake\InMemoryAttemptCounter;
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
 use Clavia\Application\OAuth2\ClientAuthentication\ClientCredentials;
+use Clavia\Application\OAuth2\ClientAuthentication\ClientFailureThrottle;
 use Clavia\Application\OAuth2\RequestParameters;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
@@ -26,6 +29,8 @@ use PHPUnit\Framework\TestCase;
 
 final class ClientAuthenticatorTest extends TestCase
 {
+    private const string ADDRESS = '203.0.113.7';
+
     private const array ALL = [
         ClientAuthMethod::ClientSecretBasic,
         ClientAuthMethod::ClientSecretPost,
@@ -44,7 +49,11 @@ final class ClientAuthenticatorTest extends TestCase
         $clients->save(Clients::confidential('post-app', $hasher->hash('s3cret'), ClientAuthMethod::ClientSecretPost));
         $clients->save(Clients::confidential('odd+id/100%', $hasher->hash('p@ss word&more')));
 
-        $this->authenticator = new ClientAuthenticator($clients, $hasher);
+        $this->authenticator = new ClientAuthenticator(
+            $clients,
+            $hasher,
+            new ClientFailureThrottle(new InMemoryAttemptCounter(new FrozenClock()), 1000, 300),
+        );
     }
 
     public function testAPublicClientIdentifiesItselfWithItsIdAlone(): void
@@ -132,7 +141,7 @@ final class ClientAuthenticatorTest extends TestCase
         $this->expectException(OAuth2Error::class);
 
         $this->authenticator->authenticate(
-            new ClientCredentials(null, RequestParameters::fromMap(['client_id' => 'spa'])),
+            new ClientCredentials(null, RequestParameters::fromMap(['client_id' => 'spa']), self::ADDRESS),
             [ClientAuthMethod::ClientSecretBasic, ClientAuthMethod::ClientSecretPost],
         );
     }
@@ -206,7 +215,7 @@ final class ClientAuthenticatorTest extends TestCase
     private function authenticate(?string $header = null, array $body = []): Client
     {
         return $this->authenticator->authenticate(
-            new ClientCredentials($header, RequestParameters::fromMap($body)),
+            new ClientCredentials($header, RequestParameters::fromMap($body), self::ADDRESS),
             self::ALL,
         );
     }

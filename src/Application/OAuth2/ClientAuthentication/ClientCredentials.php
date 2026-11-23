@@ -23,10 +23,12 @@ final readonly class ClientCredentials
      * @param string|null       $authorizationHeader The raw `Authorization` header, when there is one.
      * @param RequestParameters $body                The form body, where `client_id` and
      *                                               `client_secret` may travel instead.
+     * @param string            $clientAddress       Where the request came from, for {@see ClientFailureThrottle}.
      */
     public function __construct(
         #[\SensitiveParameter] public ?string $authorizationHeader,
         public RequestParameters $body,
+        public string $clientAddress,
     ) {
     }
 }

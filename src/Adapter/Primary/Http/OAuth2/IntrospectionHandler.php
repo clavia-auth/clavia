@@ -11,7 +11,9 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\OAuth2;
 
+use Clavia\Adapter\Primary\Http\Shared\ClientAddress;
 use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
+use Clavia\Application\OAuth2\ClientAuthentication\TooManyFailedRequests;
 use Clavia\Application\OAuth2\Token\TokenRequest;
 use Clavia\Application\OAuth2\TokenManagement\IntrospectToken;
 use Clavia\Application\OAuth2\TokenManagement\TokenIntrospection;
@@ -47,9 +49,12 @@ final readonly class IntrospectionHandler implements RequestHandlerInterface
             $introspection = ($this->introspect)(new TokenRequest(
                 RequestParameterReader::form($request),
                 $authorization === '' ? null : $authorization,
+                ClientAddress::of($request),
             ));
         } catch (OAuth2Error $error) {
             return $this->responder->tokenError($error);
+        } catch (TooManyFailedRequests $refusal) {
+            return $this->responder->tooManyFailures($refusal);
         }
 
         return $this->responder->success($this->payload($introspection));

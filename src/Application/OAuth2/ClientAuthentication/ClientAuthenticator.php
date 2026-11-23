@@ -36,28 +36,37 @@ use Clavia\Domain\Shared\InvalidValue;
  *
  * Every failure is the same `invalid_client`, whatever went wrong: an unknown client, a
  * wrong secret, the wrong method and mixed methods are not told apart for the caller.
+ *
+ * Failures are counted against the request's address ({@see ClientFailureThrottle}), and an
+ * address that has failed too often is refused before any secret is checked.
  */
 final readonly class ClientAuthenticator
 {
     public function __construct(
         private ClientRepository $clients,
         private PasswordHasher $hasher,
+        private ClientFailureThrottle $throttle,
     ) {
     }
 
     /**
      * @param list<ClientAuthMethod> $accepted The methods the endpoint accepts.
      *
-     * @throws OAuth2Error `invalid_client` when the request does not authenticate a client with one
-     *                     accepted method, the one that client is registered with.
+     * @throws OAuth2Error           `invalid_client` when the request does not authenticate a client with
+     *                               one accepted method, the one that client is registered with.
+     * @throws TooManyFailedRequests When the address, or the client it proves, has failed too often.
      */
     public function authenticate(ClientCredentials $credentials, array $accepted): Client
     {
+        $this->throttle->refuseIfLimited($credentials->clientAddress);
         [$method, $client] = $this->presented($credentials);
 
         if ($client === null || ! in_array($method, $accepted, true) || $client->authMethod !== $method) {
+            $this->throttle->recordFailedAuthentication($credentials->clientAddress);
+
             throw OAuth2Error::invalidClient('Client authentication failed.');
         }
+        $this->throttle->refuseIfLimited($credentials->clientAddress, $client);
 
         return $client;
     }
