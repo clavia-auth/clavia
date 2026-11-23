@@ -32,6 +32,8 @@ final readonly class NewClient
      * @param string|null  $backChannelLogoutUri Where to tell it that a session it signed in through ended.
      * @param bool         $requirePkce   False lets a confidential client's OpenID Connect requests carrying a
      *                                    `nonce` go without PKCE (OAuth 2.1 §7.5.1).
+     * @param string       $mfaPolicy     `optional` or `required`: whether its users must sign in with more
+     *                                    than one factor ({@see \Clavia\Domain\Authentication\MfaPolicy}).
      */
     public function __construct(
         public string $name = '',
@@ -46,6 +48,7 @@ final readonly class NewClient
         public ?string $backChannelLogoutUri = null,
         public bool $backChannelLogoutSessionRequired = false,
         public bool $requirePkce = true,
+        public string $mfaPolicy = 'optional',
     ) {
     }
 }

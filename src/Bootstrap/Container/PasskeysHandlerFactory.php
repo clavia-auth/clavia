@@ -14,6 +14,7 @@ namespace Clavia\Bootstrap\Container;
 use Clavia\Adapter\Primary\Http\Auth\AuthCookies;
 use Clavia\Adapter\Primary\Http\Auth\AuthPageResponder;
 use Clavia\Adapter\Primary\Http\Auth\PasskeysHandler;
+use Clavia\Application\Authentication\Mfa\DescribeEnrolmentOnTheWay;
 use Clavia\Application\Authentication\Passkey\BeginPasskeyRegistration;
 use Clavia\Application\Authentication\Passkey\CompletePasskeyRegistration;
 use Clavia\Application\Authentication\Passkey\DescribePasskeys;
@@ -46,6 +47,9 @@ final class PasskeysHandlerFactory
         /** @var AuthCookies $cookies */
         $cookies = $container->get(AuthCookies::class);
 
+        /** @var DescribeEnrolmentOnTheWay $onTheWay */
+        $onTheWay = $container->get(DescribeEnrolmentOnTheWay::class);
+
         return new PasskeysHandler(
             $resolveEndUser,
             $requireSignIn,
@@ -54,6 +58,7 @@ final class PasskeysHandlerFactory
             $complete,
             $rename,
             $remove,
+            $onTheWay,
             $responder,
             $cookies,
         );

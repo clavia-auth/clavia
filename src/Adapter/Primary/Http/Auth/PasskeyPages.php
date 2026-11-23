@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
+use Clavia\Application\Authentication\Mfa\EnrolmentOnTheWay;
 use Clavia\Application\Authentication\Passkey\AccountPasskeys;
 use Clavia\Application\Authentication\Passkey\AssertionOptions;
 use Clavia\Application\Authentication\Passkey\DescribedPasskey;
@@ -69,8 +70,12 @@ final class PasskeyPages
     }
 
     /** The page where the browser makes the passkey, from the options of an open ceremony. */
-    public static function create(RegistrationOptions $options, ?string $error = null, int $status = 200): HtmlPage
-    {
+    public static function create(
+        RegistrationOptions $options,
+        ?string $error = null,
+        int $status = 200,
+        ?EnrolmentOnTheWay $onTheWay = null,
+    ): HtmlPage {
         return new HtmlPage(
             template: 'auth::passkey-new',
             title: 'Add a passkey',
@@ -78,7 +83,11 @@ final class PasskeyPages
             variables: [
                 'email' => $options->userName,
                 'options' => json_encode(self::creationOptions($options), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
+                // On the way to an application requiring a second factor: carried back to it.
+                'loginState' => $onTheWay->loginState ?? '',
             ],
+            // Making the passkey may lead straight back to the application's redirect URI.
+            formOrigins: $onTheWay === null ? [] : $onTheWay->formOrigins,
             error: $error,
             status: $status,
             script: self::SCRIPT,
@@ -86,18 +95,20 @@ final class PasskeyPages
     }
 
     /**
-     * The recovery codes that came with the account's first passkey, shown this once.
+     * The recovery codes that came with the account's first passkey, shown this once — and, on
+     * the way to an application, the way back to it.
      *
      * @param list<string> $codes
      */
-    public static function recoveryCodes(array $codes): HtmlPage
+    public static function recoveryCodes(array $codes, ?EnrolmentOnTheWay $onTheWay = null): HtmlPage
     {
         return new HtmlPage(
             template: 'auth::passkey-codes',
             title: 'Recovery codes',
             heading: 'Your passkey is ready',
-            variables: ['codes' => $codes],
+            variables: ['codes' => $codes, 'loginState' => $onTheWay->loginState ?? ''],
             wide: true,
+            formOrigins: $onTheWay === null ? [] : $onTheWay->formOrigins,
         );
     }
 

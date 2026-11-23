@@ -11,13 +11,14 @@
  * @var string $csrfToken
  * @var string $email
  * @var string $options The creation options, as JSON.
+ * @var string $loginState The held request's handle, on the way to an application; empty otherwise.
  */
 ?>
 <?php $this->placeholder('subtitle')->captureStart() ?>
       <p class="subtitle"><?= $this->escapeHtml($email) ?></p>
 <?php $this->placeholder('subtitle')->captureEnd() ?>
     <form method="post" action="/auth/passkeys" data-webauthn-create="<?= $this->escapeHtmlAttr($options) ?>">
-<?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => '']) ?>
+<?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => $loginState]) ?>
       <input type="hidden" name="credential" value="">
       <label for="name">Name it <span class="hint">(optional)</span></label>
       <input id="name" name="name" type="text" maxlength="64" autocomplete="off" placeholder="Work laptop">

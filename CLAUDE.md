@@ -326,11 +326,14 @@ only when the error must not be redirected. The order is fixed:
    the client does not enable, `prompt=login` or `select_account`, or `max_age` exceeded.
    `prompt=none` then answers `login_required`. Otherwise the request is held behind an opaque
    handle (`LoginStateStore`) and the browser goes to `/auth/login`. A signed-in session that
-   falls short of `acr_values` (`AuthenticationRequirement`: known levels only, any one
-   accepted) **steps up** (`docs/design/mfa-policies.md` §5.1): `prompt=none` answers
+   falls short of the requirement — `acr_values` (`AuthenticationRequirement`: known levels
+   only, any one accepted) with the client's and the API's `MfaPolicy` as a floor
+   (`withMinimum()`) — **steps up** (`docs/design/mfa-policies.md` §5.1): `prompt=none` answers
    `interaction_required`; a person who holds a factor that would be enough is sent to
-   `/auth/mfa` with a step-up challenge (`BeginStepUp`, the request resumed as it is); anyone
-   else gets `unmet_authentication_requirements`.
+   `/auth/mfa` with a step-up challenge (`BeginStepUp`, the request resumed as it is); a person
+   with no second factor, a verified address and a requirement MFA meets **enrols on the way**
+   (`BeginEnrolmentOnTheWay`: the request held behind a login state, the browser sent to
+   `/auth/mfa/enroll?state=…`); anyone else gets `unmet_authentication_requirements`.
 6. **Roles**: on an API that enforces them, somebody holding nothing there gets `access_denied`.
 7. **Consent** (`ConsentPolicy`): `prompt=consent` asks; a first-party client is not asked for
    no API, or an API allowing skipping; otherwise a consent on record must cover every scope.
@@ -458,6 +461,17 @@ applies however the person signed in.
   through and logs a warning: NIST SP 800-63B §5.1.1.2 asks for the check, and somebody else's
   outage must not lock people out. At sign-up it runs after the limit per client address, which
   bounds how often a client can make this server ask.
+
+- **MFA policies** (`MfaPolicy`, `optional` or `required`, on `Client` and `ResourceServer`,
+  `mfa_policy` in the Management API): `required` on either is the MFA level, at the
+  authorization endpoint and at device approval (`DecideDeviceRequest`, which steps up or sends
+  to enrol and back to the same code). New authorizations only: refresh tokens issued before keep
+  working. **Enrolment on the way** (§5.3): the enrolment pages carry the held request's `state`
+  (`DescribeEnrolmentOnTheWay`); confirming an authenticator app raises the session
+  (`FinishEnrolmentOnTheWay`: `otp`, `mfa`) and mails the owner a notice, outside the send
+  limit; making a passkey goes back to the request, whose step-up then asks for it. The
+  recovery codes lead back with `POST /auth/mfa/enroll/continue`. Trust on first use: only a
+  verified address may enrol on the way.
 
 - **Passkeys** (`Passkey\*`, design in `docs/design/passkeys.md`; phase 1, a second factor). The account page `/auth/passkeys` lists them; `POST /auth/passkeys/new` opens a
   registration ceremony (`BeginPasskeyRegistration`) and shows the page that runs `passkeys.js`,

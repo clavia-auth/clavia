@@ -21,6 +21,7 @@ use Clavia\Application\OAuth2\Authorize\AuthorizationRequest;
 use Clavia\Application\OAuth2\Authorize\Authorize;
 use Clavia\Application\OAuth2\Authorize\CodeIssued;
 use Clavia\Application\OAuth2\Authorize\ConsentRequired;
+use Clavia\Application\OAuth2\Authorize\EnrolmentRequired;
 use Clavia\Application\OAuth2\Authorize\LoginRequired;
 use Clavia\Application\OAuth2\Authorize\RequestRefused;
 use Clavia\Application\OAuth2\Authorize\StepUpRequired;
@@ -89,6 +90,12 @@ final readonly class AuthorizeHandler implements RequestHandlerInterface
         if ($outcome instanceof StepUpRequired) {
             return $this->responder->redirectWithinServer(MfaPages::CHALLENGE_PATH)
                 ->withAddedHeader('Set-Cookie', $this->cookies->mfaChallenge($outcome->challenge)->toString());
+        }
+
+        if ($outcome instanceof EnrolmentRequired) {
+            return $this->responder->redirectWithinServer(
+                MfaPages::SETTINGS_PATH . '?' . http_build_query(['state' => $outcome->loginState]),
+            );
         }
 
         assert($outcome instanceof LoginRequired);

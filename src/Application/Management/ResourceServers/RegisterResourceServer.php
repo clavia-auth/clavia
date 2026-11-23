@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Application\Management\ResourceServers;
 
 use Clavia\Application\Port\DomainEvents;
+use Clavia\Domain\Authentication\MfaPolicy;
 use Clavia\Domain\ResourceServer\Event\ResourceServerRegistered;
 use Clavia\Domain\ResourceServer\ResourceServer;
 use Clavia\Domain\ResourceServer\ResourceServerId;
@@ -46,6 +47,7 @@ final readonly class RegisterResourceServer
     {
         NewResourceServer::checkIdentifier($new->identifier);
         $format = NewResourceServer::accessTokenFormat($new->accessTokenFormat);
+        $mfaPolicy = MfaPolicy::fromString($new->mfaPolicy);
 
         $resourceServer = ResourceServer::register(
             ResourceServerId::generate($this->secrets),
@@ -56,6 +58,7 @@ final readonly class RegisterResourceServer
             enforcePolicies: $new->enforcePolicies,
             allowSkippingConsent: $new->allowSkippingConsent,
             accessTokenFormat: $format,
+            mfaPolicy: $mfaPolicy,
         );
         $this->resourceServers->save($resourceServer);
         $this->events->dispatch(new ResourceServerRegistered($resourceServer));

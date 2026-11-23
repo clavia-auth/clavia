@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
+use Clavia\Application\Authentication\Mfa\EnrolmentOnTheWay;
 use Clavia\Application\Authentication\Mfa\MfaStatus;
 use Clavia\Application\Authentication\Mfa\SecondFactorPage;
 use Clavia\Application\Authentication\Mfa\TotpEnrollment;
@@ -26,6 +27,9 @@ final class MfaPages
     public const string CHALLENGE_PATH = '/auth/mfa';
 
     public const string SETTINGS_PATH = '/auth/mfa/enroll';
+
+    /** Back to the request that sent the person to set a second factor up. */
+    public const string CONTINUE_PATH = '/auth/mfa/enroll/continue';
 
     public const string INVALID_CODE = 'That code is not valid.';
 
@@ -78,19 +82,29 @@ final class MfaPages
         );
     }
 
-    /** Whether it is on, the account's passkeys, and the way to change either. */
-    public static function settings(MfaStatus $status, ?string $error = null, int $httpStatus = 200): HtmlPage
-    {
+    /**
+     * Whether it is on, the account's passkeys, and the way to change either — or, on the way to
+     * an application requiring a second factor, what it asks and the ways to set one up.
+     */
+    public static function settings(
+        MfaStatus $status,
+        ?string $error = null,
+        int $httpStatus = 200,
+        ?EnrolmentOnTheWay $onTheWay = null,
+    ): HtmlPage {
         return new HtmlPage(
             template: 'auth::mfa-settings',
             title: 'Two-factor authentication',
-            heading: 'Two-factor authentication',
+            heading: $onTheWay === null ? 'Two-factor authentication' : 'Set up two-factor authentication',
             returnTo: self::SETTINGS_PATH,
             variables: [
                 'email' => $status->email,
                 'enabled' => $status->enabled,
                 'recoveryCodesLeft' => $status->recoveryCodesLeft,
                 'passkeys' => $status->passkeys,
+                'onTheWay' => $onTheWay !== null,
+                'application' => $onTheWay?->application,
+                'loginState' => $onTheWay->loginState ?? '',
             ],
             error: $error,
             status: $httpStatus,
@@ -98,13 +112,21 @@ final class MfaPages
     }
 
     /** The seed to scan or type, and the field for the code that proves it. */
-    public static function setUp(TotpEnrollment $enrollment, ?string $error = null, int $status = 200): HtmlPage
-    {
+    public static function setUp(
+        TotpEnrollment $enrollment,
+        ?string $error = null,
+        int $status = 200,
+        ?EnrolmentOnTheWay $onTheWay = null,
+    ): HtmlPage {
         return new HtmlPage(
             template: 'auth::mfa-setup',
             title: 'Set up two-factor authentication',
             heading: 'Scan this code',
-            variables: ['secret' => $enrollment->secret, 'qrSvg' => QrCodeSvg::of($enrollment->provisioningUri)],
+            variables: [
+                'secret' => $enrollment->secret,
+                'qrSvg' => QrCodeSvg::of($enrollment->provisioningUri),
+                'loginState' => $onTheWay->loginState ?? '',
+            ],
             error: $error,
             status: $status,
             wide: true,
@@ -112,18 +134,20 @@ final class MfaPages
     }
 
     /**
-     * The recovery codes, shown this once.
+     * The recovery codes, shown this once — and, on the way to an application, the way back to it.
      *
      * @param list<string> $codes
      */
-    public static function recoveryCodes(array $codes): HtmlPage
+    public static function recoveryCodes(array $codes, ?EnrolmentOnTheWay $onTheWay = null): HtmlPage
     {
         return new HtmlPage(
             template: 'auth::mfa-codes',
             title: 'Recovery codes',
             heading: 'Two-factor authentication is on',
-            variables: ['codes' => $codes],
+            variables: ['codes' => $codes, 'loginState' => $onTheWay->loginState ?? ''],
             wide: true,
+            // Continuing ends at the application's redirect URI (see the auth pages' CSP).
+            formOrigins: $onTheWay === null ? [] : $onTheWay->formOrigins,
         );
     }
 }

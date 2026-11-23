@@ -130,6 +130,28 @@ final readonly class AccountMail
     }
 
     /**
+     * What the owner of an account gets when a second factor was set up on the way to an
+     * application requiring one: if it was not them, someone holds their password.
+     *
+     * @param non-empty-string $email
+     */
+    public function secondFactorEnrolled(string $email): OutgoingMail
+    {
+        return new OutgoingMail(
+            $email,
+            sprintf('Two-factor authentication was turned on for your %s account', $this->site),
+            sprintf(
+                "An authenticator app was set up as a second factor for your account on %s.\n\n"
+                . "If it was you, there is nothing to do.\n\n"
+                . "If it was not you, someone knows your password. Choose a new one here, which signs out "
+                . "every session:\n\n%s\n",
+                $this->site,
+                rtrim($this->issuer, '/') . self::FORGOT_PATH,
+            ),
+        );
+    }
+
+    /**
      * @param non-empty-string $token
      */
     public function url(string $path, #[\SensitiveParameter] string $token): string

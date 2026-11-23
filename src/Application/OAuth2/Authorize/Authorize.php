@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Application\OAuth2\Authorize;
 
 use Clavia\Application\Authentication\EndUser;
+use Clavia\Application\Authentication\Mfa\BeginEnrolmentOnTheWay;
 use Clavia\Application\Authentication\Mfa\BeginStepUp;
 use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Connection\ConnectionAccess;
@@ -67,10 +68,11 @@ use Clavia\Domain\Shared\SecretGenerator;
  *    a connection the application does not enable counts for nothing here: the person
  *    signs in again, through one it does. So does somebody the client asked to see
  *    again: `prompt=login` or `select_account`, or a sign-in older than `max_age`.
- *    A person signed in less strongly than `acr_values` asks (docs/design/mfa-policies.md
- *    §5.1) steps up: one more factor on the second-factor page, and the request is decided
- *    again. Someone who holds no factor that would be enough is refused with
- *    `unmet_authentication_requirements`.
+ *    A person signed in less strongly than `acr_values`, or the application's or the API's
+ *    MFA policy, asks (docs/design/mfa-policies.md §5.1) steps up: one more factor on the
+ *    second-factor page, and the request is decided again. Someone with no second factor
+ *    at all, asked for MFA, sets one up on the way if their address is verified (§5.3);
+ *    anyone else is refused with `unmet_authentication_requirements`.
  * 4. **Then their consent**, when {@see ConsentPolicy} says the request has to be put to
  *    them: the request goes on hold, and the browser to the consent screen.
  *
@@ -98,6 +100,7 @@ final readonly class Authorize
         private ConnectionAccess $connections,
         private Sessions $sessions,
         private BeginStepUp $beginStepUp,
+        private BeginEnrolmentOnTheWay $beginEnrolment,
         private SecretGenerator $secrets,
         private RandomSource $random,
         private Clock $clock,
@@ -131,6 +134,10 @@ final readonly class Authorize
         } catch (OAuth2Error $refusal) {
             return new RequestRefused($redirectUri, $refusal, $state);
         }
+        // The application's and the API's MFA policies put a floor under `acr_values`.
+        $requirement = $requirement
+            ->withMinimum($client->mfaPolicy->level())
+            ->withMinimum($target?->mfaPolicy->level());
 
         $endUser = $request->endUser;
         $session = $endUser?->session;
@@ -264,7 +271,7 @@ final readonly class Authorize
         ?string $state,
         AuthenticationRequirement $requirement,
         Prompt $prompt,
-    ): StepUpRequired|RequestRefused {
+    ): StepUpRequired|EnrolmentRequired|RequestRefused {
         if ($prompt->forbidsInteraction()) {
             return new RequestRefused(
                 $redirectUri,
@@ -274,22 +281,22 @@ final readonly class Authorize
         }
 
         // Without a session (the development auto-login) there is nothing to raise.
-        $challenge = $endUser->session === null ? null : ($this->beginStepUp)(
-            $endUser->session,
-            $requirement,
-            $request->resumption($request->parameters),
-            $client->id,
-        );
+        $session = $endUser->session;
+        $resumed = $request->resumption($request->parameters);
+        $challenge = $session === null ? null : ($this->beginStepUp)($session, $requirement, $resumed, $client->id);
+        if ($challenge !== null) {
+            return new StepUpRequired($challenge);
+        }
+        $enrolment = $session === null ? null : ($this->beginEnrolment)($session, $requirement, $resumed, $client->id);
+        if ($enrolment !== null) {
+            return new EnrolmentRequired($enrolment);
+        }
 
-        return $challenge === null
-            ? new RequestRefused(
-                $redirectUri,
-                OAuth2Error::unmetAuthenticationRequirements(
-                    'The person cannot sign in as strongly as the request asks.',
-                ),
-                $state,
-            )
-            : new StepUpRequired($challenge);
+        return new RequestRefused(
+            $redirectUri,
+            OAuth2Error::unmetAuthenticationRequirements('The person cannot sign in as strongly as the request asks.'),
+            $state,
+        );
     }
 
     /**

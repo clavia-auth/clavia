@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Domain\Client;
 
+use Clavia\Domain\Authentication\MfaPolicy;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\Url;
@@ -61,6 +62,7 @@ final readonly class Client
         public array $connections,
         public ?BackChannelLogout $backChannelLogout,
         public bool $requiresPkce,
+        public MfaPolicy $mfaPolicy,
     ) {
     }
 
@@ -79,6 +81,7 @@ final readonly class Client
      *                                                  it does not want to be told.
      * @param bool               $requiresPkce  False lets an OpenID Connect request carrying a `nonce`
      *                                          go without PKCE; only for a confidential client.
+     * @param MfaPolicy          $mfaPolicy     Whether its users must sign in with more than one factor.
      *
      * @throws InvalidValue When the registration contradicts itself, or a third-party client would
      *                      list connections.
@@ -97,6 +100,7 @@ final readonly class Client
         array $connections = [],
         ?BackChannelLogout $backChannelLogout = null,
         bool $requiresPkce = true,
+        MfaPolicy $mfaPolicy = MfaPolicy::Optional,
     ): self {
         $secretHash = $secretHash === '' ? null : $secretHash;
 
@@ -191,6 +195,7 @@ final readonly class Client
             self::sorted($connections),
             $backChannelLogout,
             $requiresPkce,
+            $mfaPolicy,
         );
     }
 
@@ -217,6 +222,7 @@ final readonly class Client
             $connections,
             $this->backChannelLogout,
             $this->requiresPkce,
+            $this->mfaPolicy,
         );
     }
 
@@ -266,6 +272,7 @@ final readonly class Client
             $this->connections,
             $this->backChannelLogout,
             $this->requiresPkce,
+            $this->mfaPolicy,
         );
     }
 
@@ -288,6 +295,7 @@ final readonly class Client
             $this->connections,
             $backChannelLogout,
             $this->requiresPkce,
+            $this->mfaPolicy,
         );
     }
 
@@ -312,6 +320,30 @@ final readonly class Client
             $this->connections,
             $this->backChannelLogout,
             $required,
+            $this->mfaPolicy,
+        );
+    }
+
+    /**
+     * The same client, taking its users in on one factor or not, from the next authorization on.
+     */
+    public function requiringMfa(MfaPolicy $policy): self
+    {
+        return self::register(
+            $this->id,
+            $this->name,
+            $this->type,
+            $this->authMethod,
+            $this->secretHash,
+            $this->redirectUris,
+            $this->grantTypes,
+            $this->responseTypes,
+            $this->createdAt,
+            $this->postLogoutRedirectUris,
+            $this->connections,
+            $this->backChannelLogout,
+            $this->requiresPkce,
+            $policy,
         );
     }
 
@@ -342,6 +374,7 @@ final readonly class Client
             $this->connections,
             $this->backChannelLogout,
             $this->requiresPkce,
+            $this->mfaPolicy,
         );
     }
 

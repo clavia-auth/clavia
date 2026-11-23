@@ -13,6 +13,7 @@ namespace Clavia\Application\Management\ResourceServers;
 
 use Clavia\Application\Management\NotFound;
 use Clavia\Application\Port\DomainEvents;
+use Clavia\Domain\Authentication\MfaPolicy;
 use Clavia\Domain\ResourceServer\Event\ResourceServerChanged;
 use Clavia\Domain\ResourceServer\ResourceServer;
 use Clavia\Domain\ResourceServer\ResourceServerId;
@@ -45,6 +46,7 @@ final readonly class UpdateResourceServer
      * @param bool|null                       $enforcePolicies Null leaves it alone.
      * @param bool|null                       $allowSkippingConsent Null leaves it alone.
      * @param string|null                     $accessTokenFormat    `opaque` or `jwt`; null leaves it alone.
+     * @param string|null                     $mfaPolicy            `optional` or `required`; null leaves it alone.
      *
      * @throws NotFound
      * @throws InvalidValue
@@ -58,6 +60,7 @@ final readonly class UpdateResourceServer
         ?bool $enforcePolicies = null,
         ?bool $allowSkippingConsent = null,
         ?string $accessTokenFormat = null,
+        ?string $mfaPolicy = null,
     ): ResourceServer {
         $resourceServer = $this->resourceServers->find($id) ?? throw NotFound::of('API');
 
@@ -75,6 +78,9 @@ final readonly class UpdateResourceServer
                 NewResourceServer::accessTokenFormat($accessTokenFormat),
             );
         }
+        if ($mfaPolicy !== null) {
+            $resourceServer = $resourceServer->requiringMfa(MfaPolicy::fromString($mfaPolicy));
+        }
         if ($name !== null) {
             $resourceServer = $resourceServer->renamed($name);
         }
@@ -85,6 +91,7 @@ final readonly class UpdateResourceServer
             'enforce_policies' => $enforcePolicies !== null,
             'allow_skipping_consent' => $allowSkippingConsent !== null,
             'access_token_format' => $accessTokenFormat !== null,
+            'mfa_policy' => $mfaPolicy !== null,
         ]))));
 
         return $resourceServer;

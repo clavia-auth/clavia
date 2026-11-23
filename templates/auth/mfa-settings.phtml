@@ -9,10 +9,16 @@
  * @var bool   $enabled
  * @var int    $recoveryCodesLeft
  * @var int|null $passkeys   How many passkeys the account holds; null when passkeys are off.
+ * @var bool   $onTheWay      Whether a request requiring a second factor sent the person here.
+ * @var string|null $application The application asking, when it is named.
+ * @var string $loginState    The held request's handle, carried by the forms; empty when not on the way.
  */
 ?>
 <?php $this->placeholder('subtitle')->captureStart() ?>
       <p class="subtitle"><?= $this->escapeHtml($email) ?></p>
+<?php if ($onTheWay): ?>
+      <p class="subtitle"><?= $application === null ? 'This sign-in' : $this->escapeHtml($application) ?> requires two-factor authentication. Set it up to continue.</p>
+<?php endif ?>
 <?php $this->placeholder('subtitle')->captureEnd() ?>
 <?php if ($enabled): ?>
     <p class="status status-on">On</p>
@@ -43,8 +49,8 @@
     </p>
 <?php endif ?>
     <form method="post" action="/auth/mfa/enroll">
-<?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => '']) ?>
-      <button type="submit">Set up</button>
+<?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => $loginState]) ?>
+      <button type="submit"><?= $onTheWay ? 'Set up an authenticator app' : 'Set up' ?></button>
     </form>
 <?php endif ?>
 <?php if ($passkeys !== null): ?>
@@ -59,7 +65,14 @@
 <?php endif ?>
 <?php endif ?>
     </p>
+<?php if ($onTheWay): ?>
+    <form method="post" action="/auth/passkeys/new">
+<?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => $loginState]) ?>
+      <button type="submit" class="secondary">Add a passkey instead</button>
+    </form>
+<?php else: ?>
     <form method="get" action="/auth/passkeys">
       <button type="submit" class="secondary">Manage passkeys</button>
     </form>
+<?php endif ?>
 <?php endif ?>

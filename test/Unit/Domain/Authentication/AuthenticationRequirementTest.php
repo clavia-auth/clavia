@@ -11,9 +11,11 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Domain\Authentication;
 
+use Clavia\Domain\Authentication\AuthenticationLevel;
 use Clavia\Domain\Authentication\AuthenticationMethod as M;
 use Clavia\Domain\Authentication\AuthenticationRequirement;
 use Clavia\Domain\Authentication\MfaChallenge;
+use Clavia\Domain\Authentication\MfaPolicy;
 use Clavia\Domain\Authentication\Session;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
@@ -55,6 +57,33 @@ final class AuthenticationRequirementTest extends TestCase
         self::assertTrue($phr->isMetBy([M::Password, M::SoftwareKey, M::MultipleFactors]));
         self::assertFalse($either->isMetBy([M::Password]));
         self::assertTrue(AuthenticationRequirement::none()->isMetBy([M::Password]));
+    }
+
+    public function testAPolicyPutsAFloorUnderTheRequestNeverLowersIt(): void
+    {
+        $mfa = AuthenticationLevel::Mfa;
+
+        // Nothing asked: the policy is the requirement.
+        self::assertSame([self::MFA], AuthenticationRequirement::none()->withMinimum($mfa)->acrValues());
+        // `phr` asked meets MFA: it stays, alone.
+        self::assertSame(['phr'], AuthenticationRequirement::fromAcrValues('phr')->withMinimum($mfa)->acrValues());
+        // No policy: nothing changes.
+        self::assertTrue(AuthenticationRequirement::none()->withMinimum(MfaPolicy::Optional->level())->isEmpty());
+        self::assertSame(AuthenticationLevel::Mfa, MfaPolicy::Required->level());
+    }
+
+    public function testAnAuthenticatorAppIsAcceptedOnlyWhereMfaIsEnough(): void
+    {
+        self::assertTrue(AuthenticationRequirement::fromAcrValues(self::MFA)->accepts(AuthenticationLevel::Mfa));
+        self::assertTrue(AuthenticationRequirement::none()->accepts(AuthenticationLevel::Mfa));
+        self::assertFalse(AuthenticationRequirement::fromAcrValues('phr')->accepts(AuthenticationLevel::Mfa));
+    }
+
+    public function testAPolicyIsReadOnlyFromItsTwoValues(): void
+    {
+        self::assertSame(MfaPolicy::Required, MfaPolicy::fromString('required'));
+        $this->expectException(InvalidValue::class);
+        MfaPolicy::fromString('Required');
     }
 
     public function testAStepUpTakesOnlyAFactorThatIsEnough(): void

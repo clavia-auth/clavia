@@ -343,4 +343,15 @@ What the slices settled differently from the sections above, so the code and thi
   request, so no login state is held.
 - **Which factors answer** is one service, `SecondFactors`, for the page, the step-up and the
   answers; a code of a kind that cannot answer is refused without being looked at.
+- **A passkey made on the way does not raise the session by itself** (§5.3): the browser goes
+  back to the request, whose step-up asks for the new passkey, one more touch. Registration keeps
+  the recent sign-in it needs (`CLAVIA_PASSKEY_REAUTH_WINDOW`); a session older than that signs in
+  again first. Only confirming an authenticator app raises the session at enrolment.
+- **The way back from enrolment** is `POST /auth/mfa/enroll/continue` with the held request's
+  `state`, from the recovery codes page, so the target never travels in a URL.
+- **The enrolment notice is sent outside the account mail limit** (§7): the limit can be
+  exhausted by anyone with password-reset requests, which would silence the one signal an owner
+  gets. It follows a completed sign-in, so nobody without the password can trigger it.
+- **Device approval** returns to `/auth/device?user_code=…` after the step-up or enrolment, where
+  the person allows the device again with the raised session.
 

@@ -95,6 +95,24 @@ final readonly class SendAccountLink
         return true;
     }
 
+    /**
+     * The notice that a second factor was set up on the way to an application requiring one
+     * (docs/design/mfa-policies.md §7): best effort, and outside the send limit, since anyone
+     * could exhaust that limit with password-reset requests to silence the one signal an
+     * owner gets when someone else enrolled first. It follows a completed sign-in, so it
+     * cannot be triggered by anyone without the password.
+     *
+     * @param non-empty-string $email
+     */
+    public function secondFactorEnrolled(string $email): void
+    {
+        try {
+            $this->mailer->send($this->mail->secondFactorEnrolled($email));
+        } catch (MailUnavailable) {
+            // No mail backend, or it is down: the enrolment stands, and the audit trail has it.
+        }
+    }
+
     private function send(AccountLink $link, string $clientAddress, bool $invitation = false): Delivery
     {
         if (! $this->sendLimit->allowOne(mb_strtolower($link->email), $clientAddress)) {

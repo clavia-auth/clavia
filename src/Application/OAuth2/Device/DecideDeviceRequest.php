@@ -12,9 +12,12 @@ declare(strict_types=1);
 namespace Clavia\Application\OAuth2\Device;
 
 use Clavia\Application\Authentication\EndUser;
+use Clavia\Application\Authentication\Mfa\BeginEnrolmentOnTheWay;
+use Clavia\Application\Authentication\Mfa\BeginStepUp;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\Port\DeviceAuthorizationStore;
 use Clavia\Application\Port\DomainEvents;
+use Clavia\Domain\Authentication\AuthenticationRequirement;
 use Clavia\Domain\Consent\ConsentRepository;
 use Clavia\Domain\Consent\UserConsent;
 use Clavia\Domain\OAuth2\Event\DeviceRequestApproved;
@@ -32,6 +35,11 @@ use Clavia\Domain\Shared\Clock;
  * scope is narrowed to their roles again when the device redeems, as at every
  * issuance). An approval is recorded as a consent too — the device flow always asks —
  * so it is visible to operators and withdrawable like any other.
+ *
+ * And, as at the authorization endpoint, the application's and the API's MFA policies
+ * (docs/design/mfa-policies.md §5.4): allowing on one factor where more are required sends
+ * the person to give another, or to set one up, and back to the same code. A device request
+ * has no `acr_values`.
  */
 final readonly class DecideDeviceRequest
 {
@@ -42,16 +50,22 @@ final readonly class DecideDeviceRequest
         private ResourceServerRepository $resourceServers,
         private RoleRepository $roles,
         private ConsentRepository $consents,
+        private BeginStepUp $beginStepUp,
+        private BeginEnrolmentOnTheWay $beginEnrolment,
         private Clock $clock,
         private DomainEvents $events,
     ) {
     }
 
     /**
-     * @return DeviceDecided|DeviceSignInRequired|null Null when the code stands for nothing to decide.
+     * @return DeviceDecided|DeviceSignInRequired|DeviceStrongerSignInRequired|null Null when the code stands
+     *         for nothing to decide.
      */
-    public function __invoke(string $typed, EndUser $endUser, bool $allow): DeviceDecided|DeviceSignInRequired|null
-    {
+    public function __invoke(
+        string $typed,
+        EndUser $endUser,
+        bool $allow,
+    ): DeviceDecided|DeviceSignInRequired|DeviceStrongerSignInRequired|null {
         $found = $this->pending->find($typed);
         if ($found === null) {
             return null;
@@ -63,8 +77,22 @@ final readonly class DecideDeviceRequest
             return new DeviceSignInRequired($client->id, $request->userCode->value);
         }
 
-        $now = $this->clock->now();
         $api = $request->audience === null ? null : $this->resourceServers->findByIdentifier($request->audience);
+        $requirement = AuthenticationRequirement::none()
+            ->withMinimum($client->mfaPolicy->level())
+            ->withMinimum($api?->mfaPolicy->level());
+        if ($allow && ! $requirement->isMetBy($session->methods ?? [])) {
+            // Back to the same code once the session is enough: the person allows it again.
+            $returnTo = '/auth/device?' . http_build_query(['user_code' => $request->userCode->value]);
+            $stepUp = $session === null ? null : ($this->beginStepUp)($session, $requirement, $returnTo, $client->id);
+            $enrolment = $session === null || $stepUp !== null
+                ? null
+                : ($this->beginEnrolment)($session, $requirement, $returnTo, $client->id);
+
+            return new DeviceStrongerSignInRequired($stepUp, $enrolment);
+        }
+
+        $now = $this->clock->now();
         $noPermission = $allow
             && $api !== null
             && $api->enforcePolicies

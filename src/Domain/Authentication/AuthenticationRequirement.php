@@ -66,6 +66,31 @@ final readonly class AuthenticationRequirement
         return new self($levels);
     }
 
+    /**
+     * This requirement with a floor under it: a policy's level (docs/design/mfa-policies.md
+     * §5.1). The levels asked for that meet the floor stay; if none does, or none was asked
+     * for, the floor itself is the requirement. A floor never makes a request accept less.
+     */
+    public function withMinimum(?AuthenticationLevel $minimum): self
+    {
+        if ($minimum === null) {
+            return $this;
+        }
+        $kept = array_values(array_filter(
+            $this->levels,
+            static fn (AuthenticationLevel $level): bool => $level->meets($minimum),
+        ));
+
+        return new self($kept === [] ? [$minimum] : $kept);
+    }
+
+    /** Whether a sign-in at `$level` is enough for this requirement. */
+    public function accepts(AuthenticationLevel $level): bool
+    {
+        return $this->levels === []
+            || array_any($this->levels, static fn (AuthenticationLevel $wanted): bool => $level->meets($wanted));
+    }
+
     public function isEmpty(): bool
     {
         return $this->levels === [];

@@ -58,6 +58,7 @@ final readonly class ClientHandler implements RequestHandlerInterface
                     $body->string('backchannel_logout_uri'),
                     $body->bool('backchannel_logout_session_required'),
                     $body->bool('require_pkce'),
+                    $body->string('mfa_policy'),
                 ))));
             case 'DELETE':
                 ($this->delete)($id, $management->caller);

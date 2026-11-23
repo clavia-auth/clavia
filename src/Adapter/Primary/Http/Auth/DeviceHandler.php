@@ -20,6 +20,7 @@ use Clavia\Application\Authentication\ResolveEndUser;
 use Clavia\Application\OAuth2\Device\DecideDeviceRequest;
 use Clavia\Application\OAuth2\Device\DescribeDeviceRequest;
 use Clavia\Application\OAuth2\Device\DeviceSignInRequired;
+use Clavia\Application\OAuth2\Device\DeviceStrongerSignInRequired;
 use Clavia\Application\OAuth2\Device\UserCodeThrottle;
 use Clavia\Domain\Authentication\LocalPath;
 use Clavia\Domain\Client\ClientId;
@@ -84,6 +85,9 @@ final readonly class DeviceHandler implements RequestHandlerInterface
         if ($outcome instanceof DeviceSignInRequired) {
             return $this->signInFirst(DevicePages::address($outcome->userCode), $outcome->clientId);
         }
+        if ($outcome instanceof DeviceStrongerSignInRequired) {
+            return $this->strongerSignIn($request, $typed, $outcome);
+        }
 
         return $this->responder->page($request, DevicePages::done($outcome->approved, $outcome->noPermission));
     }
@@ -103,6 +107,31 @@ final readonly class DeviceHandler implements RequestHandlerInterface
         $this->throttle->recordMiss($endUser->userId, ClientAddress::of($request));
 
         return $this->responder->page($request, DevicePages::entry($typed, DevicePages::INVALID_CODE, 400));
+    }
+
+    /**
+     * The application or its API requires more than one factor: one more on the second-factor
+     * page, or one set up on the way, and back to this code; or, with neither possible, said so
+     * and the request left pending.
+     */
+    private function strongerSignIn(
+        ServerRequestInterface $request,
+        string $typed,
+        DeviceStrongerSignInRequired $outcome,
+    ): ResponseInterface {
+        if ($outcome->stepUp !== null) {
+            return $this->responder->redirect(
+                MfaPages::CHALLENGE_PATH,
+                [$this->cookies->mfaChallenge($outcome->stepUp)],
+            );
+        }
+        if ($outcome->enrolment !== null) {
+            return $this->responder->redirect(
+                MfaPages::SETTINGS_PATH . '?' . http_build_query(['state' => $outcome->enrolment]),
+            );
+        }
+
+        return $this->responder->page($request, DevicePages::entry($typed, DevicePages::STRONGER_SIGN_IN, 403));
     }
 
     private function signInFirst(string $returnTo, ?ClientId $for = null): ResponseInterface
