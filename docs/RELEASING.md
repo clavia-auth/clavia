@@ -12,6 +12,7 @@ What a release publishes:
 | A git tag `vX.Y.Z` | the repository | the maintainer |
 | The container image | `ghcr.io/clavia-auth/clavia:X.Y.Z` (also `X.Y` and `latest`) | the **Release** workflow |
 | The GitHub release, with the changelog section as its notes | GitHub | the **Release** workflow |
+| The Management API reference, `/vX.Y.Z/` and the site's root | GitHub Pages (`gh-pages`) | the **Docs** workflow, once **Release** succeeded |
 | The dashboard's tag | clavia-dashboard | the maintainer |
 
 Claude prepares the release pull request (the **ticket-release** skill); tagging and publishing
@@ -91,6 +92,41 @@ docker buildx build docker/php --target production --build-context app=. -t clav
 - The first time, set the package's visibility on ghcr.io (public, linked to the repository), which
   a workflow cannot do.
 
+## 6. The API reference
+
+`.github/workflows/docs.yml` runs when the Release workflow succeeds on a tag, and publishes the
+Management API reference to GitHub Pages:
+
+- the page is `docs/site/index.html`, Scalar (pinned) over the release's
+  `docs/openapi/management-api.yaml`, with a bar naming the release and offering the others. The
+  page and its scripts are taken from `main`, the document from the tag, so a fix to the page
+  reaches every release published after it, and each release shows its own API;
+- `docs/site/build.sh` builds a release and `docs/site/publish.sh` places it on the `gh-pages`
+  branch: `/vX.Y.Z/` for the release, replaced whole if it is published again, and the site's root
+  for the newest stable release. A pre-release, or an older release published later, never moves
+  the root. `versions.json` lists every release, newest first, for the page's picker;
+- nothing is published for a tag the Release workflow refused.
+
+To publish a release by hand (a release made before the workflow existed, or after a fix to the
+page): **Actions → Docs → Run workflow**, with the tag (`v0.3.0`). Running it again for a published
+release replaces that release's directory, and nothing else.
+
+To preview the page from a branch, with no tag and no workflow:
+
+```bash
+docs/site/build.sh dev docs/openapi/management-api.yaml /tmp/clavia-docs
+cd /tmp/clavia-docs && python3 -m http.server 8080   # the page loads its document over HTTP
+```
+
+**The first time**, in the repository's settings, **Pages → Build and deployment**: source
+*Deploy from a branch*, branch `gh-pages`, folder `/ (root)`. The branch exists once the workflow
+has run. The site is then at `https://clavia-auth.github.io/clavia/`.
+
+**A domain of your own** (`docs.example.com`): in the same settings, **Custom domain**, then a
+`CNAME` record from that name to `clavia-auth.github.io`, and **Enforce HTTPS** once GitHub has
+issued the certificate. GitHub writes the domain into a `CNAME` file on `gh-pages`, which the
+workflow never touches.
+
 ## If it goes wrong
 
 - **Verify failed**: fix what it names on `main` through a pull request, delete the tag
@@ -99,5 +135,7 @@ docker buildx build docker/php --target production --build-context app=. -t clav
 - **The image or the release step failed after the image was pushed**: re-run the failed job from
   the Actions tab. A release is created once; if one already exists for the tag, delete it first
   (`gh release delete vX.Y.Z`).
+- **The Docs workflow failed**: nothing else depends on it. Fix the cause on `main` and run it by
+  hand for the tag (section 6).
 - **A published release is wrong**: do not move the tag. Fix forward with a patch release
   (`X.Y.Z+1`) and say so in its changelog.

@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Clavia Management API · {{RELEASE}}</title>
+  <meta name="description" content="Reference of the Clavia Management API, for Clavia {{RELEASE}}.">
+  <link rel="icon" href="{{ROOT}}clavia-icon.svg" type="image/svg+xml">
+  <!--
+    The Management API reference, rendered by Scalar from management-api.yaml beside this file.
+    Built by docs/site/build.sh, which fills in the release and the path to the site's root;
+    published by .github/workflows/docs.yml. See docs/RELEASING.md.
+  -->
+  <style>
+    :root {
+      --clavia-bar-height: 48px;
+      --scalar-custom-header-height: var(--clavia-bar-height);
+    }
+    /* Clavia's green (public/auth/static/auth.css), as Scalar's accent. */
+    .light-mode {
+      --scalar-color-accent: #2d6a4f;
+      --scalar-background-accent: #2d6a4f1a;
+    }
+    .dark-mode {
+      --scalar-color-accent: #52b788;
+      --scalar-background-accent: #52b7881f;
+    }
+    body { margin: 0; }
+    .clavia-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-sizing: border-box;
+      height: var(--clavia-bar-height);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 16px;
+      font: 500 14px/1 var(--scalar-font, system-ui, sans-serif);
+      color: var(--scalar-color-1, #1b1b1b);
+      background: var(--scalar-background-1, #fff);
+      border-bottom: 1px solid var(--scalar-border-color, #e5e5e5);
+    }
+    .clavia-bar a { color: inherit; text-decoration: none; }
+    .clavia-bar .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+    .clavia-bar .brand img { width: 22px; height: 22px; }
+    .clavia-bar .muted { color: var(--scalar-color-2, #6b6b6b); font-weight: 400; }
+    .clavia-bar .spacer { flex: 1; }
+    .clavia-bar select {
+      font: inherit;
+      color: inherit;
+      background: var(--scalar-background-2, #f6f6f6);
+      border: 1px solid var(--scalar-border-color, #e5e5e5);
+      border-radius: 6px;
+      padding: 4px 8px;
+    }
+    @media (max-width: 600px) { .clavia-bar .hide-narrow { display: none; } }
+  </style>
+</head>
+<body>
+  <header class="clavia-bar">
+    <a class="brand" href="{{ROOT}}"><img src="{{ROOT}}clavia-icon.svg" alt="">Clavia</a>
+    <span class="muted hide-narrow">Management API</span>
+    <span class="spacer"></span>
+    <label class="muted hide-narrow" for="clavia-release">Release</label>
+    <select id="clavia-release" aria-label="Clavia release">
+      <option value="">{{RELEASE}}</option>
+    </select>
+    <a class="muted hide-narrow" href="https://github.com/clavia-auth/clavia">GitHub</a>
+  </header>
+  <div id="app"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.77.0/dist/browser/standalone.js"></script>
+  <script>
+    Scalar.createApiReference('#app', {
+      url: './management-api.yaml',
+      theme: 'default',
+      layout: 'modern',
+      hideClientButton: true,
+      defaultHttpClient: { targetKey: 'shell', clientKey: 'curl' },
+      // Never a real host: the reader types their own domain.
+      servers: [{
+        url: 'https://management.{domain}',
+        description: 'Your Clavia deployment',
+        variables: { domain: { default: 'example.com', description: 'Your CLAVIA_ROOT_DOMAIN' } },
+      }],
+      authentication: { preferredSecurityScheme: 'managementToken' },
+      metaData: { title: 'Clavia Management API · {{RELEASE}}' },
+    });
+
+    // The release picker: every published release, newest first (versions.json, written by the
+    // Docs workflow). Without it, the page still shows its own release.
+    (async () => {
+      const select = document.getElementById('clavia-release');
+      try {
+        const response = await fetch('{{ROOT}}versions.json', { cache: 'no-cache' });
+        if (!response.ok) return;
+        const { latest, versions } = await response.json();
+        select.replaceChildren(...versions.map((version) => {
+          const option = document.createElement('option');
+          option.value = version === latest ? '{{ROOT}}' : '{{ROOT}}v' + version + '/';
+          option.textContent = version === latest ? version + ' (latest)' : version;
+          option.selected = version === '{{RELEASE}}';
+          return option;
+        }));
+      } catch {
+        return;
+      }
+      select.addEventListener('change', () => { if (select.value !== '') location.href = select.value; });
+    })();
+  </script>
+</body>
+</html>

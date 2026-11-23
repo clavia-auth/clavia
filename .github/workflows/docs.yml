@@ -1,0 +1,87 @@
+name: Docs
+
+# Publishes the Management API reference to GitHub Pages, from the `gh-pages` branch: each release
+# in its own directory (`/v0.3.0/`, never changed again), and the site's root following the newest
+# stable release. It runs once a release is out (the Release workflow succeeded on a tag), or by
+# hand for a tag already released. The page is docs/site/, built by docs/site/build.sh; how a
+# release publishes it, and how to point a domain at it, is in docs/RELEASING.md.
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: A release tag to publish, such as v0.3.0
+        required: true
+
+permissions:
+  contents: read
+
+# One publication at a time: two would race to push the same branch.
+concurrency:
+  group: docs-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: API reference
+    # Only a release that succeeded: a tag the Release workflow refused publishes nothing.
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Read the release from the tag
+        id: release
+        env:
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.workflow_run.head_branch }}
+        run: |
+          [[ "${TAG}" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)(-[0-9A-Za-z.]+)?$ ]] \
+            || { echo "::error::'${TAG}' is not a release tag."; exit 1; }
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      # The page and its build script come from main, so a fix to the page reaches every release
+      # published after it; the document comes from the tag, so each release shows its own API.
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Build the release's reference
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          git rev-parse --verify --quiet "refs/tags/${TAG}" >/dev/null \
+            || { echo "::error::There is no tag ${TAG}."; exit 1; }
+          git show "${TAG}:docs/openapi/management-api.yaml" > "${RUNNER_TEMP}/management-api.yaml"
+          docs/site/build.sh "${VERSION}" "${RUNNER_TEMP}/management-api.yaml" "${RUNNER_TEMP}/site/v${VERSION}" "../"
+          docs/site/build.sh "${VERSION}" "${RUNNER_TEMP}/management-api.yaml" "${RUNNER_TEMP}/site/root" ""
+
+      - name: Publish to gh-pages
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          pages="${RUNNER_TEMP}/pages"
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null; then
+            git worktree add "${pages}" origin/gh-pages
+            git -C "${pages}" switch -C gh-pages
+          else
+            git worktree add --detach "${pages}"
+            git -C "${pages}" switch --orphan gh-pages
+            git -C "${pages}" rm -rf --quiet . || true
+          fi
+
+          docs/site/publish.sh "${VERSION}" "${RUNNER_TEMP}/site" "${pages}"
+
+          git -C "${pages}" add -A
+          if git -C "${pages}" diff --cached --quiet; then
+            echo "Nothing changed: ${VERSION} was already published as it is."
+            exit 0
+          fi
+          git -C "${pages}" commit --quiet -m "Publish the API reference for ${VERSION}"
+          git -C "${pages}" push origin gh-pages
