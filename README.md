@@ -159,6 +159,8 @@ the server sees. The essentials:
   can register someone else's:
   `PATCH /api/v1/connections/password` with `{"allow_sign_up": true, "require_verified_email": true}`.
 - **Purge old audit events daily**: `0 3 * * * bin/clavia audit:purge`.
+- **With client registration on, purge unused clients daily**: `15 3 * * * bin/clavia clients:purge-unused`
+  deletes self-registered clients never issued a token after `CLAVIA_CLIENT_REGISTRATION_UNUSED_LIFETIME` days.
 - **Serve `auth.{domain}` and `management.{domain}` as separate origins.** Their separation is a
   security property.
 

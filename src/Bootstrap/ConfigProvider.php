@@ -26,6 +26,7 @@ use Clavia\Adapter\Primary\Cli\ListSigningKeysCommand;
 use Clavia\Adapter\Primary\Cli\MailOutboxCommand;
 use Clavia\Adapter\Primary\Cli\MigrateDatabaseCommand;
 use Clavia\Adapter\Primary\Cli\PurgeAuditEventsCommand;
+use Clavia\Adapter\Primary\Cli\PurgeUnusedClientsCommand;
 use Clavia\Adapter\Primary\Cli\RegisterManagementApiCommand;
 use Clavia\Adapter\Primary\Cli\RotateSigningKeyCommand;
 use Clavia\Adapter\Primary\Cli\SeedDevelopmentDataCommand;
@@ -174,6 +175,8 @@ use Clavia\Application\Authentication\SignOut;
 use Clavia\Application\Authentication\SignOutEverywhere;
 use Clavia\Application\Clients\RegisterMachineClient;
 use Clavia\Application\Clients\Registration\DeleteClientConfiguration;
+use Clavia\Application\Clients\Registration\MarkRegistrationUsed;
+use Clavia\Application\Clients\Registration\PurgeUnusedRegistrations;
 use Clavia\Application\Clients\Registration\ReadClientConfiguration;
 use Clavia\Application\Clients\Registration\RegisterClientDynamically;
 use Clavia\Application\Clients\Registration\RegisteredClients;
@@ -366,6 +369,7 @@ final class ConfigProvider
         'roles:list' => ListRolesCommand::class,
         'mail:outbox' => MailOutboxCommand::class,
         'audit:purge' => PurgeAuditEventsCommand::class,
+        'clients:purge-unused' => PurgeUnusedClientsCommand::class,
     ];
 
     /**
@@ -380,6 +384,7 @@ final class ConfigProvider
         ConfigurationTrail::class,
         DirectoryTrail::class,
         BackChannelLogout::class,
+        MarkRegistrationUsed::class,
     ];
 
     /**
@@ -602,6 +607,8 @@ final class ConfigProvider
                     ReadClientConfiguration::class => Container\ReadClientConfigurationFactory::class,
                     UpdateClientConfiguration::class => Container\UpdateClientConfigurationFactory::class,
                     DeleteClientConfiguration::class => Container\DeleteClientConfigurationFactory::class,
+                    MarkRegistrationUsed::class => Container\MarkRegistrationUsedFactory::class,
+                    PurgeUnusedRegistrations::class => Container\PurgeUnusedRegistrationsFactory::class,
                     UpdateRole::class => Container\UpdateRoleFactory::class,
                     DeleteRole::class => Container\DeleteRoleFactory::class,
                     RoleAssignments::class => Container\RoleAssignmentsFactory::class,
@@ -717,6 +724,7 @@ final class ConfigProvider
                     ListSigningKeysCommand::class => Container\ListSigningKeysCommandFactory::class,
                     CreateMachineClientCommand::class => Container\CreateMachineClientCommandFactory::class,
                     IssueRegistrationTokenCommand::class => Container\IssueRegistrationTokenCommandFactory::class,
+                    PurgeUnusedClientsCommand::class => Container\PurgeUnusedClientsCommandFactory::class,
                     GrantClientAccessCommand::class => Container\GrantClientAccessCommandFactory::class,
                     RegisterManagementApiCommand::class => Container\RegisterManagementApiCommandFactory::class,
                     CreateRoleCommand::class => Container\CreateRoleCommandFactory::class,

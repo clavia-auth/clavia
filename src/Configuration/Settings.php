@@ -215,6 +215,13 @@ final readonly class Settings
         /** The window those registrations are counted in, seconds; every one restarts it. */
         #[Range(min: 60, max: 86400)]
         public int $clientRegistrationWindow = 3600,
+        /**
+         * How long a self-registered client never issued a token is kept, days, before
+         * `clavia clients:purge-unused` deletes it: an initial access token handed out in bulk leaves
+         * clients nobody finished setting up. A client used once is kept for good.
+         */
+        #[Range(min: 1, max: 365)]
+        public int $clientRegistrationUnusedLifetime = 30,
         /** How long the audit trail keeps an event, days; `clavia audit:purge` removes what is older. */
         #[Range(min: 1)]
         public int $auditRetentionDays = 90,

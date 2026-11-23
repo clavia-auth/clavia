@@ -25,12 +25,15 @@ final readonly class ClientRegistration
     /**
      * @param InitialAccessTokenId|null $initialAccessTokenId The token it registered with; null once
      *                                                        that token no longer exists.
+     * @param DateTimeImmutable|null    $firstUsedAt          When it was first issued a token; null
+     *                                                        until then.
      */
     public function __construct(
         public ClientId $clientId,
         public Digest $accessTokenDigest,
         public ?InitialAccessTokenId $initialAccessTokenId,
         public DateTimeImmutable $registeredAt,
+        public ?DateTimeImmutable $firstUsedAt = null,
     ) {
     }
 

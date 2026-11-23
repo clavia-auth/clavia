@@ -13,6 +13,7 @@ namespace Clavia\Domain\Client\Registration;
 
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Shared\Digest;
+use DateTimeImmutable;
 
 /**
  * The registrations of clients that registered themselves. Deleting a client deletes its
@@ -39,4 +40,18 @@ interface ClientRegistrationRepository
 
     /** Record a new registration access token. */
     public function save(ClientRegistration $registration): void;
+
+    /**
+     * Record the client's first token, at `$at`: one conditional write, a no-op for an operator's
+     * client (no registration) and for every token after the first.
+     */
+    public function markUsed(ClientId $clientId, DateTimeImmutable $at): void;
+
+    /**
+     * The self-registered clients never issued a token and registered before `$before`, oldest
+     * first.
+     *
+     * @return list<ClientId>
+     */
+    public function neverUsedSince(DateTimeImmutable $before): array;
 }

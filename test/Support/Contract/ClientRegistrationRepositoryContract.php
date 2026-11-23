@@ -107,6 +107,34 @@ trait ClientRegistrationRepositoryContract
     }
 
     #[Test]
+    public function theFirstUseIsKeptAndTheUnusedAreFoundOldestFirst(): void
+    {
+        $at = static fn (string $day): DateTimeImmutable => new DateTimeImmutable($day . 'T10:00:00Z');
+        foreach (
+            ['tpc_used' => '2026-01-01', 'tpc_unused_old' => '2026-01-02', 'tpc_unused' => '2026-01-03',
+            'tpc_recent' => '2026-01-20'] as $id => $day
+        ) {
+            $client = $this->aSelfRegisteredClient($id);
+            $this->clientRegistrations()->add(new ClientRegistration($client->id, Digest::of($id), null, $at($day)));
+        }
+        $used = ClientId::fromString('tpc_used');
+
+        $this->clientRegistrations()->markUsed($used, $at('2026-01-05'));
+        $this->clientRegistrations()->markUsed($used, $at('2026-01-09'));
+        $this->clientRegistrations()->markUsed(ClientId::fromString('tpc_nobody'), $at('2026-01-09'));
+
+        $firstUse = $this->clientRegistrations()->find($used)?->firstUsedAt;
+        self::assertEquals($at('2026-01-05'), $firstUse, 'The first one.');
+        self::assertSame(
+            ['tpc_unused_old', 'tpc_unused'],
+            array_map(
+                static fn (ClientId $id): string => $id->value,
+                $this->clientRegistrations()->neverUsedSince($at('2026-01-15')),
+            ),
+        );
+    }
+
+    #[Test]
     public function aRegistrationGoesWithItsClient(): void
     {
         $client = $this->aSelfRegisteredClient('tpc_deleted');

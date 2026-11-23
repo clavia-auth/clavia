@@ -56,6 +56,7 @@ final class SettingsTest extends TestCase
         self::assertSame('RS256', $settings->signingAlgorithm);
         self::assertSame(EmailBackend::Console, $settings->emailBackend);
         self::assertSame(ClientRegistration::Off, $settings->clientRegistration);
+        self::assertSame(30, $settings->clientRegistrationUnusedLifetime);
         self::assertSame(60, $settings->authorizationCodeLifetime);
         self::assertSame(['openid', 'profile', 'email'], $settings->scopesSupported);
         self::assertSame([], $settings->trustedProxies);

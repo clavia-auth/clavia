@@ -15,6 +15,7 @@ use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\Registration\ClientRegistration;
 use Clavia\Domain\Client\Registration\ClientRegistrationRepository;
 use Clavia\Domain\Shared\Digest;
+use DateTimeImmutable;
 
 /**
  * Registrations in memory, honouring the foreign key PostgreSQL enforces: given the clients, a
@@ -61,6 +62,40 @@ final class InMemoryClientRegistrationRepository implements ClientRegistrationRe
     public function ofClients(array $clientIds): array
     {
         return array_values(array_filter(array_map($this->find(...), $clientIds)));
+    }
+
+    #[\Override]
+    public function markUsed(ClientId $clientId, DateTimeImmutable $at): void
+    {
+        $registration = $this->registrations[$clientId->value] ?? null;
+        if ($registration !== null && $registration->firstUsedAt === null) {
+            $this->registrations[$clientId->value] = new ClientRegistration(
+                $registration->clientId,
+                $registration->accessTokenDigest,
+                $registration->initialAccessTokenId,
+                $registration->registeredAt,
+                $at,
+            );
+        }
+    }
+
+    #[\Override]
+    public function neverUsedSince(DateTimeImmutable $before): array
+    {
+        $unused = [];
+        foreach ($this->registrations as $registration) {
+            $current = $this->find($registration->clientId);
+            if ($current !== null && $current->firstUsedAt === null && $current->registeredAt < $before) {
+                $unused[] = $current;
+            }
+        }
+        usort(
+            $unused,
+            static fn (ClientRegistration $a, ClientRegistration $b): int
+                => [$a->registeredAt, $a->clientId->value] <=> [$b->registeredAt, $b->clientId->value],
+        );
+
+        return array_map(static fn (ClientRegistration $registration): ClientId => $registration->clientId, $unused);
     }
 
     #[\Override]
