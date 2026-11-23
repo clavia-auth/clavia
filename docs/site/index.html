@@ -76,7 +76,11 @@
       url: './management-api.yaml',
       theme: 'default',
       layout: 'modern',
+      // A reference, not a workbench: no developer toolbar (shown on localhost by default), and no
+      // "Test request", which could not reach a reader's server from this page anyway.
+      showDeveloperTools: 'never',
       hideClientButton: true,
+      hideTestRequestButton: true,
       defaultHttpClient: { targetKey: 'shell', clientKey: 'curl' },
       // Never a real host: the reader types their own domain.
       servers: [{
