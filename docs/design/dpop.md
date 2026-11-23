@@ -1,6 +1,6 @@
 # Design: DPoP, sender-constrained tokens
 
-**Status:** agreed · **Date:** 2026-11-23 · **Issue:** clavia-auth/clavia#11 ·
+**Status:** built · **Date:** 2026-11-23 · **Issue:** clavia-auth/clavia#11 ·
 **Specifications:** RFC 9449 (OAuth 2.0 Demonstrating Proof of Possession), RFC 7638 (JWK
 thumbprint), RFC 7800 (`cnf`), RFC 9068 (JWT access tokens), RFC 7662 (introspection),
 RFC 9126 (pushed authorization requests), OAuth 2.1 §1.4.3 (sender-constrained tokens)
