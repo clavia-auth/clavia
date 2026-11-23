@@ -5,6 +5,7 @@
  * Variables (set by Clavia\Adapter\Primary\Http\Auth\PasskeyPages):
  * @var Laminas\View\Renderer\PhpRenderer $this
  * @var list<string> $codes
+ * @var string $loginState The held request's handle, on the way to an application; empty otherwise.
  */
 ?>
 <?php $this->placeholder('subtitle')->captureStart() ?>
@@ -16,6 +17,13 @@
 <?php endforeach ?>
     </ul>
 
+<?php if ($loginState !== ''): ?>
+    <form method="post" action="/auth/mfa/enroll/continue">
+<?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => $loginState]) ?>
+      <button type="submit">Continue</button>
+    </form>
+<?php else: ?>
     <form method="get" action="/auth/passkeys">
       <button type="submit">Done</button>
     </form>
+<?php endif ?>

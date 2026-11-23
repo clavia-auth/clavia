@@ -14,6 +14,8 @@ namespace Clavia\Adapter\Primary\Http\Auth;
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
 use Clavia\Adapter\Primary\Http\Shared\RequestCookies;
 use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
+use Clavia\Application\Authentication\Mfa\DescribeEnrolmentOnTheWay;
+use Clavia\Application\Authentication\Mfa\EnrolmentOnTheWay;
 use Clavia\Application\Authentication\Passkey\BeginPasskeyRegistration;
 use Clavia\Application\Authentication\Passkey\CompletePasskeyRegistration;
 use Clavia\Application\Authentication\Passkey\DescribePasskeys;
@@ -46,6 +48,11 @@ use Psr\Http\Server\RequestHandlerInterface;
  * one signed in recently: a visitor without either is sent to sign in, and comes back here. Every
  * POST carries the CSRF token; one that does not is sent back to the list, unchanged. With
  * `CLAVIA_PASSKEYS_ENABLED=false` none of it is routed.
+ *
+ * **On the way** to an application requiring a second factor (docs/design/mfa-policies.md §5.3),
+ * making a passkey carries the held request's `state`, and once it is made the browser goes back
+ * to that request — past the recovery codes, when the passkey brought some — where the step-up
+ * asks for it. The sign-in needed for making one recently is still needed.
  */
 final readonly class PasskeysHandler implements RequestHandlerInterface
 {
@@ -57,6 +64,7 @@ final readonly class PasskeysHandler implements RequestHandlerInterface
         private CompletePasskeyRegistration $complete,
         private RenamePasskey $rename,
         private RemovePasskey $remove,
+        private DescribeEnrolmentOnTheWay $onTheWay,
         private AuthPageResponder $responder,
         private AuthCookies $cookies,
     ) {
@@ -83,13 +91,16 @@ final readonly class PasskeysHandler implements RequestHandlerInterface
         $passkeyId = $request->getAttribute('passkey_id');
         $path = $request->getUri()->getPath();
 
+        $onTheWay = ($this->onTheWay)($form->get('state'));
+
         return match (true) {
-            $path === PasskeyPages::PATH . '/new' => $this->begin($request, $session),
+            $path === PasskeyPages::PATH . '/new' => $this->begin($request, $session, $onTheWay),
             $path === PasskeyPages::PATH => $this->complete(
                 $request,
                 $session,
                 $form->get('credential') ?? '',
                 $form->get('name') ?? '',
+                $onTheWay,
             ),
             is_string($passkeyId) && str_ends_with($path, '/name') => $this->changed(
                 $request,
@@ -118,8 +129,11 @@ final readonly class PasskeysHandler implements RequestHandlerInterface
             : $this->responder->page($request, PasskeyPages::list($passkeys, $error, $status));
     }
 
-    private function begin(ServerRequestInterface $request, Session $session): ResponseInterface
-    {
+    private function begin(
+        ServerRequestInterface $request,
+        Session $session,
+        ?EnrolmentOnTheWay $onTheWay,
+    ): ResponseInterface {
         $options = ($this->begin)($session);
 
         return match (true) {
@@ -128,7 +142,7 @@ final readonly class PasskeysHandler implements RequestHandlerInterface
             $options instanceof PasskeyLimitReached => $this->list($request, $session, self::limit($options), 409),
             default => $this->responder->page(
                 $request,
-                PasskeyPages::create($options),
+                PasskeyPages::create($options, onTheWay: $onTheWay),
                 [$this->cookies->webauthn($options->handle)],
             ),
         };
@@ -139,6 +153,7 @@ final readonly class PasskeysHandler implements RequestHandlerInterface
         Session $session,
         string $credential,
         string $name,
+        ?EnrolmentOnTheWay $onTheWay,
     ): ResponseInterface {
         $handle = RequestCookies::first($request, AuthCookies::WEBAUTHN) ?? '';
         $outcome = ($this->complete)($session, $handle, $credential, $name);
@@ -148,8 +163,17 @@ final readonly class PasskeysHandler implements RequestHandlerInterface
             $outcome instanceof SignInAgain => $this->signInFirst(),
             $outcome instanceof PasskeyLimitReached => $this->list($request, $session, self::limit($outcome), 409),
             $outcome instanceof PasskeyAdded => $outcome->recoveryCodes === null
-                ? $this->responder->redirect(PasskeyPages::PATH, $spent)
-                : $this->responder->page($request, PasskeyPages::recoveryCodes($outcome->recoveryCodes), $spent),
+                ? $this->responder->redirect(
+                    $onTheWay === null
+                        ? PasskeyPages::PATH
+                        : $this->onTheWay->resume($onTheWay->loginState) ?? PasskeyPages::PATH,
+                    $spent,
+                )
+                : $this->responder->page(
+                    $request,
+                    PasskeyPages::recoveryCodes($outcome->recoveryCodes, $onTheWay),
+                    $spent,
+                ),
             default => $this->responder->page(
                 $request,
                 $this->failurePage($session, $outcome),

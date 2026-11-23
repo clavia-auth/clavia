@@ -2050,7 +2050,7 @@ components:
       additionalProperties: false
       required: [client_id, name, client_type, token_endpoint_auth_method, redirect_uris, grant_types,
         response_types, post_logout_redirect_uris, is_first_party, connections, backchannel_logout_uri,
-        backchannel_logout_session_required, require_pkce, created_at]
+        backchannel_logout_session_required, require_pkce, mfa_policy, created_at]
       properties:
         client_id:
           type: string
@@ -2100,6 +2100,8 @@ components:
             Whether every authorization request must carry PKCE. False only for a
             confidential client, whose OpenID Connect requests carrying a `nonce` may then
             omit it (OAuth 2.1 §7.5.1).
+        mfa_policy:
+          $ref: '#/components/schemas/MfaPolicy'
         created_at:
           type: string
           format: date-time
@@ -2118,7 +2120,7 @@ components:
       additionalProperties: false
       required: [client_id, name, client_type, token_endpoint_auth_method, redirect_uris, grant_types,
         response_types, post_logout_redirect_uris, is_first_party, connections, backchannel_logout_uri,
-        backchannel_logout_session_required, require_pkce, created_at, client_secret]
+        backchannel_logout_session_required, require_pkce, mfa_policy, created_at, client_secret]
       properties:
         client_id:
           type: string
@@ -2168,6 +2170,8 @@ components:
             Whether every authorization request must carry PKCE. False only for a
             confidential client, whose OpenID Connect requests carrying a `nonce` may then
             omit it (OAuth 2.1 §7.5.1).
+        mfa_policy:
+          $ref: '#/components/schemas/MfaPolicy'
         created_at:
           type: string
           format: date-time
@@ -2240,6 +2244,8 @@ components:
             False relieves a confidential client of PKCE for OpenID Connect requests that
             carry a `nonce` (OAuth 2.1 §7.5.1); a public client is refused (422). Defaults
             to true.
+        mfa_policy:
+          $ref: '#/components/schemas/MfaPolicy'
       description: |
         `client_type` defaults to `public`; `token_endpoint_auth_method` to `none` for a
         public client and `client_secret_basic` for a confidential one.
@@ -2290,6 +2296,8 @@ components:
           description: |
             False relieves a confidential client of PKCE for OpenID Connect requests that
             carry a `nonce` (OAuth 2.1 §7.5.1); a public client is refused (422).
+        mfa_policy:
+          $ref: '#/components/schemas/MfaPolicy'
 
     Permission:
       type: object
@@ -2321,7 +2329,7 @@ components:
       type: object
       additionalProperties: false
       required: [id, identifier, name, permissions, is_system, enforce_policies, allow_skipping_consent,
-        access_token_format, created_at]
+        access_token_format, mfa_policy, created_at]
       properties:
         id:
           type: string
@@ -2343,6 +2351,8 @@ components:
           $ref: '#/components/schemas/AllowSkippingConsent'
         access_token_format:
           $ref: '#/components/schemas/AccessTokenFormat'
+        mfa_policy:
+          $ref: '#/components/schemas/MfaPolicy'
         created_at:
           type: string
           format: date-time
@@ -2361,6 +2371,23 @@ components:
         behalf may do without the consent screen: the operator runs both, so signing in is
         the consent. A third-party application asks whatever this says. Always on for a
         system API, which no third-party application reaches.
+
+    MfaPolicy:
+      type: string
+      enum: [optional, required]
+      default: optional
+      description: |
+        Whether people must sign in with more than one factor to be let in: through this
+        application, or to be issued a token for this API. Required on either one is required.
+
+        - `optional`: what the authorization request asks with `acr_values`, and nothing more.
+          A person who enrolled a second factor is asked for it anyway.
+        - `required`: more than one factor (the `acr`
+          `http://schemas.openid.net/pape/policies/2007/06/multi-factor`). A signed-in person
+          who used one gives another without signing in again; someone with no second factor
+          sets one up on the way, if their address is verified.
+
+        It applies from the next authorization on: tokens already issued keep working.
 
     AccessTokenFormat:
       type: string
@@ -2410,6 +2437,8 @@ components:
           enum: [opaque, jwt]
           default: opaque
           description: See `ResourceServer.access_token_format`.
+        mfa_policy:
+          $ref: '#/components/schemas/MfaPolicy'
 
     ResourceServerUpdate:
       type: object
@@ -2434,6 +2463,8 @@ components:
           type: boolean
         access_token_format:
           $ref: '#/components/schemas/AccessTokenFormat'
+        mfa_policy:
+          $ref: '#/components/schemas/MfaPolicy'
 
     ConnectionName:
       type: string

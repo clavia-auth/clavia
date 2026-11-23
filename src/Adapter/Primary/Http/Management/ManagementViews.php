@@ -124,6 +124,7 @@ final class ManagementViews
             'backchannel_logout_uri' => $client->backChannelLogout?->uri->value,
             'backchannel_logout_session_required' => $client->backChannelLogout->sessionRequired ?? false,
             'require_pkce' => $client->requiresPkce,
+            'mfa_policy' => $client->mfaPolicy->value,
             'created_at' => self::instant($client->createdAt),
         ];
     }
@@ -156,6 +157,7 @@ final class ManagementViews
             'enforce_policies' => $api->enforcePolicies,
             'allow_skipping_consent' => $api->allowSkippingConsent,
             'access_token_format' => $api->accessTokenFormat->value,
+            'mfa_policy' => $api->mfaPolicy->value,
             'created_at' => self::instant($api->createdAt),
         ];
     }

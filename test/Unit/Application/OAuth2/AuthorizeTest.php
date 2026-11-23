@@ -15,7 +15,9 @@ use ClaviaTest\Support\Fake\InMemoryMfaChallengeStore;
 use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
 use ClaviaTest\Support\Fake\InMemoryRecoveryCodeRepository;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
+use ClaviaTest\Support\Fake\InMemoryUserRepository;
 use Clavia\Application\Authentication\EndUser;
+use Clavia\Application\Authentication\Mfa\BeginEnrolmentOnTheWay;
 use Clavia\Application\Authentication\Mfa\BeginStepUp;
 use Clavia\Application\Authentication\Mfa\SecondFactors;
 use Clavia\Application\Authentication\Sessions;
@@ -127,6 +129,13 @@ final class AuthorizeTest extends TestCase
                 ),
                 new SecretGenerator(new SeededRandomSource(4)),
                 300,
+            ),
+            new BeginEnrolmentOnTheWay(
+                new InMemoryUserRepository(),
+                new InMemoryMfaFactorRepository(new InMemoryTransactionManager()),
+                null,
+                $this->loginStates,
+                new SecretGenerator(new SeededRandomSource(5)),
             ),
             new SecretGenerator($random),
             $random,
@@ -439,6 +448,13 @@ final class AuthorizeTest extends TestCase
                 ),
                 new SecretGenerator(new SeededRandomSource(4)),
                 300,
+            ),
+            new BeginEnrolmentOnTheWay(
+                new InMemoryUserRepository(),
+                new InMemoryMfaFactorRepository(new InMemoryTransactionManager()),
+                null,
+                $this->loginStates,
+                new SecretGenerator(new SeededRandomSource(5)),
             ),
             new SecretGenerator($random),
             $random,

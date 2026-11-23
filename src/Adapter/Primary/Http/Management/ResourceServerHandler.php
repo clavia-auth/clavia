@@ -51,6 +51,7 @@ final readonly class ResourceServerHandler implements RequestHandlerInterface
                     $management->body->bool('enforce_policies'),
                     $management->body->bool('allow_skipping_consent'),
                     $management->body->string('access_token_format'),
+                    $management->body->string('mfa_policy'),
                 );
 
                 return $this->responder->json(ManagementViews::resourceServer($api));

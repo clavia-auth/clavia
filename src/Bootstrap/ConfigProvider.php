@@ -128,15 +128,18 @@ use Clavia\Application\Authentication\External\CompleteExternalSignIn;
 use Clavia\Application\Authentication\External\ResolveExternalAccount;
 use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
 use Clavia\Application\Authentication\LoginThrottle;
+use Clavia\Application\Authentication\Mfa\BeginEnrolmentOnTheWay;
 use Clavia\Application\Authentication\Mfa\BeginPasskeySecondFactor;
 use Clavia\Application\Authentication\Mfa\BeginStepUp;
 use Clavia\Application\Authentication\Mfa\BeginTotpEnrollment;
 use Clavia\Application\Authentication\Mfa\CompletePasskeySecondFactor;
 use Clavia\Application\Authentication\Mfa\CompleteSecondFactor;
 use Clavia\Application\Authentication\Mfa\ConfirmTotpEnrollment;
+use Clavia\Application\Authentication\Mfa\DescribeEnrolmentOnTheWay;
 use Clavia\Application\Authentication\Mfa\DescribeMfa;
 use Clavia\Application\Authentication\Mfa\DescribeSecondFactorPage;
 use Clavia\Application\Authentication\Mfa\DisableMfa;
+use Clavia\Application\Authentication\Mfa\FinishEnrolmentOnTheWay;
 use Clavia\Application\Authentication\Mfa\ResumeTotpEnrollment;
 use Clavia\Application\Authentication\Mfa\SecondFactors;
 use Clavia\Application\Authentication\Mfa\TotpSeeds;
@@ -501,6 +504,9 @@ final class ConfigProvider
                     DescribeSecondFactorPage::class => Container\DescribeSecondFactorPageFactory::class,
                     SecondFactors::class => Container\SecondFactorsFactory::class,
                     BeginStepUp::class => Container\BeginStepUpFactory::class,
+                    DescribeEnrolmentOnTheWay::class => Container\DescribeEnrolmentOnTheWayFactory::class,
+                    BeginEnrolmentOnTheWay::class => Container\BeginEnrolmentOnTheWayFactory::class,
+                    FinishEnrolmentOnTheWay::class => Container\FinishEnrolmentOnTheWayFactory::class,
                     RequireSignIn::class => Container\RequireSignInFactory::class,
                     ResetUserMfa::class => Container\ResetUserMfaFactory::class,
                     SendPasswordLink::class => Container\SendPasswordLinkFactory::class,

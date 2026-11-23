@@ -13,6 +13,7 @@ namespace Clavia\Application\Management\Clients;
 
 use Clavia\Application\Management\NotFound;
 use Clavia\Application\Port\DomainEvents;
+use Clavia\Domain\Authentication\MfaPolicy;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
@@ -69,6 +70,9 @@ final readonly class UpdateClient
         if ($changes->requirePkce !== null) {
             $updated = $updated->withPkceRequired($changes->requirePkce);
         }
+        if ($changes->mfaPolicy !== null) {
+            $updated = $updated->requiringMfa(MfaPolicy::fromString($changes->mfaPolicy));
+        }
         $this->clients->save($updated);
         $this->events->dispatch(new ClientChanged($updated->id, self::fields($changes)));
 
@@ -92,6 +96,7 @@ final readonly class UpdateClient
             'backchannel_logout_uri' => $changes->changesBackChannelLogoutUri,
             'backchannel_logout_session_required' => $changes->backChannelLogoutSessionRequired !== null,
             'require_pkce' => $changes->requirePkce !== null,
+            'mfa_policy' => $changes->mfaPolicy !== null,
         ]));
     }
 }

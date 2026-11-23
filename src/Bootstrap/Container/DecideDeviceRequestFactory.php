@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Application\Authentication\Mfa\BeginEnrolmentOnTheWay;
+use Clavia\Application\Authentication\Mfa\BeginStepUp;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\OAuth2\Device\DecideDeviceRequest;
 use Clavia\Application\OAuth2\Device\PendingDeviceRequests;
@@ -38,6 +40,10 @@ final class DecideDeviceRequestFactory
         $roles = $container->get(RoleRepository::class);
         /** @var ConsentRepository $consents */
         $consents = $container->get(ConsentRepository::class);
+        /** @var BeginStepUp $beginStepUp */
+        $beginStepUp = $container->get(BeginStepUp::class);
+        /** @var BeginEnrolmentOnTheWay $beginEnrolment */
+        $beginEnrolment = $container->get(BeginEnrolmentOnTheWay::class);
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
         /** @var DomainEvents $events */
@@ -50,6 +56,8 @@ final class DecideDeviceRequestFactory
             $resourceServers,
             $roles,
             $consents,
+            $beginStepUp,
+            $beginEnrolment,
             $clock,
             $events,
         );

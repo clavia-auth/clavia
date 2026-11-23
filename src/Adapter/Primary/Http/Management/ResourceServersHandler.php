@@ -56,6 +56,7 @@ final readonly class ResourceServersHandler implements RequestHandlerInterface
             $body->bool('enforce_policies') ?? false,
             $body->bool('allow_skipping_consent') ?? true,
             $body->string('access_token_format') ?? 'opaque',
+            $body->string('mfa_policy') ?? 'optional',
         ));
 
         return $this->responder->created(

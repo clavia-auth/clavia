@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Domain\ResourceServer;
 
+use Clavia\Domain\Authentication\MfaPolicy;
 use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\Scope;
@@ -50,6 +51,7 @@ final readonly class ResourceServer
         public bool $enforcePolicies,
         public bool $allowSkippingConsent,
         public AccessTokenFormat $accessTokenFormat,
+        public MfaPolicy $mfaPolicy,
     ) {
     }
 
@@ -73,6 +75,8 @@ final readonly class ResourceServer
      *                                               no third-party application can reach.
      * @param AccessTokenFormat $accessTokenFormat Opaque, checked by introspection, or a JWT the API
      *                                             validates on its own (RFC 9068).
+     * @param MfaPolicy         $mfaPolicy         Whether a person must sign in with more than one factor
+     *                                             to be issued a token for it.
      *
      * @throws InvalidValue When the identifier is longer than 255 bytes, the name longer than
      *                      120 characters, a permission is defined twice, or a system API would
@@ -88,6 +92,7 @@ final readonly class ResourceServer
         bool $enforcePolicies = false,
         bool $allowSkippingConsent = true,
         AccessTokenFormat $accessTokenFormat = AccessTokenFormat::Opaque,
+        MfaPolicy $mfaPolicy = MfaPolicy::Optional,
     ): self {
         if (strlen($identifier->value) > self::MAX_IDENTIFIER_LENGTH) {
             throw new InvalidValue('An API identifier is at most 255 bytes.');
@@ -124,6 +129,7 @@ final readonly class ResourceServer
             $enforcePolicies,
             $allowSkippingConsent,
             $accessTokenFormat,
+            $mfaPolicy,
         );
     }
 
@@ -144,6 +150,7 @@ final readonly class ResourceServer
             $this->enforcePolicies,
             $this->allowSkippingConsent,
             $this->accessTokenFormat,
+            $this->mfaPolicy,
         );
     }
 
@@ -171,6 +178,7 @@ final readonly class ResourceServer
             $enforce,
             $this->allowSkippingConsent,
             $this->accessTokenFormat,
+            $this->mfaPolicy,
         );
     }
 
@@ -199,6 +207,7 @@ final readonly class ResourceServer
             $this->enforcePolicies,
             $allow,
             $this->accessTokenFormat,
+            $this->mfaPolicy,
         );
     }
 
@@ -230,6 +239,7 @@ final readonly class ResourceServer
             $this->enforcePolicies,
             $this->allowSkippingConsent,
             $this->accessTokenFormat,
+            $this->mfaPolicy,
         );
     }
 
@@ -254,6 +264,7 @@ final readonly class ResourceServer
             true,
             true,
             $this->accessTokenFormat,
+            $this->mfaPolicy,
         );
     }
 
@@ -274,6 +285,27 @@ final readonly class ResourceServer
             $this->enforcePolicies,
             $this->allowSkippingConsent,
             $format,
+            $this->mfaPolicy,
+        );
+    }
+
+    /**
+     * The same API, taking people in on one factor or not, from the next authorization on.
+     * Allowed for a system API too: requiring more of its operators only narrows who gets in.
+     */
+    public function requiringMfa(MfaPolicy $policy): self
+    {
+        return new self(
+            $this->id,
+            $this->identifier,
+            $this->name,
+            $this->permissions,
+            $this->createdAt,
+            $this->isSystem,
+            $this->enforcePolicies,
+            $this->allowSkippingConsent,
+            $this->accessTokenFormat,
+            $policy,
         );
     }
 

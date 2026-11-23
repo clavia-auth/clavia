@@ -16,8 +16,10 @@ use Clavia\Adapter\Primary\Http\Auth\AuthPageResponder;
 use Clavia\Adapter\Primary\Http\Auth\MfaSettingsHandler;
 use Clavia\Application\Authentication\Mfa\BeginTotpEnrollment;
 use Clavia\Application\Authentication\Mfa\ConfirmTotpEnrollment;
+use Clavia\Application\Authentication\Mfa\DescribeEnrolmentOnTheWay;
 use Clavia\Application\Authentication\Mfa\DescribeMfa;
 use Clavia\Application\Authentication\Mfa\DisableMfa;
+use Clavia\Application\Authentication\Mfa\FinishEnrolmentOnTheWay;
 use Clavia\Application\Authentication\Mfa\ResumeTotpEnrollment;
 use Clavia\Application\Authentication\RequireSignIn;
 use Clavia\Application\Authentication\ResolveEndUser;
@@ -41,6 +43,10 @@ final class MfaSettingsHandlerFactory
         $confirm = $container->get(ConfirmTotpEnrollment::class);
         /** @var DisableMfa $disable */
         $disable = $container->get(DisableMfa::class);
+        /** @var DescribeEnrolmentOnTheWay $onTheWay */
+        $onTheWay = $container->get(DescribeEnrolmentOnTheWay::class);
+        /** @var FinishEnrolmentOnTheWay $finishOnTheWay */
+        $finishOnTheWay = $container->get(FinishEnrolmentOnTheWay::class);
         /** @var AuthPageResponder $responder */
         $responder = $container->get(AuthPageResponder::class);
         /** @var AuthCookies $cookies */
@@ -54,6 +60,8 @@ final class MfaSettingsHandlerFactory
             $resume,
             $confirm,
             $disable,
+            $onTheWay,
+            $finishOnTheWay,
             $responder,
             $cookies,
         );

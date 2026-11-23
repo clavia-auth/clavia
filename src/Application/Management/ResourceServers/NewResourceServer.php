@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Management\ResourceServers;
 
+use Clavia\Domain\Authentication\MfaPolicy;
 use Clavia\Domain\ResourceServer\AccessTokenFormat;
 use Clavia\Domain\ResourceServer\Permission;
 use Clavia\Domain\Shared\InvalidValue;
@@ -31,6 +32,7 @@ final readonly class NewResourceServer
      * @param bool                       $allowSkippingConsent Whether first-party applications may do without
      *                                                         the consent screen for its permissions.
      * @param string                     $accessTokenFormat `opaque` or `jwt`: see {@see AccessTokenFormat}.
+     * @param string                     $mfaPolicy         `optional` or `required`: see {@see MfaPolicy}.
      */
     public function __construct(
         public string $identifier,
@@ -39,6 +41,7 @@ final readonly class NewResourceServer
         public bool $enforcePolicies = false,
         public bool $allowSkippingConsent = true,
         public string $accessTokenFormat = 'opaque',
+        public string $mfaPolicy = 'optional',
     ) {
     }
 

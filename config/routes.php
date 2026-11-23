@@ -110,6 +110,7 @@ return static function (Application $app, ContainerInterface $container): void {
     }
     $app->route('/auth/mfa/enroll', MfaSettingsHandler::class, ['GET', 'POST'], 'auth.mfa.enroll');
     $app->post('/auth/mfa/enroll/confirm', MfaSettingsHandler::class, 'auth.mfa.enroll.confirm');
+    $app->post('/auth/mfa/enroll/continue', MfaSettingsHandler::class, 'auth.mfa.enroll.continue');
     $app->post('/auth/mfa/disable', MfaSettingsHandler::class, 'auth.mfa.disable');
     // The account holder's passkeys: the list, a new one, and renaming or removing one.
     if ($settings->passkeysEnabled) {

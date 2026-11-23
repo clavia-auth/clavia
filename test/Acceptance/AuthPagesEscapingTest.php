@@ -23,6 +23,7 @@ use Clavia\Adapter\Primary\Http\Shared\ErrorPage;
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
 use Clavia\Application\Authentication\External\ExternalProviderOption;
 use Clavia\Application\Authentication\LoginPage\SignInMethods;
+use Clavia\Application\Authentication\Mfa\EnrolmentOnTheWay;
 use Clavia\Application\Authentication\Mfa\MfaStatus;
 use Clavia\Application\Authentication\Mfa\SecondFactorPage;
 use Clavia\Application\Authentication\Mfa\TotpEnrollment;
@@ -211,6 +212,21 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
             ),
         ];
         yield 'the recovery codes' => [MfaPages::recoveryCodes([self::HOSTILE, 'abcd-efgh-jkmn'])];
+        yield 'the two-factor settings on the way: application and carried state' => [
+            MfaPages::settings(new MfaStatus(self::HOSTILE, false, 0, 0), onTheWay: self::onTheWay()),
+        ];
+        yield 'the set-up page on the way: carried state' => [
+            MfaPages::setUp(
+                new TotpEnrollment(self::HOSTILE, 'otpauth://totp/x'),
+                onTheWay: self::onTheWay(),
+            ),
+        ];
+        yield 'the recovery codes on the way: carried state' => [
+            MfaPages::recoveryCodes([self::HOSTILE], self::onTheWay()),
+        ];
+        yield 'the recovery codes of a first passkey on the way: carried state' => [
+            PasskeyPages::recoveryCodes([self::HOSTILE], self::onTheWay()),
+        ];
         yield 'the passkeys: address, names and ids' => [PasskeyPages::list(
             new AccountPasskeys(
                 self::HOSTILE,
@@ -255,5 +271,10 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
         yield 'an error page: message, advice and reference' => [
             new ErrorPage(self::HOSTILE, self::HOSTILE, self::HOSTILE, self::HOSTILE)->toHtmlPage(400),
         ];
+    }
+
+    private static function onTheWay(): EnrolmentOnTheWay
+    {
+        return new EnrolmentOnTheWay(self::HOSTILE, self::HOSTILE, ['https://client.test']);
     }
 }

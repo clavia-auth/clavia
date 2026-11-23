@@ -14,6 +14,7 @@ namespace Clavia\Application\Management\Clients;
 use Clavia\Application\Management\NotFound;
 use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\PasswordHasher;
+use Clavia\Domain\Authentication\MfaPolicy;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\ClientId;
@@ -81,6 +82,7 @@ final readonly class RegisterClient
             },
             $this->backChannel->of($new->backChannelLogoutUri, $new->backChannelLogoutSessionRequired),
             $new->requirePkce,
+            MfaPolicy::fromString($new->mfaPolicy),
         );
         $this->clients->save($client);
         $this->events->dispatch(new ClientRegistered($client));
