@@ -79,6 +79,7 @@ The console is `bin/clavia`:
 | `management-api:register`, `management-api:scopes` | Register the Management API; list its scopes |
 | `clients:create-m2m [--third-party]`, `clients:grant` | Machine clients and their grants on an API |
 | `clients:registration-token` | An initial access token for client registration, printed once |
+| `clients:purge-unused` | Delete self-registered clients never issued a token after `CLAVIA_CLIENT_REGISTRATION_UNUSED_LIFETIME` days; run daily |
 | `roles:create`, `roles:assign`, `roles:list` | Roles, including the first administrator |
 | `audit:purge` | Delete audit events older than `CLAVIA_AUDIT_RETENTION_DAYS`; run daily |
 | `mail:outbox` | The last messages of the `console` mail backend (development) |
@@ -618,6 +619,14 @@ operator's settings, rotates the registration access token and returns the new o
 `DeleteClient` refuses the client a token was issued to, which is the point here. Both changes
 are the client acting as itself in the trail. The Management API shows a client's `registration`
 (`initial_access_token_id`, `registered_at`, or null), read with the client (`ReadClients`).
+
+**Unused clients** (§5.4): `MarkRegistrationUsed`, a subscriber to `AccessTokenIssued`, sets a
+registration's `first_used_at` with one conditional `UPDATE` (a no-op for an operator's client and
+after the first token), so no grant knows about it. `clients:purge-unused`
+(`PurgeUnusedRegistrations`, daily, whatever `CLAVIA_CLIENT_REGISTRATION` says) deletes each
+self-registered client still unused `CLAVIA_CLIENT_REGISTRATION_UNUSED_LIFETIME` days (30) after it
+registered, one transaction each, with its own `ClientDeleted`. It reads registration rows only, so
+it never reaches an operator's client, and a client used once is kept for good.
 
 ### Device authorization (RFC 8628)
 

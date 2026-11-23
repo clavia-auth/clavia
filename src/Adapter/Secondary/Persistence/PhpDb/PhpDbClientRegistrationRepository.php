@@ -16,16 +16,19 @@ use Clavia\Domain\Client\Registration\ClientRegistration;
 use Clavia\Domain\Client\Registration\ClientRegistrationRepository;
 use Clavia\Domain\Client\Registration\InitialAccessTokenId;
 use Clavia\Domain\Shared\Digest;
+use DateTimeImmutable;
 
 /**
  * Registrations in `client_registrations`, one row per self-registered client.
  *
  * @psalm-type RegistrationRow = array{client_id: string, access_token_hash: string,
- *                                     initial_access_token_id: string|null, registered_at: string}
+ *                                     initial_access_token_id: string|null, registered_at: string,
+ *                                     first_used_at: string|null}
  */
 final readonly class PhpDbClientRegistrationRepository implements ClientRegistrationRepository
 {
-    private const string COLUMNS = 'client_id, access_token_hash, initial_access_token_id, registered_at';
+    private const string COLUMNS =
+        'client_id, access_token_hash, initial_access_token_id, registered_at, first_used_at';
 
     public function __construct(private Database $database)
     {
@@ -98,6 +101,29 @@ final readonly class PhpDbClientRegistrationRepository implements ClientRegistra
         );
     }
 
+    #[\Override]
+    public function markUsed(ClientId $clientId, DateTimeImmutable $at): void
+    {
+        $this->database->execute(
+            'UPDATE client_registrations SET first_used_at = :at '
+            . 'WHERE client_id = :client_id AND first_used_at IS NULL',
+            ['at' => Timestamp::toDatabase($at), 'client_id' => $clientId->value],
+        );
+    }
+
+    #[\Override]
+    public function neverUsedSince(DateTimeImmutable $before): array
+    {
+        /** @var list<string> $ids */
+        $ids = array_column($this->database->fetchAll(
+            'SELECT client_id FROM client_registrations WHERE first_used_at IS NULL AND registered_at < :before '
+            . 'ORDER BY registered_at, client_id',
+            ['before' => Timestamp::toDatabase($before)],
+        ), 'client_id');
+
+        return array_map(ClientId::fromString(...), $ids);
+    }
+
     /** @param RegistrationRow $row */
     private static function hydrate(array $row): ClientRegistration
     {
@@ -108,6 +134,7 @@ final readonly class PhpDbClientRegistrationRepository implements ClientRegistra
             Digest::fromHex($row['access_token_hash']),
             $initialAccessTokenId === null ? null : InitialAccessTokenId::fromString($initialAccessTokenId),
             Timestamp::fromDatabase($row['registered_at']),
+            $row['first_used_at'] === null ? null : Timestamp::fromDatabase($row['first_used_at']),
         );
     }
 }
