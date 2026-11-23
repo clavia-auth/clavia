@@ -397,6 +397,13 @@ before the grant runs, so a bad one spends no code. What the grant issues is bou
 introspection. The answer carries the next `DPoP-Nonce`. A refusal is one
 `invalid_dpop_proof`; the reason is logged. Without a proof a token is a bearer token.
 
+Codes and refresh tokens are bound too. `dpop_jkt` at `/oauth2/authorize` (validated with the
+other parameters) binds the code; a `DPoP` header at `/oauth2/par` binds the pushed request to the
+proof's key, and a `dpop_jkt` naming another is `invalid_dpop_proof`. A bound code redeemed without
+a proof from its key is `invalid_grant`, and spent. A **public** client's refresh family is bound to
+the key it started with; a refresh without it is `invalid_grant` and spends nothing. A
+confidential client's family is not bound (RFC 9449 §5): its authentication binds it.
+
 ### Client authentication
 
 One method per request, read from what the request carries: an `Authorization` header is

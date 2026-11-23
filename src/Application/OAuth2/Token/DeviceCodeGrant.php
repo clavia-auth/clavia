@@ -137,7 +137,12 @@ final readonly class DeviceCodeGrant implements Grant
             throw $scope;
         }
 
-        return $this->mint($request, $user, $scope, $client->mayUseGrant(GrantType::RefreshToken), $dpopKey);
+        // RFC 9449 §5: a public client's refresh tokens are bound to its key.
+        $familyKey = $client->isPublic() ? $dpopKey : null;
+
+        $refreshable = $client->mayUseGrant(GrantType::RefreshToken);
+
+        return $this->mint($request, $user, $scope, $refreshable, $dpopKey, $familyKey);
     }
 
     private function mint(
@@ -146,6 +151,7 @@ final readonly class DeviceCodeGrant implements Grant
         ScopeSet $scope,
         bool $refreshable,
         ?JwkThumbprint $dpopKey,
+        ?JwkThumbprint $familyKey,
     ): IssuedToken {
         $now = $this->clock->now();
 
@@ -166,6 +172,7 @@ final readonly class DeviceCodeGrant implements Grant
                 $this->refreshTokenLifetimeSeconds,
                 $this->refreshTokenAbsoluteLifetimeSeconds,
                 $request->authentication() ?? AuthenticationContext::unknown(),
+                $familyKey,
             );
             $this->refreshTokens->add($refreshToken);
         }

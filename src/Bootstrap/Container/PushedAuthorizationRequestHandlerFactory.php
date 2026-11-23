@@ -15,6 +15,7 @@ use Clavia\Adapter\Primary\Http\OAuth2\OAuth2Responder;
 use Clavia\Adapter\Primary\Http\OAuth2\PushedAuthorizationRequestHandler;
 use Clavia\Application\OAuth2\Par\PushAuthorizationRequest;
 use Psr\Container\ContainerInterface;
+use Psr\Log\LoggerInterface;
 
 final class PushedAuthorizationRequestHandlerFactory
 {
@@ -25,6 +26,9 @@ final class PushedAuthorizationRequestHandlerFactory
         /** @var OAuth2Responder $responder */
         $responder = $container->get(OAuth2Responder::class);
 
-        return new PushedAuthorizationRequestHandler($push, $responder);
+        /** @var LoggerInterface $logger */
+        $logger = $container->get(LoggerInterface::class);
+
+        return new PushedAuthorizationRequestHandler($push, $responder, $logger);
     }
 }

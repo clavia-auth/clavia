@@ -153,6 +153,11 @@ final readonly class AuthorizationCodeGrant implements Grant
         if ($refusal !== null) {
             return $refusal;
         }
+        // RFC 9449 §10: a code bound to a key is redeemed with a proof from that key, or not at
+        // all — and, like a wrong verifier, a wrong key leaves it spent.
+        if ($code->dpopJkt !== null && ($dpopKey === null || ! $code->dpopJkt->equals($dpopKey))) {
+            return OAuth2Error::invalidGrant("The 'code' is bound to another DPoP key.");
+        }
 
         // Re-checked now rather than trusted from when the code was issued: an account
         // deactivated in between must not yield a token.
@@ -166,7 +171,11 @@ final readonly class AuthorizationCodeGrant implements Grant
             return $scope;
         }
 
-        return $this->mint($code, $user, $scope, $client->mayUseGrant(GrantType::RefreshToken), $dpopKey);
+        // RFC 9449 §5: a public client's refresh tokens are bound to its key; a confidential
+        // client's are bound to its authentication.
+        $familyKey = $client->isPublic() ? $dpopKey : null;
+
+        return $this->mint($code, $user, $scope, $client->mayUseGrant(GrantType::RefreshToken), $dpopKey, $familyKey);
     }
 
     /**
@@ -216,6 +225,7 @@ final readonly class AuthorizationCodeGrant implements Grant
         ScopeSet $scope,
         bool $refreshable,
         ?JwkThumbprint $dpopKey,
+        ?JwkThumbprint $familyKey,
     ): IssuedToken {
         $now = $this->clock->now();
 
@@ -233,6 +243,7 @@ final readonly class AuthorizationCodeGrant implements Grant
                 $now,
                 $this->refreshTokenLifetimeSeconds,
                 $this->refreshTokenAbsoluteLifetimeSeconds,
+                $familyKey,
             );
             $this->refreshTokens->add($refreshToken);
         }

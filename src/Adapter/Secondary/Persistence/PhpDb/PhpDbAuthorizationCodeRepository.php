@@ -19,6 +19,7 @@ use Clavia\Domain\OAuth2\AuthorizationCode;
 use Clavia\Domain\OAuth2\AuthorizationCodeId;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
 use Clavia\Domain\OAuth2\CodeChallenge;
+use Clavia\Domain\OAuth2\Dpop\JwkThumbprint;
 use Clavia\Domain\Oidc\Nonce;
 use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\Digest;
@@ -41,11 +42,12 @@ final readonly class PhpDbAuthorizationCodeRepository implements AuthorizationCo
             <<<'SQL'
                 INSERT INTO oauth2_authorization_codes (
                     id, code_hash, client_id, user_id, redirect_uri, scope, code_challenge,
-                    code_challenge_method, audience, nonce, auth_time, amr, sid, expires_at, used_at, created_at
+                    code_challenge_method, audience, nonce, auth_time, amr, sid, expires_at, used_at, created_at,
+                    dpop_jkt
                 ) VALUES (
                     :id, :code_hash, :client_id, :user_id, :redirect_uri, :scope, :code_challenge,
                     :code_challenge_method, :audience, :nonce, :auth_time, CAST(:amr AS jsonb), :sid, :expires_at,
-                    :used_at, :created_at
+                    :used_at, :created_at, :dpop_jkt
                 )
                 SQL,
             [
@@ -65,6 +67,7 @@ final readonly class PhpDbAuthorizationCodeRepository implements AuthorizationCo
                 'expires_at' => Timestamp::toDatabase($code->expiresAt),
                 'used_at' => Timestamp::toDatabaseOrNull($code->usedAt()),
                 'created_at' => Timestamp::toDatabase($code->createdAt),
+                'dpop_jkt' => $code->dpopJkt?->value,
             ],
         );
     }
@@ -82,12 +85,12 @@ final readonly class PhpDbAuthorizationCodeRepository implements AuthorizationCo
          * @var array{id: string, code_hash: string, client_id: string, user_id: string, redirect_uri: string,
          *            scope: string, code_challenge: string|null, audience: string|null, nonce: string|null,
          *            auth_time: string|null, amr: string, sid: string|null, expires_at: string,
-         *            used_at: string|null, created_at: string}|null $row
+         *            used_at: string|null, created_at: string, dpop_jkt: string|null}|null $row
          */
         $row = $this->database->fetchOne(
             <<<'SQL'
                 SELECT id, code_hash, client_id, user_id, redirect_uri, scope, code_challenge,
-                       audience, nonce, auth_time, amr, sid, expires_at, used_at, created_at
+                       audience, nonce, auth_time, amr, sid, expires_at, used_at, created_at, dpop_jkt
                 FROM oauth2_authorization_codes
                 WHERE code_hash = :code_hash
                 FOR UPDATE
@@ -117,6 +120,7 @@ final readonly class PhpDbAuthorizationCodeRepository implements AuthorizationCo
             Timestamp::fromDatabase($row['expires_at']),
             Timestamp::fromDatabaseOrNull($row['used_at']),
             Timestamp::fromDatabase($row['created_at']),
+            $row['dpop_jkt'] === null ? null : JwkThumbprint::fromString($row['dpop_jkt']),
         );
     }
 

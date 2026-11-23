@@ -130,6 +130,7 @@ final readonly class Authorize
             $prompt = Prompt::fromParameter($parameters->get('prompt'));
             $maxAge = MaxAge::fromParameter($parameters->get('max_age'));
             $requirement = AuthorizationRequestRules::requirement($parameters);
+            $dpopKey = AuthorizationRequestRules::dpopKey($parameters);
         } catch (OAuth2Error $refusal) {
             return new RequestRefused($redirectUri, $refusal, $state);
         }
@@ -241,6 +242,7 @@ final readonly class Authorize
             $endUser->authentication(),
             $this->clock->now(),
             $this->codeLifetimeSeconds,
+            $dpopKey,
         ));
         // With a code in hand the application is about to hold a session of its own on the
         // strength of this one; when this one ends, it is told (Back-Channel Logout 1.0).

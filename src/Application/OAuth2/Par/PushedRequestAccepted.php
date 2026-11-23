@@ -19,10 +19,12 @@ final readonly class PushedRequestAccepted
 {
     /**
      * @param positive-int $expiresIn Seconds.
+     * @param string|null  $dpopNonce The nonce for the client's next DPoP proof, for a push that carried one.
      */
     public function __construct(
         public string $requestUri,
         public int $expiresIn,
+        public ?string $dpopNonce = null,
     ) {
     }
 }
