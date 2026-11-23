@@ -75,12 +75,17 @@ final readonly class ConfigurationTrail implements EventSubscriber
     private function clientRegistered(ClientRegistered $event): void
     {
         $client = $event->client;
-        $this->audit->record(AuditEventType::ClientCreated, AuditTarget::client($client->id), [
+        $detail = [
             'name' => $client->name,
             'client_type' => $client->type->value,
             'first_party' => $client->isFirstParty(),
             'grant_types' => array_map(static fn (GrantType $grant): string => $grant->value, $client->grantTypes),
-        ]);
+        ];
+        if ($event->registeredWith !== null) {
+            // A client that registered itself (RFC 7591): which initial access token let it in.
+            $detail['registered_with'] = $event->registeredWith->value;
+        }
+        $this->audit->record(AuditEventType::ClientCreated, AuditTarget::client($client->id), $detail);
     }
 
     private function clientChanged(ClientChanged $event): void

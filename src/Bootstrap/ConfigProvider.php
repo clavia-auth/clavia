@@ -81,6 +81,7 @@ use Clavia\Adapter\Primary\Http\Management\UserRolesHandler;
 use Clavia\Adapter\Primary\Http\Management\UserSessionsHandler;
 use Clavia\Adapter\Primary\Http\Management\UsersHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
+use Clavia\Adapter\Primary\Http\OAuth2\ClientRegistrationHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\DeviceAuthorizationHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\IntrospectionHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\OAuth2Responder;
@@ -171,6 +172,8 @@ use Clavia\Application\Authentication\SignIn\SignInWithPassword;
 use Clavia\Application\Authentication\SignOut;
 use Clavia\Application\Authentication\SignOutEverywhere;
 use Clavia\Application\Clients\RegisterMachineClient;
+use Clavia\Application\Clients\Registration\RegisterClientDynamically;
+use Clavia\Application\Clients\Registration\RegistrationMetadata;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\Development\BuildAuthorizationUrl;
 use Clavia\Application\Development\SeedDashboardClient;
@@ -295,6 +298,7 @@ use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
 use Clavia\Domain\Authentication\Passkey\RelyingParty;
 use Clavia\Domain\Client\ClientRepository;
+use Clavia\Domain\Client\Registration\ClientRegistrationRepository;
 use Clavia\Domain\Client\Registration\InitialAccessTokenRepository;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Consent\ConsentRepository;
@@ -424,6 +428,7 @@ final class ConfigProvider
                     SigningKeysHandler::class => Container\SigningKeysHandlerFactory::class,
                     InitialAccessTokensHandler::class => Container\InitialAccessTokensHandlerFactory::class,
                     InitialAccessTokenHandler::class => Container\InitialAccessTokenHandlerFactory::class,
+                    ClientRegistrationHandler::class => Container\ClientRegistrationHandlerFactory::class,
                     PushedAuthorizationRequestHandler::class
                         => Container\PushedAuthorizationRequestHandlerFactory::class,
                     HeldConsents::class => Container\HeldConsentsFactory::class,
@@ -585,6 +590,8 @@ final class ConfigProvider
                     IssueInitialAccessToken::class => Container\IssueInitialAccessTokenFactory::class,
                     RevokeInitialAccessToken::class => Container\RevokeInitialAccessTokenFactory::class,
                     ReadInitialAccessTokens::class => Container\ReadInitialAccessTokensFactory::class,
+                    RegistrationMetadata::class => Container\RegistrationMetadataFactory::class,
+                    RegisterClientDynamically::class => Container\RegisterClientDynamicallyFactory::class,
                     UpdateRole::class => Container\UpdateRoleFactory::class,
                     DeleteRole::class => Container\DeleteRoleFactory::class,
                     RoleAssignments::class => Container\RoleAssignmentsFactory::class,
@@ -613,6 +620,7 @@ final class ConfigProvider
                     ClientGrantRepository::class => Container\ClientGrantRepositoryFactory::class,
                     RoleRepository::class => Container\RoleRepositoryFactory::class,
                     InitialAccessTokenRepository::class => Container\InitialAccessTokenRepositoryFactory::class,
+                    ClientRegistrationRepository::class => Container\ClientRegistrationRepositoryFactory::class,
                     ConsentRepository::class => Container\ConsentRepositoryFactory::class,
                     LoginStateStore::class => Container\LoginStateStoreFactory::class,
                     PushedAuthorizationRequestStore::class => Container\PushedAuthorizationRequestStoreFactory::class,

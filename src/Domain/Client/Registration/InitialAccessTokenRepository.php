@@ -25,6 +25,9 @@ interface InitialAccessTokenRepository
 
     public function find(InitialAccessTokenId $id): ?InitialAccessToken;
 
+    /** The token whose secret has this digest, whatever its state. */
+    public function findByDigest(Digest $digest): ?InitialAccessToken;
+
     /** Record a revocation. Uses are never written here: {@see spendOne()} owns them. */
     public function save(InitialAccessToken $token): void;
 

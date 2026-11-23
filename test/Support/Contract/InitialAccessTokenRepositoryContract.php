@@ -45,6 +45,8 @@ trait InitialAccessTokenRepositoryContract
         self::assertNull($stored->revokedAt);
         $unknown = InitialAccessTokenId::generate(new SeededRandomSource(99));
         self::assertNull($this->initialAccessTokens()->find($unknown));
+        self::assertTrue($this->initialAccessTokens()->findByDigest(Digest::of('partner'))?->id->equals($token->id));
+        self::assertNull($this->initialAccessTokens()->findByDigest(Digest::of('nobody')));
     }
 
     #[Test]

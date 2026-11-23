@@ -206,6 +206,15 @@ final readonly class Settings
          * a client factory nobody vouches for is what phishing applications are made in.
          */
         public ClientRegistration $clientRegistration = ClientRegistration::Off,
+        /**
+         * Registrations one client address may ask for at `/oauth2/register` per window, valid or
+         * not: an initial access token is checked by digest, and a flood of guesses is still bounded.
+         */
+        #[Range(min: 1, max: 1000)]
+        public int $clientRegistrationMaxPerAddress = 20,
+        /** The window those registrations are counted in, seconds; every one restarts it. */
+        #[Range(min: 60, max: 86400)]
+        public int $clientRegistrationWindow = 3600,
         /** How long the audit trail keeps an event, days; `clavia audit:purge` removes what is older. */
         #[Range(min: 1)]
         public int $auditRetentionDays = 90,

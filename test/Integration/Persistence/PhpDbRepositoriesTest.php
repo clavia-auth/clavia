@@ -11,10 +11,12 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Integration\Persistence;
 
+use ClaviaTest\Support\Contract\ClientRegistrationRepositoryContract;
 use ClaviaTest\Support\Contract\InitialAccessTokenRepositoryContract;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbAuthorizationCodeRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientGrantRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientRegistrationRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbConnectionRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbConsentRepository;
@@ -43,6 +45,7 @@ use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\GrantType;
+use Clavia\Domain\Client\Registration\ClientRegistrationRepository;
 use Clavia\Domain\Client\Registration\InitialAccessTokenRepository;
 use Clavia\Domain\Client\ResponseType;
 use Clavia\Domain\Connection\ConnectionRepository;
@@ -96,6 +99,7 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
     use ConsentRepositoryContract;
     use ConnectionRepositoryContract;
     use InitialAccessTokenRepositoryContract;
+    use ClientRegistrationRepositoryContract;
 
     #[\Override]
     protected function connections(): ConnectionRepository
@@ -113,6 +117,12 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
     protected function initialAccessTokens(): InitialAccessTokenRepository
     {
         return new PhpDbInitialAccessTokenRepository(TestStorage::database());
+    }
+
+    #[\Override]
+    protected function clientRegistrations(): ClientRegistrationRepository
+    {
+        return new PhpDbClientRegistrationRepository(TestStorage::database());
     }
 
     #[\Override]

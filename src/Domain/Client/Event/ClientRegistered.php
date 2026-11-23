@@ -12,15 +12,18 @@ declare(strict_types=1);
 namespace Clavia\Domain\Client\Event;
 
 use Clavia\Domain\Client\Client;
+use Clavia\Domain\Client\Registration\InitialAccessTokenId;
 use Clavia\Domain\Shared\DomainEvent;
 
 /**
- * An application was registered.
+ * An application was registered: by an operator, or by itself (RFC 7591) with the initial access
+ * token `$registeredWith`.
  */
 final readonly class ClientRegistered implements DomainEvent
 {
     public function __construct(
         public Client $client,
+        public ?InitialAccessTokenId $registeredWith = null,
     ) {
     }
 }

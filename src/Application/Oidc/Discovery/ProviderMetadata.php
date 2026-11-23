@@ -47,6 +47,7 @@ final readonly class ProviderMetadata
     public const string USERINFO_ENDPOINT = '/oidc/userinfo';
     public const string JWKS_URI = '/oidc/jwks.json';
     public const string END_SESSION_ENDPOINT = '/oidc/logout';
+    public const string REGISTRATION_ENDPOINT = '/oauth2/register';
 
     /** The claims an ID token or the userinfo endpoint can carry. */
     private const array CLAIMS = [
@@ -60,6 +61,7 @@ final readonly class ProviderMetadata
      * @param list<GrantType>        $grantTypes        What the token endpoint answers.
      * @param list<ClientAuthMethod> $tokenAuthMethods  How a client may authenticate there.
      * @param list<SigningAlgorithm> $signingAlgorithms What ID tokens are signed with.
+     * @param bool                   $registration      Whether `/oauth2/register` exists (RFC 7591).
      */
     public function __construct(
         private string $issuer,
@@ -67,6 +69,7 @@ final readonly class ProviderMetadata
         private array $grantTypes,
         private array $tokenAuthMethods,
         private array $signingAlgorithms,
+        private bool $registration = false,
     ) {
     }
 
@@ -83,6 +86,8 @@ final readonly class ProviderMetadata
             'token_endpoint' => $this->issuer . self::TOKEN_ENDPOINT,
             'userinfo_endpoint' => $this->issuer . self::USERINFO_ENDPOINT,
             'jwks_uri' => $this->issuer . self::JWKS_URI,
+            // RFC 8414 §2, OIDC Discovery §3: named only when software may register itself.
+            ...($this->registration ? ['registration_endpoint' => $this->issuer . self::REGISTRATION_ENDPOINT] : []),
             // OpenID Connect RP-Initiated Logout 1.0 §2.1.
             'end_session_endpoint' => $this->issuer . self::END_SESSION_ENDPOINT,
             'scopes_supported' => $this->scopes->toList(),
