@@ -15,6 +15,7 @@ use Clavia\Adapter\Primary\Http\OAuth2\OAuth2Responder;
 use Clavia\Adapter\Primary\Http\OAuth2\TokenHandler;
 use Clavia\Application\OAuth2\Token\IssueToken;
 use Psr\Container\ContainerInterface;
+use Psr\Log\LoggerInterface;
 
 final class TokenHandlerFactory
 {
@@ -25,6 +26,9 @@ final class TokenHandlerFactory
         /** @var OAuth2Responder $responder */
         $responder = $container->get(OAuth2Responder::class);
 
-        return new TokenHandler($issueToken, $responder);
+        /** @var LoggerInterface $logger */
+        $logger = $container->get(LoggerInterface::class);
+
+        return new TokenHandler($issueToken, $responder, $logger);
     }
 }

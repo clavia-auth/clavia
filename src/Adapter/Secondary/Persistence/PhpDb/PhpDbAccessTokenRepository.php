@@ -19,6 +19,7 @@ use Clavia\Domain\OAuth2\AccessToken;
 use Clavia\Domain\OAuth2\AccessTokenId;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\AuthorizationCodeId;
+use Clavia\Domain\OAuth2\Dpop\JwkThumbprint;
 use Clavia\Domain\OAuth2\RefreshTokenId;
 use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\Digest;
@@ -41,10 +42,11 @@ final readonly class PhpDbAccessTokenRepository implements AccessTokenRepository
             <<<'SQL'
                 INSERT INTO oauth2_access_tokens (
                     id, token_hash, client_id, user_id, authorization_code_id, audience, token_type, scope,
-                    issued_at, expires_at, revoked_at, refresh_family_id, auth_time, amr
+                    issued_at, expires_at, revoked_at, refresh_family_id, auth_time, amr, dpop_jkt
                 ) VALUES (
                     :id, :token_hash, :client_id, :user_id, :authorization_code_id, :audience, :token_type, :scope,
-                    :issued_at, :expires_at, :revoked_at, :refresh_family_id, :auth_time, CAST(:amr AS jsonb)
+                    :issued_at, :expires_at, :revoked_at, :refresh_family_id, :auth_time, CAST(:amr AS jsonb),
+                    :dpop_jkt
                 )
                 SQL,
             [
@@ -62,6 +64,7 @@ final readonly class PhpDbAccessTokenRepository implements AccessTokenRepository
                 'refresh_family_id' => $token->refreshFamilyId?->value,
                 'auth_time' => Timestamp::toDatabaseOrNull($token->authentication->authenticatedAt),
                 'amr' => Jsonb::encode($token->authentication->methodValues()),
+                'dpop_jkt' => $token->dpopJkt?->value,
             ],
         );
     }
@@ -73,12 +76,12 @@ final readonly class PhpDbAccessTokenRepository implements AccessTokenRepository
          * @var array{id: string, token_hash: string, client_id: string, user_id: string|null,
          *            authorization_code_id: string|null, audience: string|null, scope: string, issued_at: string,
          *            expires_at: string, revoked_at: string|null, refresh_family_id: string|null,
-         *            auth_time: string|null, amr: string}|null $row
+         *            auth_time: string|null, amr: string, dpop_jkt: string|null}|null $row
          */
         $row = $this->database->fetchOne(
             <<<'SQL'
                 SELECT id, token_hash, client_id, user_id, authorization_code_id, audience, scope,
-                       issued_at, expires_at, revoked_at, refresh_family_id, auth_time, amr
+                       issued_at, expires_at, revoked_at, refresh_family_id, auth_time, amr, dpop_jkt
                 FROM oauth2_access_tokens
                 WHERE token_hash = :token_hash
                 SQL,
@@ -107,6 +110,7 @@ final readonly class PhpDbAccessTokenRepository implements AccessTokenRepository
                 Timestamp::fromDatabaseOrNull($row['auth_time']),
                 array_map(AuthenticationMethod::from(...), Jsonb::decodeStrings($row['amr'])),
             ),
+            $row['dpop_jkt'] === null ? null : JwkThumbprint::fromString($row['dpop_jkt']),
         );
     }
 

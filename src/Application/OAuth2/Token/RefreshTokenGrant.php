@@ -21,6 +21,7 @@ use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AccessToken;
 use Clavia\Domain\OAuth2\AccessTokenId;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
+use Clavia\Domain\OAuth2\Dpop\JwkThumbprint;
 use Clavia\Domain\OAuth2\Event\AccessTokenIssued;
 use Clavia\Domain\OAuth2\Event\RefreshTokenReplayed;
 use Clavia\Domain\OAuth2\OAuth2Error;
@@ -92,7 +93,7 @@ final readonly class RefreshTokenGrant implements Grant
     }
 
     #[\Override]
-    public function issue(RequestParameters $parameters, Client $client): IssuedToken
+    public function issue(RequestParameters $parameters, Client $client, ?JwkThumbprint $dpopKey = null): IssuedToken
     {
         $presented = $parameters->get('refresh_token');
         if ($presented === null) {
@@ -106,7 +107,7 @@ final readonly class RefreshTokenGrant implements Grant
         }
 
         $result = $this->transactions->transactional(
-            fn (): IssuedToken|OAuth2Error => $this->refresh($presented, $requested, $client),
+            fn (): IssuedToken|OAuth2Error => $this->refresh($presented, $requested, $client, $dpopKey),
         );
 
         return $result instanceof OAuth2Error ? throw $result : $result;
@@ -119,6 +120,7 @@ final readonly class RefreshTokenGrant implements Grant
         #[\SensitiveParameter] string $presented,
         ScopeSet $requested,
         Client $client,
+        ?JwkThumbprint $dpopKey,
     ): IssuedToken|OAuth2Error {
         $now = $this->clock->now();
 
@@ -179,6 +181,7 @@ final readonly class RefreshTokenGrant implements Grant
                 $now,
                 $this->accessTokenLifetimeSeconds,
             ),
+            $dpopKey,
         );
         $token = $minted->token;
         $value = $minted->value;
@@ -186,7 +189,7 @@ final readonly class RefreshTokenGrant implements Grant
 
         return new IssuedToken(
             $value,
-            AccessToken::TOKEN_TYPE,
+            $token->tokenType(),
             $token->lifetimeFrom($now),
             $token->scope,
             null,

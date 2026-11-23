@@ -20,6 +20,7 @@ use Clavia\Domain\OAuth2\OAuth2Error;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
+use Psr\Log\LoggerInterface;
 
 /**
  * `POST /oauth2/token` — the token endpoint (RFC 6749 §3.2).
@@ -32,6 +33,7 @@ final readonly class TokenHandler implements RequestHandlerInterface
     public function __construct(
         private IssueToken $issueToken,
         private OAuth2Responder $responder,
+        private LoggerInterface $logger,
     ) {
     }
 
@@ -45,8 +47,15 @@ final readonly class TokenHandler implements RequestHandlerInterface
                 RequestParameterReader::form($request),
                 $authorization === '' ? null : $authorization,
                 ClientAddress::of($request),
+                array_values($request->getHeader('DPoP')),
             ));
         } catch (OAuth2Error $error) {
+            if ($error->reason !== null) {
+                $this->logger->info('A DPoP proof was refused at the token endpoint: {reason}', [
+                    'reason' => $error->reason,
+                ]);
+            }
+
             return $this->responder->tokenError($error);
         } catch (TooManyFailedRequests $refusal) {
             return $this->responder->tooManyFailures($refusal);
@@ -67,6 +76,9 @@ final readonly class TokenHandler implements RequestHandlerInterface
             $payload['id_token'] = $token->idToken;
         }
 
-        return $this->responder->success($payload);
+        $response = $this->responder->success($payload);
+
+        // RFC 9449 §8: the nonce for the client's next proof, without a failed round trip.
+        return $token->dpopNonce === null ? $response : $response->withHeader('DPoP-Nonce', $token->dpopNonce);
     }
 }

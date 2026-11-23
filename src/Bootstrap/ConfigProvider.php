@@ -228,6 +228,7 @@ use Clavia\Application\OAuth2\Device\DescribeDeviceRequest;
 use Clavia\Application\OAuth2\Device\PendingDeviceRequests;
 use Clavia\Application\OAuth2\Device\RequestDeviceAuthorization;
 use Clavia\Application\OAuth2\Device\UserCodeThrottle;
+use Clavia\Application\OAuth2\Dpop\ReadDpopProof;
 use Clavia\Application\OAuth2\Par\PushAuthorizationRequest;
 use Clavia\Application\OAuth2\ReadRequestedAccess;
 use Clavia\Application\OAuth2\Token\AccessTokenMinter;
@@ -408,6 +409,7 @@ final class ConfigProvider
                     ClientFailureThrottle::class => Container\ClientFailureThrottleFactory::class,
                     Authorize::class => Container\AuthorizeFactory::class,
                     AuthorizationRequestRules::class => Container\AuthorizationRequestRulesFactory::class,
+                    ReadDpopProof::class => Container\ReadDpopProofFactory::class,
                     PushAuthorizationRequest::class => Container\PushAuthorizationRequestFactory::class,
                     SigningKeysHandler::class => Container\SigningKeysHandlerFactory::class,
                     PushedAuthorizationRequestHandler::class

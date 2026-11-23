@@ -15,6 +15,7 @@ use Clavia\Application\OAuth2\RequestParameters;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\GrantType;
+use Clavia\Domain\OAuth2\Dpop\JwkThumbprint;
 use Clavia\Domain\OAuth2\OAuth2Error;
 
 /**
@@ -34,7 +35,10 @@ interface Grant
     /**
      * Issue a token to an already-authenticated client that is registered for this grant.
      *
+     * @param JwkThumbprint|null $dpopKey The key of the request's verified DPoP proof (RFC 9449 §5), when
+     *                                    there is one: the access token issued is bound to it.
+     *
      * @throws OAuth2Error
      */
-    public function issue(RequestParameters $parameters, Client $client): IssuedToken;
+    public function issue(RequestParameters $parameters, Client $client, ?JwkThumbprint $dpopKey = null): IssuedToken;
 }

@@ -13,11 +13,14 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
 use Clavia\Application\OAuth2\ClientAuthentication\ClientFailureThrottle;
+use Clavia\Application\OAuth2\Dpop\ReadDpopProof;
 use Clavia\Application\OAuth2\Token\AuthorizationCodeGrant;
 use Clavia\Application\OAuth2\Token\ClientCredentialsGrant;
 use Clavia\Application\OAuth2\Token\DeviceCodeGrant;
 use Clavia\Application\OAuth2\Token\IssueToken;
 use Clavia\Application\OAuth2\Token\RefreshTokenGrant;
+use Clavia\Application\Oidc\Discovery\ProviderMetadata;
+use Clavia\Configuration\Settings;
 use Psr\Container\ContainerInterface;
 
 final class IssueTokenFactory
@@ -38,9 +41,17 @@ final class IssueTokenFactory
         $deviceCode = $container->get(DeviceCodeGrant::class);
 
         // Every grant the token endpoint offers. A grant not listed here does not exist.
+        /** @var ReadDpopProof $dpop */
+        $dpop = $container->get(ReadDpopProof::class);
+        /** @var Settings $settings */
+        $settings = $container->get(Settings::class);
+        $tokenEndpoint = $settings->issuer() . ProviderMetadata::TOKEN_ENDPOINT;
+
         return new IssueToken(
             $authenticator,
             $throttle,
+            $dpop,
+            $tokenEndpoint,
             $authorizationCode,
             $clientCredentials,
             $refreshToken,

@@ -28,6 +28,8 @@ final readonly class IssuedToken
      *                                       request (OIDC Core §3.1.3.3).
      * @param string|null      $refreshToken The refresh token, for a client registered for the
      *                                       refresh token grant; a new one on every refresh.
+     * @param string|null      $dpopNonce    The nonce for the client's next DPoP proof (RFC 9449 §8), for a
+     *                                       request that came with one.
      */
     public function __construct(
         #[\SensitiveParameter] public string $accessToken,
@@ -36,6 +38,20 @@ final readonly class IssuedToken
         public ScopeSet $scope,
         #[\SensitiveParameter] public ?string $idToken = null,
         #[\SensitiveParameter] public ?string $refreshToken = null,
+        public ?string $dpopNonce = null,
     ) {
+    }
+
+    public function withDpopNonce(string $nonce): self
+    {
+        return new self(
+            $this->accessToken,
+            $this->tokenType,
+            $this->expiresIn,
+            $this->scope,
+            $this->idToken,
+            $this->refreshToken,
+            $nonce,
+        );
     }
 }

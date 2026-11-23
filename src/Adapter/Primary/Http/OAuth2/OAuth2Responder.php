@@ -87,6 +87,14 @@ final readonly class OAuth2Responder
      */
     public function tokenError(OAuth2Error $error): ResponseInterface
     {
+        if ($error->dpopNonce !== null) {
+            // RFC 9449 §8: `use_dpop_nonce` is a 400 carrying the nonce to use.
+            return new JsonResponse(
+                self::document($error),
+                400,
+                self::NO_STORE + ['DPoP-Nonce' => $error->dpopNonce],
+            );
+        }
         if ($error->error === ErrorCode::InvalidClient) {
             return new JsonResponse(
                 self::document($error),

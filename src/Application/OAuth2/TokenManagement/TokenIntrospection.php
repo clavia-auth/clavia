@@ -30,6 +30,8 @@ final readonly class TokenIntrospection
      *                                                §6.2); null for a client acting as itself, or a sign-in this
      *                                                server did not witness.
      * @param string|null            $acr             The level of that sign-in; null for one factor.
+     * @param string|null            $dpopJkt         The thumbprint of the DPoP key it is bound to (RFC 9449
+     *                                                §6.2); null for a bearer token.
      */
     public function __construct(
         public ClientId $clientId,
@@ -42,6 +44,7 @@ final readonly class TokenIntrospection
         public ?string $tokenType,
         public ?DateTimeImmutable $authenticatedAt = null,
         public ?string $acr = null,
+        public ?string $dpopJkt = null,
     ) {
     }
 }

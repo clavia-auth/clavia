@@ -96,6 +96,10 @@ final readonly class IntrospectionHandler implements RequestHandlerInterface
         if ($introspection->acr !== null) {
             $payload['acr'] = $introspection->acr;
         }
+        if ($introspection->dpopJkt !== null) {
+            // RFC 9449 §6.2: the resource server checks the proof's key against it.
+            $payload['cnf'] = ['jkt' => $introspection->dpopJkt];
+        }
 
         return $payload;
     }

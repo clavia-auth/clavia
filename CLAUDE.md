@@ -381,6 +381,22 @@ yields a code, and pushed again under a new handle — as long as the login stat
 for the sign-in page, consent or a step-up. Discovery names the endpoint;
 `require_pushed_authorization_requests` is per client (RFC 9126 §6), off by default.
 
+### DPoP
+
+A request to the token endpoint may carry a DPoP proof (RFC 9449, design in `docs/design/dpop.md`):
+a JWT in the `DPoP` header, signed by a key the client holds. `ReadDpopProof` is the one door:
+exactly one header; the cryptography in `JoseDpopProofVerifier` (`typ: dpop+jwt`; ES256, EdDSA or
+RS256 with a key of the matching type; no private member; never PS256, whose pure-PHP
+verification costs a second); the request in `ProofRequirement` (`htm`; `htu` against this
+server's own URL, normalised, never the `Host`; `iat` within `CLAVIA_DPOP_PROOF_LIFETIME` and
+5 s ahead; `ath` and the bound key where a token is presented); the server's nonce
+(`DpopNonces`, one per `CLAVIA_DPOP_NONCE_LIFETIME`, the previous one accepted; `use_dpop_nonce`
+with `DPoP-Nonce`); then the `jti`, claimed once per key (`DpopReplayCache`). The proof is read
+before the grant runs, so a bad one spends no code. What the grant issues is bound to the key:
+`token_type: DPoP`, `dpop_jkt` on the access token, `cnf.jkt` in JWT access tokens and
+introspection. The answer carries the next `DPoP-Nonce`. A refusal is one
+`invalid_dpop_proof`; the reason is logged. Without a proof a token is a bearer token.
+
 ### Client authentication
 
 One method per request, read from what the request carries: an `Authorization` header is

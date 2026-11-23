@@ -45,7 +45,7 @@ final readonly class AccessTokenClaims
     public const string TYPE = 'at+jwt';
 
     /**
-     * @param array<non-empty-string, string|int> $claims
+     * @param array<non-empty-string, string|int|array<string, string>> $claims
      */
     private function __construct(private array $claims)
     {
@@ -83,12 +83,16 @@ final readonly class AccessTokenClaims
         if ($token->userId !== null && $acr !== null) {
             $claims['acr'] = $acr;
         }
+        if ($token->dpopJkt !== null) {
+            // RFC 9449 §6.1: the key a proof must come from for the token to be accepted.
+            $claims['cnf'] = ['jkt' => $token->dpopJkt->value];
+        }
 
         return new self($claims);
     }
 
     /**
-     * @return array<non-empty-string, string|int>
+     * @return array<non-empty-string, string|int|array<string, string>>
      */
     public function toArray(): array
     {

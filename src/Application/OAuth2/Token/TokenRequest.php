@@ -23,11 +23,13 @@ final readonly class TokenRequest
      * @param RequestParameters $parameters          The form body, unvalidated.
      * @param string|null       $authorizationHeader The raw `Authorization` header, when there is one.
      * @param string            $clientAddress       The address the request came from, as the web server saw it.
+     * @param list<string>      $dpopProofs          Every `DPoP` header it carried (RFC 9449 §4.1).
      */
     public function __construct(
         public RequestParameters $parameters,
         #[\SensitiveParameter] public ?string $authorizationHeader,
         public string $clientAddress,
+        public array $dpopProofs = [],
     ) {
     }
 

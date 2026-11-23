@@ -14,6 +14,8 @@ namespace Clavia\Application\OAuth2\Token;
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
 use Clavia\Application\OAuth2\ClientAuthentication\ClientFailureThrottle;
 use Clavia\Application\OAuth2\ClientAuthentication\TooManyFailedRequests;
+use Clavia\Application\OAuth2\Dpop\ReadDpopProof;
+use Clavia\Domain\OAuth2\Dpop\ProofRequirement;
 use Clavia\Domain\OAuth2\ErrorCode;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\GrantType;
@@ -26,15 +28,25 @@ use Clavia\Domain\OAuth2\OAuth2Error;
  * A grant refused as `invalid_grant` — a wrong code or verifier, a replayed or unknown
  * refresh token, an unknown device code — counts as a failure ({@see ClientFailureThrottle}).
  * Answers a device is told to wait with (`authorization_pending`, `slow_down`) do not.
+ *
+ * A request carrying a DPoP proof (RFC 9449 §5) has it read before the grant runs — so a bad
+ * proof never spends a code — with the server's nonce required (§8, docs/design/dpop.md §2), and
+ * what the grant issues is bound to the proof's key. The answer then carries the next nonce.
  */
 final readonly class IssueToken
 {
     /** @var array<string, Grant> Keyed by `grant_type`. */
     private array $grants;
 
+    /**
+     * @param non-empty-string $tokenEndpoint The token endpoint's URL, as discovery names it: what a DPoP
+     *                                        proof's `htu` must be (RFC 9449 §4.3).
+     */
     public function __construct(
         private ClientAuthenticator $authenticator,
         private ClientFailureThrottle $throttle,
+        private ReadDpopProof $dpop,
+        private string $tokenEndpoint,
         Grant ...$grants,
     ) {
         $byType = [];
@@ -78,8 +90,10 @@ final readonly class IssueToken
             );
         }
 
+        $proof = ($this->dpop)($request->dpopProofs, new ProofRequirement('POST', $this->tokenEndpoint), true);
+
         try {
-            return $grant->issue($parameters, $client);
+            $issued = $grant->issue($parameters, $client, $proof?->thumbprint);
         } catch (OAuth2Error $error) {
             if ($error->error === ErrorCode::InvalidGrant) {
                 $this->throttle->recordRejectedGrant($request->clientAddress, $client);
@@ -87,6 +101,8 @@ final readonly class IssueToken
 
             throw $error;
         }
+
+        return $proof === null ? $issued : $issued->withDpopNonce($this->dpop->currentNonce());
     }
 
     /**
