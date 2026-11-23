@@ -68,6 +68,7 @@ registered itself is a third-party client, and so can never reach a system API**
 | Which clients RFC 7592 can touch | **Only the ones registered through RFC 7591**: an operator's client has no registration access token | The configuration endpoint must never be a second door into the operator's own applications |
 | Deletion | `DELETE` removes the client the same way the Management API does (its tokens, codes, consents, cascades), `204` | RFC 7592 §2.3. One deletion path, so nothing is left behind |
 | Operator's view | The Management API shows a client's `registration` (by which initial access token, when), and may change or delete it like any other client | The operator stays in charge. A self-registered client is an ordinary client once it exists |
+| Unused clients | A self-registered client that has **never been issued a token** is deleted `CLAVIA_CLIENT_REGISTRATION_UNUSED_LIFETIME` days after it registered (`clients:purge-unused`, run daily). A client used once is never purged | A token handed out in bulk leaves clients nobody finished setting up. "Never used" is one write per client's lifetime; "idle since" would be a write at every token, and would delete a legitimate client that is only dormant |
 | Throttle | Registrations are limited per client address (`AttemptCounter`), counted before the token is checked | A bad token costs a digest lookup; a flood of them should still be bounded |
 
 ## 3. Settings
@@ -77,6 +78,7 @@ registered itself is a third-party client, and so can never reach a system API**
 | `CLAVIA_CLIENT_REGISTRATION` | `off` | `off`, `token` | `off`: there is no registration endpoint, and discovery does not name one. `token`: open to holders of an initial access token. A third value, `open`, is #81 |
 | `CLAVIA_CLIENT_REGISTRATION_MAX_PER_ADDRESS` | 20 | 1–1000 | Registrations, valid or not, from one client address per window |
 | `CLAVIA_CLIENT_REGISTRATION_WINDOW` | 3600 s | 60–86400 | The window those are counted in |
+| `CLAVIA_CLIENT_REGISTRATION_UNUSED_LIFETIME` | 30 days | 1–365 | How long a self-registered client that has never been issued a token is kept (§5.4) |
 
 The configuration endpoint follows the same switch: with registration `off`, it does not exist
 either, and a self-registered client already made keeps working as a client.
@@ -93,16 +95,22 @@ either, and a self-registered client already made keeps working as a client.
   AND uses < max_uses RETURNING id`: the answer to "may this caller register, and did it win the
   last use?".
 - **`Domain\Client\Registration\ClientRegistration`**: the client's `ClientId`, the digest of its
-  registration access token, the `InitialAccessTokenId` it came through, `registeredAt`.
-  `rotate(Digest)` for a `PUT`.
+  registration access token, the `InitialAccessTokenId` it came through, `registeredAt`, and
+  `firstUsedAt` (null until the client is first issued a token). `rotate(Digest)` for a `PUT`.
 - **`ClientRegistrationRepository`**: `add`, `findByAccessToken(Digest)`, `find(ClientId)`,
-  `save`. Deleting the client deletes its registration (foreign key, cascade).
+  `save`, `markUsed(ClientId, DateTimeImmutable)` (one conditional `UPDATE … WHERE first_used_at
+  IS NULL`: a no-op for every token but the first), and `neverUsedSince(DateTimeImmutable):
+  list<ClientId>`. Deleting the client deletes its registration (foreign key, cascade).
 - **`Application\Clients\Registration\RegistrationMetadata`**: reads RFC 7591 metadata into a
   `NewClient` under the policy of §2, or a list of refusals by field. The one place the policy
   lives, so `POST` and `PUT` cannot drift apart.
 - **Use cases**: `RegisterClientDynamically`, `ReadClientConfiguration`,
   `UpdateClientConfiguration`, `DeleteClientConfiguration` (the last reuses `DeleteClient`);
-  `IssueInitialAccessToken`, `RevokeInitialAccessToken`, `ReadInitialAccessTokens`.
+  `IssueInitialAccessToken`, `RevokeInitialAccessToken`, `ReadInitialAccessTokens`;
+  `PurgeUnusedRegistrations` (each client deleted through `DeleteClient`).
+- **Subscriber** `MarkRegistrationUsed`, on `AccessTokenIssued`: records the first use, so no
+  grant changes. Listed in `ConfigProvider::EVENT_SUBSCRIBERS`; it records nothing in the audit
+  trail (the token's own event already does).
 - **Events**: `InitialAccessTokenIssued`, `InitialAccessTokenRevoked` (configuration trail);
   the client's own `ClientRegistered`, `ClientChanged` and `ClientDeleted`, as today. The actor
   of a self-registration is a new `Actor::registrant(InitialAccessTokenId)`
@@ -114,7 +122,8 @@ either, and a self-registered client already made keeps working as a client.
     max_uses), revoked_at)`;
   - `client_registrations (client_id PK REFERENCES oauth2_clients ON DELETE CASCADE,
     access_token_digest bytea UNIQUE, initial_access_token_id REFERENCES initial_access_tokens
-    ON DELETE SET NULL, registered_at)`.
+    ON DELETE SET NULL, registered_at)`;
+  - slice 5 adds `client_registrations.first_used_at timestamptz NULL`, in its own migration.
 
 ## 5. Flows
 
@@ -172,6 +181,18 @@ access token>`:
 - `bin/clavia clients:registration-token [--uses=N] [--expires-in=S] <description>` does what the
   `POST` does, for a server with no dashboard yet.
 
+### 5.4 Unused clients
+
+1. Whenever a token is issued to a client, `MarkRegistrationUsed` sets its registration's
+   `first_used_at` if it is still null. An operator's client has no registration, and nothing
+   happens.
+2. `bin/clavia clients:purge-unused`, run daily like `audit:purge`, deletes every self-registered
+   client whose `first_used_at` is null and whose `registered_at` is older than
+   `CLAVIA_CLIENT_REGISTRATION_UNUSED_LIFETIME`, through `DeleteClient`, so each deletion is a
+   `ClientDeleted` in the trail with the system as the actor. It prints how many it deleted.
+3. It runs whatever `CLAVIA_CLIENT_REGISTRATION` says: clients registered before the switch went
+   `off` are still cleaned up.
+
 ## 6. Interfaces
 
 - **Endpoints**: `POST /oauth2/register`; `GET | PUT | DELETE /oauth2/register/{client_id}`.
@@ -210,6 +231,9 @@ access token>`:
 - **Secrets are returned once** (the client secret at registration, the registration access
   token at registration and each `PUT`, the initial access token at issuance) and stored as
   digests or bcrypt hashes. No error repeats a value from the request.
+- **Only a self-registered client that never got a token is ever purged**: the purge reads
+  registration rows only, so it cannot reach an operator's client, and one token issued settles
+  it for good.
 - **PKCE stays mandatory**, and the operator's levers (`mfa_policy`, PAR, connections) stay the
   operator's.
 
@@ -233,7 +257,9 @@ access token>`:
     tokens gone); another client's token, an operator's client: `401`;
   - the throttle answers `429`;
   - the Management API issues, lists and revokes initial access tokens, and shows a client's
-    registration, every response checked against the document.
+    registration, every response checked against the document;
+  - `clients:purge-unused` deletes a client registered past the lifetime and never used, keeps
+    one used once, one still within the lifetime and every operator's client.
 
 ## 9. Slices
 
@@ -250,6 +276,11 @@ access token>`:
    deletes itself, and nothing else.
 4. **Dashboard** (clavia-dashboard): the initial access tokens page and a client's registration.
    *Done when* an operator does slice 1 without the shell.
+5. **Unused clients.** The `first_used_at` migration, `MarkRegistrationUsed`,
+   `PurgeUnusedRegistrations`, `clients:purge-unused`, the
+   `CLAVIA_CLIENT_REGISTRATION_UNUSED_LIFETIME` setting, and `docs/` naming the command next to
+   `audit:purge` as a daily job. *Done when* a self-registered client never issued a token is
+   deleted after the lifetime, and no other client ever is.
 
 ## Open questions
 
@@ -257,9 +288,9 @@ access token>`:
    never seen) register with no initial access token at all. *Settled*: not now; #81 designs
    `open` later, with a per-address quota, expiry of clients that never sign anyone in, and a
    consent screen that says plainly that nobody has checked the application.
-2. **Expiry of unused clients.** A client registered and never used stays forever. *Recommendation*:
-   leave it to the operator (the dashboard shows when a client was registered and by which
-   token); revisit with question 1.
+2. **Expiry of unused clients.** *Settled*: slice 5 deletes a self-registered client that has
+   never been issued a token, after `CLAVIA_CLIENT_REGISTRATION_UNUSED_LIFETIME`; an idle client
+   that was used is kept.
 3. **Loopback ports.** RFC 8252 §7.3 asks the server to accept any port on a loopback redirect,
    since a native application picks a free one at run time. Today Clavia matches every redirect
    URI exactly, for every client. *Recommendation*: accept any port for a loopback redirect URI
