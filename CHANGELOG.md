@@ -6,6 +6,127 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-23
+
+Tokens and policies: JWT access tokens, authentication levels and step-up, MFA policies, pushed
+authorization requests, DPoP, and dynamic client registration (`docs/design/mfa-policies.md`,
+`docs/design/dpop.md`, `docs/design/dynamic-client-registration.md`).
+
+### Added
+
+**Tokens**
+
+- **JWT access tokens** (RFC 9068), chosen per API with `access_token_format` (`opaque`, the
+  default, or `jwt`) in the Management API. A JWT is `typ: at+jwt`, signed with the active key, and
+  carries `iss`, `exp`, `aud`, `sub`, `client_id`, `iat`, `jti` and `scope`, plus `auth_time` and
+  `acr` for a person. An API that validates a JWT on its own accepts it until `exp`, so revocation
+  cannot reach it there: the access token lifetime bounds a revoked JWT's life.
+- **Authentication levels.** ID tokens, JWT access tokens and introspection carry `acr` (the PAPE
+  multi-factor URI, or `phr` for a passkey) and `auth_time`, worked out from how the person signed
+  in. A refresh family keeps its first sign-in. Discovery names `acr_values_supported`.
+- **Signing keys in the Management API**: `GET /api/v1/signing-keys` (`read:signing_keys`) and
+  `POST /api/v1/signing-keys/rotate` (`create:signing_keys`) do what `keys:list` and `keys:rotate`
+  do, naming keys by `kid`, never by their material. With a remote signing backend both answer
+  `409`.
+
+**Policies and step-up**
+
+- **`acr_values`** at the authorization endpoint (RFC 9470): a signed-in session that falls short
+  steps up. `prompt=none` answers `interaction_required`; a person holding a factor that would do
+  is asked for it; anyone else gets `unmet_authentication_requirements`.
+- **MFA policies** per application and per API (`mfa_policy`: `optional`, the default, or
+  `required`), at the authorization endpoint and at device approval. A person with no second
+  factor and a verified address **enrols on the way**, then carries on with the request. New
+  authorizations only: refresh tokens issued before keep working.
+- **Step-up at the Management API**: when its own `mfa_policy` is `required`, a person's token
+  from a one-factor sign-in is `401 insufficient_user_authentication`, with the `acr_values` to
+  ask for. Machine tokens are not concerned. `seed-dev` turns it on.
+- **Pushed authorization requests** (RFC 9126) at `POST /oauth2/par`: the client sends its request
+  over the back channel and gets a `request_uri`, good for `CLAVIA_PAR_LIFETIME`. A client
+  registered with `require_pushed_authorization_requests` must push. Discovery names the endpoint.
+- **Breached passwords** (`CLAVIA_BREACHED_PASSWORD_CHECK`, off by default): a new password found
+  in Have I Been Pwned's Pwned Passwords is refused, at sign-up, at a reset and through the
+  Management API. Only five characters of its SHA-1 leave the server; when the service is down the
+  password is let through and a warning logged.
+
+**DPoP** (RFC 9449)
+
+- **Sender-constrained tokens.** A token request carrying a `DPoP` proof gets tokens bound to the
+  proof's key (`token_type: DPoP`, `cnf.jkt` in JWT access tokens and introspection). Proofs are
+  ES256, EdDSA or RS256, checked against the method, this server's own URL, their age and the
+  server's nonce, and accepted once each. Discovery names `dpop_signing_alg_values_supported`.
+- **Bound codes and refresh tokens.** `dpop_jkt` at the authorization endpoint, or a `DPoP` proof
+  at `/oauth2/par`, binds the code to a key; a public client's refresh tokens are bound to the key
+  they started with.
+- **Userinfo and the Management API** take a bound token as `Authorization: DPoP` with a fresh
+  proof, and refuse it presented as a bearer token.
+- **DPoP required per client** (`dpop_bound_access_tokens`, off by default): such a client is
+  refused any token without a proof.
+
+**Dynamic client registration** (RFC 7591, RFC 7592)
+
+- **Initial access tokens**, issued by an operator (`POST /api/v1/initial-access-tokens` or
+  `bin/clavia clients:registration-token`), listed and revoked. Each has a description, an expiry
+  (a minute to ninety days, seven by default) and a number of uses (1 to 1000), and is shown once.
+- **`POST /oauth2/register`**, when `CLAVIA_CLIENT_REGISTRATION=token`, for a bearer of an
+  initial access token: software registers itself. A client registered this way is **always
+  third-party**, so it never reaches a system API and is asked for consent. It may hold the code
+  flow and refresh tokens, keeps PKCE, and uses https redirect URIs, or loopback ones for a native
+  application. Discovery names `registration_endpoint` only when registration is on.
+- **`GET`, `PUT` and `DELETE /oauth2/register/{client_id}`**, with the registration access token
+  the client was given: it reads, replaces or deletes its registration, and the token is replaced
+  at each update. An operator's client is never reachable there.
+- **`bin/clavia clients:purge-unused`**, to run daily: deletes a self-registered client never
+  issued a token after `CLAVIA_CLIENT_REGISTRATION_UNUSED_LIFETIME` days.
+
+**Settings**
+
+| Setting | Default | What it does |
+|---|---|---|
+| `CLAVIA_TOKEN_MAX_FAILURES` | 20 | Failed client authentications or grants per subject within the window before `429` |
+| `CLAVIA_TOKEN_FAILURE_WINDOW` | 300 s | The window those are counted in; every failure restarts it |
+| `CLAVIA_PAR_LIFETIME` | 60 s | How long a pushed request's `request_uri` is good for |
+| `CLAVIA_DPOP_PROOF_LIFETIME` | 60 s | How old a DPoP proof may be |
+| `CLAVIA_DPOP_NONCE_LIFETIME` | 300 s | How long a DPoP nonce is current |
+| `CLAVIA_BREACHED_PASSWORD_CHECK` | `false` | Refuse passwords found in Pwned Passwords |
+| `CLAVIA_CLIENT_REGISTRATION` | `off` | `token` opens `/oauth2/register` to holders of an initial access token |
+| `CLAVIA_CLIENT_REGISTRATION_MAX_PER_ADDRESS` | 20 | Registrations one client address may ask for per window |
+| `CLAVIA_CLIENT_REGISTRATION_WINDOW` | 3600 s | The window those are counted in |
+| `CLAVIA_CLIENT_REGISTRATION_UNUSED_LIFETIME` | 30 days | How long a self-registered client never used is kept |
+
+**Migrations**: `0026` to `0035`, applied by `bin/clavia db:migrate`. All of them add tables,
+columns or indexes; none rewrites existing data.
+
+**Management API scopes**: `read:signing_keys`, `create:signing_keys`,
+`read:initial_access_tokens`, `create:initial_access_tokens` and `delete:initial_access_tokens`.
+On an existing server, run `bin/clavia management-api:register` once after upgrading: it adds them
+to the Management API, keeping its name. Then give them to the roles (and the machine clients'
+grants, with `clients:grant`) that should hold them: nobody holds a new scope until then.
+
+### Changed
+
+- **Failures are limited at the token, introspection, revocation and device authorization
+  endpoints.** Past `CLAVIA_TOKEN_MAX_FAILURES` within the window, the endpoint answers `429` with
+  `Retry-After`, before any secret is checked. Failures count per client address, and per client
+  only once it has proved itself with a secret, so nobody locks a client out by sending its id. A
+  busy client that does not fail is never refused.
+- **New required fields in the Management API document**: a client gains `mfa_policy`,
+  `require_pushed_authorization_requests`, `dpop_bound_access_tokens` and `registration`; an API
+  gains `access_token_format` and `mfa_policy`. Clients that generate types from
+  `docs/openapi/management-api.yaml` regenerate them.
+- Bearer refusals at userinfo and the Management API may now be `invalid_dpop_proof`, and a DPoP
+  request is challenged with `WWW-Authenticate: DPoP`.
+
+### Security
+
+- Every token this server signs is explicitly typed and checked as such (RFC 8725 §3.11): a JWT
+  access token is no longer accepted as an `id_token_hint` at sign-out.
+- A DPoP-bound token presented as a bearer token is refused, so binding is not optional for
+  whoever steals one. A bound code redeemed with another key is refused and spent.
+- A self-registered client is third-party by construction, whatever its request says, and
+  registration is never open to anybody: it is off by default, and on only for holders of an
+  operator's initial access token, limited in uses and time.
+
 ## [0.2.0] - 2026-11-23
 
 Passkeys: as a second factor, and as the way in (`docs/design/passkeys.md`, phases 1 and 2).
@@ -156,6 +277,7 @@ forbids passing (a code flow with neither PKCE nor a `nonce`); see
 - Request objects (`request`, `request_uri`) and the `address` and `phone` scopes.
 - A queue for mail: a sign-in email is sent while the person waits.
 
-[Unreleased]: https://github.com/clavia-auth/clavia/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/clavia-auth/clavia/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/clavia-auth/clavia/releases/tag/v0.3.0
 [0.2.0]: https://github.com/clavia-auth/clavia/releases/tag/v0.2.0
 [0.1.0]: https://github.com/clavia-auth/clavia/releases/tag/v0.1.0
