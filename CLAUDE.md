@@ -703,7 +703,10 @@ those are the ones worth having in production.
   `google/auth`) are Composer suggestions; Azure is REST. Nothing calls a provider at boot.
 - **Lifecycle**: one active key (the database enforces it). `keys:generate` only when there is
   none; `keys:rotate` retires the active key for `RotateSigningKey::grace()` (twice the longest
-  token lifetime plus a day). Nothing creates a key on first use: issuing without one is
+  token lifetime plus a day). The Management API does what `keys:list` and `keys:rotate` do
+  (`GET /api/v1/signing-keys`, `read:signing_keys`; `POST /api/v1/signing-keys/rotate`,
+  `create:signing_keys`), naming keys by `kid`, algorithm and place in the rotation, never by
+  their material; with a remote backend both answer `409`, and the key store is never built. Nothing creates a key on first use: issuing without one is
   `NoActiveSigningKey`, a loud error. With a remote backend, rotation is a new key made the
   reference and the old one listed as retired until its tokens expire. The JWKS and discovery
   cache lifetimes (`PublishSigningKeys::CACHE_MAX_AGE`, `DiscoveryHandler::CACHE_MAX_AGE`) are

@@ -41,6 +41,7 @@ use Clavia\Adapter\Primary\Http\Management\RoleHandler;
 use Clavia\Adapter\Primary\Http\Management\RolesHandler;
 use Clavia\Adapter\Primary\Http\Management\RoleUsersHandler;
 use Clavia\Adapter\Primary\Http\Management\RotateClientSecretHandler;
+use Clavia\Adapter\Primary\Http\Management\SigningKeysHandler;
 use Clavia\Adapter\Primary\Http\Management\UserConsentsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserHandler;
 use Clavia\Adapter\Primary\Http\Management\UserIdentitiesHandler;
@@ -253,6 +254,8 @@ return static function (Application $app, ContainerInterface $container): void {
         'api.resource-server',
     );
     $app->route('/api/v1/roles', $management(RolesHandler::class), ['GET', 'POST'], 'api.roles');
+    $app->get('/api/v1/signing-keys', $management(SigningKeysHandler::class), 'api.signing-keys');
+    $app->post('/api/v1/signing-keys/rotate', $management(SigningKeysHandler::class), 'api.signing-keys.rotate');
     $app->route('/api/v1/audit-events', $management(AuditEventsHandler::class), ['GET'], 'api.audit-events');
     $app->route(
         '/api/v1/roles/{role_id}',

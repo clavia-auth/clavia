@@ -26,6 +26,9 @@ namespace Clavia\Application\Management;
  * choose a password. It is its own permission because it reaches the person's mailbox, not
  * their record, and `update:users` never suffices.
  *
+ * `create:signing_keys` rotates the signing key (a rotation makes a new one), as the hosted
+ * providers name it; nothing in this API reads, exports or deletes key material.
+ *
  * `update:roles` is the one to guard most carefully: it can attach any permission on any
  * API to a role and give that role to anyone, the caller included. Giving somebody a role
  * needs it wherever that happens — on the role or on the account — and `update:users`
@@ -55,6 +58,8 @@ enum ManagementPermission: string
     case DeleteConnections = 'delete:connections';
     case CreateUserTickets = 'create:user_tickets';
     case ReadAuditEvents = 'read:audit_events';
+    case ReadSigningKeys = 'read:signing_keys';
+    case CreateSigningKeys = 'create:signing_keys';
 
     /** A sentence for the permission, shown wherever one is assigned. */
     public function description(): string
@@ -73,6 +78,7 @@ enum ManagementPermission: string
             'connections' => 'the ways users sign in',
             'user_tickets' => 'links for end users to choose a password',
             'audit_events' => 'the audit trail',
+            'signing_keys' => 'the keys tokens are signed with',
             default => 'APIs',
         };
     }
