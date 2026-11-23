@@ -17,6 +17,8 @@ namespace Clavia\Domain\OAuth2\Dpop;
  */
 enum DpopRefusal: string
 {
+    /** No proof where one is required: a bound token, or a client that must use DPoP. */
+    case Missing = 'missing';
     case Malformed = 'malformed';
     case WrongMethod = 'wrong_method';
     case WrongUrl = 'wrong_url';

@@ -395,7 +395,10 @@ with `DPoP-Nonce`); then the `jti`, claimed once per key (`DpopReplayCache`). Th
 before the grant runs, so a bad one spends no code. What the grant issues is bound to the key:
 `token_type: DPoP`, `dpop_jkt` on the access token, `cnf.jkt` in JWT access tokens and
 introspection. The answer carries the next `DPoP-Nonce`. A refusal is one
-`invalid_dpop_proof`; the reason is logged. Without a proof a token is a bearer token.
+`invalid_dpop_proof`; the reason is logged. Without a proof a token is a bearer token, unless
+the client is registered with `dpop_bound_access_tokens` (RFC 9449 §5.2, off by default, in the
+Management API): then a token request without a proof is `invalid_dpop_proof`, refused before the
+grant runs, so a code is not spent.
 
 Codes and refresh tokens are bound too. `dpop_jkt` at `/oauth2/authorize` (validated with the
 other parameters) binds the code; a `DPoP` header at `/oauth2/par` binds the pushed request to the

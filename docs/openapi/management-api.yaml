@@ -2191,7 +2191,7 @@ components:
       required: [client_id, name, client_type, token_endpoint_auth_method, redirect_uris, grant_types,
         response_types, post_logout_redirect_uris, is_first_party, connections, backchannel_logout_uri,
         backchannel_logout_session_required, require_pkce, mfa_policy, require_pushed_authorization_requests,
-        created_at]
+        dpop_bound_access_tokens, created_at]
       properties:
         client_id:
           type: string
@@ -2249,6 +2249,13 @@ components:
             Whether its authorization requests must be pushed to `/oauth2/par` first and reach
             `/oauth2/authorize` by `request_uri` (RFC 9126 §6). A request sent any other way is
             refused with `invalid_request`.
+        dpop_bound_access_tokens:
+          type: boolean
+          description: |
+            Whether every token it is issued must be bound to a DPoP key (RFC 9449 §5.2): a token
+            request without a `DPoP` proof is refused (`invalid_dpop_proof`). Off by default, when a
+            proof is welcome but not required. Takes effect from its next token request: tokens
+            already issued keep working as they were.
         created_at:
           type: string
           format: date-time
@@ -2268,7 +2275,7 @@ components:
       required: [client_id, name, client_type, token_endpoint_auth_method, redirect_uris, grant_types,
         response_types, post_logout_redirect_uris, is_first_party, connections, backchannel_logout_uri,
         backchannel_logout_session_required, require_pkce, mfa_policy, require_pushed_authorization_requests,
-        created_at, client_secret]
+        dpop_bound_access_tokens, created_at, client_secret]
       properties:
         client_id:
           type: string
@@ -2326,6 +2333,13 @@ components:
             Whether its authorization requests must be pushed to `/oauth2/par` first and reach
             `/oauth2/authorize` by `request_uri` (RFC 9126 §6). A request sent any other way is
             refused with `invalid_request`.
+        dpop_bound_access_tokens:
+          type: boolean
+          description: |
+            Whether every token it is issued must be bound to a DPoP key (RFC 9449 §5.2): a token
+            request without a `DPoP` proof is refused (`invalid_dpop_proof`). Off by default, when a
+            proof is welcome but not required. Takes effect from its next token request: tokens
+            already issued keep working as they were.
         created_at:
           type: string
           format: date-time
@@ -2406,6 +2420,13 @@ components:
             Whether its authorization requests must be pushed to `/oauth2/par` first and reach
             `/oauth2/authorize` by `request_uri` (RFC 9126 §6). A request sent any other way is
             refused with `invalid_request`.
+        dpop_bound_access_tokens:
+          type: boolean
+          description: |
+            Whether every token it is issued must be bound to a DPoP key (RFC 9449 §5.2): a token
+            request without a `DPoP` proof is refused (`invalid_dpop_proof`). Off by default, when a
+            proof is welcome but not required. Takes effect from its next token request: tokens
+            already issued keep working as they were.
       description: |
         `client_type` defaults to `public`; `token_endpoint_auth_method` to `none` for a
         public client and `client_secret_basic` for a confidential one.
@@ -2464,6 +2485,13 @@ components:
             Whether its authorization requests must be pushed to `/oauth2/par` first and reach
             `/oauth2/authorize` by `request_uri` (RFC 9126 §6). A request sent any other way is
             refused with `invalid_request`.
+        dpop_bound_access_tokens:
+          type: boolean
+          description: |
+            Whether every token it is issued must be bound to a DPoP key (RFC 9449 §5.2): a token
+            request without a `DPoP` proof is refused (`invalid_dpop_proof`). Off by default, when a
+            proof is welcome but not required. Takes effect from its next token request: tokens
+            already issued keep working as they were.
 
     Permission:
       type: object

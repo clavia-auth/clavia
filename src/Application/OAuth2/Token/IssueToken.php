@@ -15,6 +15,7 @@ use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
 use Clavia\Application\OAuth2\ClientAuthentication\ClientFailureThrottle;
 use Clavia\Application\OAuth2\ClientAuthentication\TooManyFailedRequests;
 use Clavia\Application\OAuth2\Dpop\ReadDpopProof;
+use Clavia\Domain\OAuth2\Dpop\DpopRefusal;
 use Clavia\Domain\OAuth2\Dpop\ProofRequirement;
 use Clavia\Domain\OAuth2\ErrorCode;
 use Clavia\Domain\Client\ClientAuthMethod;
@@ -31,7 +32,9 @@ use Clavia\Domain\OAuth2\OAuth2Error;
  *
  * A request carrying a DPoP proof (RFC 9449 §5) has it read before the grant runs — so a bad
  * proof never spends a code — with the server's nonce required (§8, docs/design/dpop.md §2), and
- * what the grant issues is bound to the proof's key. The answer then carries the next nonce.
+ * what the grant issues is bound to the proof's key. The answer then carries the next nonce. A
+ * client registered with `dpop_bound_access_tokens` (§5.2) sending no proof is refused, before the
+ * grant runs: nothing it is issued may be a bearer token.
  */
 final readonly class IssueToken
 {
@@ -91,6 +94,9 @@ final readonly class IssueToken
         }
 
         $proof = ($this->dpop)($request->dpopProofs, new ProofRequirement('POST', $this->tokenEndpoint), true);
+        if ($proof === null && $client->requiresDpop) {
+            throw OAuth2Error::invalidDpopProof(DpopRefusal::Missing->value);
+        }
 
         try {
             $issued = $grant->issue($parameters, $client, $proof?->thumbprint);

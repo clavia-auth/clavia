@@ -64,6 +64,7 @@ final readonly class ClientsHandler implements RequestHandlerInterface
             $body->bool('require_pkce') ?? true,
             $body->string('mfa_policy') ?? 'optional',
             $body->bool('require_pushed_authorization_requests') ?? false,
+            $body->bool('dpop_bound_access_tokens') ?? false,
         ));
 
         return $this->responder->created(

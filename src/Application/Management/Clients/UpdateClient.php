@@ -76,6 +76,9 @@ final readonly class UpdateClient
         if ($changes->requirePushedAuthorizationRequests !== null) {
             $updated = $updated->withPushedAuthorizationRequestsRequired($changes->requirePushedAuthorizationRequests);
         }
+        if ($changes->requireDpop !== null) {
+            $updated = $updated->withDpopRequired($changes->requireDpop);
+        }
         $this->clients->save($updated);
         $this->events->dispatch(new ClientChanged($updated->id, self::fields($changes)));
 
@@ -101,6 +104,7 @@ final readonly class UpdateClient
             'require_pkce' => $changes->requirePkce !== null,
             'mfa_policy' => $changes->mfaPolicy !== null,
             'require_pushed_authorization_requests' => $changes->requirePushedAuthorizationRequests !== null,
+            'dpop_bound_access_tokens' => $changes->requireDpop !== null,
         ]));
     }
 }

@@ -128,6 +128,7 @@ final class ManagementViews
             'require_pkce' => $client->requiresPkce,
             'mfa_policy' => $client->mfaPolicy->value,
             'require_pushed_authorization_requests' => $client->requiresPushedAuthorizationRequests,
+            'dpop_bound_access_tokens' => $client->requiresDpop,
             'created_at' => self::instant($client->createdAt),
         ];
     }
