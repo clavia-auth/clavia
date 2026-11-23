@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Application\Authentication\Account\PasswordScreen;
 use Clavia\Application\Management\Users\CreateUser;
 use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\PasswordHasher;
@@ -28,6 +29,8 @@ final class CreateUserFactory
         $users = $container->get(UserRepository::class);
         /** @var PasswordHasher $hasher */
         $hasher = $container->get(PasswordHasher::class);
+        /** @var PasswordScreen $passwords */
+        $passwords = $container->get(PasswordScreen::class);
         /** @var RandomSource $random */
         $random = $container->get(RandomSource::class);
         /** @var Clock $clock */
@@ -37,6 +40,6 @@ final class CreateUserFactory
         /** @var DomainEvents $events */
         $events = $container->get(DomainEvents::class);
 
-        return new CreateUser($users, $hasher, $random, $clock, $connections, $events);
+        return new CreateUser($users, $hasher, $passwords, $random, $clock, $connections, $events);
     }
 }

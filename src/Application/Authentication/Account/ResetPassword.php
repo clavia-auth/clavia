@@ -21,7 +21,6 @@ use Clavia\Domain\Authentication\Event\SessionEndReason;
 use Clavia\Domain\Authentication\Event\SessionsEnded;
 use Clavia\Domain\Identity\AccountLinkPurpose;
 use Clavia\Domain\Identity\Event\PasswordReset;
-use Clavia\Domain\Identity\PasswordPolicy;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\InvalidValue;
@@ -29,7 +28,8 @@ use Clavia\Domain\Shared\InvalidValue;
 /**
  * Set a new password from a reset link.
  *
- * The password is checked against the policy before the link is spent, so a refused one
+ * The password is screened ({@see PasswordScreen}: the policy, then the breached passwords)
+ * before the link is spent, so a refused one
  * leaves the link for another try. Then, with the link claimed and still matching its account
  * (same address, same old password, still active): the password is changed and the address
  * marked verified — the link proved the mailbox — and every session of the account ends. A
@@ -43,6 +43,7 @@ final readonly class ResetPassword
         private AccountLinkStore $links,
         private UserRepository $users,
         private PasswordHasher $hasher,
+        private PasswordScreen $passwords,
         private Sessions $sessions,
         private LoginStateStore $loginStates,
         private TransactionManager $transactions,
@@ -63,7 +64,7 @@ final readonly class ResetPassword
             return new AccountLinkRefused();
         }
         try {
-            $accepted = PasswordPolicy::accept($password);
+            $accepted = $this->passwords->accept($password);
         } catch (InvalidValue $refusal) {
             return new PasswordRejected($refusal->getMessage());
         }

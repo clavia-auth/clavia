@@ -117,6 +117,7 @@ use Clavia\Application\Authentication\Account\AccountMail;
 use Clavia\Application\Authentication\Account\ConfirmEmail;
 use Clavia\Application\Authentication\Account\DescribeAccountLink;
 use Clavia\Application\Authentication\Account\DescribeSignUpPage;
+use Clavia\Application\Authentication\Account\PasswordScreen;
 use Clavia\Application\Authentication\Account\RequestPasswordReset;
 use Clavia\Application\Authentication\Account\ResetPassword;
 use Clavia\Application\Authentication\Account\SendAccountLink;
@@ -242,6 +243,7 @@ use Clavia\Application\Oidc\UserInfo\ReadUserInfo;
 use Clavia\Application\Port\AccountLinkStore;
 use Clavia\Application\Port\AttemptCounter;
 use Clavia\Application\Port\BackChannelLogoutDelivery;
+use Clavia\Application\Port\BreachedPasswords;
 use Clavia\Application\Port\ConsentStateStore;
 use Clavia\Application\Port\DeferredTasks;
 use Clavia\Application\Port\DeviceAuthorizationStore;
@@ -448,6 +450,8 @@ final class ConfigProvider
                     ExternalSignInHandler::class => Container\ExternalSignInHandlerFactory::class,
                     ExternalSignInCallbackHandler::class => Container\ExternalSignInCallbackHandlerFactory::class,
                     Mailer::class => Container\MailerFactory::class,
+                    BreachedPasswords::class => Container\BreachedPasswordsFactory::class,
+                    PasswordScreen::class => Container\PasswordScreenFactory::class,
                     MailOutbox::class => Container\MailOutboxFactory::class,
                     PasswordlessChallengeStore::class => Container\PasswordlessChallengeStoreFactory::class,
                     SignInMail::class => Container\SignInMailFactory::class,

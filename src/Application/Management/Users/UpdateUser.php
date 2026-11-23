@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Management\Users;
 
+use Clavia\Application\Authentication\Account\PasswordScreen;
 use Clavia\Application\Authentication\SignOutEverywhere;
 use Clavia\Application\Management\NotFound;
 use Clavia\Application\Port\DomainEvents;
@@ -18,7 +19,6 @@ use Clavia\Application\Port\PasswordHasher;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
 use Clavia\Domain\Identity\Event\UserChanged;
-use Clavia\Domain\Identity\PasswordPolicy;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\Shared\AlreadyExists;
@@ -28,7 +28,8 @@ use Clavia\Domain\Shared\InvalidValue;
 /**
  * `PATCH /api/v1/users/{user_id}`.
  *
- * A new address is unverified unless the same request says otherwise. Deactivating an
+ * A new address is unverified unless the same request says otherwise. A new password is
+ * screened ({@see PasswordScreen}) like one a person chooses. Deactivating an
  * account takes effect on its next request: sessions and tokens are re-checked against
  * the account wherever they are used.
  */
@@ -37,6 +38,7 @@ final readonly class UpdateUser
     public function __construct(
         private UserRepository $users,
         private PasswordHasher $hasher,
+        private PasswordScreen $passwords,
         private Clock $clock,
         private MfaFactorRepository $factors,
         private PasskeyRepository $passkeys,
@@ -62,7 +64,7 @@ final readonly class UpdateUser
             $user->recordEmailVerification($changes->emailVerified, $now);
         }
         if ($changes->password !== null) {
-            $user->changePassword($this->hasher->hash(PasswordPolicy::accept($changes->password)), $now);
+            $user->changePassword($this->hasher->hash($this->passwords->accept($changes->password)), $now);
         }
         $deactivated = $changes->isActive === false && $user->isActive();
         if ($changes->isActive === true) {

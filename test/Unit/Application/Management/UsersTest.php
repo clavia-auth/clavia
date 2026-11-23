@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Application\Management;
 
+use Clavia\Application\Authentication\Account\PasswordScreen;
 use Clavia\Application\Authentication\Mfa\DisableMfa;
 use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Authentication\SignOutEverywhere;
@@ -52,6 +53,7 @@ use Clavia\Domain\Shared\PageRequest;
 use Clavia\Domain\Shared\ScopeSet;
 use Clavia\Domain\Shared\SecretGenerator;
 use ClaviaTest\Support\BackChannelLogouts;
+use ClaviaTest\Support\Fake\FakeBreachedPasswords;
 use ClaviaTest\Support\Fake\FakePasswordHasher;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
@@ -73,6 +75,8 @@ use PHPUnit\Framework\TestCase;
 final class UsersTest extends TestCase
 {
     private InMemoryUserRepository $users;
+    private const string BREACHED_PASSWORD = 'password123';
+
     private FakePasswordHasher $hasher;
     private FrozenClock $clock;
     private InMemoryTransactionManager $transactions;
@@ -133,6 +137,28 @@ final class UsersTest extends TestCase
         $this->expectException(InvalidValue::class);
 
         $this->create(new NewUser('ada@example.com', 'short'));
+    }
+
+    public function testABreachedPasswordIsRefusedAtCreation(): void
+    {
+        $this->expectException(InvalidValue::class);
+        $this->expectExceptionMessageIsOrContains(PasswordScreen::BREACHED);
+
+        $this->create(new NewUser('ada@example.com', self::BREACHED_PASSWORD));
+    }
+
+    public function testABreachedPasswordIsRefusedAsAChangeAndLeavesTheOldOne(): void
+    {
+        $user = $this->create(new NewUser('ada@example.com', 'a-good-password'));
+        $before = $this->users->find($user->id)?->passwordHash();
+
+        try {
+            ($this->update())($user->id, new UserChanges(password: self::BREACHED_PASSWORD));
+            self::fail('A breached password is refused.');
+        } catch (InvalidValue $refusal) {
+            self::assertSame(PasswordScreen::BREACHED, $refusal->getMessage());
+        }
+        self::assertSame($before, $this->users->find($user->id)?->passwordHash());
     }
 
     public function testAUserCreatedWithoutAPasswordHasNone(): void
@@ -485,6 +511,7 @@ final class UsersTest extends TestCase
         $create = new CreateUser(
             $this->users,
             $this->hasher,
+            self::screen(),
             $random,
             $this->clock,
             $this->connections,
@@ -501,12 +528,19 @@ final class UsersTest extends TestCase
         return new UpdateUser(
             $this->users,
             $this->hasher,
+            self::screen(),
             $this->clock,
             $this->factors,
             $this->passkeys,
             $this->signOut,
             new InMemoryDomainEvents(),
         );
+    }
+
+    /** The screen every password set here passes, with one breached password known. */
+    private static function screen(): PasswordScreen
+    {
+        return new PasswordScreen(new FakeBreachedPasswords([self::BREACHED_PASSWORD]));
     }
 
     private function enrol(User $user): void

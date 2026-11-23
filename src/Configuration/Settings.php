@@ -238,6 +238,14 @@ final readonly class Settings
         /** Accounts one client address may create from the sign-up page per hour. */
         #[Range(min: 1, max: 1000)]
         public int $signUpLimit = 10,
+        /**
+         * Refuse a new password found in Have I Been Pwned's Pwned Passwords (NIST SP 800-63B
+         * §5.1.1.2), at sign-up, at a reset and through the Management API. Only the first five
+         * characters of the password's SHA-1 leave the server (k-anonymity). Off by default
+         * because it calls a third party; when on and the service is down, the password is let
+         * through and a warning logged.
+         */
+        public bool $breachedPasswordCheck = false,
         // ------------------------------------------------------------------
         // Passkeys (docs/design/passkeys.md)
         // ------------------------------------------------------------------

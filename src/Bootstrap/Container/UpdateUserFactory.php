@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Application\Authentication\Account\PasswordScreen;
 use Clavia\Application\Authentication\SignOutEverywhere;
 use Clavia\Application\Management\Users\UpdateUser;
 use Clavia\Application\Port\DomainEvents;
@@ -29,6 +30,8 @@ final class UpdateUserFactory
         $users = $container->get(UserRepository::class);
         /** @var PasswordHasher $hasher */
         $hasher = $container->get(PasswordHasher::class);
+        /** @var PasswordScreen $passwords */
+        $passwords = $container->get(PasswordScreen::class);
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
         /** @var MfaFactorRepository $factors */
@@ -41,6 +44,6 @@ final class UpdateUserFactory
         /** @var PasskeyRepository $passkeys */
         $passkeys = $container->get(PasskeyRepository::class);
 
-        return new UpdateUser($users, $hasher, $clock, $factors, $passkeys, $signOut, $events);
+        return new UpdateUser($users, $hasher, $passwords, $clock, $factors, $passkeys, $signOut, $events);
     }
 }

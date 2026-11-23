@@ -45,6 +45,9 @@ a third-party audit; one is worth commissioning before Clavia holds real account
 - **Outbound HTTP**: everything a registration can name (OIDC issuers, back-channel logout
   URIs) passes `OutboundUrlPolicy` — https, no private, loopback or link-local address, checked
   again at connection time (`PinCheckedAddresses`), no redirects followed, bounded timeouts.
+  The breached-password check (`BreachedPasswords\PwnedPasswordsRange`, off by default) goes
+  through the same policy, sends only the first five hexadecimal characters of the password's
+  SHA-1 (k-anonymity) with `Add-Padding`, and logs a failure without the prefix.
   The signing client is the one exception, because the Azure metadata endpoint is link-local;
   every address it reaches comes from the operator's own configuration.
 - **Signing**: no private key leaves a signing adapter; remote backends refuse references that

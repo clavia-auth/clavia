@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Management\Users;
 
+use Clavia\Application\Authentication\Account\PasswordScreen;
 use Clavia\Application\Management\Connections\ReadConnections;
 use Clavia\Application\Management\NotFound;
 use Clavia\Application\Port\DomainEvents;
@@ -18,7 +19,6 @@ use Clavia\Application\Port\PasswordHasher;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Identity\Event\UserCreated;
-use Clavia\Domain\Identity\PasswordPolicy;
 use Clavia\Domain\Identity\Profile;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
@@ -30,7 +30,8 @@ use Clavia\Domain\Shared\RandomSource;
 
 /**
  * `POST /api/v1/users`: an account, in a pool — the default one unless another is named.
- * A password, when given, is checked against the policy, hashed on the way in with the same
+ * A password, when given, is screened ({@see PasswordScreen}: the policy, then the breached
+ * passwords), hashed on the way in with the same
  * primitive the login page verifies against, and never returned. Without one the account is
  * an invitation waiting to be sent: password sign-in fails like any other, and the person
  * chooses a password from the link of {@see SendPasswordLink}. An external connection's accounts are made by signing in
@@ -41,6 +42,7 @@ final readonly class CreateUser
     public function __construct(
         private UserRepository $users,
         private PasswordHasher $hasher,
+        private PasswordScreen $passwords,
         private RandomSource $random,
         private Clock $clock,
         private ConnectionRepository $connections,
@@ -72,7 +74,7 @@ final readonly class CreateUser
         $user = User::register(
             UserId::generate($this->random),
             $new->email,
-            $new->password === null ? null : $this->hasher->hash(PasswordPolicy::accept($new->password)),
+            $new->password === null ? null : $this->hasher->hash($this->passwords->accept($new->password)),
             $now,
             $pool,
         );

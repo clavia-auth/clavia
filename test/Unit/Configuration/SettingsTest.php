@@ -424,6 +424,16 @@ final class SettingsTest extends TestCase
 
     // ── Passkeys ────────────────────────────────────────────────────────────────
 
+    public function testTheBreachedPasswordCheckIsOffUnlessTurnedOn(): void
+    {
+        // It calls a third party, so an operator chooses it.
+        self::assertFalse(Settings::fromEnvironment(self::MINIMAL)->breachedPasswordCheck);
+        self::assertTrue(
+            Settings::fromEnvironment(['CLAVIA_BREACHED_PASSWORD_CHECK' => 'true'] + self::MINIMAL)
+                ->breachedPasswordCheck,
+        );
+    }
+
     public function testPasskeysAreOnAndBoundToTheSignInHostByDefault(): void
     {
         $settings = Settings::fromEnvironment(self::MINIMAL);
