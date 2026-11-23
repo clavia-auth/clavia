@@ -28,7 +28,8 @@ use Psr\Http\Server\RequestHandlerInterface;
  * The answer is a JSON object with `active` and, for an active token, its metadata: the
  * client it was issued to, its scope, the issuer, `iat` and `exp`, the API it is for
  * (`aud`), and for one issued on a person's behalf `sub` — the same value the person's ID
- * token carries — and `username`. A token issued to a client as itself has no subject,
+ * token carries — `username`, and, for a sign-in this server witnessed, `auth_time` and `acr`
+ * (RFC 9470 §6.2). A token issued to a client as itself has no subject,
  * and says so by having none.
  */
 final readonly class IntrospectionHandler implements RequestHandlerInterface
@@ -88,6 +89,12 @@ final readonly class IntrospectionHandler implements RequestHandlerInterface
         }
         if ($introspection->username !== null) {
             $payload['username'] = $introspection->username;
+        }
+        if ($introspection->authenticatedAt !== null) {
+            $payload['auth_time'] = $introspection->authenticatedAt->getTimestamp();
+        }
+        if ($introspection->acr !== null) {
+            $payload['acr'] = $introspection->acr;
         }
 
         return $payload;

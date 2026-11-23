@@ -290,7 +290,7 @@ objects, repository interfaces, and an `Event` namespace for its domain events.
 | `Consent` | `UserConsent`, `ConsentPolicy`, `PendingConsent` | `ConsentPolicy` alone decides who is asked |
 | `OAuth2` | `AuthorizationCode`, `AccessToken`, `AccessTokenClaims` (RFC 9068), `RefreshToken` (families), `DeviceAuthorization`, `UserCode`, `CodeChallenge`/`CodeVerifier` (S256), `Prompt`, `MaxAge`, `OAuth2Error`/`ErrorCode`, `BearerTokenError` | Single use, exact matching, rotation with replay revocation |
 | `Oidc` | `SigningKey`, `SigningAlgorithm`, `PublicJwk`, `Nonce`, `OidcScope`, `IdentityClaims`, `IdTokenClaims`, `LogoutTokenClaims` | One active key; retired keys stay published until their tokens expire |
-| `Authentication` | `Session`, `AuthenticationMethod` (RFC 8176 `amr`), `AuthenticationContext`, `LocalPath`, `LoginState`, `MfaChallenge`, `Mfa\*` (`Totp`, `RecoveryCode`, `MfaFactor`), `Passkey\*` (`Passkey`, `CredentialId`, `PasskeyRepository`, `WebAuthnChallenge`, `RelyingParty`…), `PasswordlessChallenge`, `PendingExternalSignIn` | Sessions have idle and absolute lifetimes and a `sid`; a TOTP step is spent once; a passkey's signature counter must grow (a synced passkey's stays at zero), and its eligibility for backup never changes |
+| `Authentication` | `Session`, `AuthenticationMethod` (RFC 8176 `amr`), `AuthenticationLevel` (`acr`), `AuthenticationContext`, `LocalPath`, `LoginState`, `MfaChallenge`, `Mfa\*` (`Totp`, `RecoveryCode`, `MfaFactor`), `Passkey\*` (`Passkey`, `CredentialId`, `PasskeyRepository`, `WebAuthnChallenge`, `RelyingParty`…), `PasswordlessChallenge`, `PendingExternalSignIn` | Sessions have idle and absolute lifetimes and a `sid`; a TOTP step is spent once; a passkey's signature counter must grow (a synced passkey's stays at zero), and its eligibility for backup never changes |
 | `Audit` | `AuditEvent`, `AuditEventType`, `Actor`, `AuditTarget`, `Outcome`, `AuditQuery`, `AuditLog` | Append-only; facts, never secrets |
 
 The application mirrors these contexts (`Application\OAuth2`, `Authentication`, `Oidc`,
@@ -523,9 +523,9 @@ chose (`access_token_format`, opaque by default; a token for no API is always op
 - **Opaque**: a 43-character secret the API resolves at introspection.
 - **JWT** (RFC 9068): `typ: at+jwt`, signed through `TokenSigner` with the active key, claims
   from `AccessTokenClaims` (`iss`, `exp`, `aud`, `sub`, `client_id`, `iat`, `jti`, `scope`).
-  `sub` is the client's id for a client acting as itself; `jti` is the recorded token's id. No
-  `auth_time`, `acr`, `amr` (§2.2.1: a refreshed token no longer knows them) and no identity
-  claims (userinfo releases those).
+  `sub` is the client's id for a client acting as itself; `jti` is the recorded token's id. For
+  a person, `auth_time` and `acr` too (RFC 9470 §6.1), from the sign-in that started the token's
+  refresh family. No `amr` and no identity claims (userinfo releases those).
 
 Both are recorded by the digest of the value handed out, signed before the row is written, so
 introspection, revocation, userinfo and the Management API treat them alike, and a signing
@@ -536,9 +536,15 @@ OpenAPI document says so where the format is chosen.
 ### OpenID Connect
 
 - **ID tokens** carry `sub` and protocol claims only (`iss`, `aud`, `exp`, `iat`, `nonce`,
-  `auth_time`, `amr`, `sid`, `at_hash`). What a scope releases (`IdentityClaims::of()`) is
+  `auth_time`, `amr`, `acr`, `sid`, `at_hash`). What a scope releases (`IdentityClaims::of()`) is
   served by `/oidc/userinfo` alone; an unknown value is left out, never null. `auth_time` and
   `amr` come from the session that approved the code.
+- **Levels** (`AuthenticationLevel`, design in `docs/design/mfa-policies.md`): `acr` is worked
+  out from `amr`, never stored. Three values, a ladder: the PAPE multi-factor URI (`amr` has
+  `mfa`), `phr` (and a passkey, `hwk` or `swk`), `phrh` (and a device-bound one, `hwk`). One
+  factor has no `acr`. Every token issued for a person keeps how they signed in (`auth_time`,
+  `amr`, never the `sid`): a refresh family keeps its first sign-in, so its access tokens all say
+  the same, and introspection reports `auth_time` and `acr` (RFC 9470 §6.2).
 - **Discovery** (`/.well-known/openid-configuration` and `/.well-known/oauth-authorization-server`)
   names only what exists, and states every field whose default differs from the server.
   `ProviderMetadata` holds the paths; grant types and client authentication methods are read

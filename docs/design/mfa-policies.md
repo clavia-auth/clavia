@@ -1,6 +1,6 @@
 # Design: MFA policies, `acr_values` and step-up
 
-**Status:** proposed · **Date:** 2026-11-23 · **Issue:** clavia-auth/clavia#10 ·
+**Status:** agreed · **Date:** 2026-11-23 · **Issue:** clavia-auth/clavia#10 ·
 **Specifications:** OpenID Connect Core 1.0 (§2 `acr`, §3.1.2.1 `acr_values` and `max_age`,
 §3.1.2.6 errors), OpenID Connect Core Error Code `unmet_authentication_requirements` 1.0,
 RFC 9470 (OAuth 2.0 Step Up Authentication Challenge Protocol), OpenID Connect EAP ACR Values

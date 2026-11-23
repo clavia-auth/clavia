@@ -13,6 +13,7 @@ namespace Clavia\Application\Oidc\Discovery;
 
 use Clavia\Application\OAuth2\TokenManagement\IntrospectToken;
 use Clavia\Application\OAuth2\TokenManagement\RevokeToken;
+use Clavia\Domain\Authentication\AuthenticationLevel;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\ResponseType;
@@ -47,7 +48,7 @@ final readonly class ProviderMetadata
 
     /** The claims an ID token or the userinfo endpoint can carry. */
     private const array CLAIMS = [
-        'iss', 'sub', 'aud', 'exp', 'iat', 'auth_time', 'nonce', 'amr', 'at_hash', 'sid',
+        'iss', 'sub', 'aud', 'exp', 'iat', 'auth_time', 'nonce', 'acr', 'amr', 'at_hash', 'sid',
         'name', 'given_name', 'family_name', 'nickname', 'picture', 'locale', 'updated_at',
         'email', 'email_verified',
     ];
@@ -94,6 +95,8 @@ final readonly class ProviderMetadata
                 static fn (GrantType $type): string => $type->value,
                 $this->grantTypes,
             ),
+            // The levels an `acr` claim can take (OIDC Discovery §3), weakest first; one factor has none.
+            'acr_values_supported' => AuthenticationLevel::supportedAcrValues(),
             'subject_types_supported' => ['public'],
             'id_token_signing_alg_values_supported' => array_map(
                 static fn (SigningAlgorithm $algorithm): string => $algorithm->value,

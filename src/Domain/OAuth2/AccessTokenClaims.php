@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Domain\OAuth2;
 
+use Clavia\Domain\Authentication\AuthenticationLevel;
 use LogicException;
 
 /**
@@ -28,12 +29,15 @@ use LogicException;
  *   id this server generates is letters and digits only;
  * - `client_id`: the client it was issued to (RFC 8693 §4.3).
  *
- * `scope` (§2.2.3) is the granted scope, left out when nothing was granted. The
- * authentication claims of §2.2.1 (`auth_time`, `acr`, `amr`) are left out: §2.2.1 wants
- * them identical on every token descended from one authorization, and a refreshed token
- * no longer knows how its person signed in. Identity claims (§2.2.2) are left out too:
- * an access token travels to every API it names, and userinfo is where a person's
- * details are released.
+ * `scope` (§2.2.3) is the granted scope, left out when nothing was granted. Of the
+ * authentication claims of §2.2.1, `auth_time` and `acr` are given — the ones a resource
+ * server compares with what it requires (RFC 9470 §6.1) — for a token issued on a person's
+ * behalf whose sign-in this server witnessed. A token keeps the sign-in that started its
+ * refresh family, so every token descended from one authorization says the same (§2.2.1).
+ * `acr` is left out for one factor ({@see AuthenticationLevel}). `amr` is left out: what an
+ * API needs to decide is the level, and the methods are the ID token's to tell the client.
+ * Identity claims (§2.2.2) are left out too: an access token travels to every API it
+ * names, and userinfo is where a person's details are released.
  */
 final readonly class AccessTokenClaims
 {
@@ -70,6 +74,14 @@ final readonly class AccessTokenClaims
         ];
         if (! $token->scope->isEmpty()) {
             $claims['scope'] = $token->scope->toString();
+        }
+        $authenticatedAt = $token->authentication->authenticatedAt;
+        if ($token->userId !== null && $authenticatedAt !== null) {
+            $claims['auth_time'] = $authenticatedAt->getTimestamp();
+        }
+        $acr = $token->authentication->acr();
+        if ($token->userId !== null && $acr !== null) {
+            $claims['acr'] = $acr;
         }
 
         return new self($claims);

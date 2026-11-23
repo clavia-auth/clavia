@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Domain\OAuth2;
 
+use Clavia\Domain\Authentication\AuthenticationContext;
+use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\OAuth2\AccessToken;
@@ -44,6 +46,14 @@ final class AccessTokenClaimsTest extends TestCase
             ScopeSet::fromString('invoices:read invoices:write'),
             new DateTimeImmutable('2026-01-15T10:00:00Z'),
             3600,
+            AuthenticationContext::reconstitute(
+                new DateTimeImmutable('2026-01-15T09:58:00Z'),
+                [
+                    AuthenticationMethod::Password,
+                    AuthenticationMethod::OneTimePassword,
+                    AuthenticationMethod::MultipleFactors,
+                ],
+            ),
         );
 
         self::assertSame([
@@ -55,6 +65,9 @@ final class AccessTokenClaimsTest extends TestCase
             'iat' => 1768471200,
             'jti' => self::TOKEN_ID,
             'scope' => 'invoices:read invoices:write',
+            // RFC 9470 §6.1: when and how strongly the person signed in.
+            'auth_time' => 1768471080,
+            'acr' => 'http://schemas.openid.net/pape/policies/2007/06/multi-factor',
         ], AccessTokenClaims::of(self::ISSUER, $token)->toArray());
     }
 
@@ -76,6 +89,19 @@ final class AccessTokenClaimsTest extends TestCase
         self::assertArrayNotHasKey('scope', $claims);
     }
 
+    public function testOneFactorHasNoAcrAndAnUnwitnessedSignInNoAuthTime(): void
+    {
+        $oneFactor = $this->personToken(AuthenticationContext::reconstitute(
+            new DateTimeImmutable('2026-01-15T09:58:00Z'),
+            [AuthenticationMethod::Password],
+        ));
+        $unknown = $this->personToken(AuthenticationContext::unknown());
+
+        self::assertArrayNotHasKey('acr', AccessTokenClaims::of(self::ISSUER, $oneFactor)->toArray());
+        self::assertSame(1768471080, AccessTokenClaims::of(self::ISSUER, $oneFactor)->toArray()['auth_time']);
+        self::assertArrayNotHasKey('auth_time', AccessTokenClaims::of(self::ISSUER, $unknown)->toArray());
+    }
+
     public function testATokenForNoApiIsNeverAJwt(): void
     {
         // §2.2 requires `aud`.
@@ -88,11 +114,27 @@ final class AccessTokenClaimsTest extends TestCase
             ScopeSet::fromString('openid'),
             new DateTimeImmutable('2026-01-15T10:00:00Z'),
             3600,
+            AuthenticationContext::unknown(),
         );
 
         $this->expectException(LogicException::class);
 
         AccessTokenClaims::of(self::ISSUER, $token);
+    }
+
+    private function personToken(AuthenticationContext $authentication): AccessToken
+    {
+        return AccessToken::issueForUser(
+            AccessTokenId::fromString(self::TOKEN_ID),
+            Digest::of('value'),
+            ClientId::fromString('web-app'),
+            UserId::fromString(self::USER_ID),
+            Audience::fromString(self::API),
+            ScopeSet::fromString('invoices:read'),
+            new DateTimeImmutable('2026-01-15T10:00:00Z'),
+            3600,
+            $authentication,
+        );
     }
 
     private function machineToken(ScopeSet $scope): AccessToken
