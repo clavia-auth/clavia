@@ -27,6 +27,7 @@ use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserRepository;
+use Clavia\Domain\Shared\Clock;
 
 /**
  * Check an email and a password and, when they match an active account, start a session —
@@ -61,6 +62,7 @@ final readonly class SignInWithPassword
         private CompleteFirstFactor $completeFirstFactor,
         private DomainEvents $events,
         private SendAccountLink $verificationLinks,
+        private Clock $clock,
     ) {
     }
 
@@ -145,6 +147,12 @@ final readonly class SignInWithPassword
         foreach ($candidates as $candidate) {
             if ($this->hasher->verify($attempt->password, (string) $candidate->passwordHash())) {
                 $this->throttle->reset($attempt->email, $attempt->clientAddress);
+                if ($this->hasher->needsRehash((string) $candidate->passwordHash())) {
+                    // A hash at another cost (an imported one, or today's count raised): the password
+                    // is at hand only now, so it is hashed again at today's.
+                    $candidate->changePassword($this->hasher->hash($attempt->password), $this->clock->now());
+                    $this->users->save($candidate);
+                }
 
                 return $candidate;
             }

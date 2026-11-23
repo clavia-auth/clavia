@@ -13,8 +13,10 @@ namespace ClaviaTest\Unit\Support;
 
 use ClaviaTest\Support\Contract\ClientRegistrationRepositoryContract;
 use ClaviaTest\Support\Contract\InitialAccessTokenRepositoryContract;
+use ClaviaTest\Support\Contract\UserJobRepositoryContract;
 use ClaviaTest\Support\Fake\InMemoryClientRegistrationRepository;
 use ClaviaTest\Support\Fake\InMemoryInitialAccessTokenRepository;
+use ClaviaTest\Support\Fake\InMemoryUserJobRepository;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
 use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
@@ -25,6 +27,7 @@ use Clavia\Domain\Client\Registration\InitialAccessTokenRepository;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Consent\ConsentRepository;
 use Clavia\Domain\Identity\ExternalIdentityRepository;
+use Clavia\Domain\Identity\Jobs\UserJobRepository;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
@@ -75,6 +78,7 @@ final class InMemoryRepositoriesTest extends TestCase
     use ConnectionRepositoryContract;
     use InitialAccessTokenRepositoryContract;
     use ClientRegistrationRepositoryContract;
+    use UserJobRepositoryContract;
 
     private InMemoryRoleRepository $roles;
     private InMemoryUserRepository $users;
@@ -91,6 +95,7 @@ final class InMemoryRepositoriesTest extends TestCase
     private InMemoryConnectionRepository $connections;
     private InMemoryInitialAccessTokenRepository $initialAccessTokens;
     private InMemoryClientRegistrationRepository $clientRegistrations;
+    private ?InMemoryUserJobRepository $userJobs = null;
 
     #[\Override]
     protected function setUp(): void
@@ -134,6 +139,12 @@ final class InMemoryRepositoriesTest extends TestCase
     protected function clientRegistrations(): ClientRegistrationRepository
     {
         return $this->clientRegistrations;
+    }
+
+    #[\Override]
+    protected function userJobs(): UserJobRepository
+    {
+        return $this->userJobs ??= new InMemoryUserJobRepository();
     }
 
     #[\Override]

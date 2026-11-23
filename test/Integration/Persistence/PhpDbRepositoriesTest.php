@@ -13,6 +13,7 @@ namespace ClaviaTest\Integration\Persistence;
 
 use ClaviaTest\Support\Contract\ClientRegistrationRepositoryContract;
 use ClaviaTest\Support\Contract\InitialAccessTokenRepositoryContract;
+use ClaviaTest\Support\Contract\UserJobRepositoryContract;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbAuthorizationCodeRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientGrantRepository;
@@ -28,6 +29,7 @@ use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbRecoveryCodeRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbResourceServerRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbRoleRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbTransactionManager;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbUserJobRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbUserRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PostgresUrl;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
@@ -51,6 +53,7 @@ use Clavia\Domain\Client\ResponseType;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Consent\ConsentRepository;
 use Clavia\Domain\Identity\ExternalIdentityRepository;
+use Clavia\Domain\Identity\Jobs\UserJobRepository;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
@@ -100,6 +103,7 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
     use ConnectionRepositoryContract;
     use InitialAccessTokenRepositoryContract;
     use ClientRegistrationRepositoryContract;
+    use UserJobRepositoryContract;
 
     #[\Override]
     protected function connections(): ConnectionRepository
@@ -123,6 +127,12 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
     protected function clientRegistrations(): ClientRegistrationRepository
     {
         return new PhpDbClientRegistrationRepository(TestStorage::database());
+    }
+
+    #[\Override]
+    protected function userJobs(): UserJobRepository
+    {
+        return new PhpDbUserJobRepository(TestStorage::database());
     }
 
     #[\Override]

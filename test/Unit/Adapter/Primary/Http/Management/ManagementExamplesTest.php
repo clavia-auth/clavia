@@ -114,6 +114,15 @@ final class ManagementExamplesTest extends TestCase
         foreach (self::children(self::object($node->content)) as $type => $mediaType) {
             $entry = $content->for(MediaType::parse($type) ?? self::fail('Unreadable ' . $type));
             self::assertNotNull($entry, $where . ' ' . $type);
+            if (! $entry[0]->isJson()) {
+                // Opaque bytes (NDJSON, say): the example is the text itself.
+                /** @var mixed $value */
+                foreach (self::values($mediaType) as $name => $value) {
+                    self::assertIsString($value, sprintf('%s %s, example %s', $where, $type, $name));
+                    ++$checked;
+                }
+                continue;
+            }
             $schema = $entry[1];
             self::assertNotNull($schema, $where . ' ' . $type . ' has no schema.');
             /** @var mixed $value */

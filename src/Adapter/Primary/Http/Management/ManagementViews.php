@@ -33,6 +33,8 @@ use Clavia\Domain\Client\Registration\InitialAccessToken;
 use Clavia\Domain\Client\ResponseType;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\ExternalIdentity;
+use Clavia\Domain\Identity\Jobs\LineError;
+use Clavia\Domain\Identity\Jobs\UserJob;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Rbac\Role;
 use Clavia\Domain\ResourceServer\Permission;
@@ -419,6 +421,37 @@ final class ManagementViews
             'details' => (object) $event->details,
             'client_address' => $event->clientAddress,
             'user_agent' => $event->userAgent,
+        ];
+    }
+
+    /**
+     * A bulk job: where it stands, and for an import its report — counts, and each refused line by
+     * number and reason. Never its input.
+     *
+     * @return array<string, mixed>
+     */
+    public static function userJob(UserJob $job): array
+    {
+        $at = static fn (?DateTimeImmutable $instant): ?string => $instant === null ? null : self::instant($instant);
+
+        return [
+            'id' => $job->id->value,
+            'type' => $job->kind->value,
+            'status' => $job->status()->value,
+            'connection' => $job->connection->value,
+            'created_at' => self::instant($job->createdAt),
+            'started_at' => $at($job->startedAt()),
+            'finished_at' => $at($job->finishedAt()),
+            'summary' => ['total' => $job->total(), 'created' => $job->created(), 'failed' => $job->failed()],
+            'errors' => array_map(
+                static fn (LineError $error): array => [
+                    'line' => $error->line,
+                    'error' => $error->error,
+                    'detail' => $error->detail,
+                ],
+                $job->errors(),
+            ),
+            'failure' => $job->failure(),
         ];
     }
 

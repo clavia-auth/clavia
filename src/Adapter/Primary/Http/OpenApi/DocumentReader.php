@@ -321,7 +321,25 @@ final class DocumentReader
             $range = $mediaTypeNode->name;
             $mediaType = MediaType::parse($range) ?? throw $mediaTypeNode->invalid('is not a media type');
             if (! $mediaType->isJson()) {
-                throw $mediaTypeNode->invalid('is not a JSON media type: only JSON bodies are supported');
+                // Any other body is opaque bytes, and said so: `{type: string, format: binary}` is
+                // the one schema this validator can enforce on it (it accepts any bytes). What the
+                // bytes mean (NDJSON lines, for one) is the operation's to check, after.
+                $mediaTypeNode->allowOnly(['schema', 'example', 'examples']);
+                $schema = $mediaTypeNode->optional('schema');
+                $names = $schema?->names() ?? [];
+                sort($names);
+                $opaque = $schema !== null
+                    && $names === ['format', 'type']
+                    && $schema->stringMember('type') === 'string'
+                    && $schema->stringMember('format') === 'binary';
+                if (! $opaque) {
+                    throw $mediaTypeNode->invalid(
+                        'is not a JSON media type: its schema must be {type: string, format: binary}, '
+                        . 'opaque bytes',
+                    );
+                }
+                $entries[$range] = [$mediaType, null];
+                continue;
             }
             $mediaTypeNode->allowOnly(['schema', 'example', 'examples']);
             $schema = $mediaTypeNode->optional('schema');

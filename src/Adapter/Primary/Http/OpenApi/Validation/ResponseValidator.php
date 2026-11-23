@@ -96,6 +96,10 @@ final class ResponseValidator
                 implode(' or ', $content->mediaTypes()),
             ))];
         }
+        if (! $entry[0]->isJson()) {
+            // Opaque bytes ({type: string, format: binary}): any body is one.
+            return [];
+        }
 
         try {
             /** @var mixed $body */
