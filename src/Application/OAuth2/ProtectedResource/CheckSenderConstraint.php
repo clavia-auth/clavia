@@ -14,6 +14,7 @@ namespace Clavia\Application\OAuth2\ProtectedResource;
 use Clavia\Application\OAuth2\Dpop\ReadDpopProof;
 use Clavia\Domain\OAuth2\AccessToken;
 use Clavia\Domain\OAuth2\BearerTokenError;
+use Clavia\Domain\OAuth2\Dpop\DpopRefusal;
 use Clavia\Domain\OAuth2\Dpop\ProofRequirement;
 use Clavia\Domain\OAuth2\OAuth2Error;
 
@@ -69,7 +70,7 @@ final readonly class CheckSenderConstraint
             throw BearerTokenError::invalidDpopProof($refusal->reason ?? 'refused');
         }
         if ($proof === null) {
-            throw BearerTokenError::invalidDpopProof('missing');
+            throw BearerTokenError::invalidDpopProof(DpopRefusal::Missing->value);
         }
     }
 }

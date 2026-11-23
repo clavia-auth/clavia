@@ -60,6 +60,7 @@ final readonly class ClientHandler implements RequestHandlerInterface
                     $body->bool('require_pkce'),
                     $body->string('mfa_policy'),
                     $body->bool('require_pushed_authorization_requests'),
+                    $body->bool('dpop_bound_access_tokens'),
                 ))));
             case 'DELETE':
                 ($this->delete)($id, $management->caller);

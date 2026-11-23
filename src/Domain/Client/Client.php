@@ -64,6 +64,7 @@ final readonly class Client
         public bool $requiresPkce,
         public MfaPolicy $mfaPolicy,
         public bool $requiresPushedAuthorizationRequests,
+        public bool $requiresDpop,
     ) {
     }
 
@@ -85,6 +86,8 @@ final readonly class Client
      * @param MfaPolicy          $mfaPolicy     Whether its users must sign in with more than one factor.
      * @param bool               $requiresPushedAuthorizationRequests Whether its authorization requests must
      *                                          be pushed first (RFC 9126 §6), and arrive by reference.
+     * @param bool               $requiresDpop  Whether every token it is issued must be bound to a DPoP
+     *                                          key (`dpop_bound_access_tokens`, RFC 9449 §5.2).
      *
      * @throws InvalidValue When the registration contradicts itself, or a third-party client would
      *                      list connections.
@@ -105,6 +108,7 @@ final readonly class Client
         bool $requiresPkce = true,
         MfaPolicy $mfaPolicy = MfaPolicy::Optional,
         bool $requiresPushedAuthorizationRequests = false,
+        bool $requiresDpop = false,
     ): self {
         $secretHash = $secretHash === '' ? null : $secretHash;
 
@@ -201,6 +205,7 @@ final readonly class Client
             $requiresPkce,
             $mfaPolicy,
             $requiresPushedAuthorizationRequests,
+            $requiresDpop,
         );
     }
 
@@ -229,6 +234,7 @@ final readonly class Client
             $this->requiresPkce,
             $this->mfaPolicy,
             $this->requiresPushedAuthorizationRequests,
+            $this->requiresDpop,
         );
     }
 
@@ -280,6 +286,7 @@ final readonly class Client
             $this->requiresPkce,
             $this->mfaPolicy,
             $this->requiresPushedAuthorizationRequests,
+            $this->requiresDpop,
         );
     }
 
@@ -304,6 +311,7 @@ final readonly class Client
             $this->requiresPkce,
             $this->mfaPolicy,
             $this->requiresPushedAuthorizationRequests,
+            $this->requiresDpop,
         );
     }
 
@@ -330,6 +338,7 @@ final readonly class Client
             $required,
             $this->mfaPolicy,
             $this->requiresPushedAuthorizationRequests,
+            $this->requiresDpop,
         );
     }
 
@@ -354,6 +363,7 @@ final readonly class Client
             $this->requiresPkce,
             $policy,
             $this->requiresPushedAuthorizationRequests,
+            $this->requiresDpop,
         );
     }
 
@@ -377,6 +387,33 @@ final readonly class Client
             $this->backChannelLogout,
             $this->requiresPkce,
             $this->mfaPolicy,
+            $required,
+            $this->requiresDpop,
+        );
+    }
+
+    /**
+     * The same client, required to bind every token it is issued to a DPoP key (RFC 9449 §5.2) or
+     * not, from its next token request on.
+     */
+    public function withDpopRequired(bool $required): self
+    {
+        return self::register(
+            $this->id,
+            $this->name,
+            $this->type,
+            $this->authMethod,
+            $this->secretHash,
+            $this->redirectUris,
+            $this->grantTypes,
+            $this->responseTypes,
+            $this->createdAt,
+            $this->postLogoutRedirectUris,
+            $this->connections,
+            $this->backChannelLogout,
+            $this->requiresPkce,
+            $this->mfaPolicy,
+            $this->requiresPushedAuthorizationRequests,
             $required,
         );
     }
@@ -410,6 +447,7 @@ final readonly class Client
             $this->requiresPkce,
             $this->mfaPolicy,
             $this->requiresPushedAuthorizationRequests,
+            $this->requiresDpop,
         );
     }
 

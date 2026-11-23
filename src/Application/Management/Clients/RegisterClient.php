@@ -84,6 +84,7 @@ final readonly class RegisterClient
             $new->requirePkce,
             MfaPolicy::fromString($new->mfaPolicy),
             $new->requirePushedAuthorizationRequests,
+            $new->requireDpop,
         );
         $this->clients->save($client);
         $this->events->dispatch(new ClientRegistered($client));

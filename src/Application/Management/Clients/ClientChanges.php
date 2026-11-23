@@ -38,6 +38,7 @@ final readonly class ClientChanges
         public ?bool $requirePkce = null,
         public ?string $mfaPolicy = null,
         public ?bool $requirePushedAuthorizationRequests = null,
+        public ?bool $requireDpop = null,
     ) {
     }
 }

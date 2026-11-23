@@ -36,6 +36,8 @@ final readonly class NewClient
      *                                    than one factor ({@see \Clavia\Domain\Authentication\MfaPolicy}).
      * @param bool         $requirePushedAuthorizationRequests Whether its authorization requests must be
      *                                    pushed first (RFC 9126 §6).
+     * @param bool         $requireDpop   Whether every token it is issued must be bound to a DPoP key
+     *                                    (`dpop_bound_access_tokens`, RFC 9449 §5.2).
      */
     public function __construct(
         public string $name = '',
@@ -52,6 +54,7 @@ final readonly class NewClient
         public bool $requirePkce = true,
         public string $mfaPolicy = 'optional',
         public bool $requirePushedAuthorizationRequests = false,
+        public bool $requireDpop = false,
     ) {
     }
 }
