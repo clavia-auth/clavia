@@ -21,6 +21,8 @@ use Clavia\Domain\Client\Event\ClientDeleted;
 use Clavia\Domain\Client\Event\ClientRegistered;
 use Clavia\Domain\Client\Event\ClientSecretRotated;
 use Clavia\Domain\Client\GrantType;
+use Clavia\Domain\Client\Registration\Event\InitialAccessTokenIssued;
+use Clavia\Domain\Client\Registration\Event\InitialAccessTokenRevoked;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Connection\Event\ConnectionChanged;
 use Clavia\Domain\Connection\Event\ConnectionCreated;
@@ -33,7 +35,8 @@ use Clavia\Domain\ResourceServer\Event\ResourceServerDeleted;
 use Clavia\Domain\ResourceServer\Event\ResourceServerRegistered;
 
 /**
- * Applications, APIs, client grants, connections and signing keys — in the audit trail.
+ * Applications, APIs, client grants, connections, signing keys and initial access tokens — in the
+ * audit trail.
  *
  * The actor is the request's caller: an operator through the dashboard, a machine client
  * holding a Management API token, or the system at the console. A change lists what it
@@ -64,6 +67,8 @@ final readonly class ConfigurationTrail implements EventSubscriber
             ConnectionDeleted::class => $this->connectionDeleted(...),
             SigningKeyCreated::class => $this->signingKeyCreated(...),
             SigningKeyRotated::class => $this->signingKeyRotated(...),
+            InitialAccessTokenIssued::class => $this->initialAccessTokenIssued(...),
+            InitialAccessTokenRevoked::class => $this->initialAccessTokenRevoked(...),
         ];
     }
 
@@ -171,5 +176,23 @@ final readonly class ConfigurationTrail implements EventSubscriber
             'algorithm' => $event->active->algorithm()->value,
             'retired_kid' => $event->retired?->kid(),
         ]);
+    }
+
+    private function initialAccessTokenIssued(InitialAccessTokenIssued $event): void
+    {
+        $token = $event->token;
+        $this->audit->record(AuditEventType::InitialAccessTokenIssued, AuditTarget::initialAccessToken($token->id), [
+            'description' => $token->description,
+            'max_uses' => $token->maxUses,
+        ]);
+    }
+
+    private function initialAccessTokenRevoked(InitialAccessTokenRevoked $event): void
+    {
+        $this->audit->record(
+            AuditEventType::InitialAccessTokenRevoked,
+            AuditTarget::initialAccessToken($event->token->id),
+            ['uses' => $event->token->uses],
+        );
     }
 }

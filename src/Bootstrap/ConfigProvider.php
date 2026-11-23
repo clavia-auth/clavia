@@ -19,6 +19,7 @@ use Clavia\Adapter\Primary\Cli\DatabaseStatusCommand;
 use Clavia\Adapter\Primary\Cli\GenerateEncryptionKeyCommand;
 use Clavia\Adapter\Primary\Cli\GenerateSigningKeyCommand;
 use Clavia\Adapter\Primary\Cli\GrantClientAccessCommand;
+use Clavia\Adapter\Primary\Cli\IssueRegistrationTokenCommand;
 use Clavia\Adapter\Primary\Cli\ListManagementScopesCommand;
 use Clavia\Adapter\Primary\Cli\ListRolesCommand;
 use Clavia\Adapter\Primary\Cli\ListSigningKeysCommand;
@@ -57,6 +58,8 @@ use Clavia\Adapter\Primary\Http\Management\ClientHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientsHandler;
 use Clavia\Adapter\Primary\Http\Management\ConnectionHandler;
 use Clavia\Adapter\Primary\Http\Management\ConnectionsHandler;
+use Clavia\Adapter\Primary\Http\Management\InitialAccessTokenHandler;
+use Clavia\Adapter\Primary\Http\Management\InitialAccessTokensHandler;
 use Clavia\Adapter\Primary\Http\Management\ManagementApiMiddleware;
 use Clavia\Adapter\Primary\Http\Management\ManagementContract;
 use Clavia\Adapter\Primary\Http\Management\ManagementResponder;
@@ -187,6 +190,9 @@ use Clavia\Application\Management\Connections\DeleteConnection;
 use Clavia\Application\Management\Connections\OidcConfiguration;
 use Clavia\Application\Management\Connections\ReadConnections;
 use Clavia\Application\Management\Connections\UpdateConnection;
+use Clavia\Application\Management\InitialAccessTokens\IssueInitialAccessToken;
+use Clavia\Application\Management\InitialAccessTokens\ReadInitialAccessTokens;
+use Clavia\Application\Management\InitialAccessTokens\RevokeInitialAccessToken;
 use Clavia\Application\Management\Provisioning\AssignRole;
 use Clavia\Application\Management\Provisioning\EnsureRole;
 use Clavia\Application\Management\Provisioning\GrantClientAccess;
@@ -289,6 +295,7 @@ use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
 use Clavia\Domain\Authentication\Passkey\RelyingParty;
 use Clavia\Domain\Client\ClientRepository;
+use Clavia\Domain\Client\Registration\InitialAccessTokenRepository;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Consent\ConsentRepository;
 use Clavia\Domain\Identity\ExternalIdentityRepository;
@@ -342,6 +349,7 @@ final class ConfigProvider
         'keys:list' => ListSigningKeysCommand::class,
         'clients:create-m2m' => CreateMachineClientCommand::class,
         'clients:grant' => GrantClientAccessCommand::class,
+        'clients:registration-token' => IssueRegistrationTokenCommand::class,
         'management-api:register' => RegisterManagementApiCommand::class,
         'management-api:scopes' => ListManagementScopesCommand::class,
         'roles:create' => CreateRoleCommand::class,
@@ -414,6 +422,8 @@ final class ConfigProvider
                     CheckSenderConstraint::class => Container\CheckSenderConstraintFactory::class,
                     PushAuthorizationRequest::class => Container\PushAuthorizationRequestFactory::class,
                     SigningKeysHandler::class => Container\SigningKeysHandlerFactory::class,
+                    InitialAccessTokensHandler::class => Container\InitialAccessTokensHandlerFactory::class,
+                    InitialAccessTokenHandler::class => Container\InitialAccessTokenHandlerFactory::class,
                     PushedAuthorizationRequestHandler::class
                         => Container\PushedAuthorizationRequestHandlerFactory::class,
                     HeldConsents::class => Container\HeldConsentsFactory::class,
@@ -572,6 +582,9 @@ final class ConfigProvider
                     RolePermissions::class => Container\RolePermissionsFactory::class,
                     ReadRoles::class => Container\ReadRolesFactory::class,
                     CreateRole::class => Container\CreateRoleFactory::class,
+                    IssueInitialAccessToken::class => Container\IssueInitialAccessTokenFactory::class,
+                    RevokeInitialAccessToken::class => Container\RevokeInitialAccessTokenFactory::class,
+                    ReadInitialAccessTokens::class => Container\ReadInitialAccessTokensFactory::class,
                     UpdateRole::class => Container\UpdateRoleFactory::class,
                     DeleteRole::class => Container\DeleteRoleFactory::class,
                     RoleAssignments::class => Container\RoleAssignmentsFactory::class,
@@ -599,6 +612,7 @@ final class ConfigProvider
                     ResourceServerRepository::class => Container\ResourceServerRepositoryFactory::class,
                     ClientGrantRepository::class => Container\ClientGrantRepositoryFactory::class,
                     RoleRepository::class => Container\RoleRepositoryFactory::class,
+                    InitialAccessTokenRepository::class => Container\InitialAccessTokenRepositoryFactory::class,
                     ConsentRepository::class => Container\ConsentRepositoryFactory::class,
                     LoginStateStore::class => Container\LoginStateStoreFactory::class,
                     PushedAuthorizationRequestStore::class => Container\PushedAuthorizationRequestStoreFactory::class,
@@ -684,6 +698,7 @@ final class ConfigProvider
                     RotateSigningKeyCommand::class => Container\RotateSigningKeyCommandFactory::class,
                     ListSigningKeysCommand::class => Container\ListSigningKeysCommandFactory::class,
                     CreateMachineClientCommand::class => Container\CreateMachineClientCommandFactory::class,
+                    IssueRegistrationTokenCommand::class => Container\IssueRegistrationTokenCommandFactory::class,
                     GrantClientAccessCommand::class => Container\GrantClientAccessCommandFactory::class,
                     RegisterManagementApiCommand::class => Container\RegisterManagementApiCommandFactory::class,
                     CreateRoleCommand::class => Container\CreateRoleCommandFactory::class,

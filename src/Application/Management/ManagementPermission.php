@@ -60,6 +60,9 @@ enum ManagementPermission: string
     case ReadAuditEvents = 'read:audit_events';
     case ReadSigningKeys = 'read:signing_keys';
     case CreateSigningKeys = 'create:signing_keys';
+    case ReadInitialAccessTokens = 'read:initial_access_tokens';
+    case CreateInitialAccessTokens = 'create:initial_access_tokens';
+    case DeleteInitialAccessTokens = 'delete:initial_access_tokens';
 
     /** A sentence for the permission, shown wherever one is assigned. */
     public function description(): string

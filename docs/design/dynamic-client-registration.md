@@ -1,6 +1,6 @@
 # Design: Dynamic client registration
 
-**Status:** proposed · **Date:** 2026-11-23 · **Issue:** clavia-auth/clavia#15 ·
+**Status:** agreed · **Date:** 2026-11-23 · **Issue:** clavia-auth/clavia#15 ·
 **Specifications:** RFC 7591 (OAuth 2.0 Dynamic Client Registration Protocol), RFC 7592
 (Dynamic Client Registration Management Protocol), RFC 8414 §2 (`registration_endpoint`),
 OpenID Connect Dynamic Client Registration 1.0, RFC 8252 §7.3 (loopback redirects),

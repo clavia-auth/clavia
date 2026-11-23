@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Integration\Persistence;
 
+use ClaviaTest\Support\Contract\InitialAccessTokenRepositoryContract;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbAuthorizationCodeRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientGrantRepository;
@@ -18,6 +19,7 @@ use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbConnectionRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbConsentRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbExternalIdentityRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbInitialAccessTokenRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbMfaFactorRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbPasskeyRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbRecoveryCodeRepository;
@@ -41,6 +43,7 @@ use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\GrantType;
+use Clavia\Domain\Client\Registration\InitialAccessTokenRepository;
 use Clavia\Domain\Client\ResponseType;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Consent\ConsentRepository;
@@ -92,6 +95,7 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
     use RoleRepositoryContract;
     use ConsentRepositoryContract;
     use ConnectionRepositoryContract;
+    use InitialAccessTokenRepositoryContract;
 
     #[\Override]
     protected function connections(): ConnectionRepository
@@ -103,6 +107,12 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
     protected function consents(): ConsentRepository
     {
         return new PhpDbConsentRepository(TestStorage::database());
+    }
+
+    #[\Override]
+    protected function initialAccessTokens(): InitialAccessTokenRepository
+    {
+        return new PhpDbInitialAccessTokenRepository(TestStorage::database());
     }
 
     #[\Override]

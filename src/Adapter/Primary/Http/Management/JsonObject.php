@@ -61,6 +61,14 @@ final readonly class JsonObject
         return $value === null || is_bool($value) ? $value : throw self::mistyped($name, 'a boolean');
     }
 
+    public function int(string $name): ?int
+    {
+        /** @var mixed $value */
+        $value = $this->value($name);
+
+        return $value === null || is_int($value) ? $value : throw self::mistyped($name, 'an integer');
+    }
+
     /**
      * @return list<string>|null
      */
