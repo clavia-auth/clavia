@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Domain\OAuth2;
 
+use Clavia\Domain\Authentication\AuthenticationContext;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\Audience;
@@ -55,6 +56,7 @@ final class RefreshToken
         public readonly DateTimeImmutable $familyExpiresAt,
         private ?DateTimeImmutable $usedAt,
         private ?DateTimeImmutable $revokedAt,
+        public readonly AuthenticationContext $authentication,
     ) {
     }
 
@@ -86,12 +88,17 @@ final class RefreshToken
             $now,
             $idleLifetimeSeconds,
             $absoluteLifetimeSeconds,
+            $code->authentication,
         );
     }
 
     /**
      * The first refresh token of a family started by any grant acting for a person: the
      * code flow, or a device approved on another screen (no code to trace it to).
+     *
+     * The family keeps how the person signed in to authorize it, so every access token it
+     * mints reports the same `acr` and `auth_time` (RFC 9470 §6.1); the session, which may end
+     * long before the family does, is not kept.
      */
     public static function startFamilyFor(
         RefreshTokenId $id,
@@ -104,6 +111,7 @@ final class RefreshToken
         DateTimeImmutable $now,
         int $idleLifetimeSeconds,
         int $absoluteLifetimeSeconds,
+        AuthenticationContext $authentication,
     ): self {
         $familyExpiresAt = self::after($now, $absoluteLifetimeSeconds);
 
@@ -121,6 +129,7 @@ final class RefreshToken
             $familyExpiresAt,
             null,
             null,
+            $authentication->withoutSession(),
         );
     }
 
@@ -145,6 +154,7 @@ final class RefreshToken
             $this->familyExpiresAt,
             null,
             null,
+            $this->authentication,
         );
     }
 
@@ -163,6 +173,7 @@ final class RefreshToken
         DateTimeImmutable $familyExpiresAt,
         ?DateTimeImmutable $usedAt,
         ?DateTimeImmutable $revokedAt,
+        ?AuthenticationContext $authentication = null,
     ): self {
         return new self(
             $id,
@@ -178,6 +189,7 @@ final class RefreshToken
             $familyExpiresAt,
             $usedAt,
             $revokedAt,
+            $authentication ?? AuthenticationContext::unknown(),
         );
     }
 

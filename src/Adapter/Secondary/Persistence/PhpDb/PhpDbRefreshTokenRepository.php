@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Secondary\Persistence\PhpDb;
 
+use Clavia\Domain\Authentication\AuthenticationContext;
+use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\OAuth2\AuthorizationCodeId;
@@ -29,12 +31,12 @@ use LogicException;
  * @psalm-type RefreshTokenRow = array{id: string, token_hash: string, family_id: string, client_id: string,
  *     user_id: string, authorization_code_id: string|null, scope: string, audience: string|null,
  *     issued_at: string, expires_at: string, family_expires_at: string, used_at: string|null,
- *     revoked_at: string|null}
+ *     revoked_at: string|null, auth_time: string|null, amr: string}
  */
 final readonly class PhpDbRefreshTokenRepository implements RefreshTokenRepository
 {
     private const string COLUMNS = 'id, token_hash, family_id, client_id, user_id, authorization_code_id, scope, '
-        . 'audience, issued_at, expires_at, family_expires_at, used_at, revoked_at';
+        . 'audience, issued_at, expires_at, family_expires_at, used_at, revoked_at, auth_time, amr';
 
     public function __construct(private Database $database)
     {
@@ -46,7 +48,7 @@ final readonly class PhpDbRefreshTokenRepository implements RefreshTokenReposito
         $this->database->execute(
             'INSERT INTO oauth2_refresh_tokens (' . self::COLUMNS . ') VALUES (:id, :token_hash, :family_id, '
             . ':client_id, :user_id, :authorization_code_id, :scope, :audience, :issued_at, :expires_at, '
-            . ':family_expires_at, :used_at, :revoked_at)',
+            . ':family_expires_at, :used_at, :revoked_at, :auth_time, CAST(:amr AS jsonb))',
             [
                 'id' => $token->id->value,
                 'token_hash' => $token->digest->toString(),
@@ -61,6 +63,8 @@ final readonly class PhpDbRefreshTokenRepository implements RefreshTokenReposito
                 'family_expires_at' => Timestamp::toDatabase($token->familyExpiresAt),
                 'used_at' => Timestamp::toDatabaseOrNull($token->usedAt()),
                 'revoked_at' => Timestamp::toDatabaseOrNull($token->revokedAt()),
+                'auth_time' => Timestamp::toDatabaseOrNull($token->authentication->authenticatedAt),
+                'amr' => Jsonb::encode($token->authentication->methodValues()),
             ],
         );
     }
@@ -143,6 +147,10 @@ final readonly class PhpDbRefreshTokenRepository implements RefreshTokenReposito
             Timestamp::fromDatabase($row['family_expires_at']),
             Timestamp::fromDatabaseOrNull($row['used_at']),
             Timestamp::fromDatabaseOrNull($row['revoked_at']),
+            AuthenticationContext::reconstitute(
+                Timestamp::fromDatabaseOrNull($row['auth_time']),
+                array_map(AuthenticationMethod::from(...), Jsonb::decodeStrings($row['amr'])),
+            ),
         );
     }
 }

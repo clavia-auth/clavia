@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Secondary\Persistence\PhpDb;
 
+use Clavia\Domain\Authentication\AuthenticationContext;
+use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\OAuth2\AccessToken;
@@ -39,10 +41,10 @@ final readonly class PhpDbAccessTokenRepository implements AccessTokenRepository
             <<<'SQL'
                 INSERT INTO oauth2_access_tokens (
                     id, token_hash, client_id, user_id, authorization_code_id, audience, token_type, scope,
-                    issued_at, expires_at, revoked_at, refresh_family_id
+                    issued_at, expires_at, revoked_at, refresh_family_id, auth_time, amr
                 ) VALUES (
                     :id, :token_hash, :client_id, :user_id, :authorization_code_id, :audience, :token_type, :scope,
-                    :issued_at, :expires_at, :revoked_at, :refresh_family_id
+                    :issued_at, :expires_at, :revoked_at, :refresh_family_id, :auth_time, CAST(:amr AS jsonb)
                 )
                 SQL,
             [
@@ -58,6 +60,8 @@ final readonly class PhpDbAccessTokenRepository implements AccessTokenRepository
                 'expires_at' => Timestamp::toDatabase($token->expiresAt),
                 'revoked_at' => Timestamp::toDatabaseOrNull($token->revokedAt()),
                 'refresh_family_id' => $token->refreshFamilyId?->value,
+                'auth_time' => Timestamp::toDatabaseOrNull($token->authentication->authenticatedAt),
+                'amr' => Jsonb::encode($token->authentication->methodValues()),
             ],
         );
     }
@@ -68,12 +72,13 @@ final readonly class PhpDbAccessTokenRepository implements AccessTokenRepository
         /**
          * @var array{id: string, token_hash: string, client_id: string, user_id: string|null,
          *            authorization_code_id: string|null, audience: string|null, scope: string, issued_at: string,
-         *            expires_at: string, revoked_at: string|null, refresh_family_id: string|null}|null $row
+         *            expires_at: string, revoked_at: string|null, refresh_family_id: string|null,
+         *            auth_time: string|null, amr: string}|null $row
          */
         $row = $this->database->fetchOne(
             <<<'SQL'
                 SELECT id, token_hash, client_id, user_id, authorization_code_id, audience, scope,
-                       issued_at, expires_at, revoked_at, refresh_family_id
+                       issued_at, expires_at, revoked_at, refresh_family_id, auth_time, amr
                 FROM oauth2_access_tokens
                 WHERE token_hash = :token_hash
                 SQL,
@@ -98,6 +103,10 @@ final readonly class PhpDbAccessTokenRepository implements AccessTokenRepository
             Timestamp::fromDatabase($row['expires_at']),
             Timestamp::fromDatabaseOrNull($row['revoked_at']),
             $row['refresh_family_id'] === null ? null : RefreshTokenId::fromString($row['refresh_family_id']),
+            AuthenticationContext::reconstitute(
+                Timestamp::fromDatabaseOrNull($row['auth_time']),
+                array_map(AuthenticationMethod::from(...), Jsonb::decodeStrings($row['amr'])),
+            ),
         );
     }
 

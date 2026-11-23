@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Support\Contract;
 
+use Clavia\Domain\Authentication\AuthenticationContext;
+use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\OAuth2\AccessToken;
 use Clavia\Domain\OAuth2\AccessTokenId;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
@@ -55,6 +57,41 @@ trait AccessTokenRepositoryContract
         self::assertEquals(new DateTimeImmutable('2026-01-15T10:00:10Z'), $stored->issuedAt);
         self::assertEquals(new DateTimeImmutable('2026-01-15T11:00:10Z'), $stored->expiresAt);
         self::assertFalse($stored->isRevoked());
+    }
+
+    #[Test]
+    public function howThePersonSignedInIsKeptWithoutTheirSession(): void
+    {
+        // RFC 9470 §6: what a token reports as `acr` and `auth_time` must survive storage.
+        $code = $this->aStoredCode('code-1');
+        $this->tokens()->add(AccessToken::issueForUser(
+            AccessTokenId::generate(new SeededRandomSource(3)),
+            Digest::of('token-1'),
+            $code->clientId,
+            $code->userId,
+            null,
+            ScopeSet::fromString('openid'),
+            new DateTimeImmutable('2026-01-15T10:00:10Z'),
+            3600,
+            AuthenticationContext::reconstitute(
+                new DateTimeImmutable('2026-01-15T09:59:00Z'),
+                [
+                    AuthenticationMethod::Password,
+                    AuthenticationMethod::SoftwareKey,
+                    AuthenticationMethod::MultipleFactors,
+                ],
+                'a-session-id',
+            ),
+        ));
+
+        $stored = $this->tokens()->findByDigest(Digest::of('token-1'))?->authentication;
+
+        self::assertNotNull($stored);
+        self::assertEquals(new DateTimeImmutable('2026-01-15T09:59:00Z'), $stored->authenticatedAt);
+        self::assertSame(['pwd', 'swk', 'mfa'], $stored->methodValues());
+        self::assertSame('phr', $stored->acr());
+        // The session may end long before the token does: a token never names it.
+        self::assertNull($stored->sid);
     }
 
     #[Test]

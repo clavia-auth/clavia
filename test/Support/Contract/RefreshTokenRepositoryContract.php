@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Support\Contract;
 
+use Clavia\Domain\Authentication\AuthenticationContext;
+use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\OAuth2\AuthorizationCode;
 use Clavia\Domain\OAuth2\Refresh;
 use Clavia\Domain\OAuth2\RefreshToken;
@@ -44,6 +46,48 @@ trait RefreshTokenRepositoryContract
      * @return T
      */
     abstract protected function transactional(callable $work): mixed;
+
+    #[Test]
+    public function aFamilyKeepsHowThePersonSignedInAndPassesItOn(): void
+    {
+        $code = $this->aStoredCode('code-1');
+        $first = RefreshToken::startFamilyFor(
+            RefreshTokenId::generate(new SeededRandomSource(3)),
+            Digest::of('refresh-1'),
+            $code->clientId,
+            $code->userId,
+            $code->id,
+            null,
+            ScopeSet::fromString('openid'),
+            new DateTimeImmutable('2026-01-15T10:00:00Z'),
+            3600,
+            7200,
+            AuthenticationContext::reconstitute(
+                new DateTimeImmutable('2026-01-15T09:59:00Z'),
+                [
+                    AuthenticationMethod::Password,
+                    AuthenticationMethod::SoftwareKey,
+                    AuthenticationMethod::MultipleFactors,
+                ],
+                'a-session-id',
+            ),
+        );
+        $this->refreshTokens()->add($first);
+        $this->refreshTokens()->add($first->succeededBy(
+            RefreshTokenId::generate(new SeededRandomSource(4)),
+            Digest::of('refresh-2'),
+            ScopeSet::fromString('openid'),
+            new DateTimeImmutable('2026-01-15T10:30:00Z'),
+            3600,
+        ));
+
+        $successor = $this->refreshTokens()->findByDigest(Digest::of('refresh-2'))?->authentication;
+
+        self::assertNotNull($successor);
+        self::assertEquals(new DateTimeImmutable('2026-01-15T09:59:00Z'), $successor->authenticatedAt);
+        self::assertSame('phr', $successor->acr());
+        self::assertNull($successor->sid);
+    }
 
     #[Test]
     public function aFamilysFirstTokenIsReadBackWhole(): void

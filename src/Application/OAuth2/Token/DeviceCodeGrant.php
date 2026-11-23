@@ -159,6 +159,7 @@ final readonly class DeviceCodeGrant implements Grant
                 $now,
                 $this->refreshTokenLifetimeSeconds,
                 $this->refreshTokenAbsoluteLifetimeSeconds,
+                $request->authentication() ?? AuthenticationContext::unknown(),
             );
             $this->refreshTokens->add($refreshToken);
         }
@@ -173,6 +174,7 @@ final readonly class DeviceCodeGrant implements Grant
                 $scope,
                 $now,
                 $this->accessTokenLifetimeSeconds,
+                $request->authentication() ?? AuthenticationContext::unknown(),
                 $refreshToken?->familyId,
             ),
         );

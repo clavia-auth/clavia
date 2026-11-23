@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Domain\OAuth2;
 
+use Clavia\Domain\Authentication\AuthenticationContext;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\Audience;
@@ -46,6 +47,7 @@ final class AccessToken
         public readonly DateTimeImmutable $expiresAt,
         private ?DateTimeImmutable $revokedAt,
         public readonly ?RefreshTokenId $refreshFamilyId,
+        public readonly AuthenticationContext $authentication,
     ) {
     }
 
@@ -77,20 +79,16 @@ final class AccessToken
             $now->modify(sprintf('+%d seconds', $lifetimeSeconds)),
             null,
             $refreshFamily,
+            $code->authentication->withoutSession(),
         );
     }
 
     /**
-     * Record a token minted by a refresh, issued with `$refreshToken`, the successor of
-     * the token just spent. It inherits the person, the API, the code and the family.
-     *
-     * @param positive-int $lifetimeSeconds
-     */
-    /**
      * A token issued on a person's behalf by a grant other than the code flow — the device
      * grant: no authorization code to trace it to.
      *
-     * @param RefreshTokenId|null $refreshFamily The family issued alongside, if any.
+     * @param AuthenticationContext $authentication How the person signed in to approve it.
+     * @param RefreshTokenId|null   $refreshFamily  The family issued alongside, if any.
      */
     public static function issueForUser(
         AccessTokenId $id,
@@ -101,6 +99,7 @@ final class AccessToken
         ScopeSet $scope,
         DateTimeImmutable $now,
         int $lifetimeSeconds,
+        AuthenticationContext $authentication,
         ?RefreshTokenId $refreshFamily = null,
     ): self {
         return new self(
@@ -115,9 +114,17 @@ final class AccessToken
             $now->modify(sprintf('+%d seconds', $lifetimeSeconds)),
             null,
             $refreshFamily,
+            $authentication->withoutSession(),
         );
     }
 
+    /**
+     * Record a token minted by a refresh, issued with `$refreshToken`, the successor of
+     * the token just spent. It inherits the person, the API, the code, the family, and how
+     * the person signed in when the family started (RFC 9470 §6.1).
+     *
+     * @param positive-int $lifetimeSeconds
+     */
     public static function issueFromRefresh(
         AccessTokenId $id,
         Digest $digest,
@@ -138,6 +145,7 @@ final class AccessToken
             $now->modify(sprintf('+%d seconds', $lifetimeSeconds)),
             null,
             $refreshToken->familyId,
+            $refreshToken->authentication,
         );
     }
 
@@ -171,6 +179,7 @@ final class AccessToken
             $now->modify(sprintf('+%d seconds', $lifetimeSeconds)),
             null,
             null,
+            AuthenticationContext::unknown(),
         );
     }
 
@@ -187,6 +196,7 @@ final class AccessToken
         DateTimeImmutable $expiresAt,
         ?DateTimeImmutable $revokedAt,
         ?RefreshTokenId $refreshFamilyId = null,
+        ?AuthenticationContext $authentication = null,
     ): self {
         return new self(
             $id,
@@ -200,6 +210,7 @@ final class AccessToken
             $expiresAt,
             $revokedAt,
             $refreshFamilyId,
+            $authentication ?? AuthenticationContext::unknown(),
         );
     }
 
@@ -221,6 +232,7 @@ final class AccessToken
             $this->expiresAt,
             $this->revokedAt,
             $this->refreshFamilyId,
+            $this->authentication,
         );
     }
 
@@ -239,6 +251,7 @@ final class AccessToken
             $this->expiresAt,
             $this->revokedAt ?? $now,
             $this->refreshFamilyId,
+            $this->authentication,
         );
     }
 

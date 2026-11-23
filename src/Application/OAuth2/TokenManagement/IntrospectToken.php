@@ -35,6 +35,10 @@ use Clavia\Domain\Shared\Clock;
  * sharing this server's database. Anything else is `active: false`, the same answer as
  * an unknown token (§2.2), so a caller cannot probe which tokens exist.
  *
+ * For a token issued on a person's behalf, the answer also says when and how strongly the
+ * person signed in (`auth_time`, `acr`), what a resource server compares with what it
+ * requires (RFC 9470 §6.2).
+ *
  * Active means usable now: not expired, not revoked, a refresh token not spent, and —
  * for a token issued on a person's behalf — an account that exists and is active.
  */
@@ -96,6 +100,8 @@ final readonly class IntrospectToken
             $token->userId,
             $username,
             $token instanceof AccessToken ? AccessToken::TOKEN_TYPE : null,
+            $token->userId === null ? null : $token->authentication->authenticatedAt,
+            $token->userId === null ? null : $token->authentication->acr(),
         );
     }
 

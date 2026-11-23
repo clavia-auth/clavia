@@ -73,6 +73,18 @@ final readonly class AuthenticationContext
         return new self($this->authenticatedAt, $this->methods, null);
     }
 
+    /** The level these methods meet ({@see AuthenticationLevel}); null for one factor or none. */
+    public function level(): ?AuthenticationLevel
+    {
+        return AuthenticationLevel::of($this->methods);
+    }
+
+    /** The `acr` to report (OIDC Core §2); null, and the claim left out, for one factor or none. */
+    public function acr(): ?string
+    {
+        return $this->level()?->acr();
+    }
+
     /** @return list<string> The RFC 8176 `amr` values. */
     public function methodValues(): array
     {

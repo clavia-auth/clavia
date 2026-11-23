@@ -26,6 +26,10 @@ final readonly class TokenIntrospection
      * @param UserId|null $subject   The person it was issued on behalf of; none for a client acting as itself.
      * @param string|null $username  The person's address, for people reading the answer.
      * @param string|null $tokenType `Bearer` for an access token; a refresh token is presented to no API.
+     * @param DateTimeImmutable|null $authenticatedAt When the person signed in to authorize it (`auth_time`, RFC 9470
+     *                                                §6.2); null for a client acting as itself, or a sign-in this
+     *                                                server did not witness.
+     * @param string|null            $acr             The level of that sign-in; null for one factor.
      */
     public function __construct(
         public ClientId $clientId,
@@ -36,6 +40,8 @@ final readonly class TokenIntrospection
         public ?UserId $subject,
         public ?string $username,
         public ?string $tokenType,
+        public ?DateTimeImmutable $authenticatedAt = null,
+        public ?string $acr = null,
     ) {
     }
 }
