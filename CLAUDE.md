@@ -300,7 +300,7 @@ The application mirrors these contexts (`Application\OAuth2`, `Authentication`, 
 (`SessionStore`, `LoginStateStore`, `MfaChallengeStore`, `ConsentStateStore`,
 `DeviceAuthorizationStore`, `PasswordlessChallengeStore`, `AccountLinkStore`,
 `ExternalSignInStore`, `WebAuthnChallengeStore`, `NonceRegistry`, `AttemptCounter`), passkeys
-(`PasskeyVerifier`), mail (`Mailer`, `MailOutbox`),
+(`PasskeyVerifier`), breached passwords (`BreachedPasswords`), mail (`Mailer`, `MailOutbox`),
 identity providers (`IdentityProvider[s]`, `OidcDiscovery`), outbound URLs (`OutboundUrls`), deferred work
 (`DeferredTasks`, `BackChannelLogoutDelivery`) and events (`DomainEvents`).
 
@@ -421,7 +421,7 @@ applies however the person signed in.
   mailed a notice instead; a pool that does not signs the new account in at once and says when an
   address is taken. Password sign-in refuses an unverified account in such a pool *after* its
   password verifies (`EmailVerificationRequired`) and sends a new link. `RequestPasswordReset`
-  always answers the same and mails only existing accounts; `ResetPassword` checks the policy
+  always answers the same and mails only existing accounts; `ResetPassword` screens the password
   before spending the link, changes the password, marks the address verified, and ends every
   session (`SessionEndReason::PasswordReset`). Links are `AccountLink`s in Redis (digest keys,
   `GETDEL`), spent only by a POST, and dead once the address changes or, for a reset, once the
@@ -433,6 +433,15 @@ applies however the person signed in.
   chooses one), a reset when it has one, refused for a deactivated account or one outside a pool. The caller is
   authenticated, so unlike the public form it is told how it went: `202`, `429` when the send
   limit is reached, `503` when no mail can be sent.
+
+- **Choosing a password** (`Account\PasswordScreen`): at sign-up, at a reset and through the
+  Management API, `PasswordPolicy` first, then, with `CLAVIA_BREACHED_PASSWORD_CHECK` on (off by
+  default), Have I Been Pwned's Pwned Passwords by k-anonymity (`PwnedPasswordsRange`: five
+  characters of the SHA-1 leave, with `Add-Padding`, through `OutboundUrlPolicy`). A breached
+  password is refused like one the policy refuses. An unreachable service lets the password
+  through and logs a warning: NIST SP 800-63B §5.1.1.2 asks for the check, and somebody else's
+  outage must not lock people out. At sign-up it runs after the limit per client address, which
+  bounds how often a client can make this server ask.
 
 - **Passkeys** (`Passkey\*`, design in `docs/design/passkeys.md`; phase 1, a second factor). The account page `/auth/passkeys` lists them; `POST /auth/passkeys/new` opens a
   registration ceremony (`BeginPasskeyRegistration`) and shows the page that runs `passkeys.js`,
@@ -701,7 +710,7 @@ These follow from the RFCs and from mistakes already made once. Breaking one is 
 - An identity from another provider is `(connection, subject)`; only a *verified* address links
   to an existing account; `state` is paired with a cookie; provider errors are never echoed.
 - Every URL fetched on an operator's say-so (OIDC discovery and endpoints, back-channel logout
-  URIs) goes through `OutboundUrlPolicy`: https only, never a non-global address (as written or as
+  URIs), and the breached-password service, goes through `OutboundUrlPolicy`: https only, never a non-global address (as written or as
   resolved), checked at registration and again at send time, connecting to the addresses checked
   (`PinCheckedAddresses`). `CLAVIA_OUTBOUND_ALLOW_PRIVATE_ADDRESSES` waives this in development.
 - Caddy sets `Cache-Control: no-store` on `auth.*` except discovery, the JWKS and static files,

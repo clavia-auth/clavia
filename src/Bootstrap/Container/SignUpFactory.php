@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Application\Authentication\Account\PasswordScreen;
 use Clavia\Application\Authentication\Account\SendAccountLink;
 use Clavia\Application\Authentication\Account\SignUp;
 use Clavia\Application\Authentication\SignIn\CompleteFirstFactor;
@@ -41,6 +42,8 @@ final class SignUpFactory
         $users = $container->get(UserRepository::class);
         /** @var PasswordHasher $hasher */
         $hasher = $container->get(PasswordHasher::class);
+        /** @var PasswordScreen $passwords */
+        $passwords = $container->get(PasswordScreen::class);
         /** @var AttemptCounter $counter */
         $counter = $container->get(AttemptCounter::class);
         /** @var SendAccountLink $links */
@@ -67,6 +70,7 @@ final class SignUpFactory
             $loginStates,
             $users,
             $hasher,
+            $passwords,
             $counter,
             $links,
             $completeFirstFactor,

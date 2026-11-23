@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Application\Authentication\Account\PasswordScreen;
 use Clavia\Application\Authentication\Account\ResetPassword;
 use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Port\AccountLinkStore;
@@ -32,6 +33,8 @@ final class ResetPasswordFactory
         $users = $container->get(UserRepository::class);
         /** @var PasswordHasher $hasher */
         $hasher = $container->get(PasswordHasher::class);
+        /** @var PasswordScreen $passwords */
+        $passwords = $container->get(PasswordScreen::class);
         /** @var Sessions $sessions */
         $sessions = $container->get(Sessions::class);
         /** @var LoginStateStore $loginStates */
@@ -47,6 +50,7 @@ final class ResetPasswordFactory
             $links,
             $users,
             $hasher,
+            $passwords,
             $sessions,
             $loginStates,
             $transactions,

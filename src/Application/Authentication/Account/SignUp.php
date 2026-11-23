@@ -39,7 +39,9 @@ use Clavia\Domain\Shared\RandomSource;
  * Create an account from the sign-up page, in the pool the application opens to sign-ups
  * ({@see ConnectionAccess::signUpPool()}).
  *
- * In order: the pool, the password policy, the sign-up limit per client address. Then:
+ * In order: the pool, the password policy, the sign-up limit per client address, and the
+ * breached-password check ({@see PasswordScreen}), last because it asks a third party, so the
+ * limit bounds how often a client address can make this server ask. Then:
  *
  * - **a pool requiring a verified address** answers {@see CheckYourInbox} whatever happens. A
  *   new account is created unverified and mailed a verification link; an address that already
@@ -63,6 +65,7 @@ final readonly class SignUp
         private LoginStateStore $loginStates,
         private UserRepository $users,
         private PasswordHasher $hasher,
+        private PasswordScreen $passwords,
         private AttemptCounter $counter,
         private SendAccountLink $links,
         private CompleteFirstFactor $completeFirstFactor,
@@ -98,6 +101,11 @@ final readonly class SignUp
             return new SignUpRefused(SignUpFailure::TooManySignUps, $email);
         }
         $this->counter->increment($subject, self::WINDOW_SECONDS);
+        try {
+            $password = $this->passwords->accept($password);
+        } catch (InvalidValue $refusal) {
+            return new SignUpRefused(SignUpFailure::PasswordRejected, $email, $refusal->getMessage());
+        }
 
         // Hashed whether or not an account is made, so the time taken says nothing either.
         $hash = $this->hasher->hash($password);
