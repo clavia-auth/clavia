@@ -16,7 +16,7 @@ namespace Clavia\Domain\Authentication;
  * token, a JWT access token and introspection report (OIDC Core §2, RFC 9470 §6), and the
  * values discovery lists (`acr_values_supported`). Design: `docs/design/mfa-policies.md` §3.
  *
- * A ladder of three, each meeting every one below it:
+ * Two, the second meeting the first:
  *
  * - **MFA**: more than one factor (`amr` holds `mfa`). Spelled as the OpenID Provider
  *   Authentication Policy Extension 1.0's multi-factor policy, the value relying parties
@@ -24,7 +24,12 @@ namespace Clavia\Domain\Authentication;
  * - **phishing-resistant** (`phr`, OpenID Connect EAP ACR Values 1.0): MFA with a passkey
  *   (`hwk` or `swk`). A password typed before it could have been phished; the passkey's
  *   signature, bound to this origin, cannot be relayed.
- * - **phishing-resistant, hardware** (`phrh`): MFA with a device-bound passkey (`hwk`).
+ *
+ * There is no `phrh` (phishing-resistant, hardware-protected), on purpose. Passkeys are
+ * registered without attestation, so whether a key is device-bound is only what its
+ * authenticator says of itself (the backup eligibility flag), and a relying party reading
+ * `phrh` would take it as a fact about hardware. It becomes possible once attestation is
+ * verified at registration (docs/design/mfa-policies.md §2).
  *
  * One factor is no level at all, and has no `acr`: OIDC Core §2 makes the claim optional,
  * and its `"0"` describes something weaker than a password.
@@ -36,7 +41,6 @@ enum AuthenticationLevel: string
 {
     case Mfa = 'http://schemas.openid.net/pape/policies/2007/06/multi-factor';
     case PhishingResistant = 'phr';
-    case PhishingResistantHardware = 'phrh';
 
     /**
      * The strongest level these methods meet; null for one factor, or none at all.
@@ -48,10 +52,10 @@ enum AuthenticationLevel: string
         if (! in_array(AuthenticationMethod::MultipleFactors, $methods, true)) {
             return null;
         }
-        if (in_array(AuthenticationMethod::HardwareKey, $methods, true)) {
-            return self::PhishingResistantHardware;
-        }
-        if (in_array(AuthenticationMethod::SoftwareKey, $methods, true)) {
+        if (
+            in_array(AuthenticationMethod::HardwareKey, $methods, true)
+            || in_array(AuthenticationMethod::SoftwareKey, $methods, true)
+        ) {
             return self::PhishingResistant;
         }
 
@@ -85,7 +89,6 @@ enum AuthenticationLevel: string
         return match ($this) {
             self::Mfa => 1,
             self::PhishingResistant => 2,
-            self::PhishingResistantHardware => 3,
         };
     }
 }

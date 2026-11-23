@@ -540,9 +540,9 @@ OpenAPI document says so where the format is chosen.
   served by `/oidc/userinfo` alone; an unknown value is left out, never null. `auth_time` and
   `amr` come from the session that approved the code.
 - **Levels** (`AuthenticationLevel`, design in `docs/design/mfa-policies.md`): `acr` is worked
-  out from `amr`, never stored. Three values, a ladder: the PAPE multi-factor URI (`amr` has
-  `mfa`), `phr` (and a passkey, `hwk` or `swk`), `phrh` (and a device-bound one, `hwk`). One
-  factor has no `acr`. Every token issued for a person keeps how they signed in (`auth_time`,
+  out from `amr`, never stored. Two values: the PAPE multi-factor URI (`amr` has `mfa`), then
+  `phr` (and a passkey, `hwk` or `swk`). One factor has no `acr`. No `phrh`: passkeys are
+  registered without attestation, so a key's hardware is only its authenticator's word. Every token issued for a person keeps how they signed in (`auth_time`,
   `amr`, never the `sid`): a refresh family keeps its first sign-in, so its access tokens all say
   the same, and introspection reports `auth_time` and `acr` (RFC 9470 §6.2).
 - **Discovery** (`/.well-known/openid-configuration` and `/.well-known/oauth-authorization-server`)

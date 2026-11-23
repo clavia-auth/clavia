@@ -46,7 +46,8 @@ final class AuthenticationLevelTest extends TestCase
         ];
         yield 'a password and a security key, presence only' => [
             [M::Password, M::HardwareKey, M::UserPresence, M::MultipleFactors],
-            AuthenticationLevel::PhishingResistantHardware,
+            // Device-bound by its own account only: no attestation, so no `phrh`.
+            AuthenticationLevel::PhishingResistant,
         ];
         yield 'a verified synced passkey alone' => [
             [M::SoftwareKey, M::MultipleFactors],
@@ -54,7 +55,7 @@ final class AuthenticationLevelTest extends TestCase
         ];
         yield 'a verified security key alone' => [
             [M::HardwareKey, M::MultipleFactors],
-            AuthenticationLevel::PhishingResistantHardware,
+            AuthenticationLevel::PhishingResistant,
         ];
         // A passkey that did not satisfy MFA (CLAVIA_PASSKEY_SATISFIES_MFA off) is one factor.
         yield 'a passkey that was not enough on its own' => [[M::SoftwareKey], null];
@@ -69,20 +70,17 @@ final class AuthenticationLevelTest extends TestCase
         self::assertSame($expected, AuthenticationLevel::of($methods));
     }
 
-    public function testEachLevelMeetsTheOnesBelowItAndNoneAbove(): void
+    public function testPhishingResistantMeetsMfaAndNotTheReverse(): void
     {
-        self::assertTrue(AuthenticationLevel::PhishingResistantHardware->meets(AuthenticationLevel::Mfa));
+        self::assertTrue(AuthenticationLevel::PhishingResistant->meets(AuthenticationLevel::Mfa));
         self::assertTrue(AuthenticationLevel::PhishingResistant->meets(AuthenticationLevel::PhishingResistant));
-        self::assertFalse(
-            AuthenticationLevel::PhishingResistant->meets(AuthenticationLevel::PhishingResistantHardware),
-        );
         self::assertFalse(AuthenticationLevel::Mfa->meets(AuthenticationLevel::PhishingResistant));
     }
 
     public function testTheValuesAreTheRegisteredOnesWeakestFirst(): void
     {
         self::assertSame(
-            ['http://schemas.openid.net/pape/policies/2007/06/multi-factor', 'phr', 'phrh'],
+            ['http://schemas.openid.net/pape/policies/2007/06/multi-factor', 'phr'],
             AuthenticationLevel::supportedAcrValues(),
         );
     }

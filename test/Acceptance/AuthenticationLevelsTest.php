@@ -50,7 +50,8 @@ final class AuthenticationLevelsTest extends AcceptanceTestCase
     {
         $document = self::json($this->get('/.well-known/openid-configuration'));
 
-        self::assertSame([self::MFA, 'phr', 'phrh'], $document['acr_values_supported']);
+        // No `phrh`: without attestation, a key's hardware is only its own word.
+        self::assertSame([self::MFA, 'phr'], $document['acr_values_supported']);
         self::assertIsArray($document['claims_supported']);
         self::assertContains('acr', $document['claims_supported']);
     }

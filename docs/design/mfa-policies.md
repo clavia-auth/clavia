@@ -4,8 +4,11 @@
 **Specifications:** OpenID Connect Core 1.0 (§2 `acr`, §3.1.2.1 `acr_values` and `max_age`,
 §3.1.2.6 errors), OpenID Connect Core Error Code `unmet_authentication_requirements` 1.0,
 RFC 9470 (OAuth 2.0 Step Up Authentication Challenge Protocol), OpenID Connect EAP ACR Values
-1.0 (`phr`, `phrh`), OpenID Provider Authentication Policy Extension 1.0 (the multi-factor
+1.0 (`phr`), OpenID Provider Authentication Policy Extension 1.0 (the multi-factor
 policy URI), RFC 8176 (`amr`), NIST SP 800-63B §4 (authenticator assurance levels)
+
+**Amended** in the first slice's pull request: `phrh` withdrawn until attestation is verified
+(§2, "No `phrh`").
 
 ## 1. Summary
 
@@ -16,7 +19,7 @@ someone signed in (`amr`) but not to what level (`acr`).
 
 This design adds three things:
 
-- **Authentication levels**: a small, fixed ladder of `acr` values, worked out from the `amr`
+- **Authentication levels**: two `acr` values, worked out from the `amr`
   a session already records, and put in the ID token, JWT access tokens and introspection.
 - **Asking for a level**: a relying party asks with `acr_values` (OIDC Core §3.1.2.1), an
   operator requires one per application or per API with an **MFA policy**, and a resource
@@ -42,6 +45,7 @@ This design adds three things:
 - Trusting an external provider's MFA (its `amr` or `acr`): an external sign-in is one factor
   here, as today.
 - Conditional or risk-based policies (new device, new country), and per-user policies.
+- `phrh` (a hardware-protected key): it needs attestation verified at registration (§2).
 - Passkey-only accounts and "require a passkey" policies: passkeys phase 3 (#8), which builds on
   the levels this design defines.
 
@@ -49,7 +53,8 @@ This design adds three things:
 
 | Topic | Decision | Why (alternatives rejected) |
 |---|---|---|
-| The levels | Three `acr` values, a ladder: `http://schemas.openid.net/pape/policies/2007/06/multi-factor` (MFA) < `phr` (phishing-resistant) < `phrh` (phishing-resistant, hardware) | The PAPE URI is the value Auth0 documents for asking for MFA, so relying parties written for it already send it. `phr` and `phrh` are the OpenID Foundation's values for phishing-resistant authentication, which passkeys are. Clavia-specific URNs would interoperate with nothing. NIST AAL numbers depend on things Clavia cannot attest |
+| The levels | Two `acr` values: `http://schemas.openid.net/pape/policies/2007/06/multi-factor` (MFA) < `phr` (phishing-resistant) | The PAPE URI is the value Auth0 documents for asking for MFA, so relying parties written for it already send it. `phr` is the OpenID Foundation's value for phishing-resistant authentication, which passkeys are. Clavia-specific URNs would interoperate with nothing. NIST AAL numbers depend on things Clavia cannot attest |
+| No `phrh` | **Not offered**, until attestation is verified | `phrh` promises a hardware-protected key, and relying parties use it for compliance (NIST AAL3). Passkeys are registered with attestation `none`, so whether a key is device-bound is only its authenticator's word (the backup eligibility flag): a software authenticator can claim it. Offering `phrh` needs attestation checked against trusted roots or the FIDO Metadata Service at registration, and a verified-hardware flag on the passkey: passkeys phase 3 (#8). `amr` keeps `hwk`, which describes what the authenticator reported, not a guarantee |
 | No level for one factor | A single-factor session has **no `acr`**: the claim is left out | OIDC Core §2 makes `acr` optional, and `"0"` means "below ISO 29115 level 1" (a long-lived cookie), which overstates nothing a password session is. A relying party that needs a level asks for it; one that finds no `acr` knows it got one factor |
 | Where the level comes from | Worked out from the session's `amr`, never stored | `amr` is the record of what happened (RFC 8176), and is already on sessions, codes and tokens. A stored level could disagree with it |
 | `acr_values` | **A requirement**, not a hint: the request is satisfied when the session meets any listed value Clavia knows, or the person steps up to the first one they can reach. Unknown values are ignored; only unknown values means no requirement | OIDC Core calls `acr` a voluntary claim, so issuing a weaker one silently would be conforming. But RFC 9470's loop only ends if the server either reaches the level or says it cannot, and the hosted providers treat a value they know as a demand |
@@ -71,9 +76,8 @@ This design adds three things:
   | one factor | (none) | anything else |
   | MFA | `http://schemas.openid.net/pape/policies/2007/06/multi-factor` | `mfa` |
   | phishing-resistant | `phr` | `mfa`, and `hwk` or `swk` |
-  | phishing-resistant, hardware | `phrh` | `mfa` and `hwk` |
 
-  Each level meets every level below it. A password followed by a passkey is `phr`: the
+  `phr` meets MFA. A password followed by a passkey is `phr`: the
   password could have been phished, but the passkey's signature cannot be relayed to another
   origin. A recovery code is MFA, not `phr`.
 - **Requirement**: the levels a request will accept, from `acr_values`, the client's policy and
@@ -85,8 +89,7 @@ This design adds three things:
 
 ### Domain
 
-- `Domain\Authentication\AuthenticationLevel` (enum: `Mfa`, `PhishingResistant`,
-  `PhishingResistantHardware`). `acr()` gives the value; `fromAcr(string): ?self` reads one, or
+- `Domain\Authentication\AuthenticationLevel` (enum: `Mfa`, `PhishingResistant`). `acr()` gives the value; `fromAcr(string): ?self` reads one, or
   gives null for a value Clavia does not know. `of(list<AuthenticationMethod>): ?self` gives the
   strongest level a set of methods meets, or null for one factor. `meets(self $required): bool`.
 - `Domain\Authentication\AuthenticationRequirement` (value object): a list of acceptable
@@ -151,9 +154,9 @@ The fixed order of `Authorize` (CLAUDE.md, "Authorization code with PKCE") chang
      opened (`BeginStepUp`), and the browser goes to `/auth/mfa`;
   5. a session that falls short, the requirement is the MFA level, and the person has no second
      factor at all: the request is held, and the browser goes to enrolment (§5.3);
-  6. anything else (`phrh` asked of someone with only an authenticator app, or of a person whose
-     only passkeys are synced): `unmet_authentication_requirements`, redirected with `state` and
-     `iss`.
+  6. anything else (`phr` asked of someone with only an authenticator app, or the MFA level of
+     someone whose account cannot enroll, §5.3): `unmet_authentication_requirements`, redirected
+     with `state` and `iss`.
 
 `max_age` keeps its meaning. A step-up counts as an active authentication, so it satisfies a
 `max_age` as a fresh sign-in would: RFC 9470's `max_age` challenge is answered by stepping up.
@@ -163,7 +166,7 @@ The fixed order of `Authorize` (CLAUDE.md, "Authorization code with PKCE") chang
 `/auth/mfa` already shows a challenge's second factors. For a step-up challenge:
 
 - the factors offered are those reaching the aim: for MFA, an authenticator app, a passkey or a
-  recovery code; for `phr`, a passkey only; for `phrh`, a device-bound passkey only. A factor
+  recovery code; for `phr`, a passkey only. A factor
   already in the session's `amr` is not offered again: an authenticator app's code after a
   sign-in that already used one would count one device twice;
 - the page says why it is asked: "*Application* asks you to confirm it's you";
@@ -222,7 +225,7 @@ approval. Polling devices see `authorization_pending` meanwhile.
 
 ## 6. Interfaces
 
-- **Discovery**: `acr_values_supported` (the three values, weakest first), and `acr` in
+- **Discovery**: `acr_values_supported` (the two values, weakest first), and `acr` in
   `claims_supported`. `ProviderMetadata` holds them, and `OidcTest` checks them.
 - **Authorization endpoint**: `acr_values`; the errors `interaction_required` and
   `unmet_authentication_requirements`.
@@ -277,7 +280,7 @@ approval. Polling devices see `authorization_pending` meanwhile.
   - `acr_values` not met: the step-up page, then a code without typing the password again,
     with the same `sid` and a new session cookie;
   - `prompt=none` falling short: `interaction_required`;
-  - `phrh` asked of a person with a synced passkey only: `unmet_authentication_requirements`;
+  - `phr` asked of a person with only an authenticator app: `unmet_authentication_requirements`;
   - a client policy `required`, a person with no factor: enrolment, then a code;
   - an API policy `required`, through the device flow;
   - a step-up challenge answered with another browser's session is refused;
