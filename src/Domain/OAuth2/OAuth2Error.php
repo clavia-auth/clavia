@@ -81,6 +81,16 @@ final class OAuth2Error extends DomainException
         return new self(ErrorCode::LoginRequired, $description);
     }
 
+    public static function interactionRequired(string $description): self
+    {
+        return new self(ErrorCode::InteractionRequired, $description);
+    }
+
+    public static function unmetAuthenticationRequirements(string $description): self
+    {
+        return new self(ErrorCode::UnmetAuthenticationRequirements, $description);
+    }
+
     public static function consentRequired(string $description): self
     {
         return new self(ErrorCode::ConsentRequired, $description);

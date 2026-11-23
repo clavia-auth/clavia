@@ -329,3 +329,18 @@ approval. Polling devices see `authorization_pending` meanwhile.
 4. **"Never" as a policy value** (§2). *Recommendation:* drop it, as above. If it is wanted, it
    would mean "ignore `acr_values` from this client", and it can be added later without a
    migration.
+
+## 11. As built
+
+What the slices settled differently from the sections above, so the code and this document agree.
+
+- **A step-up challenge names its session by the `sid`** (§4, §5.2), not by a digest of the
+  session identifier: the authorization endpoint knows the session, not the cookie. The `sid` is
+  unique per session and kept by the step-up, and `Sessions::stepUp()` refuses unless the
+  browser's own session carries it.
+- **The step-up challenge is the sign-in's** (`MfaChallenge`, behind the `clavia_mfa` cookie),
+  with the session's `amr` as its first factor. Its `nextUrl` is the resumed authorization
+  request, so no login state is held.
+- **Which factors answer** is one service, `SecondFactors`, for the page, the step-up and the
+  answers; a code of a kind that cannot answer is refused without being looked at.
+

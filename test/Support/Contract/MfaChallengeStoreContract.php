@@ -13,6 +13,7 @@ namespace ClaviaTest\Support\Contract;
 
 use Clavia\Application\Port\MfaChallengeStore;
 use Clavia\Domain\Authentication\AuthenticationMethod;
+use Clavia\Domain\Authentication\AuthenticationRequirement;
 use Clavia\Domain\Authentication\MfaChallenge;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Connection\ConnectionName;
@@ -40,6 +41,44 @@ trait MfaChallengeStoreContract
         self::assertSame('spa', $challenge->clientId?->value);
         self::assertSame([AuthenticationMethod::Password], $challenge->firstFactor);
         self::assertSame(0, $challenge->attempts);
+    }
+
+    #[Test]
+    public function aStepUpKeepsTheSessionItRaisesAndWhatItAsks(): void
+    {
+        $this->challenges()->open('handle-1', new MfaChallenge(
+            UserId::fromString('0190a4f2-7c1e-7b3a-9c2d-5e6f7a8b9c0d'),
+            '/oauth2/authorize?acr_values=phr',
+            ClientId::fromString('spa'),
+            [
+                AuthenticationMethod::Password,
+                AuthenticationMethod::OneTimePassword,
+                AuthenticationMethod::MultipleFactors,
+            ],
+            ConnectionName::defaultPool(),
+            0,
+            'the-sid',
+            AuthenticationRequirement::fromAcrValues('phr'),
+        ), 300);
+
+        $challenge = $this->challenges()->find('handle-1');
+
+        self::assertNotNull($challenge);
+        self::assertTrue($challenge->isStepUp());
+        self::assertSame('the-sid', $challenge->stepUpOf);
+        self::assertSame(['phr'], $challenge->requirement?->acrValues());
+    }
+
+    #[Test]
+    public function aSignInIsNoStepUp(): void
+    {
+        $this->challenges()->open('handle-1', $this->aChallenge(null), 300);
+
+        $challenge = $this->challenges()->find('handle-1');
+
+        self::assertNotNull($challenge);
+        self::assertFalse($challenge->isStepUp());
+        self::assertNull($challenge->requirement);
     }
 
     #[Test]

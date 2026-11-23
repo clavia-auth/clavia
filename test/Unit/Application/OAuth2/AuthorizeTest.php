@@ -11,7 +11,13 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Application\OAuth2;
 
+use ClaviaTest\Support\Fake\InMemoryMfaChallengeStore;
+use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
+use ClaviaTest\Support\Fake\InMemoryRecoveryCodeRepository;
+use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use Clavia\Application\Authentication\EndUser;
+use Clavia\Application\Authentication\Mfa\BeginStepUp;
+use Clavia\Application\Authentication\Mfa\SecondFactors;
 use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\OAuth2\Authorize\AuthorizationOutcome;
@@ -112,6 +118,16 @@ final class AuthorizeTest extends TestCase
             $this->consentStates,
             new ConnectionAccess($this->connections, new FakeIdentityProviders(), new RecordingMailer(false)),
             $this->sessions,
+            new BeginStepUp(
+                new InMemoryMfaChallengeStore($clock),
+                new SecondFactors(
+                    new InMemoryMfaFactorRepository(new InMemoryTransactionManager()),
+                    new InMemoryRecoveryCodeRepository(),
+                    null,
+                ),
+                new SecretGenerator(new SeededRandomSource(4)),
+                300,
+            ),
             new SecretGenerator($random),
             $random,
             $clock,
@@ -414,6 +430,16 @@ final class AuthorizeTest extends TestCase
             $this->consentStates,
             new ConnectionAccess($this->connections, new FakeIdentityProviders(), new RecordingMailer(false)),
             $this->sessions,
+            new BeginStepUp(
+                new InMemoryMfaChallengeStore(new FrozenClock()),
+                new SecondFactors(
+                    new InMemoryMfaFactorRepository(new InMemoryTransactionManager()),
+                    new InMemoryRecoveryCodeRepository(),
+                    null,
+                ),
+                new SecretGenerator(new SeededRandomSource(4)),
+                300,
+            ),
             new SecretGenerator($random),
             $random,
             new FrozenClock(),

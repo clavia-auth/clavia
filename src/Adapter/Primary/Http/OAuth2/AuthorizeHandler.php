@@ -13,6 +13,7 @@ namespace Clavia\Adapter\Primary\Http\OAuth2;
 
 use Clavia\Adapter\Primary\Http\Auth\AuthCookies;
 use Clavia\Adapter\Primary\Http\Auth\ConsentPages;
+use Clavia\Adapter\Primary\Http\Auth\MfaPages;
 use Clavia\Adapter\Primary\Http\Shared\RequestCookies;
 use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\Authentication\ResolveEndUser;
@@ -22,6 +23,7 @@ use Clavia\Application\OAuth2\Authorize\CodeIssued;
 use Clavia\Application\OAuth2\Authorize\ConsentRequired;
 use Clavia\Application\OAuth2\Authorize\LoginRequired;
 use Clavia\Application\OAuth2\Authorize\RequestRefused;
+use Clavia\Application\OAuth2\Authorize\StepUpRequired;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -81,6 +83,12 @@ final readonly class AuthorizeHandler implements RequestHandlerInterface
             return $this->responder->redirectWithinServer(
                 ConsentPages::PATH . '?' . http_build_query(['state' => $outcome->consentState]),
             );
+        }
+
+        // The step-up challenge, like a sign-in's, lives behind a cookie scoped to /auth.
+        if ($outcome instanceof StepUpRequired) {
+            return $this->responder->redirectWithinServer(MfaPages::CHALLENGE_PATH)
+                ->withAddedHeader('Set-Cookie', $this->cookies->mfaChallenge($outcome->challenge)->toString());
         }
 
         assert($outcome instanceof LoginRequired);

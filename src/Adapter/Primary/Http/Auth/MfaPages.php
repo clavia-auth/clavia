@@ -58,10 +58,15 @@ final class MfaPages
         return new HtmlPage(
             template: 'auth::mfa-challenge',
             title: 'Two-factor authentication',
-            heading: $passkey !== null ? 'Confirm it is you' : 'Check your authenticator',
+            heading: $passkey !== null || $page->stepUp ? 'Confirm it is you' : 'Check your authenticator',
             returnTo: self::CHALLENGE_PATH,
             variables: [
                 'authenticatorApp' => $page->authenticatorApp,
+                'codeField' => $page->authenticatorApp || $page->recoveryCode,
+                'recoveryCode' => $page->recoveryCode,
+                // A step-up says who asks for more, and why the person signed in is asked again.
+                'stepUp' => $page->stepUp,
+                'application' => $page->application,
                 'passkeyOptions' => $passkey === null
                     ? null
                     : json_encode(PasskeyPages::requestOptions($passkey), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),

@@ -18,6 +18,7 @@ use Clavia\Application\Authentication\Mfa\DescribeSecondFactorPage;
 use Clavia\Application\Authentication\Mfa\SecondFactorAttempt;
 use Clavia\Application\Authentication\Mfa\SecondFactorOutcome;
 use Clavia\Application\Authentication\Mfa\SecondFactorRejected;
+use Clavia\Application\Authentication\Mfa\SecondFactors;
 use Clavia\Application\Authentication\Mfa\TotpSeeds;
 use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Authentication\SignIn\SignedIn;
@@ -274,8 +275,7 @@ final class CompleteSecondFactorTest extends TestCase
         $describe = new DescribeSecondFactorPage(
             $this->challenges,
             new InMemoryClientRepository(),
-            $this->factors,
-            $passkeys,
+            new SecondFactors($this->factors, new InMemoryRecoveryCodeRepository(), $passkeys),
         );
 
         $page = $describe(self::HANDLE);

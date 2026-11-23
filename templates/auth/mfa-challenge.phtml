@@ -1,36 +1,30 @@
 <?php
-/**
- * The second step of a sign-in: a passkey, a code from the authenticator app, or a recovery code.
- *
- * With a passkey, the options of its ceremony are data in an escaped attribute; `passkeys.js`
- * asks the browser for the passkey and posts the answer in the `credential` field. Without a
- * browser that can, the button stays hidden, and a code still works.
- *
- * Variables (set by Clavia\Adapter\Primary\Http\Auth\MfaPages):
- * @var Laminas\View\Renderer\PhpRenderer $this
- * @var string      $csrfToken
- * @var bool        $authenticatorApp Whether a code from an app answers.
- * @var string|null $passkeyOptions   The request options, as JSON, when a passkey answers.
- */
 ?>
 <?php $this->placeholder('subtitle')->captureStart() ?>
+<?php if ($stepUp): ?>
+      <p class="subtitle"><?= $application === null ? 'This sign-in' : $this->escapeHtml($application) ?> needs one more step to confirm it is you.</p>
+<?php endif ?>
 <?php if ($passkeyOptions !== null): ?>
-      <p class="subtitle">Use your passkey<?= $authenticatorApp ? ', or enter the six-digit code from your app' : '' ?>. A recovery code works too.</p>
+      <p class="subtitle">Use your passkey<?= $authenticatorApp ? ', or enter the six-digit code from your app' : '' ?>.<?= $recoveryCode ? ' A recovery code works too.' : '' ?></p>
+<?php elseif ($authenticatorApp): ?>
+      <p class="subtitle">Enter the six-digit code from your app<?= $recoveryCode ? ', or one of your recovery codes' : '' ?>.</p>
 <?php else: ?>
-      <p class="subtitle">Enter the six-digit code from your app, or one of your recovery codes.</p>
+      <p class="subtitle">Enter one of your recovery codes.</p>
 <?php endif ?>
 <?php $this->placeholder('subtitle')->captureEnd() ?>
 <?php if ($passkeyOptions !== null): ?>
     <form method="post" action="/auth/mfa/passkey" data-webauthn-get="<?= $this->escapeHtmlAttr($passkeyOptions) ?>">
 <?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => '']) ?>
       <input type="hidden" name="credential" value="">
-      <p class="hint" data-webauthn-failed hidden>Your browser did not use the passkey. Try again, or use a code.</p>
+      <p class="hint" data-webauthn-failed hidden>Your browser did not use the passkey.<?= $codeField ? ' Try again, or use a code.' : ' Try again.' ?></p>
       <button type="submit" data-webauthn-start hidden>Use a passkey</button>
     </form>
 <?php endif ?>
+<?php if ($codeField): ?>
     <form method="post" action="/auth/mfa" autocomplete="off" novalidate>
 <?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => '']) ?>
 <?= $this->partial('partial::code-field', ['label' => $authenticatorApp ? 'Code' : 'Recovery code']) ?>
 
       <button type="submit"<?php if ($passkeyOptions !== null): ?> class="secondary"<?php endif ?>>Continue</button>
     </form>
+<?php endif ?>

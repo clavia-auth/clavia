@@ -13,6 +13,7 @@ namespace Clavia\Adapter\Secondary\Redis;
 
 use Clavia\Application\Port\MfaChallengeStore;
 use Clavia\Domain\Authentication\AuthenticationMethod;
+use Clavia\Domain\Authentication\AuthenticationRequirement;
 use Clavia\Domain\Authentication\MfaChallenge;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Connection\ConnectionName;
@@ -70,6 +71,9 @@ final readonly class RedisMfaChallengeStore implements MfaChallengeStore
             ),
             'connection' => $challenge->connection->value,
             'attempts' => (string) $challenge->attempts,
+            // A step-up's session and requirement; empty for a sign-in.
+            'step_up_of' => $challenge->stepUpOf ?? '',
+            'acr_values' => implode(' ', $challenge->requirement?->acrValues() ?? []),
         ]);
         $client->expire($key, $lifetimeSeconds);
         $client->exec();
@@ -94,6 +98,7 @@ final readonly class RedisMfaChallengeStore implements MfaChallengeStore
             if (! is_array($methods) || ! isset($fields['user_id'], $fields['next_url'], $fields['connection'])) {
                 return null;
             }
+            $stepUpOf = ($fields['step_up_of'] ?? '') === '' ? null : $fields['step_up_of'];
 
             return new MfaChallenge(
                 UserId::fromString($fields['user_id']),
@@ -107,6 +112,8 @@ final readonly class RedisMfaChallengeStore implements MfaChallengeStore
                 )),
                 ConnectionName::fromString($fields['connection']),
                 max(0, (int) ($fields['attempts'] ?? '0')),
+                $stepUpOf,
+                $stepUpOf === null ? null : AuthenticationRequirement::fromAcrValues($fields['acr_values'] ?? ''),
             );
         } catch (JsonException | InvalidValue | ValueError) {
             // An entry this code cannot read is an entry that is not there.

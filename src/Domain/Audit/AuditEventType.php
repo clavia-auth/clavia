@@ -21,6 +21,7 @@ enum AuditEventType: string
     case SignedIn = 'authentication.succeeded';
     case SignInFailed = 'authentication.failed';
     case SessionEnded = 'session.ended';
+    case SessionSteppedUp = 'session.stepped_up';
     case MfaEnrolled = 'mfa.enrolled';
     case MfaRemoved = 'mfa.removed';
     case PasskeyRegistered = 'passkey.registered';

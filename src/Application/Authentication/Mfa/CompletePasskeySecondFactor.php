@@ -45,7 +45,8 @@ use Clavia\Domain\Shared\Clock;
  *   counter that went back is audited for what it is, and the passkey stays, for its holder or an
  *   operator to look at;
  * - success adds the passkey's methods to `amr` (`hwk` or `swk`, and `user` when nobody was
- *   verified), then `mfa`.
+ *   verified), then `mfa`; for a step-up, to the browser's own session, raised in place
+ *   ({@see Sessions::stepUp()}).
  */
 final readonly class CompletePasskeySecondFactor
 {
@@ -79,7 +80,8 @@ final readonly class CompletePasskeySecondFactor
         $methods = null;
         $throttled = $user !== null && $this->throttle->isThrottled($user->email, $attempt->clientAddress);
         // A passkey after a passkey is one factor counted twice: refused, as a wrong answer is.
-        if ($user !== null && $user->isActive() && ! $throttled && ! $challenge->firstFactorWasAPasskey()) {
+        $answers = ! $challenge->firstFactorWasAPasskey() && $challenge->isAnsweredBy(SecondFactors::PASSKEY);
+        if ($user !== null && $user->isActive() && ! $throttled && $answers) {
             [$refusal, $passkey, $methods] = $this->verify($user, $attempt, $ceremony);
         }
 
@@ -100,6 +102,12 @@ final readonly class CompletePasskeySecondFactor
 
         $this->challenges->close($attempt->challenge);
         $this->throttle->reset($user->email, $attempt->clientAddress);
+
+        if ($challenge->stepUpOf !== null) {
+            $raised = $this->sessions->stepUp($attempt->currentSessionId, $challenge->stepUpOf, $methods);
+
+            return $raised === null ? new ChallengeGone() : new SignedIn($raised, $challenge->nextUrl);
+        }
 
         return new SignedIn(
             $this->sessions->establish(
