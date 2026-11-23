@@ -90,7 +90,7 @@ final readonly class PwnedPasswordsRange implements BreachedPasswords
      * The key the corpus is indexed by: the password's SHA-1, in upper-case hexadecimal.
      *
      * @psalm-suppress WeakHash SHA-1 is the service's index, not a way of storing passwords:
-     *                          passwords are bcrypt hashes, and only five characters of this leave.
+     *                          passwords are PBKDF2 hashes, and only five characters of this leave.
      */
     public static function hashOf(#[\SensitiveParameter] string $password): string
     {

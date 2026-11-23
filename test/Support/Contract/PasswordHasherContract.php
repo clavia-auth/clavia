@@ -62,7 +62,7 @@ abstract class PasswordHasherContract extends TestCase
         yield 'empty' => [''];
         yield 'plaintext' => ['a-secret'];
         yield 'another algorithm' => ['$argon2id$v=19$m=65536,t=4,p=1$c29tZXNhbHQ$RdescudvJCsgt3ub+b+dWRWJTmaaJObG'];
-        yield 'a truncated bcrypt hash' => ['$2y$12$abcdefghijklmnopqrstuu'];
+        yield 'bcrypt' => ['$2y$12$CCCCCCCCCCCCCCCCCCCCC.E5YPO9kmyuRGyh0XouQYb4YMJKvyOeW'];
         yield 'a NUL byte' => ["\0"];
     }
 
@@ -72,47 +72,46 @@ abstract class PasswordHasherContract extends TestCase
         self::assertFalse($this->hasher()->verify('a-secret', $hash));
     }
 
-    public function testASecretLongerThanSeventyTwoBytesIsRefusedRatherThanTruncated(): void
+    public function testASecretOfMoreThan1024BytesIsRefused(): void
     {
         $hasher = $this->hasher();
-        self::assertNotSame('', $hasher->hash(str_repeat('a', 72)));
+        self::assertTrue($hasher->verify(str_repeat('a', 1024), $hasher->hash(str_repeat('a', 1024))));
 
         $this->expectException(SecretNotHashable::class);
 
-        $hasher->hash(str_repeat('a', 73));
+        $hasher->hash(str_repeat('a', 1025));
     }
 
-    public function testALongerSecretNeverMatchesAHashOfItsFirstSeventyTwoBytes(): void
+    public function testTheWholeSecretCounts(): void
     {
+        // No truncation: two long secrets differing only in their last byte are two secrets.
         $hasher = $this->hasher();
-        $hash = $hasher->hash(str_repeat('a', 72));
+        $hash = $hasher->hash(str_repeat('a', 1000) . 'x');
 
-        self::assertTrue($hasher->verify(str_repeat('a', 72), $hash));
-        self::assertFalse($hasher->verify(str_repeat('a', 72) . 'anything', $hash));
+        self::assertFalse($hasher->verify(str_repeat('a', 1000) . 'y', $hash));
+        self::assertFalse($hasher->verify(str_repeat('a', 1000), $hash));
     }
 
-    public function testASecretHoldingANulByteIsRefusedWhenHashingAndNeverMatches(): void
+    public function testANulByteIsPartOfTheSecret(): void
     {
+        // Hashed faithfully, not cut at the NUL: "before" alone is another secret.
         $hasher = $this->hasher();
-        $hash = $hasher->hash('before');
+        $hash = $hasher->hash("before\0after");
 
-        self::assertFalse($hasher->verify("before\0after", $hash));
-
-        $this->expectException(SecretNotHashable::class);
-
-        $hasher->hash("before\0after");
+        self::assertTrue($hasher->verify("before\0after", $hash));
+        self::assertFalse($hasher->verify('before', $hash));
     }
 
     public function testTheLimitIsInBytesNotCharacters(): void
     {
         $hasher = $this->hasher();
 
-        // 24 three-byte characters are exactly 72 bytes; one more character is over.
-        self::assertTrue($hasher->verify(str_repeat('€', 24), $hasher->hash(str_repeat('€', 24))));
+        // 341 three-byte characters are 1,023 bytes; one more character is over.
+        self::assertTrue($hasher->verify(str_repeat('€', 341), $hasher->hash(str_repeat('€', 341))));
 
         $this->expectException(SecretNotHashable::class);
 
-        $hasher->hash(str_repeat('€', 25));
+        $hasher->hash(str_repeat('€', 342));
     }
 
     public function testSimulatingAVerificationAcceptsAnySecretAndLeavesNothingBehind(): void
@@ -122,7 +121,7 @@ abstract class PasswordHasherContract extends TestCase
 
         // Whatever an attacker types reaches this path: nothing may make it throw.
         $hasher->simulateVerification('');
-        $hasher->simulateVerification(str_repeat('a', 200));
+        $hasher->simulateVerification(str_repeat('a', 2000));
         $hasher->simulateVerification("before\0after");
 
         self::assertTrue($hasher->verify('the-secret', $hash));

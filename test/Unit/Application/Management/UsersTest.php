@@ -217,7 +217,7 @@ final class UsersTest extends TestCase
         self::assertTrue($this->hasher->verify('another-password', (string) $updated->passwordHash()));
 
         $this->expectException(InvalidValue::class);
-        $this->update()($user->id, new UserChanges(password: str_repeat('a', 73)));
+        $this->update()($user->id, new UserChanges(password: str_repeat('a', 1025)));
     }
 
     public function testDeactivatingAndReactivating(): void

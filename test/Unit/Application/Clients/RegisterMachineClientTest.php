@@ -103,7 +103,7 @@ final class RegisterMachineClientTest extends TestCase
 
     public function testAChosenSecretThatIsTooShortOrTooLongIsRefused(): void
     {
-        foreach ([str_repeat('s', 31), str_repeat('s', 73)] as $secret) {
+        foreach ([str_repeat('s', 31), str_repeat('s', 1025)] as $secret) {
             try {
                 ($this->register)('Worker', $secret);
                 self::fail('The secret was accepted.');

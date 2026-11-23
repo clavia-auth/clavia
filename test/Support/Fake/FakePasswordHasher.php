@@ -18,14 +18,14 @@ use Clavia\Application\Port\SecretNotHashable;
  * A password hasher that costs nothing, for tests that are not about hashing.
  *
  * Salted so that two hashes of one secret differ, like the real thing; otherwise as
- * weak as it looks. It honours the same contract as the bcrypt adapter, including the
+ * weak as it looks. It honours the same contract as the PBKDF2 adapter, including the
  * secrets that adapter refuses.
  */
 final class FakePasswordHasher implements PasswordHasher
 {
     private const string PREFIX = '$fake$';
 
-    private const int MAX_SECRET_BYTES = 72;
+    private const int MAX_SECRET_BYTES = 1024;
 
     private int $salt = 0;
 
@@ -38,7 +38,7 @@ final class FakePasswordHasher implements PasswordHasher
     public function hash(#[\SensitiveParameter] string $secret): string
     {
         if (! $this->isRepresentable($secret)) {
-            throw new SecretNotHashable('The secret is too long or holds a NUL byte.');
+            throw new SecretNotHashable('The secret is too long.');
         }
 
         $salt = (string) ++$this->salt;
@@ -71,6 +71,6 @@ final class FakePasswordHasher implements PasswordHasher
 
     private function isRepresentable(#[\SensitiveParameter] string $secret): bool
     {
-        return strlen($secret) <= self::MAX_SECRET_BYTES && ! str_contains($secret, "\0");
+        return strlen($secret) <= self::MAX_SECRET_BYTES;
     }
 }

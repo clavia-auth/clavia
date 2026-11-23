@@ -16,7 +16,7 @@ namespace Clavia\Domain\Shared;
  *
  * Authorization codes, access and refresh tokens, and the identifiers of Redis-held
  * state are stored as this, never in plaintext: a leaked dump must not be directly
- * replayable. SHA-256 is the right primitive here even though passwords use bcrypt —
+ * replayable. SHA-256 is the right primitive here even though passwords use PBKDF2 —
  * these are 256-bit random values, so there is no low-entropy guess space to brute
  * force, and a deterministic digest is what lets a token be looked up through an
  * indexed unique column. A salted, deliberately slow hash would turn that lookup into

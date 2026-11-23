@@ -6,6 +6,16 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ## [Unreleased]
 
+### Changed
+
+- **Passwords and client secrets are hashed with PBKDF2-HMAC-SHA-256**, for FIPS 140 (NIST
+  SP 800-132): 600,000 iterations, a 16-byte random salt each, derived through OpenSSL, so its FIPS
+  provider does the work when the system runs in FIPS mode. **bcrypt hashes no longer verify**:
+  every account must choose its password again (the reset link, or
+  `POST /api/v1/users/{user_id}/password-reset`), and every confidential client needs a new
+  secret (`POST /api/v1/clients/{client_id}/rotate-secret`, or a new `clients:create-m2m`).
+- A password or a client secret may be up to 1,024 bytes, where bcrypt took 72.
+
 ## [0.3.0] - 2026-11-23
 
 Tokens and policies: JWT access tokens, authentication levels and step-up, MFA policies, pushed

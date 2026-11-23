@@ -30,8 +30,9 @@ a third-party audit; one is worth commissioning before Clavia holds real account
   `Search`'s escaped `ILIKE` patterns. Migrations are checksummed and refused when edited.
 - **Redis**: every key reached through a secret (session, login state, codes, handles) is a
   SHA-256 digest of it (`Keys::forSecret()`); multi-step changes are single Lua scripts.
-- **Secrets**: client secrets and passwords are bcrypt (cost 12; passwords capped at bcrypt's
-  72 bytes by `PasswordPolicy`); codes, access and refresh tokens are stored as digests and
+- **Secrets**: client secrets and passwords are PBKDF2-HMAC-SHA-256 through OpenSSL, for FIPS 140
+  (600,000 iterations, a 16-byte salt each; secrets capped at 1,024 bytes by `PasswordPolicy` and
+  the hasher, to bound the work one request causes); codes, access and refresh tokens are stored as digests and
   compared with `hash_equals()`; TOTP seeds and the `postgres` backend's keys are AES-256-GCM
   with a random 96-bit nonce and their row's id as associated data.
 - **Client authentication**: one method per request, the one the client is registered with;

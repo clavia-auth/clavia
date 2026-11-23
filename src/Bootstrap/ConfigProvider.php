@@ -101,7 +101,7 @@ use Clavia\Adapter\Primary\Http\Shared\HealthHandler;
 use Clavia\Adapter\Primary\Http\Shared\MethodNotAllowedMiddleware;
 use Clavia\Adapter\Primary\Http\Shared\NotFoundHandler;
 use Clavia\Adapter\Primary\Http\Shared\PageRenderer;
-use Clavia\Adapter\Secondary\Crypto\BcryptPasswordHasher;
+use Clavia\Adapter\Secondary\Crypto\Pbkdf2PasswordHasher;
 use Clavia\Adapter\Secondary\Http\OutboundUrlPolicy;
 use Clavia\Adapter\Secondary\IdentityProvider\IdTokenVerifier;
 use Clavia\Adapter\Secondary\IdentityProvider\JwksCache;
@@ -409,7 +409,7 @@ final class ConfigProvider
                     // Ports whose adapter needs nothing to be built
                     Clock::class => SystemClock::class,
                     RandomSource::class => SystemRandomSource::class,
-                    PasswordHasher::class => BcryptPasswordHasher::class,
+                    PasswordHasher::class => Pbkdf2PasswordHasher::class,
 
                     // Console commands with no collaborator
                     ListManagementScopesCommand::class => ListManagementScopesCommand::class,

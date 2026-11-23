@@ -435,7 +435,7 @@ it is not secret (a public client's is in every authorization URL), and counting
 would let anyone lock that client out. Past `CLAVIA_TOKEN_MAX_FAILURES` within
 `CLAVIA_TOKEN_FAILURE_WINDOW` (every failure restarts it) the endpoint answers `429` with
 `Retry-After` and `temporarily_unavailable`, before any secret is checked, which also bounds
-the bcrypt work an address can cause. `authorization_pending` and `slow_down` are not failures.
+the PBKDF2 work an address can cause. `authorization_pending` and `slow_down` are not failures.
 
 ### Sign-in
 
@@ -845,8 +845,13 @@ These follow from the RFCs and from mistakes already made once. Breaking one is 
 - Every token this server signs is explicitly typed (RFC 8725 §3.11): `JWT` for an ID token,
   `logout+jwt`, `at+jwt`. `SignatureVerifier` takes the type it accepts, so one kind is never
   taken for another (a JWT access token is no `id_token_hint`).
-- Passwords and client secrets are bcrypt hashes (cost 12; more than 72 bytes or a NUL is
-  refused, never truncated). Codes and tokens are stored as SHA-256 digests, for indexed lookup.
+- Passwords and client secrets are PBKDF2-HMAC-SHA-256 hashes, for FIPS 140 (NIST SP 800-132):
+  600,000 iterations, a 16-byte random salt each, a 32-byte key, derived through OpenSSL
+  (`openssl_pbkdf2()`, so its FIPS provider when the system runs in FIPS mode, never PHP's own
+  `hash_pbkdf2()`), stored as a PHC string (`$pbkdf2-sha256$i=…$salt$key`) and compared in
+  constant time (`Pbkdf2PasswordHasher`). A secret is taken whole, up to 1,024 bytes, a bound on
+  the work one request causes; there is no bcrypt left to verify. Codes and tokens are stored as
+  SHA-256 digests, for indexed lookup.
 - `prompt`, `max_age`, `request` and `request_uri` are one decision at the authorization
   endpoint (see the flow above). The one `request_uri` accepted is a pushed request's
   (RFC 9126): the URN `/oauth2/par` handed out, for the client that pushed it. It yields one
