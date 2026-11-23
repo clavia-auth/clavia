@@ -14,6 +14,7 @@ namespace Clavia\Domain\OAuth2;
 use Clavia\Domain\Authentication\AuthenticationContext;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\UserId;
+use Clavia\Domain\OAuth2\Dpop\JwkThumbprint;
 use Clavia\Domain\Oidc\Nonce;
 use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\Digest;
@@ -47,6 +48,7 @@ final class AuthorizationCode
         public readonly DateTimeImmutable $expiresAt,
         private ?DateTimeImmutable $usedAt,
         public readonly DateTimeImmutable $createdAt,
+        public readonly ?JwkThumbprint $dpopJkt = null,
     ) {
     }
 
@@ -61,6 +63,7 @@ final class AuthorizationCode
      * @param CodeChallenge|null $challenge Null only for a client relieved of PKCE, and then with a nonce.
      * @param Nonce|null   $nonce           The `nonce` of an OpenID Connect request, for the ID token.
      * @param positive-int $lifetimeSeconds OAuth 2.1 recommends one minute at most.
+     * @param JwkThumbprint|null $dpopJkt   The DPoP key that must redeem it (`dpop_jkt`, RFC 9449 §10).
      *
      * @throws InvalidValue When the code would be bound by neither a challenge nor a nonce.
      */
@@ -77,6 +80,7 @@ final class AuthorizationCode
         AuthenticationContext $authentication,
         DateTimeImmutable $now,
         int $lifetimeSeconds,
+        ?JwkThumbprint $dpopJkt = null,
     ): self {
         if ($challenge === null && $nonce === null) {
             throw new InvalidValue('A code without a PKCE challenge is bound to its client by a nonce instead.');
@@ -96,6 +100,7 @@ final class AuthorizationCode
             $now->modify(sprintf('+%d seconds', $lifetimeSeconds)),
             null,
             $now,
+            $dpopJkt,
         );
     }
 
@@ -114,6 +119,7 @@ final class AuthorizationCode
         DateTimeImmutable $expiresAt,
         ?DateTimeImmutable $usedAt,
         DateTimeImmutable $createdAt,
+        ?JwkThumbprint $dpopJkt = null,
     ): self {
         return new self(
             $id,
@@ -129,6 +135,7 @@ final class AuthorizationCode
             $expiresAt,
             $usedAt,
             $createdAt,
+            $dpopJkt,
         );
     }
 

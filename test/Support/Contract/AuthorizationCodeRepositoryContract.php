@@ -19,6 +19,7 @@ use Clavia\Domain\OAuth2\AuthorizationCode;
 use Clavia\Domain\OAuth2\AuthorizationCodeId;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
 use Clavia\Domain\OAuth2\CodeChallenge;
+use Clavia\Domain\OAuth2\Dpop\JwkThumbprint;
 use Clavia\Domain\OAuth2\Redemption;
 use Clavia\Domain\Oidc\Nonce;
 use Clavia\Domain\Shared\Digest;
@@ -50,6 +51,31 @@ trait AuthorizationCodeRepositoryContract
      * @return array{ClientId, UserId}
      */
     abstract protected function anOwner(): array;
+
+    #[Test]
+    public function theDpopKeyACodeIsBoundToIsKept(): void
+    {
+        [$clientId, $userId] = $this->anOwner();
+        $this->codes()->add(AuthorizationCode::issue(
+            AuthorizationCodeId::generate(new SeededRandomSource(5)),
+            Digest::of('bound-code'),
+            $clientId,
+            $userId,
+            'https://app.example/cb',
+            ScopeSet::fromString('openid'),
+            CodeChallenge::fromString(str_repeat('a', 43)),
+            null,
+            null,
+            AuthenticationContext::unknown(),
+            new DateTimeImmutable('2026-01-15T10:00:00Z'),
+            60,
+            JwkThumbprint::fromString('NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs'),
+        ));
+        $this->codes()->add($this->aCode('unbound-code'));
+
+        self::assertSame('NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs', $this->locked('bound-code')?->dpopJkt?->value);
+        self::assertNull($this->locked('unbound-code')?->dpopJkt);
+    }
 
     #[Test]
     public function anAddedCodeIsReadBackWholeByItsDigest(): void

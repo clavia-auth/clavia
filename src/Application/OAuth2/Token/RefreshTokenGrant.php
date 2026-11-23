@@ -139,6 +139,11 @@ final readonly class RefreshTokenGrant implements Grant
             // Unknown, foreign, revoked, replayed and expired tokens are one answer.
             return self::invalid();
         }
+        // RFC 9449 §5: a family bound to a key refreshes only with a proof from it. Checked before
+        // the token is spent: a wrong proof is not a replay, and the holder keeps its session.
+        if ($spent->dpopJkt !== null && ($dpopKey === null || ! $spent->dpopJkt->equals($dpopKey))) {
+            return self::invalid();
+        }
 
         // RFC 6749 §6: a refresh may narrow the scope, never widen it. Checked before the
         // token is spent: a client that over-asks keeps its session.

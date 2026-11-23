@@ -14,6 +14,7 @@ namespace ClaviaTest\Support\Contract;
 use Clavia\Domain\Authentication\AuthenticationContext;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\OAuth2\AuthorizationCode;
+use Clavia\Domain\OAuth2\Dpop\JwkThumbprint;
 use Clavia\Domain\OAuth2\Refresh;
 use Clavia\Domain\OAuth2\RefreshToken;
 use Clavia\Domain\OAuth2\RefreshTokenId;
@@ -46,6 +47,34 @@ trait RefreshTokenRepositoryContract
      * @return T
      */
     abstract protected function transactional(callable $work): mixed;
+
+    #[Test]
+    public function aFamilyBoundToADpopKeyPassesItOn(): void
+    {
+        $code = $this->aStoredCode('code-1');
+        $first = RefreshToken::startFamily(
+            RefreshTokenId::generate(new SeededRandomSource(3)),
+            Digest::of('refresh-1'),
+            $code,
+            ScopeSet::fromString('openid'),
+            new DateTimeImmutable('2026-01-15T10:00:00Z'),
+            3600,
+            7200,
+            JwkThumbprint::fromString('NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs'),
+        );
+        $this->refreshTokens()->add($first);
+        $this->refreshTokens()->add($first->succeededBy(
+            RefreshTokenId::generate(new SeededRandomSource(4)),
+            Digest::of('refresh-2'),
+            ScopeSet::fromString('openid'),
+            new DateTimeImmutable('2026-01-15T10:30:00Z'),
+            3600,
+        ));
+
+        $successor = $this->refreshTokens()->findByDigest(Digest::of('refresh-2'));
+
+        self::assertSame('NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs', $successor?->dpopJkt?->value);
+    }
 
     #[Test]
     public function aFamilyKeepsHowThePersonSignedInAndPassesItOn(): void

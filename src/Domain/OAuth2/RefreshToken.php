@@ -14,6 +14,7 @@ namespace Clavia\Domain\OAuth2;
 use Clavia\Domain\Authentication\AuthenticationContext;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\UserId;
+use Clavia\Domain\OAuth2\Dpop\JwkThumbprint;
 use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\ScopeSet;
@@ -57,6 +58,7 @@ final class RefreshToken
         private ?DateTimeImmutable $usedAt,
         private ?DateTimeImmutable $revokedAt,
         public readonly AuthenticationContext $authentication,
+        public readonly ?JwkThumbprint $dpopJkt = null,
     ) {
     }
 
@@ -76,6 +78,7 @@ final class RefreshToken
         DateTimeImmutable $now,
         int $idleLifetimeSeconds,
         int $absoluteLifetimeSeconds,
+        ?JwkThumbprint $dpopJkt = null,
     ): self {
         return self::startFamilyFor(
             $id,
@@ -89,12 +92,16 @@ final class RefreshToken
             $idleLifetimeSeconds,
             $absoluteLifetimeSeconds,
             $code->authentication,
+            $dpopJkt,
         );
     }
 
     /**
      * The first refresh token of a family started by any grant acting for a person: the
      * code flow, or a device approved on another screen (no code to trace it to).
+     *
+     * A public client's family is bound to the DPoP key it started with (RFC 9449 §5): every refresh
+     * needs a proof from that key. A confidential client's is bound to its authentication instead.
      *
      * The family keeps how the person signed in to authorize it, so every access token it
      * mints reports the same `acr` and `auth_time` (RFC 9470 §6.1); the session, which may end
@@ -112,6 +119,7 @@ final class RefreshToken
         int $idleLifetimeSeconds,
         int $absoluteLifetimeSeconds,
         AuthenticationContext $authentication,
+        ?JwkThumbprint $dpopJkt = null,
     ): self {
         $familyExpiresAt = self::after($now, $absoluteLifetimeSeconds);
 
@@ -130,6 +138,7 @@ final class RefreshToken
             null,
             null,
             $authentication->withoutSession(),
+            $dpopJkt,
         );
     }
 
@@ -155,6 +164,7 @@ final class RefreshToken
             null,
             null,
             $this->authentication,
+            $this->dpopJkt,
         );
     }
 
@@ -174,6 +184,7 @@ final class RefreshToken
         ?DateTimeImmutable $usedAt,
         ?DateTimeImmutable $revokedAt,
         ?AuthenticationContext $authentication = null,
+        ?JwkThumbprint $dpopJkt = null,
     ): self {
         return new self(
             $id,
@@ -190,6 +201,7 @@ final class RefreshToken
             $usedAt,
             $revokedAt,
             $authentication ?? AuthenticationContext::unknown(),
+            $dpopJkt,
         );
     }
 

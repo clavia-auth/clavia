@@ -20,6 +20,7 @@ use Clavia\Domain\OAuth2\OAuth2Error;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
+use Psr\Log\LoggerInterface;
 
 /**
  * `POST /oauth2/par` — the pushed authorization request endpoint (RFC 9126 §2).
@@ -32,6 +33,7 @@ final readonly class PushedAuthorizationRequestHandler implements RequestHandler
     public function __construct(
         private PushAuthorizationRequest $push,
         private OAuth2Responder $responder,
+        private LoggerInterface $logger,
     ) {
     }
 
@@ -45,16 +47,25 @@ final readonly class PushedAuthorizationRequestHandler implements RequestHandler
                 RequestParameterReader::form($request),
                 $authorization === '' ? null : $authorization,
                 ClientAddress::of($request),
+                array_values($request->getHeader('DPoP')),
             ));
         } catch (OAuth2Error $error) {
+            if ($error->reason !== null) {
+                $this->logger->info('A DPoP proof was refused at the PAR endpoint: {reason}', [
+                    'reason' => $error->reason,
+                ]);
+            }
+
             return $this->responder->tokenError($error);
         } catch (TooManyFailedRequests $refusal) {
             return $this->responder->tooManyFailures($refusal);
         }
 
-        return $this->responder->created([
+        $response = $this->responder->created([
             'request_uri' => $accepted->requestUri,
             'expires_in' => $accepted->expiresIn,
         ]);
+
+        return $accepted->dpopNonce === null ? $response : $response->withHeader('DPoP-Nonce', $accepted->dpopNonce);
     }
 }

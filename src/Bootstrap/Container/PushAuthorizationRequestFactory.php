@@ -13,7 +13,9 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\OAuth2\Authorize\AuthorizationRequestRules;
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
+use Clavia\Application\OAuth2\Dpop\ReadDpopProof;
 use Clavia\Application\OAuth2\Par\PushAuthorizationRequest;
+use Clavia\Application\Oidc\Discovery\ProviderMetadata;
 use Clavia\Application\Port\PushedAuthorizationRequestStore;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Shared\SecretGenerator;
@@ -36,6 +38,18 @@ final class PushAuthorizationRequestFactory
         $lifetime = $settings->parLifetime;
         assert($lifetime > 0);
 
-        return new PushAuthorizationRequest($authenticator, $rules, $pushedRequests, $secrets, $lifetime);
+        /** @var ReadDpopProof $dpop */
+        $dpop = $container->get(ReadDpopProof::class);
+        $endpoint = $settings->issuer() . ProviderMetadata::PUSHED_AUTHORIZATION_REQUEST_ENDPOINT;
+
+        return new PushAuthorizationRequest(
+            $authenticator,
+            $rules,
+            $pushedRequests,
+            $secrets,
+            $lifetime,
+            $dpop,
+            $endpoint,
+        );
     }
 }

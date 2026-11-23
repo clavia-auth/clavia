@@ -14,9 +14,12 @@ namespace Clavia\Application\OAuth2\Par;
 use Clavia\Application\OAuth2\Authorize\AuthorizationRequestRules;
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
 use Clavia\Application\OAuth2\ClientAuthentication\TooManyFailedRequests;
+use Clavia\Application\OAuth2\Dpop\ReadDpopProof;
 use Clavia\Application\OAuth2\Token\TokenRequest;
 use Clavia\Application\Port\PushedAuthorizationRequestStore;
 use Clavia\Domain\Client\ClientAuthMethod;
+use Clavia\Domain\OAuth2\Dpop\DpopRefusal;
+use Clavia\Domain\OAuth2\Dpop\ProofRequirement;
 use Clavia\Domain\OAuth2\MaxAge;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use Clavia\Domain\OAuth2\Prompt;
@@ -36,6 +39,10 @@ use Clavia\Domain\Shared\SecretGenerator;
  *
  * What is held is the request without the client's credentials: `client_secret` never reaches
  * storage.
+ *
+ * A push carrying a DPoP proof (RFC 9449 §10.1; the server's nonce required, as at the token
+ * endpoint) binds the request to the proof's key: its `dpop_jkt` becomes the proof's thumbprint,
+ * and a `dpop_jkt` naming another key is refused.
  */
 final readonly class PushAuthorizationRequest
 {
@@ -47,7 +54,8 @@ final readonly class PushAuthorizationRequest
     ];
 
     /**
-     * @param positive-int $lifetimeSeconds How long a `request_uri` is good for (`CLAVIA_PAR_LIFETIME`).
+     * @param positive-int     $lifetimeSeconds How long a `request_uri` is good for (`CLAVIA_PAR_LIFETIME`).
+     * @param non-empty-string $endpoint        This endpoint's URL, as discovery names it: a DPoP proof's `htu`.
      */
     public function __construct(
         private ClientAuthenticator $authenticator,
@@ -55,6 +63,8 @@ final readonly class PushAuthorizationRequest
         private PushedAuthorizationRequestStore $pushedRequests,
         private SecretGenerator $secrets,
         private int $lifetimeSeconds,
+        private ReadDpopProof $dpop,
+        private string $endpoint,
     ) {
     }
 
@@ -76,6 +86,15 @@ final readonly class PushAuthorizationRequest
         }
         $parameters = $parameters->without('client_secret')->with('client_id', $client->id->value);
 
+        $proof = ($this->dpop)($request->dpopProofs, new ProofRequirement('POST', $this->endpoint), true);
+        $requestedKey = AuthorizationRequestRules::dpopKey($parameters);
+        if ($proof !== null) {
+            if ($requestedKey !== null && ! $requestedKey->equals($proof->thumbprint)) {
+                throw OAuth2Error::invalidDpopProof(DpopRefusal::WrongKey->value);
+            }
+            $parameters = $parameters->with('dpop_jkt', $proof->thumbprint->value);
+        }
+
         AuthorizationRequestRules::refuseRequestObjects($parameters);
         $this->rules->redirectUri($parameters, $client);
         [$scope] = $this->rules->validate($parameters, $client);
@@ -92,6 +111,10 @@ final readonly class PushAuthorizationRequest
             $this->lifetimeSeconds,
         );
 
-        return new PushedRequestAccepted(PushedAuthorizationRequest::uriFor($handle), $this->lifetimeSeconds);
+        return new PushedRequestAccepted(
+            PushedAuthorizationRequest::uriFor($handle),
+            $this->lifetimeSeconds,
+            $proof === null ? null : $this->dpop->currentNonce(),
+        );
     }
 }

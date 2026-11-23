@@ -20,6 +20,7 @@ use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\ResponseType;
 use Clavia\Domain\OAuth2\CodeChallenge;
+use Clavia\Domain\OAuth2\Dpop\JwkThumbprint;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use Clavia\Domain\Oidc\Nonce;
 use Clavia\Domain\Oidc\OidcScope;
@@ -235,6 +236,26 @@ final readonly class AuthorizationRequestRules
             return AuthenticationRequirement::fromAcrValues($parameters->get('acr_values'));
         } catch (InvalidValue) {
             throw OAuth2Error::invalidRequest("'acr_values' must name at least one value.");
+        }
+    }
+
+    /**
+     * `dpop_jkt` (RFC 9449 §10): the thumbprint of the DPoP key that will redeem the code, so a code
+     * stolen on its way back cannot be redeemed with anyone else's key. Optional.
+     *
+     * @throws OAuth2Error
+     */
+    public static function dpopKey(RequestParameters $parameters): ?JwkThumbprint
+    {
+        $value = $parameters->get('dpop_jkt');
+        if ($value === null) {
+            return null;
+        }
+
+        try {
+            return JwkThumbprint::fromString($value);
+        } catch (InvalidValue) {
+            throw OAuth2Error::invalidRequest("'dpop_jkt' must be a JWK SHA-256 thumbprint.");
         }
     }
 }
