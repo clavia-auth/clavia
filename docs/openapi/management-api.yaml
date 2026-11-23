@@ -79,18 +79,6 @@ tags:
       The audit trail: sign-ins, sessions, consents, tokens and every change to the
       configuration, append-only and kept for CLAVIA_AUDIT_RETENTION_DAYS. Read-only.
 
-# The sidebar's sections, for a rendered reference (Scalar, Redoc): every tag in exactly one,
-# in the order above. ManagementDocumentationTest keeps it so.
-x-tagGroups:
-  - name: Identity
-    tags: [users, roles]
-  - name: Applications
-    tags: [clients, initial-access-tokens, resource-servers]
-  - name: Sign-in
-    tags: [connections]
-  - name: Security
-    tags: [signing-keys, audit]
-
 paths:
   /api/v1/users:
     get:

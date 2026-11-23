@@ -51,6 +51,13 @@
       --scalar-color-accent: #52b788;
       --scalar-background-accent: #52b7881f;
     }
+    /*
+      No section before each tag's operations (its description and a list of its operations):
+      the sidebar already lists them, and the reference goes straight to the operations. Those
+      sections are Scalar's tag sections outside an operation list; the operations, inside one,
+      share the "/tag/" prefix of their ids and stay.
+    */
+    section.section[id*="/tag/"]:not(.contents section) { display: none; }
     body { margin: 0; }
     .clavia-bar {
       position: sticky;
