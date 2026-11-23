@@ -1598,6 +1598,12 @@ components:
         No usable token: none at all (a bare `Bearer` challenge and `{}`), or one that
         is unknown, expired, revoked, issued for another API or for an account that cannot
         be used (`invalid_token`).
+
+        Or a token acting for a person who signed in with one factor, while this API's own
+        `mfa_policy` is `required` (`insufficient_user_authentication`, RFC 9470 §3): the
+        challenge names the `acr_values` to ask for, and the client sends the person back to
+        `/oauth2/authorize` with them to step up. Checked after the audience and before the
+        scope. A token a client obtained as itself is never refused for this.
       headers:
         WWW-Authenticate:
           schema:
@@ -1696,7 +1702,7 @@ components:
       properties:
         error:
           type: string
-          enum: [invalid_request, invalid_token, insufficient_scope]
+          enum: [invalid_request, invalid_token, insufficient_scope, insufficient_user_authentication]
         error_description:
           type: string
 

@@ -19,6 +19,7 @@ use Clavia\Application\Management\Provisioning\AssignRole;
 use Clavia\Application\Management\Provisioning\EnsureRole;
 use Clavia\Application\Management\Provisioning\GrantClientAccess;
 use Clavia\Application\Management\Provisioning\RegisterManagementApi;
+use Clavia\Domain\Authentication\MfaPolicy;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Rbac\Role;
@@ -99,6 +100,14 @@ final class SeedManagementAccessTest extends TestCase
         self::assertTrue($this->roles->permissionsHeld($this->user->id, $api->id)->equals($api->permissionScopes()));
     }
 
+    public function testTheManagementApiRequiresMoreThanOneFactor(): void
+    {
+        // So the dashboard's step-up is exercised in development (docs/design/mfa-policies.md §10, 3).
+        $seeded = ($this->seeder())(self::ADMINISTRATOR);
+
+        self::assertSame(MfaPolicy::Required, $this->apis->findByIdentifier($seeded->managementApi)?->mfaPolicy);
+    }
+
     public function testRunningItAgainKeepsTheClientAndTheRole(): void
     {
         $first = $this->seeder()(self::ADMINISTRATOR);
@@ -136,6 +145,7 @@ final class SeedManagementAccessTest extends TestCase
 
         return new SeedManagementAccess(
             $this->clients,
+            $this->apis,
             new RegisterManagementApi(
                 $this->apis,
                 $transactions,

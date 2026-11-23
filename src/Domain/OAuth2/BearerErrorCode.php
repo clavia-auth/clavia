@@ -24,4 +24,10 @@ enum BearerErrorCode: string
 
     /** The token is fine but was not granted the scope this resource needs. */
     case InsufficientScope = 'insufficient_scope';
+
+    /**
+     * The token is fine, but the person signed in less strongly than this resource needs
+     * (RFC 9470 §3): the client asks for a new one with the `acr_values` the challenge names.
+     */
+    case InsufficientUserAuthentication = 'insufficient_user_authentication';
 }

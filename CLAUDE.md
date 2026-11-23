@@ -599,7 +599,9 @@ source of truth. `ManagementApiMiddleware` checks every request in one order:
 
 1. credentials (`BearerCredentials`, the `Authorization` header only);
 2. the token: live, issued for the Management API (`aud` before any scope), its subject still
-   active;
+   active, and — when the Management API's own `mfa_policy` is `required` — a person's token
+   from a sign-in meeting MFA, or `401 insufficient_user_authentication` with the `acr_values`
+   to ask for (RFC 9470 §3; a machine token is not concerned; `seed-dev` turns it on);
 3. the scope named by the operation's `security` requirement (there is no second list);
 4. the request against the contract: a parameter twice, unreadable JSON or bad
    percent-encoding is 400; not JSON is 415; anything the contract or the domain refuses is

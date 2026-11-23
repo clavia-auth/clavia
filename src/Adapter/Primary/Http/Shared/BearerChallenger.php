@@ -65,11 +65,16 @@ final readonly class BearerChallenger
         if ($error->requiredScope !== null) {
             $parameters['scope'] = $error->requiredScope->toString();
         }
+        if ($error->requiredAuthentication !== null) {
+            // RFC 9470 §3: the levels that would do, for the client's next authorization request.
+            $parameters['acr_values'] = implode(' ', $error->requiredAuthentication->acrValues());
+        }
 
         $status = match ($error->error) {
             BearerErrorCode::InvalidRequest => 400,
             BearerErrorCode::InvalidToken => 401,
             BearerErrorCode::InsufficientScope => 403,
+            BearerErrorCode::InsufficientUserAuthentication => 401,
         };
 
         return new JsonResponse(

@@ -20,6 +20,7 @@ use Clavia\Application\Management\Provisioning\RegisterManagementApi;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Client\ClientRepository;
+use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Psr\Container\ContainerInterface;
 
 final class SeedManagementAccessFactory
@@ -28,6 +29,8 @@ final class SeedManagementAccessFactory
     {
         /** @var ClientRepository $clients */
         $clients = $container->get(ClientRepository::class);
+        /** @var ResourceServerRepository $resourceServers */
+        $resourceServers = $container->get(ResourceServerRepository::class);
         /** @var RegisterManagementApi $registerManagementApi */
         $registerManagementApi = $container->get(RegisterManagementApi::class);
         /** @var RegisterMachineClient $registerMachineClient */
@@ -45,6 +48,7 @@ final class SeedManagementAccessFactory
 
         return new SeedManagementAccess(
             $clients,
+            $resourceServers,
             $registerManagementApi,
             $registerMachineClient,
             $grantClientAccess,

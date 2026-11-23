@@ -11,9 +11,11 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Management\Caller;
 
+use Clavia\Domain\Authentication\AuthenticationRequirement;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\BearerTokenError;
+use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\Digest;
@@ -30,7 +32,13 @@ use Clavia\Domain\Shared\Digest;
  *    `read:users` on another API is a different permission spelled the same way. A
  *    token naming no API at all is refused too, whatever its scope says.
  *
- * The third — the scope the operation requires — is {@see ManagementCaller::require()}.
+ * Then, for a token acting for a person, **the sign-in is strong enough** when the
+ * Management API's own MFA policy is `required` (docs/design/mfa-policies.md §5.6): a token
+ * from a one-factor sign-in is refused with RFC 9470's `insufficient_user_authentication`,
+ * naming the `acr_values` the client asks for next, and the person steps up. A machine token
+ * has nobody to step up and is not concerned.
+ *
+ * The last — the scope the operation requires — is {@see ManagementCaller::require()}.
  * Every failure here is the same `invalid_token`: telling "expired" from "for another
  * API" helps only whoever holds a token that is not theirs.
  */
@@ -44,11 +52,12 @@ final readonly class AuthenticateManagementCaller
         private UserRepository $users,
         private Clock $clock,
         private Audience $managementApi,
+        private ResourceServerRepository $resourceServers,
     ) {
     }
 
     /**
-     * @throws BearerTokenError `invalid_token`.
+     * @throws BearerTokenError `invalid_token`, or `insufficient_user_authentication`.
      */
     public function __invoke(#[\SensitiveParameter] string $accessToken): ManagementCaller
     {
@@ -67,6 +76,15 @@ final readonly class AuthenticateManagementCaller
             $user = $this->users->find($token->userId);
             if ($user === null || ! $user->isActive()) {
                 throw self::refused();
+            }
+            $required = AuthenticationRequirement::none()->withMinimum(
+                $this->resourceServers->findByIdentifier($this->managementApi)?->mfaPolicy->level(),
+            );
+            if (! $required->isMetBy($token->authentication->methods)) {
+                throw BearerTokenError::insufficientUserAuthentication(
+                    $required,
+                    'The Management API requires a stronger sign-in.',
+                );
             }
         }
 

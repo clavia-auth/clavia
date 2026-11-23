@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Domain\OAuth2;
 
+use Clavia\Domain\Authentication\AuthenticationRequirement;
 use Clavia\Domain\Shared\ScopeSet;
 use DomainException;
 
@@ -26,6 +27,7 @@ final class BearerTokenError extends DomainException
         public readonly BearerErrorCode $error,
         public readonly string $description,
         public readonly ?ScopeSet $requiredScope,
+        public readonly ?AuthenticationRequirement $requiredAuthentication = null,
     ) {
         parent::__construct($error->value . ': ' . $description);
     }
@@ -47,5 +49,16 @@ final class BearerTokenError extends DomainException
     public static function insufficientScope(ScopeSet $required, string $description): self
     {
         return new self(BearerErrorCode::InsufficientScope, $description, $required);
+    }
+
+    /**
+     * @param AuthenticationRequirement $required What the sign-in must meet, stated in the challenge as
+     *                                            `acr_values` (RFC 9470 §3) so the client knows what to ask.
+     */
+    public static function insufficientUserAuthentication(
+        AuthenticationRequirement $required,
+        string $description,
+    ): self {
+        return new self(BearerErrorCode::InsufficientUserAuthentication, $description, null, $required);
     }
 }

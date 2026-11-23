@@ -18,7 +18,9 @@ use Clavia\Application\Management\Provisioning\EnsureRole;
 use Clavia\Application\Management\Provisioning\GrantClientAccess;
 use Clavia\Application\Management\Provisioning\RegisterManagementApi;
 use Clavia\Application\Port\TransactionManager;
+use Clavia\Domain\Authentication\MfaPolicy;
 use Clavia\Domain\Client\ClientRepository;
+use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use LogicException;
 
 /**
@@ -32,6 +34,10 @@ use LogicException;
  * which a generated one could not be — and that is what makes this development-only.
  * Idempotent: the client is found by name, its grant rewritten to every scope the API
  * defines now; the role is found by name and given what it lacks.
+ *
+ * The Management API is set to require more than one factor (docs/design/mfa-policies.md §5.6),
+ * so the dashboard's step-up is exercised in development as it should be in production. The
+ * development user's address is verified, so they set a second factor up on the way.
  */
 final readonly class SeedManagementAccess
 {
@@ -43,6 +49,7 @@ final readonly class SeedManagementAccess
 
     public function __construct(
         private ClientRepository $clients,
+        private ResourceServerRepository $resourceServers,
         private RegisterManagementApi $registerManagementApi,
         private RegisterMachineClient $registerMachineClient,
         private GrantClientAccess $grantClientAccess,
@@ -66,7 +73,8 @@ final readonly class SeedManagementAccess
         }
 
         return $this->transactions->transactional(function () use ($administrator): SeededManagementAccess {
-            $api = ($this->registerManagementApi)();
+            $api = ($this->registerManagementApi)()->requiringMfa(MfaPolicy::Required);
+            $this->resourceServers->save($api);
 
             $client = $this->clients->findByName(self::CLIENT_NAME);
             $created = $client === null;
