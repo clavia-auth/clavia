@@ -41,9 +41,9 @@ final class PasswordPolicyTest extends TestCase
     public static function refused(): iterable
     {
         yield 'seven characters' => ['1234567'];
-        // bcrypt would read only the first 72 bytes and ignore the rest.
-        yield 'seventy-three bytes' => [str_repeat('a', 73)];
-        yield 'forty accented letters, eighty bytes' => [str_repeat('é', 40)];
+        // A bound on the work one sign-in asks of the hash, counted in bytes.
+        yield '1,025 bytes' => [str_repeat('a', 1025)];
+        yield '342 euro signs, 1,026 bytes' => [str_repeat('€', 342)];
         yield 'not UTF-8' => ["\xff\xfe\xfd\xfc\xfb\xfa\xf9\xf8"];
         yield 'a NUL byte' => ["password\0suffix"];
     }

@@ -17,14 +17,16 @@ use Clavia\Domain\Shared\InvalidValue;
  * What a password chosen for an account must be.
  *
  * Length only, after NIST SP 800-63B §5.1.1: at least 8 characters, no composition
- * rules. The maximum is not a policy but the hash's: bcrypt reads 72 bytes, and a
- * longer password would silently be equal to every other one sharing its first 72.
+ * rules. The maximum, 1,024 bytes, is a bound on the work one sign-in can ask of the
+ * hash, far past any passphrase a person types (SP 800-63B asks for at least 64).
+ * A NUL byte is refused: no keyboard types one, and it would be a trap for any code
+ * that reads the password as a C string.
  */
 final class PasswordPolicy
 {
     public const int MIN_LENGTH = 8;
 
-    public const int MAX_BYTES = 72;
+    public const int MAX_BYTES = 1024;
 
     private function __construct()
     {
@@ -33,7 +35,7 @@ final class PasswordPolicy
     /**
      * @return non-empty-string
      *
-     * @throws InvalidValue When the password is shorter than 8 characters, longer than 72 bytes,
+     * @throws InvalidValue When the password is shorter than 8 characters, longer than 1,024 bytes,
      *                      not UTF-8, or holds a NUL byte.
      */
     public static function accept(#[\SensitiveParameter] string $password): string

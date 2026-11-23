@@ -90,6 +90,21 @@ final class SeedDevelopmentDataTest extends TestCase
         self::assertFalse($this->clients->find($first->clientId)?->hasRedirectUri('http://localhost:9999/elsewhere'));
     }
 
+    public function testARerunHashesThePasswordAgainWhenTheStoredHashIsOutdated(): void
+    {
+        // A database seeded before the hash changed (bcrypt, then PBKDF2): the user would be locked out.
+        $this->seeder()('dev@clavia.test', 'devpassword', 'http://localhost:3000/callback');
+        $before = $this->users->findByEmail(ConnectionName::defaultPool(), 'dev@clavia.test')?->passwordHash();
+        $this->hasher->outdated = true;
+
+        $second = $this->seeder()('dev@clavia.test', 'devpassword', 'http://localhost:3000/callback');
+
+        self::assertFalse($second->userCreated);
+        $after = $this->users->findByEmail(ConnectionName::defaultPool(), 'dev@clavia.test')?->passwordHash();
+        self::assertNotSame($before, $after, 'Hashed again.');
+        self::assertTrue($this->hasher->verify('devpassword', (string) $after));
+    }
+
     public function testItRefusesOutsideADevelopmentDeployment(): void
     {
         try {

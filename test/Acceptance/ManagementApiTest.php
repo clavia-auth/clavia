@@ -420,10 +420,16 @@ final class ManagementApiTest extends AcceptanceTestCase
             422,
             $this->api('POST', self::USERS, ['email' => 'ok@clavia.dev', 'password' => 'short'])->getStatusCode(),
         );
-        // Long enough in characters, too long for bcrypt in bytes: refused, never truncated.
+        // Past the contract's 256 characters: refused, never truncated.
         self::assertSame(
             422,
-            $this->api('POST', self::USERS, ['email' => 'ok@clavia.dev', 'password' => str_repeat('é', 40)])
+            $this->api('POST', self::USERS, ['email' => 'ok@clavia.dev', 'password' => str_repeat('é', 257)])
+                ->getStatusCode(),
+        );
+        // What bcrypt could not take (80 bytes) is an ordinary password now.
+        self::assertSame(
+            201,
+            $this->api('POST', self::USERS, ['email' => 'long@clavia.dev', 'password' => str_repeat('é', 40)])
                 ->getStatusCode(),
         );
     }

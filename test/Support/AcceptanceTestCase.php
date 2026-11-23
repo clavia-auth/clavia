@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Support;
 
-use Clavia\Adapter\Secondary\Crypto\BcryptPasswordHasher;
+use Clavia\Adapter\Secondary\Crypto\Pbkdf2PasswordHasher;
 use Clavia\Adapter\Secondary\System\AfterResponseTasks;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Configuration\Settings;
@@ -102,9 +102,9 @@ abstract class AcceptanceTestCase extends TestCase
         $container->setAllowOverride(true);
         $container->setService(Settings::class, Settings::fromEnvironment($environment + TestEnvironment::variables()));
         $container->setService(LoggerInterface::class, $this->logger);
-        // The real adapter at bcrypt's lowest cost: the suite is about behaviour, and
-        // the production cost would spend most of its time hashing fixtures.
-        $container->setService(PasswordHasher::class, new BcryptPasswordHasher(4));
+        // The real adapter at the fewest iterations SP 800-132 allows: the suite is about behaviour,
+        // and 600,000 would spend most of its time hashing fixtures.
+        $container->setService(PasswordHasher::class, new Pbkdf2PasswordHasher(Pbkdf2PasswordHasher::MIN_ITERATIONS));
 
         /** @var Application $application */
         $application = $container->get(Application::class);

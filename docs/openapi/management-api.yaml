@@ -3220,7 +3220,7 @@ components:
           minLength: 8
           maxLength: 256
           description: |
-            At least 8 characters, at most 72 bytes once encoded. With
+            At least 8 characters, at most 256 (1,024 bytes once encoded). With
             `CLAVIA_BREACHED_PASSWORD_CHECK` on, a password found in Have I Been Pwned's Pwned
             Passwords is refused (422). Omit it to create the account without one; it is then
             invited with `POST /users/{user_id}/password-reset`.

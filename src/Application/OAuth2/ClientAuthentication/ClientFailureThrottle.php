@@ -24,7 +24,7 @@ use Clavia\Domain\Client\ClientAuthMethod;
  *
  * - **the client address**, for every failed client authentication and every rejected
  *   grant. A client secret is 256 random bits and cannot be guessed; what an attacker can
- *   do is make this server run bcrypt on every attempt. The limit is checked before any
+ *   do is make this server run PBKDF2 on every attempt. The limit is checked before any
  *   secret is, so it caps that work per address.
  * - **the client**, for a rejected grant (a wrong code, verifier, refresh or device code),
  *   and only for a client that proved itself with a secret. A client id is not secret —

@@ -105,6 +105,12 @@ final readonly class SeedDevelopmentData
             // second factor up on the way to the dashboard, whose API requires one.
             $user->recordEmailVerification(true, $now);
             $this->users->save($user);
+        } elseif ($this->hasher->needsRehash($user->passwordHash() ?? '')) {
+            // Seeded under another hash (bcrypt, before PBKDF2): the stored one no longer verifies,
+            // so the user would be locked out. Hashed again with the password given. A hash still
+            // in use is left alone, whatever the password: a rerun changes nothing that works.
+            $user->changePassword($this->hasher->hash($password), $now);
+            $this->users->save($user);
         }
 
         $client = $this->clients->findByName(self::CLIENT_NAME);

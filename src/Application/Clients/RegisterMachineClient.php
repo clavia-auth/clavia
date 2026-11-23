@@ -75,7 +75,7 @@ final readonly class RegisterMachineClient
         try {
             $hash = $this->hasher->hash($secret);
         } catch (SecretNotHashable) {
-            throw new InvalidValue('A client secret is at most 72 bytes, with no NUL byte.');
+            throw new InvalidValue('A client secret is at most 1,024 bytes.');
         }
 
         $client = Client::register(
