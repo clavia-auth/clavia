@@ -78,6 +78,7 @@ The console is `bin/clavia`:
 | `keys:generate`, `keys:rotate`, `keys:list` | Signing keys (the `postgres` backend only) |
 | `management-api:register`, `management-api:scopes` | Register the Management API; list its scopes |
 | `clients:create-m2m [--third-party]`, `clients:grant` | Machine clients and their grants on an API |
+| `clients:registration-token` | An initial access token for client registration, printed once |
 | `roles:create`, `roles:assign`, `roles:list` | Roles, including the first administrator |
 | `audit:purge` | Delete audit events older than `CLAVIA_AUDIT_RETENTION_DAYS`; run daily |
 | `mail:outbox` | The last messages of the `console` mail backend (development) |
@@ -283,7 +284,7 @@ objects, repository interfaces, and an `Event` namespace for its domain events.
 |---|---|---|
 | `Shared` | `Clock`, `RandomSource`, `SecretGenerator`, `Digest`, `Scope`/`ScopeSet`, `Audience`, `Url`, `UuidId`, `Base64Url`, `PageRequest`/`Page`, `InvalidValue`, `AlreadyExists`, `DomainEvent` | Secrets are 43-character tokens; codes and tokens are stored as their SHA-256 `Digest`; URLs are kept byte for byte and compared exactly |
 | `Identity` | `User`, `Profile`, `PasswordPolicy`, `ExternalIdentity`, `AssertedIdentity`, `AccountLink` | Every account belongs to one connection; an address is unique within it; a changed address is unverified; an emailed link dies with the address or password it was issued against |
-| `Client` | `Client`, `ClientId`, `ClientType`, `ClientAuthMethod`, `GrantType`, `ResponseType`, `Ownership`, `BackChannelLogout` | Type, auth method and secret agree; the code flow needs a redirect URI; `client_credentials` needs a confidential client; `tpc_…` ids are third-party |
+| `Client` | `Client`, `ClientId`, `ClientType`, `ClientAuthMethod`, `GrantType`, `ResponseType`, `Ownership`, `BackChannelLogout`, `Registration\InitialAccessToken` | Type, auth method and secret agree; the code flow needs a redirect URI; `client_credentials` needs a confidential client; `tpc_…` ids are third-party |
 | `Connection` | `Connection`, `ConnectionName`, `ConnectionStrategy` (database, social, OIDC, passwordless), `OidcSettings`, `BuiltInConnection` | The default pool, social providers and `email` are switched, never created or deleted; only a pool takes sign-ups or requires a verified address |
 | `ResourceServer` | `ResourceServer` (an API: `rs_…` id, audience, permissions, `AccessTokenFormat`), `Permission`, `ClientGrant` | A system API (the Management API) can be renamed, never deleted, always enforces roles; tokens are opaque unless the API takes JWTs |
 | `Rbac` | `Role`, `GrantedPermission`, `RoleRepository` (also the assignments) | A person holds a permission only through a role; `permissionsHeld(user, API)` is the question issuance asks |
@@ -570,6 +571,19 @@ a permission takes effect on the next token. The token has no subject, so every 
 describes a person (userinfo, introspection's `sub`) refuses it. Client grants are written
 from the shell only (`clients:grant`): an endpoint writing them would let a caller widen its own
 access. A third-party client never gets a token for a system API.
+
+### Dynamic client registration
+
+Design in `docs/design/dynamic-client-registration.md` (RFC 7591, RFC 7592), built in slices.
+`CLAVIA_CLIENT_REGISTRATION` is `off` by default, or `token`: registration is only ever open to a
+bearer of an **initial access token** an operator issued (`POST /api/v1/initial-access-tokens`,
+`create:initial_access_tokens`, or `clients:registration-token`), never to anybody at all. A token
+is its own kind, not a Management API token: a 43-character secret shown once and stored as its
+digest, with a description, an expiry (a minute to ninety days, seven by default), a number of
+uses (1 to 1000) and a revocation (`DELETE …/{id}`; the clients it registered keep working). Its
+uses are spent by one conditional `UPDATE` (`InitialAccessTokenRepository::spendOne()`), never
+written by `save()`, so two registrations cannot share the last. Its state (`active`, `expired`,
+`used_up`, `revoked`) is worked out, never stored.
 
 ### Device authorization (RFC 8628)
 

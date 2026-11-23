@@ -13,6 +13,7 @@ namespace Clavia\Adapter\Primary\Http\Management;
 
 use Clavia\Application\Management\Clients\ClientWithSecret;
 use Clavia\Application\Management\Connections\DescribedConnection;
+use Clavia\Application\Management\InitialAccessTokens\IssuedInitialAccessToken;
 use Clavia\Application\Management\Roles\DescribedPermission;
 use Clavia\Application\Management\Roles\DescribedRole;
 use Clavia\Application\Management\Roles\EffectivePermission;
@@ -26,6 +27,7 @@ use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\Passkey\Passkey;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\GrantType;
+use Clavia\Domain\Client\Registration\InitialAccessToken;
 use Clavia\Domain\Client\ResponseType;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\ExternalIdentity;
@@ -296,6 +298,35 @@ final class ManagementViews
             'created_at' => self::instant($passkey->createdAt),
             'last_used_at' => $passkey->lastUsedAt === null ? null : self::instant($passkey->lastUsedAt),
         ];
+    }
+
+    /**
+     * An initial access token, its state told at `$now`. Never its value: that is not kept.
+     *
+     * @return array<string, mixed>
+     */
+    public static function initialAccessToken(InitialAccessToken $token, DateTimeImmutable $now): array
+    {
+        return [
+            'id' => $token->id->value,
+            'description' => $token->description,
+            'created_at' => self::instant($token->createdAt),
+            'expires_at' => self::instant($token->expiresAt),
+            'max_uses' => $token->maxUses,
+            'uses' => $token->uses,
+            'state' => $token->stateAt($now)->value,
+            'revoked_at' => $token->revokedAt === null ? null : self::instant($token->revokedAt),
+        ];
+    }
+
+    /**
+     * An initial access token just issued, with its value, the one time it is shown.
+     *
+     * @return array<string, mixed>
+     */
+    public static function issuedInitialAccessToken(IssuedInitialAccessToken $issued, DateTimeImmutable $now): array
+    {
+        return self::initialAccessToken($issued->token, $now) + ['token' => $issued->secret];
     }
 
     /**

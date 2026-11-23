@@ -199,6 +199,13 @@ final readonly class Settings
          */
         #[Range(min: 30, max: 3600)]
         public int $dpopNonceLifetime = 300,
+        /**
+         * Who may register a client at `/oauth2/register` (RFC 7591; docs/design/
+         * dynamic-client-registration.md): nobody (`off`, the default), or a bearer of an initial
+         * access token an operator issued (`token`). Registration is never open to anybody at all:
+         * a client factory nobody vouches for is what phishing applications are made in.
+         */
+        public ClientRegistration $clientRegistration = ClientRegistration::Off,
         /** How long the audit trail keeps an event, days; `clavia audit:purge` removes what is older. */
         #[Range(min: 1)]
         public int $auditRetentionDays = 90,

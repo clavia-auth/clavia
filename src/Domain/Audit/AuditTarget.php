@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Domain\Audit;
 
 use Clavia\Domain\Client\ClientId;
+use Clavia\Domain\Client\Registration\InitialAccessTokenId;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Rbac\RoleId;
@@ -75,5 +76,10 @@ final readonly class AuditTarget
     public static function signingKey(string $kid): self
     {
         return self::of(TargetType::SigningKey, $kid);
+    }
+
+    public static function initialAccessToken(InitialAccessTokenId $id): self
+    {
+        return self::of(TargetType::InitialAccessToken, $id->value);
     }
 }

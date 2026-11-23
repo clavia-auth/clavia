@@ -34,6 +34,8 @@ use Clavia\Adapter\Primary\Http\Management\ClientHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientsHandler;
 use Clavia\Adapter\Primary\Http\Management\ConnectionHandler;
 use Clavia\Adapter\Primary\Http\Management\ConnectionsHandler;
+use Clavia\Adapter\Primary\Http\Management\InitialAccessTokenHandler;
+use Clavia\Adapter\Primary\Http\Management\InitialAccessTokensHandler;
 use Clavia\Adapter\Primary\Http\Management\ManagementApiMiddleware;
 use Clavia\Adapter\Primary\Http\Management\ResourceServerHandler;
 use Clavia\Adapter\Primary\Http\Management\ResourceServersHandler;
@@ -256,6 +258,18 @@ return static function (Application $app, ContainerInterface $container): void {
     $app->route('/api/v1/roles', $management(RolesHandler::class), ['GET', 'POST'], 'api.roles');
     $app->get('/api/v1/signing-keys', $management(SigningKeysHandler::class), 'api.signing-keys');
     $app->post('/api/v1/signing-keys/rotate', $management(SigningKeysHandler::class), 'api.signing-keys.rotate');
+    $app->route(
+        '/api/v1/initial-access-tokens',
+        $management(InitialAccessTokensHandler::class),
+        ['GET', 'POST'],
+        'api.initial-access-tokens',
+    );
+    $app->route(
+        '/api/v1/initial-access-tokens/{initial_access_token_id}',
+        $management(InitialAccessTokenHandler::class),
+        ['DELETE'],
+        'api.initial-access-token',
+    );
     $app->route('/api/v1/audit-events', $management(AuditEventsHandler::class), ['GET'], 'api.audit-events');
     $app->route(
         '/api/v1/roles/{role_id}',

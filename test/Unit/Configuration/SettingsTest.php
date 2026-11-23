@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Configuration;
 
+use Clavia\Configuration\ClientRegistration;
 use Clavia\Configuration\EmailBackend;
 use Clavia\Configuration\Environment;
 use Clavia\Configuration\InvalidSettings;
@@ -54,6 +55,7 @@ final class SettingsTest extends TestCase
         self::assertSame('postgres', $settings->signingBackend);
         self::assertSame('RS256', $settings->signingAlgorithm);
         self::assertSame(EmailBackend::Console, $settings->emailBackend);
+        self::assertSame(ClientRegistration::Off, $settings->clientRegistration);
         self::assertSame(60, $settings->authorizationCodeLifetime);
         self::assertSame(['openid', 'profile', 'email'], $settings->scopesSupported);
         self::assertSame([], $settings->trustedProxies);
@@ -217,6 +219,7 @@ final class SettingsTest extends TestCase
         yield 'a maybe for a boolean' => ['CLAVIA_SOCIAL_AUTO_LINK', 'maybe', 'must be true or false'];
         yield 'an unknown environment' => ['CLAVIA_ENV', 'prod', 'must be one of development, staging, production'];
         yield 'an unknown mail backend' => ['CLAVIA_EMAIL_BACKEND', 'sendmail', 'must be one of console, smtp, none'];
+        yield 'open client registration' => ['CLAVIA_CLIENT_REGISTRATION', 'open', 'must be one of off, token'];
         yield 'a JSON object for a list' => ['CLAVIA_SCOPES_SUPPORTED', '[{"a":1}]', 'must be a list of strings'];
         yield 'broken JSON for a list' => ['CLAVIA_SCOPES_SUPPORTED', '["openid"', 'must be a list of strings'];
         yield 'a hostname for a proxy' => ['CLAVIA_TRUSTED_PROXIES', 'lb.internal', 'must be IP addresses'];

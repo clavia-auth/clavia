@@ -70,4 +70,6 @@ enum AuditEventType: string
     case ConnectionDeleted = 'connection.deleted';
     case SigningKeyCreated = 'signing_key.created';
     case SigningKeyRotated = 'signing_key.rotated';
+    case InitialAccessTokenIssued = 'initial_access_token.issued';
+    case InitialAccessTokenRevoked = 'initial_access_token.revoked';
 }
