@@ -32,7 +32,7 @@ registered itself is a third-party client, and so can never reach a system API**
 
 ### Not in scope
 
-- **Open registration** (no initial access token): question 1.
+- **Open registration** (no initial access token): later, #81.
 - **Software statements** (RFC 7591 §2.3): a signed statement from a software publisher. Without
   a trust list of publishers there is nothing to verify it against; a request carrying one is
   refused (§2).
@@ -74,7 +74,7 @@ registered itself is a third-party client, and so can never reach a system API**
 
 | Setting | Default | Range | Why |
 |---|---|---|---|
-| `CLAVIA_CLIENT_REGISTRATION` | `off` | `off`, `token` | `off`: there is no registration endpoint, and discovery does not name one. `token`: open to holders of an initial access token. A third value, `open`, is question 1 |
+| `CLAVIA_CLIENT_REGISTRATION` | `off` | `off`, `token` | `off`: there is no registration endpoint, and discovery does not name one. `token`: open to holders of an initial access token. A third value, `open`, is #81 |
 | `CLAVIA_CLIENT_REGISTRATION_MAX_PER_ADDRESS` | 20 | 1–1000 | Registrations, valid or not, from one client address per window |
 | `CLAVIA_CLIENT_REGISTRATION_WINDOW` | 3600 s | 60–86400 | The window those are counted in |
 
@@ -254,15 +254,14 @@ access token>`:
 ## Open questions
 
 1. **Open registration.** Some ecosystems (MCP clients finding an authorization server they have
-   never seen) register with no initial access token at all. *Recommendation*: not now. Ship
-   `token`, see who asks, and design `open` then, with what it needs: a per-address quota,
-   expiry of clients that never sign anyone in, and a consent screen that says plainly that
-   nobody has checked the application.
+   never seen) register with no initial access token at all. *Settled*: not now; #81 designs
+   `open` later, with a per-address quota, expiry of clients that never sign anyone in, and a
+   consent screen that says plainly that nobody has checked the application.
 2. **Expiry of unused clients.** A client registered and never used stays forever. *Recommendation*:
    leave it to the operator (the dashboard shows when a client was registered and by which
    token); revisit with question 1.
 3. **Loopback ports.** RFC 8252 §7.3 asks the server to accept any port on a loopback redirect,
    since a native application picks a free one at run time. Today Clavia matches every redirect
    URI exactly, for every client. *Recommendation*: accept any port for a loopback redirect URI
-   registered without one, for public clients only, as a separate change to `Client::allowsRedirectUri()`
-   that applies to every client, with its own ticket; this design does not depend on it.
+   registered without one, for public clients only. *Settled*: a separate change to
+   `Client::allowsRedirectUri()` for every client, #82; this design does not depend on it.
