@@ -86,9 +86,14 @@ final class ManagementDocumentationTest extends TestCase
         $grouped = [];
         foreach ($groups as $group) {
             self::assertIsArray($group);
-            self::assertIsString($group['name'] ?? null);
-            self::assertIsArray($group['tags'] ?? null, $group['name'] . ' has no tags.');
-            foreach ($group['tags'] as $tag) {
+            /** @var mixed $name */
+            $name = $group['name'] ?? null;
+            /** @var mixed $tags */
+            $tags = $group['tags'] ?? null;
+            self::assertIsString($name);
+            self::assertIsArray($tags, $name . ' has no tags.');
+            /** @var mixed $tag */
+            foreach ($tags as $tag) {
                 self::assertIsString($tag);
                 $grouped[] = $tag;
             }
