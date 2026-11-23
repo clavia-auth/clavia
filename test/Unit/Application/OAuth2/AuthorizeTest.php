@@ -13,6 +13,7 @@ namespace ClaviaTest\Unit\Application\OAuth2;
 
 use ClaviaTest\Support\Fake\InMemoryMfaChallengeStore;
 use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
+use ClaviaTest\Support\Fake\InMemoryPushedAuthorizationRequestStore;
 use ClaviaTest\Support\Fake\InMemoryRecoveryCodeRepository;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
@@ -24,6 +25,7 @@ use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\OAuth2\Authorize\AuthorizationOutcome;
 use Clavia\Application\OAuth2\Authorize\AuthorizationRequest;
+use Clavia\Application\OAuth2\Authorize\AuthorizationRequestRules;
 use Clavia\Application\OAuth2\Authorize\Authorize;
 use Clavia\Application\OAuth2\Authorize\CodeIssued;
 use Clavia\Application\OAuth2\Authorize\ConsentRequired;
@@ -110,16 +112,20 @@ final class AuthorizeTest extends TestCase
             new InMemoryDomainEvents(),
         );
         $this->authorize = new Authorize(
-            $this->clients,
+            new AuthorizationRequestRules(
+                $this->clients,
+                $this->nonces,
+                new ReadRequestedAccess($this->resourceServers, ScopeSet::fromString('openid profile email')),
+            ),
             $this->codes,
             $this->loginStates,
             $this->nonces,
-            new ReadRequestedAccess($this->resourceServers, ScopeSet::fromString('openid profile email')),
             $this->roles,
             $this->consents,
             $this->consentStates,
             new ConnectionAccess($this->connections, new FakeIdentityProviders(), new RecordingMailer(false)),
             $this->sessions,
+            new InMemoryPushedAuthorizationRequestStore(new FrozenClock()),
             new BeginStepUp(
                 new InMemoryMfaChallengeStore($clock),
                 new SecondFactors(
@@ -429,16 +435,20 @@ final class AuthorizeTest extends TestCase
         };
         $random = new SeededRandomSource(9);
         $authorize = new Authorize(
-            $this->clients,
+            new AuthorizationRequestRules(
+                $this->clients,
+                $raced,
+                new ReadRequestedAccess($this->resourceServers, ScopeSet::fromString('openid')),
+            ),
             $this->codes,
             $this->loginStates,
             $raced,
-            new ReadRequestedAccess($this->resourceServers, ScopeSet::fromString('openid')),
             $this->roles,
             $this->consents,
             $this->consentStates,
             new ConnectionAccess($this->connections, new FakeIdentityProviders(), new RecordingMailer(false)),
             $this->sessions,
+            new InMemoryPushedAuthorizationRequestStore(new FrozenClock()),
             new BeginStepUp(
                 new InMemoryMfaChallengeStore(new FrozenClock()),
                 new SecondFactors(

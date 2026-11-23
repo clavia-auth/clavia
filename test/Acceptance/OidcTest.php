@@ -127,7 +127,7 @@ final class OidcTest extends AcceptanceTestCase
                 $advertised[$field] = $url;
             }
         }
-        self::assertCount(8, $advertised);
+        self::assertCount(9, $advertised);
 
         foreach ($advertised as $field => $url) {
             self::assertStringStartsWith(self::ISSUER . '/', $url, $field);

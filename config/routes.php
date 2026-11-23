@@ -54,6 +54,7 @@ use Clavia\Adapter\Primary\Http\Management\UsersHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\DeviceAuthorizationHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\IntrospectionHandler;
+use Clavia\Adapter\Primary\Http\OAuth2\PushedAuthorizationRequestHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\RevocationHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\TokenHandler;
 use Clavia\Adapter\Primary\Http\Oidc\DiscoveryHandler;
@@ -79,6 +80,7 @@ return static function (Application $app, ContainerInterface $container): void {
     // ── /oauth2/* — the authorization server. Callers authenticate as clients. ──
     $app->route('/oauth2/authorize', AuthorizeHandler::class, ['GET', 'POST'], 'oauth2.authorize');
     $app->post('/oauth2/token', TokenHandler::class, 'oauth2.token');
+    $app->post('/oauth2/par', PushedAuthorizationRequestHandler::class, 'oauth2.par');
     $app->post('/oauth2/introspect', IntrospectionHandler::class, 'oauth2.introspect');
     $app->post('/oauth2/revoke', RevocationHandler::class, 'oauth2.revoke');
     $app->post('/oauth2/device/code', DeviceAuthorizationHandler::class, 'oauth2.device');

@@ -71,6 +71,45 @@ final readonly class RequestParameters
     }
 
     /**
+     * Rebuild parameters from {@see self::pairs()}.
+     *
+     * @param list<array{string, string}> $pairs
+     */
+    public static function fromPairs(array $pairs): self
+    {
+        $values = [];
+        foreach ($pairs as [$name, $value]) {
+            $values[$name][] = $value;
+        }
+
+        return new self($values);
+    }
+
+    /**
+     * Every parameter as a name and a value, repetitions included, in order: to keep a request
+     * as it was received, and rebuild it with {@see self::fromPairs()}.
+     *
+     * @return list<array{string, string}>
+     */
+    public function pairs(): array
+    {
+        $pairs = [];
+        foreach ($this->values as $name => $values) {
+            foreach ($values as $value) {
+                $pairs[] = [(string) $name, $value];
+            }
+        }
+
+        return $pairs;
+    }
+
+    /** The same parameters without `$name`. */
+    public function without(string $name): self
+    {
+        return $this->with($name, null);
+    }
+
+    /**
      * Every parameter as a query string (RFC 3986 encoding), repetitions included, in the
      * order they were given — to send the browser back to the same request.
      */

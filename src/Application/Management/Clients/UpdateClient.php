@@ -73,6 +73,9 @@ final readonly class UpdateClient
         if ($changes->mfaPolicy !== null) {
             $updated = $updated->requiringMfa(MfaPolicy::fromString($changes->mfaPolicy));
         }
+        if ($changes->requirePushedAuthorizationRequests !== null) {
+            $updated = $updated->withPushedAuthorizationRequestsRequired($changes->requirePushedAuthorizationRequests);
+        }
         $this->clients->save($updated);
         $this->events->dispatch(new ClientChanged($updated->id, self::fields($changes)));
 
@@ -97,6 +100,7 @@ final readonly class UpdateClient
             'backchannel_logout_session_required' => $changes->backChannelLogoutSessionRequired !== null,
             'require_pkce' => $changes->requirePkce !== null,
             'mfa_policy' => $changes->mfaPolicy !== null,
+            'require_pushed_authorization_requests' => $changes->requirePushedAuthorizationRequests !== null,
         ]));
     }
 }

@@ -57,6 +57,16 @@ final readonly class OAuth2Responder
         return new JsonResponse($payload, 200, self::NO_STORE);
     }
 
+    /**
+     * Something made: `201` and a JSON body, not cached — a pushed request (RFC 9126 §2.2).
+     *
+     * @param array<string, mixed> $payload
+     */
+    public function created(array $payload): ResponseInterface
+    {
+        return new JsonResponse($payload, 201, self::NO_STORE);
+    }
+
     /** A request that succeeded with nothing to say: `200`, an empty body, not cached. */
     public function done(): ResponseInterface
     {

@@ -83,6 +83,7 @@ final readonly class RegisterClient
             $this->backChannel->of($new->backChannelLogoutUri, $new->backChannelLogoutSessionRequired),
             $new->requirePkce,
             MfaPolicy::fromString($new->mfaPolicy),
+            $new->requirePushedAuthorizationRequests,
         );
         $this->clients->save($client);
         $this->events->dispatch(new ClientRegistered($client));

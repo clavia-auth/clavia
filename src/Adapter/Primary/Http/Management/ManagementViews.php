@@ -125,6 +125,7 @@ final class ManagementViews
             'backchannel_logout_session_required' => $client->backChannelLogout->sessionRequired ?? false,
             'require_pkce' => $client->requiresPkce,
             'mfa_policy' => $client->mfaPolicy->value,
+            'require_pushed_authorization_requests' => $client->requiresPushedAuthorizationRequests,
             'created_at' => self::instant($client->createdAt),
         ];
     }
