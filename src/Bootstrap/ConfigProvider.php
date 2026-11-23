@@ -211,6 +211,7 @@ use Clavia\Application\Management\Users\UserSessions;
 use Clavia\Application\Management\Users\WithdrawConsent;
 use Clavia\Application\OAuth2\Authorize\Authorize;
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
+use Clavia\Application\OAuth2\ClientAuthentication\ClientFailureThrottle;
 use Clavia\Application\OAuth2\Consent\DecideConsent;
 use Clavia\Application\OAuth2\Consent\DescribeConsent;
 use Clavia\Application\OAuth2\Consent\HeldConsents;
@@ -394,6 +395,7 @@ final class ConfigProvider
                     DevelopmentAutoLogin::class => Container\DevelopmentAutoLoginFactory::class,
                     SeedDashboardClient::class => Container\SeedDashboardClientFactory::class,
                     ClientAuthenticator::class => Container\ClientAuthenticatorFactory::class,
+                    ClientFailureThrottle::class => Container\ClientFailureThrottleFactory::class,
                     Authorize::class => Container\AuthorizeFactory::class,
                     HeldConsents::class => Container\HeldConsentsFactory::class,
                     DescribeConsent::class => Container\DescribeConsentFactory::class,

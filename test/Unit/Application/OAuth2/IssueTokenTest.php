@@ -11,7 +11,11 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Application\OAuth2;
 
+use ClaviaTest\Support\Fake\FrozenClock;
+use ClaviaTest\Support\Fake\InMemoryAttemptCounter;
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
+use Clavia\Application\OAuth2\ClientAuthentication\ClientFailureThrottle;
+use Clavia\Application\OAuth2\ClientAuthentication\TooManyFailedRequests;
 use Clavia\Application\OAuth2\RequestParameters;
 use Clavia\Application\OAuth2\Token\Grant;
 use Clavia\Application\OAuth2\Token\IssuedToken;
@@ -31,7 +35,10 @@ use PHPUnit\Framework\TestCase;
 final class IssueTokenTest extends TestCase
 {
     private InMemoryClientRepository $clients;
+    private const string ADDRESS = '203.0.113.7';
+
     private ClientAuthenticator $authenticator;
+    private ClientFailureThrottle $throttle;
 
     /** @var list<string> The ids of the clients the grant was asked to issue for. */
     private array $issuedFor = [];
@@ -42,7 +49,8 @@ final class IssueTokenTest extends TestCase
         $this->clients = new InMemoryClientRepository();
         $this->clients->save(Clients::public('spa'));
         $this->clients->save(Clients::public('no-grant', grantTypes: [], responseTypes: []));
-        $this->authenticator = new ClientAuthenticator($this->clients, new FakePasswordHasher());
+        $this->throttle = new ClientFailureThrottle(new InMemoryAttemptCounter(new FrozenClock()), 1000, 300);
+        $this->authenticator = new ClientAuthenticator($this->clients, new FakePasswordHasher(), $this->throttle);
     }
 
     public function testAnAuthenticatedClientIsHandedToTheGrantItAskedFor(): void
@@ -55,11 +63,12 @@ final class IssueTokenTest extends TestCase
 
     public function testARepeatedParameterIsRefusedBeforeAnythingElse(): void
     {
-        $issueToken = new IssueToken($this->authenticator, $this->aGrant());
+        $issueToken = new IssueToken($this->authenticator, $this->throttle, $this->aGrant());
 
         $error = $this->refusal(static fn (): IssuedToken => $issueToken(new TokenRequest(
             new RequestParameters(['grant_type' => ['authorization_code'], 'code' => ['one', 'two']]),
             null,
+            self::ADDRESS,
         )));
 
         self::assertSame(ErrorCode::InvalidRequest, $error->error);
@@ -83,11 +92,12 @@ final class IssueTokenTest extends TestCase
 
     public function testAKnownGrantTypeTheServerDoesNotOfferIsUnsupported(): void
     {
-        $withoutGrants = new IssueToken($this->authenticator);
+        $withoutGrants = new IssueToken($this->authenticator, $this->throttle);
 
         $error = $this->refusal(static fn (): IssuedToken => $withoutGrants(new TokenRequest(
             RequestParameters::fromMap(['grant_type' => 'authorization_code', 'client_id' => 'spa']),
             null,
+            self::ADDRESS,
         )));
 
         self::assertSame(ErrorCode::UnsupportedGrantType, $error->error);
@@ -115,11 +125,16 @@ final class IssueTokenTest extends TestCase
 
     public function testOnlyTheMethodsTheGrantAcceptsAreTried(): void
     {
-        $issueToken = new IssueToken($this->authenticator, $this->aGrant([ClientAuthMethod::ClientSecretBasic]));
+        $issueToken = new IssueToken(
+            $this->authenticator,
+            $this->throttle,
+            $this->aGrant([ClientAuthMethod::ClientSecretBasic]),
+        );
 
         $error = $this->refusal(static fn (): IssuedToken => $issueToken(new TokenRequest(
             RequestParameters::fromMap(['grant_type' => 'authorization_code', 'client_id' => 'spa']),
             null,
+            self::ADDRESS,
         )));
 
         self::assertSame(ErrorCode::InvalidClient, $error->error);
@@ -130,8 +145,8 @@ final class IssueTokenTest extends TestCase
      */
     private function issue(array $form): IssuedToken
     {
-        return new IssueToken($this->authenticator, $this->aGrant())(
-            new TokenRequest(RequestParameters::fromMap($form), null),
+        return new IssueToken($this->authenticator, $this->throttle, $this->aGrant())(
+            new TokenRequest(RequestParameters::fromMap($form), null, self::ADDRESS),
         );
     }
 
@@ -153,6 +168,7 @@ final class IssueTokenTest extends TestCase
     {
         $issueToken = new IssueToken(
             $this->authenticator,
+            $this->throttle,
             $this->aGrant([ClientAuthMethod::ClientSecretBasic, ClientAuthMethod::None]),
         );
 
@@ -161,7 +177,62 @@ final class IssueTokenTest extends TestCase
             [ClientAuthMethod::ClientSecretBasic, ClientAuthMethod::None],
             $issueToken->supportedAuthMethods(),
         );
-        self::assertSame([], new IssueToken($this->authenticator)->supportedGrantTypes());
+        self::assertSame([], new IssueToken($this->authenticator, $this->throttle)->supportedGrantTypes());
+    }
+
+    public function testARejectedGrantCountsAndAPendingDeviceDoesNot(): void
+    {
+        // RFC 8628 §3.5: a device told to keep polling is doing what it was told.
+        $hasher = new FakePasswordHasher();
+        $this->clients->save(Clients::confidential('backend', $hasher->hash('s3cret')));
+        $throttle = new ClientFailureThrottle(new InMemoryAttemptCounter(new FrozenClock()), 2, 300);
+        $authenticator = new ClientAuthenticator($this->clients, $hasher, $throttle);
+        $request = new TokenRequest(
+            RequestParameters::fromMap(['grant_type' => 'authorization_code']),
+            'Basic ' . base64_encode('backend:s3cret'),
+            self::ADDRESS,
+        );
+        $pendingGrant = $this->failingGrant(OAuth2Error::authorizationPending('Wait.'));
+        $pending = new IssueToken($authenticator, $throttle, $pendingGrant);
+        $rejected = new IssueToken($authenticator, $throttle, $this->failingGrant(OAuth2Error::invalidGrant('No.')));
+
+        for ($i = 0; $i < 5; ++$i) {
+            $error = $this->refusal(static fn (): IssuedToken => $pending($request));
+            self::assertSame(ErrorCode::AuthorizationPending, $error->error);
+        }
+        $this->refusal(static fn (): IssuedToken => $rejected($request));
+        $this->refusal(static fn (): IssuedToken => $rejected($request));
+
+        $this->expectException(TooManyFailedRequests::class);
+        $pending($request);
+    }
+
+    /** A grant for confidential clients that always answers with the error given. */
+    private function failingGrant(OAuth2Error $error): Grant
+    {
+        return new readonly class ($error) implements Grant {
+            public function __construct(private OAuth2Error $error)
+            {
+            }
+
+            #[\Override]
+            public function type(): GrantType
+            {
+                return GrantType::AuthorizationCode;
+            }
+
+            #[\Override]
+            public function acceptedAuthMethods(): array
+            {
+                return [ClientAuthMethod::ClientSecretBasic];
+            }
+
+            #[\Override]
+            public function issue(RequestParameters $parameters, Client $client): IssuedToken
+            {
+                throw $this->error;
+            }
+        };
     }
 
     /**

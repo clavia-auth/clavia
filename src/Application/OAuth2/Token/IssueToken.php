@@ -12,6 +12,9 @@ declare(strict_types=1);
 namespace Clavia\Application\OAuth2\Token;
 
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
+use Clavia\Application\OAuth2\ClientAuthentication\ClientFailureThrottle;
+use Clavia\Application\OAuth2\ClientAuthentication\TooManyFailedRequests;
+use Clavia\Domain\OAuth2\ErrorCode;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\OAuth2\OAuth2Error;
@@ -19,6 +22,10 @@ use Clavia\Domain\OAuth2\OAuth2Error;
 /**
  * The token endpoint (RFC 6749 §3.2): authenticate the client, check it may use the
  * grant it asks for, and let that grant issue the token.
+ *
+ * A grant refused as `invalid_grant` — a wrong code or verifier, a replayed or unknown
+ * refresh token, an unknown device code — counts as a failure ({@see ClientFailureThrottle}).
+ * Answers a device is told to wait with (`authorization_pending`, `slow_down`) do not.
  */
 final readonly class IssueToken
 {
@@ -27,6 +34,7 @@ final readonly class IssueToken
 
     public function __construct(
         private ClientAuthenticator $authenticator,
+        private ClientFailureThrottle $throttle,
         Grant ...$grants,
     ) {
         $byType = [];
@@ -38,6 +46,7 @@ final readonly class IssueToken
 
     /**
      * @throws OAuth2Error
+     * @throws TooManyFailedRequests
      */
     public function __invoke(TokenRequest $request): IssuedToken
     {
@@ -69,7 +78,15 @@ final readonly class IssueToken
             );
         }
 
-        return $grant->issue($parameters, $client);
+        try {
+            return $grant->issue($parameters, $client);
+        } catch (OAuth2Error $error) {
+            if ($error->error === ErrorCode::InvalidGrant) {
+                $this->throttle->recordRejectedGrant($request->clientAddress, $client);
+            }
+
+            throw $error;
+        }
     }
 
     /**

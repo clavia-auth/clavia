@@ -170,6 +170,16 @@ final readonly class Settings
         public int $loginMaxAttempts = 10,
         #[Range(min: 1)]
         public int $loginAttemptWindow = 900,
+        /**
+         * Failed requests at the token, introspection, revocation and device authorization
+         * endpoints, per client address and per client that proved itself with a secret, before
+         * those endpoints answer `429`. Only failures count: a wrong secret, a rejected grant.
+         */
+        #[Range(min: 1)]
+        public int $tokenMaxFailures = 20,
+        /** How long such a failure counts, seconds; every new one restarts it. */
+        #[Range(min: 1)]
+        public int $tokenFailureWindow = 300,
         /** How long the audit trail keeps an event, days; `clavia audit:purge` removes what is older. */
         #[Range(min: 1)]
         public int $auditRetentionDays = 90,

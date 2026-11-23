@@ -13,6 +13,7 @@ namespace Clavia\Adapter\Primary\Http\OAuth2;
 
 use Clavia\Adapter\Primary\Http\Shared\ErrorPage;
 use Clavia\Adapter\Primary\Http\Shared\ErrorResponder;
+use Clavia\Application\OAuth2\ClientAuthentication\TooManyFailedRequests;
 use Clavia\Domain\OAuth2\ErrorCode;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use Laminas\Diactoros\Response\JsonResponse;
@@ -85,6 +86,27 @@ final readonly class OAuth2Responder
         }
 
         return new JsonResponse(self::document($error), 400, self::NO_STORE);
+    }
+
+    /**
+     * Too many failed requests: `429` (RFC 6585 §4) with `Retry-After` (RFC 9110 §10.2.3),
+     * before the request was looked at.
+     *
+     * RFC 6749 registers no error code for the token endpoint to say this with, so the body
+     * uses the one it gives the authorization endpoint for the same condition,
+     * `temporarily_unavailable` (§4.1.2.1): a client reading only `error` still sees that
+     * waiting is the remedy.
+     */
+    public function tooManyFailures(TooManyFailedRequests $refusal): ResponseInterface
+    {
+        return new JsonResponse(
+            [
+                'error' => ErrorCode::TemporarilyUnavailable->value,
+                'error_description' => 'Too many failed requests. Retry later.',
+            ],
+            429,
+            self::NO_STORE + ['Retry-After' => (string) $refusal->retryAfter],
+        );
     }
 
     /**

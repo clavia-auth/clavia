@@ -363,6 +363,17 @@ never tried in turn, and mixing them is refused. The method must equal the clien
 `token_endpoint_auth_method`, so the right secret through the wrong door fails. Every failure
 is the same `invalid_client` (401 with `WWW-Authenticate` at the token endpoint).
 
+**Failures are limited** (`ClientFailureThrottle`) at the four endpoints that authenticate a
+client: token, introspection, revocation, device authorization. Only failures count, so a busy,
+well-behaved client is never refused. Every `invalid_client` counts against the client address
+(`REMOTE_ADDR`); a grant refused as `invalid_grant` counts against the address and, when the
+client proved itself with a secret, against the client. A client id alone is never a subject:
+it is not secret (a public client's is in every authorization URL), and counting failures under it
+would let anyone lock that client out. Past `CLAVIA_TOKEN_MAX_FAILURES` within
+`CLAVIA_TOKEN_FAILURE_WINDOW` (every failure restarts it) the endpoint answers `429` with
+`Retry-After` and `temporarily_unavailable`, before any secret is checked, which also bounds
+the bcrypt work an address can cause. `authorization_pending` and `slow_down` are not failures.
+
 ### Sign-in
 
 All first factors end at `SignIn\CompleteFirstFactor`, which either establishes the session or,
@@ -663,6 +674,8 @@ These follow from the RFCs and from mistakes already made once. Breaking one is 
   wildcard, and a URI is appended to, never parsed and rebuilt.
 - Refresh tokens rotate on every use; a replay revokes the family. No grace period.
 - Client credentials: confidential clients only, no refresh token, no subject.
+- Failures at the machine endpoints are counted per client address, and per client only once it
+  has proved itself with a secret: nobody locks a client out by sending its id.
 - A scope means nothing without an audience: check `aud` before any scope.
 - A permission belongs to an API, and a client holds none of its own. Scope is narrowed at
   issuance (the API's permissions, then the person's roles or the machine's grant) and

@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Management;
 
-use Clavia\Adapter\Primary\Http\Auth\ClientAddress;
+use Clavia\Adapter\Primary\Http\Shared\ClientAddress;
 use Clavia\Application\Management\Users\PasswordLinkRefused;
 use Clavia\Application\Management\Users\SendPasswordLink;
 use Clavia\Domain\Identity\UserId;

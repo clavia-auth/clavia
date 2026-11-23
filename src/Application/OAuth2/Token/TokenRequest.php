@@ -22,15 +22,17 @@ final readonly class TokenRequest
     /**
      * @param RequestParameters $parameters          The form body, unvalidated.
      * @param string|null       $authorizationHeader The raw `Authorization` header, when there is one.
+     * @param string            $clientAddress       The address the request came from, as the web server saw it.
      */
     public function __construct(
         public RequestParameters $parameters,
         #[\SensitiveParameter] public ?string $authorizationHeader,
+        public string $clientAddress,
     ) {
     }
 
     public function credentials(): ClientCredentials
     {
-        return new ClientCredentials($this->authorizationHeader, $this->parameters);
+        return new ClientCredentials($this->authorizationHeader, $this->parameters, $this->clientAddress);
     }
 }

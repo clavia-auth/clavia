@@ -43,6 +43,9 @@ abstract class AcceptanceTestCase extends TestCase
 
     protected RecordingLogger $logger;
 
+    /** The address every request comes from (`REMOTE_ADDR`), until {@see comeFrom()} changes it. */
+    private string $clientAddress = '203.0.113.7';
+
     private ?ServiceManager $container = null;
     private ?Application $application = null;
     private int $errorReporting = E_ALL;
@@ -113,6 +116,12 @@ abstract class AcceptanceTestCase extends TestCase
         return $this->application = $application;
     }
 
+    /** Send the next requests from another client address, as another machine would. */
+    protected function comeFrom(string $address): void
+    {
+        $this->clientAddress = $address;
+    }
+
     /**
      * Stop the application's clock, so a test can move time instead of waiting for it.
      * Call before the first request: services read the clock they were built with.
@@ -159,7 +168,7 @@ abstract class AcceptanceTestCase extends TestCase
         }
 
         $request = new ServerRequest(
-            serverParams: ['REMOTE_ADDR' => '203.0.113.7'],
+            serverParams: ['REMOTE_ADDR' => $this->clientAddress],
             uri: 'https://' . $host . $path,
             method: $method,
             body: $stream,

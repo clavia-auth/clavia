@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
+use Clavia\Application\OAuth2\ClientAuthentication\ClientFailureThrottle;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Domain\Client\ClientRepository;
 use Psr\Container\ContainerInterface;
@@ -25,6 +26,9 @@ final class ClientAuthenticatorFactory
         /** @var PasswordHasher $hasher */
         $hasher = $container->get(PasswordHasher::class);
 
-        return new ClientAuthenticator($clients, $hasher);
+        /** @var ClientFailureThrottle $throttle */
+        $throttle = $container->get(ClientFailureThrottle::class);
+
+        return new ClientAuthenticator($clients, $hasher, $throttle);
     }
 }

@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
+use Clavia\Application\OAuth2\ClientAuthentication\ClientFailureThrottle;
 use Clavia\Application\OAuth2\Token\AuthorizationCodeGrant;
 use Clavia\Application\OAuth2\Token\ClientCredentialsGrant;
 use Clavia\Application\OAuth2\Token\DeviceCodeGrant;
@@ -25,6 +26,8 @@ final class IssueTokenFactory
     {
         /** @var ClientAuthenticator $authenticator */
         $authenticator = $container->get(ClientAuthenticator::class);
+        /** @var ClientFailureThrottle $throttle */
+        $throttle = $container->get(ClientFailureThrottle::class);
         /** @var AuthorizationCodeGrant $authorizationCode */
         $authorizationCode = $container->get(AuthorizationCodeGrant::class);
         /** @var ClientCredentialsGrant $clientCredentials */
@@ -35,6 +38,13 @@ final class IssueTokenFactory
         $deviceCode = $container->get(DeviceCodeGrant::class);
 
         // Every grant the token endpoint offers. A grant not listed here does not exist.
-        return new IssueToken($authenticator, $authorizationCode, $clientCredentials, $refreshToken, $deviceCode);
+        return new IssueToken(
+            $authenticator,
+            $throttle,
+            $authorizationCode,
+            $clientCredentials,
+            $refreshToken,
+            $deviceCode
+        );
     }
 }

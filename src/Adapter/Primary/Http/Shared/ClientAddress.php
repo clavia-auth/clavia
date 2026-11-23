@@ -9,7 +9,7 @@
 
 declare(strict_types=1);
 
-namespace Clavia\Adapter\Primary\Http\Auth;
+namespace Clavia\Adapter\Primary\Http\Shared;
 
 use Psr\Http\Message\ServerRequestInterface;
 
