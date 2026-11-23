@@ -12,16 +12,42 @@
     published by .github/workflows/docs.yml. See docs/RELEASING.md.
   -->
   <style>
+    /*
+      Type and spacing of Clavia's own pages (public/auth/static/auth.css): the system font, 15px
+      on a 1.5 line, rather than a web font fetched from elsewhere (withDefaultFonts: false).
+    */
     :root {
-      --clavia-bar-height: 48px;
+      --clavia-bar-height: 52px;
+      --clavia-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      --clavia-font-code: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
       --scalar-custom-header-height: var(--clavia-bar-height);
     }
-    /* Clavia's green (public/auth/static/auth.css), as Scalar's accent. */
-    .light-mode {
+    .scalar-app, .clavia-bar {
+      --scalar-font: var(--clavia-font);
+      --scalar-font-code: var(--clavia-font-code);
+      /* Prose at Clavia's 15px; the rest of Scalar's scale (navigation, labels) as it is. */
+      --scalar-font-size-2: 15px;
+      --scalar-line-height-1: 1.5;
+      --scalar-line-height-2: 1.55;
+      --scalar-line-height-3: 1.6;
+      --scalar-code-line-height: 1.6;
+      --scalar-radius: 6px;
+      --scalar-radius-lg: 8px;
+      --scalar-radius-xl: 10px;
+      --scalar-sidebar-width: 288px;
+      --scalar-sidebar-padding: 14px;
+      --scalar-content-max-width: 1320px;
+    }
+    /*
+      Clavia's green (public/auth/static/auth.css), as Scalar's accent. Declared on the app's own
+      element: Scalar declares its theme on .light-mode / .dark-mode and :root, after this sheet, and
+      a variable declared nearer the elements that read it wins whatever the order.
+    */
+    .light-mode .scalar-app, .light-mode.scalar-app {
       --scalar-color-accent: #2d6a4f;
       --scalar-background-accent: #2d6a4f1a;
     }
-    .dark-mode {
+    .dark-mode .scalar-app, .dark-mode.scalar-app {
       --scalar-color-accent: #52b788;
       --scalar-background-accent: #52b7881f;
     }
@@ -34,9 +60,9 @@
       height: var(--clavia-bar-height);
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 0 16px;
-      font: 500 14px/1 var(--scalar-font, system-ui, sans-serif);
+      gap: 14px;
+      padding: 0 20px;
+      font: 500 15px/1 var(--clavia-font);
       color: var(--scalar-color-1, #1b1b1b);
       background: var(--scalar-background-1, #fff);
       border-bottom: 1px solid var(--scalar-border-color, #e5e5e5);
@@ -79,8 +105,13 @@
       // A reference, not a workbench: no developer toolbar (shown on localhost by default), and no
       // "Test request", which could not reach a reader's server from this page anyway.
       showDeveloperTools: 'never',
+      // Nor Scalar's "Ask AI", a service of Scalar's own (on by default on localhost).
+      agent: { disabled: true },
       hideClientButton: true,
       hideTestRequestButton: true,
+      // The schemas are in each operation, where they are read; a separate list repeats them.
+      hideModels: true,
+      withDefaultFonts: false,
       defaultHttpClient: { targetKey: 'shell', clientKey: 'curl' },
       // Never a real host: the reader types their own domain.
       servers: [{

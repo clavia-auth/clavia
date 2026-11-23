@@ -70,6 +70,35 @@ final class ManagementDocumentationTest extends TestCase
         self::assertSame([], array_values(array_diff($declared, $used)), 'Tags no operation uses.');
     }
 
+    public function testEveryTagSitsInExactlyOneGroupInTheTagsOrder(): void
+    {
+        $tags = self::document()['tags'] ?? null;
+        self::assertIsArray($tags);
+        $declared = array_map(static function (mixed $tag): string {
+            self::assertIsArray($tag);
+            self::assertIsString($tag['name']);
+
+            return $tag['name'];
+        }, array_values($tags));
+
+        $groups = self::document()['x-tagGroups'] ?? null;
+        self::assertIsArray($groups, 'The sidebar has no x-tagGroups.');
+        $grouped = [];
+        foreach ($groups as $group) {
+            self::assertIsArray($group);
+            self::assertIsString($group['name'] ?? null);
+            self::assertIsArray($group['tags'] ?? null, $group['name'] . ' has no tags.');
+            foreach ($group['tags'] as $tag) {
+                self::assertIsString($tag);
+                $grouped[] = $tag;
+            }
+        }
+
+        // Each tag once, none forgotten (a tag outside every group vanishes from the sidebar), and
+        // the groups read in the order the tags are declared.
+        self::assertSame($declared, $grouped);
+    }
+
     /** @return array<string, array<array-key, mixed>> Operations by `METHOD path`. */
     private static function operations(): array
     {
