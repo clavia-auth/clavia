@@ -1,0 +1,3363 @@
+openapi: 3.0.3
+
+info:
+  title: Clavia Management API
+  version: 1.0.0
+  license:
+    name: BSD-3-Clause
+    url: https://opensource.org/licenses/BSD-3-Clause
+  description: |
+    Administration of a Clavia deployment: end users, client applications, the APIs
+    tokens are issued for, and the roles that grant people permissions on them.
+
+    **A machine plane.** Every operation takes a bearer access token issued for this API
+    (its `aud` is the Management API identifier, `https://management.{domain}/api/v1/` by
+    default) and carrying the scope the operation names. The browser session of
+    `auth.{domain}` is never accepted here, and neither is a token in the query string or
+    the body. Checks are made in this order: the token is live (known, unrevoked,
+    unexpired, its subject still active), it was issued for this API, it carries the
+    scope. Failures are RFC 6750 challenges.
+
+    **This document is the contract.** Every request is validated against it before it
+    reaches the application: a body carrying a field not described here is refused, not
+    ignored. Errors other than authentication failures are RFC 9457 problem documents.
+
+    **Secrets appear once.** A password is never returned; a client secret only in the
+    response that creates or rotates it.
+
+    There is no endpoint that grants a client access to an API: a scope that could write
+    client grants would be the scope that grants every other scope. Grants are written
+    from the shell (`clavia clients:grant`).
+
+servers:
+  - url: /
+
+tags:
+  - name: users
+    description: End users — the resource owners, and the subjects of ID tokens.
+  - name: clients
+    description: Applications registered to obtain tokens.
+  - name: resource-servers
+    description: The APIs tokens are issued for, and the permissions each defines.
+  - name: roles
+    description: |
+      Named sets of permissions, across APIs, that users are given. On an API that enforces
+      roles, a person's token carries only what their roles grant there.
+  - name: connections
+    description: |
+      The ways people sign in — pools of accounts with passwords, social providers, OpenID
+      Connect providers — and which applications may use each.
+  - name: signing-keys
+    description: |
+      The keys ID tokens, logout tokens and JWT access tokens are signed with, for the
+      `postgres` backend, whose keys this server keeps. Never any key material: the public
+      keys are the JWKS's to publish (`/oidc/jwks.json`), and the private ones never leave the
+      backend. With any other backend the keys live at the provider and are rotated there;
+      both operations answer 409.
+  - name: initial-access-tokens
+    description: |
+      What lets software register itself as a client at `/oauth2/register` (RFC 7591 §3): a
+      token an operator hands to a partner, good for a number of registrations until a date,
+      revocable. A client registered with one is always third-party, so it never reaches a system
+      API. The token is shown once, when it is issued; only its digest is kept.
+  - name: audit
+    description: |
+      The audit trail: sign-ins, sessions, consents, tokens and every change to the
+      configuration, append-only and kept for CLAVIA_AUDIT_RETENTION_DAYS. Read-only.
+
+paths:
+  /api/v1/users:
+    get:
+      tags: [users]
+      operationId: listUsers
+      summary: List users, newest first, optionally searching the email address.
+      security:
+        - managementToken: [read:users]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200':
+          description: One page of users.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    post:
+      tags: [users]
+      operationId: createUser
+      summary: Create a user, with a password or to be invited.
+      description: |
+        A password is hashed and never returned. Without one the account has none yet
+        (`has_password` is `false`): it cannot sign in with a password, and its person
+        chooses one from the link `POST /api/v1/users/{user_id}/password-reset` mails them,
+        an invitation.
+      security:
+        - managementToken: [create:users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+      responses:
+        '201':
+          description: The user, as created.
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/users/{user_id}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [users]
+      operationId: getUser
+      summary: Read one user.
+      security:
+        - managementToken: [read:users]
+      responses:
+        '200':
+          description: The user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    patch:
+      tags: [users]
+      operationId: updateUser
+      summary: Change some of a user's fields; absent fields are left alone.
+      description: |
+        A profile field set to `null` is cleared. A new email address is unverified
+        unless the same request says otherwise. Deactivating an account stops every
+        session and token it holds from being accepted on their next use.
+      security:
+        - managementToken: [update:users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+      responses:
+        '200':
+          description: The user, as updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    delete:
+      tags: [users]
+      operationId: deleteUser
+      summary: Delete a user, and every code and token issued on their behalf.
+      description: Refused for the account the token is acting as.
+      security:
+        - managementToken: [delete:users]
+      responses:
+        '204':
+          description: Deleted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/users/{user_id}/mfa:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    delete:
+      tags: [users]
+      operationId: resetUserMfa
+      summary: Turn a user's two-factor authentication off.
+      description: |
+        The way back for someone who lost both their authenticator and their recovery
+        codes: every second factor and every recovery code of the account is removed,
+        and the next sign-in is by password alone. Idempotent — the user's
+        two-factor authentication is off afterwards, whether it was on or not.
+      security:
+        - managementToken: [update:users]
+      responses:
+        '204':
+          description: Two-factor authentication is off.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/users/{user_id}/password-reset:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    post:
+      tags: [users]
+      operationId: sendUserPasswordLink
+      summary: Mail a user a link to choose a password.
+      description: |
+        An invitation for an account that has no password yet, a reset for one that has: the
+        same one-time link the sign-in page mails to whoever asks, worded for each. It works
+        once, expires after `CLAVIA_RESET_LINK_LIFETIME`, and dies as soon as the account's
+        password or address changes. Choosing a password verifies the address and ends every
+        session of the account.
+
+        Unlike the public form, the caller is told how it went. Mail counts against the
+        account send limit per address and per client address, so a user cannot be flooded.
+        Only an account in a pool has a password; a deactivated account is refused.
+      security:
+        - managementToken: [create:user_tickets]
+      responses:
+        '202':
+          description: The email was sent and the link is open.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordLinkSent'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /api/v1/users/{user_id}/consents:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [users]
+      operationId: listUserConsents
+      summary: The applications a user allowed to act as them, and what they allowed.
+      description: |
+        Only what the user was actually asked on the consent screen: a first-party
+        application that did without it has nothing here. Oldest first.
+      security:
+        - managementToken: [read:users]
+      responses:
+        '200':
+          description: The user's consents.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserConsent'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/users/{user_id}/consents/{client_id}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+      - $ref: '#/components/parameters/ClientId'
+    delete:
+      tags: [users]
+      operationId: withdrawUserConsent
+      summary: Withdraw everything a user allowed one application, on every API.
+      description: |
+        The application's next authorization request asks again. Tokens it already holds
+        run to their own expiry. Idempotent: nothing to withdraw is still withdrawn; only
+        an unknown user is a 404.
+      security:
+        - managementToken: [update:users]
+      responses:
+        '204':
+          description: Withdrawn.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/users/{user_id}/sessions:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [users]
+      operationId: listUserSessions
+      summary: A user's browser sessions, with the applications that signed in through each.
+      description: |
+        Oldest first. Device approvals are not sessions and are not here.
+      security:
+        - managementToken: [read:users]
+      responses:
+        '200':
+          description: The user's sessions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    delete:
+      tags: [users]
+      operationId: endUserSessions
+      summary: Sign a user out everywhere.
+      description: |
+        Ends every browser session and, after the response, posts a logout token to each
+        application that signed in through one of them and registered a back-channel logout
+        URI. Tokens already issued are not revoked (`/oauth2/revoke` does that). Idempotent:
+        a user with no session is already signed out everywhere.
+      security:
+        - managementToken: [update:users]
+      responses:
+        '204':
+          description: Signed out everywhere.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/users/{user_id}/sessions/{sid}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+      - $ref: '#/components/parameters/Sid'
+    delete:
+      tags: [users]
+      operationId: endUserSession
+      summary: End one session, by its sid, and tell its applications.
+      security:
+        - managementToken: [update:users]
+      responses:
+        '204':
+          description: Ended.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/users/{user_id}/identities:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [users, connections]
+      operationId: listUserIdentities
+      summary: The accounts at external providers linked to this one.
+      security:
+        - managementToken: [read:users]
+      responses:
+        '200':
+          description: The identities, by connection, then subject.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Identity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/users/{user_id}/identities/{connection}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+      - $ref: '#/components/parameters/IdentityConnection'
+    delete:
+      tags: [users, connections]
+      operationId: unlinkUserIdentity
+      summary: Detach the account's identity at an external provider.
+      description: |
+        Signing in through that provider again makes a new account, or links by address as
+        a first sign-in would. Refused (409) when it is the account's only way in: no
+        password it could use and nothing else linked.
+      security:
+        - managementToken: [update:users]
+      responses:
+        '204':
+          description: Unlinked.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/users/{user_id}/passkeys:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [users]
+      operationId: listUserPasskeys
+      summary: The account's passkeys.
+      description: |
+        What each is called, whether a credential manager syncs it, its maker when known, and
+        when it was added and last used: never its credential id or its key. Oldest first.
+      security:
+        - managementToken: [read:users]
+      responses:
+        '200':
+          description: The passkeys.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserPasskey'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/users/{user_id}/passkeys/{passkey_id}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+      - $ref: '#/components/parameters/PasskeyId'
+    delete:
+      tags: [users]
+      operationId: removeUserPasskey
+      summary: Remove one of the account's passkeys.
+      description: |
+        For somebody who lost the device it lived on. One at a time, so an operator sees what
+        they remove; the authenticator app and the recovery codes are
+        `DELETE /api/v1/users/{user_id}/mfa`. A passkey of another account is not found.
+      security:
+        - managementToken: [update:users]
+      responses:
+        '204':
+          description: Removed.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/users/{user_id}/roles:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [users, roles]
+      operationId: listUserRoles
+      summary: The roles a user holds, by name.
+      security:
+        - managementToken: [read:users]
+      responses:
+        '200':
+          description: The user's roles.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Role'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    put:
+      tags: [users, roles]
+      operationId: setUserRoles
+      summary: Make a user hold exactly these roles.
+      description: |
+        Needs `update:roles`, not `update:users`: this confers authority, and conferring it
+        takes the scope that guards authority wherever it happens. Refused whole (404) when
+        one of the roles does not exist. Takes effect on the user's next token.
+      security:
+        - managementToken: [update:roles]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleIds'
+      responses:
+        '200':
+          description: The roles the user holds now, by name.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Role'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/users/{user_id}/permissions:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [users, roles]
+      operationId: listUserPermissions
+      summary: Every permission a user holds through their roles, and which roles grant each.
+      description: |
+        Several roles can grant the same permission; all of them are listed, because
+        taking one away does not necessarily take the permission.
+      security:
+        - managementToken: [read:users]
+      responses:
+        '200':
+          description: The permissions, by API identifier, then value.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EffectivePermission'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/clients:
+    get:
+      tags: [clients]
+      operationId: listClients
+      summary: List clients, newest first, optionally searching the id and the name.
+      security:
+        - managementToken: [read:clients]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200':
+          description: One page of clients.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    post:
+      tags: [clients]
+      operationId: createClient
+      summary: Register a client. Its id — and, when confidential, its secret — are generated.
+      description: |
+        The secret is in this response and nowhere else: only its hash is kept. A
+        registration that no flow could serve is refused — a confidential client without
+        a secret method, a public one with one, the client credentials grant for a public
+        client, the code flow without a redirect URI or with only half of it.
+      security:
+        - managementToken: [create:clients]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientCreate'
+      responses:
+        '201':
+          description: The client, with its secret.
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientWithSecret'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/clients/{client_id}:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [clients]
+      operationId: getClient
+      summary: Read one client. Its secret is never part of it.
+      security:
+        - managementToken: [read:clients]
+      responses:
+        '200':
+          description: The client.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    patch:
+      tags: [clients]
+      operationId: updateClient
+      summary: Change some of a client's registration; the result is checked as a new one would be.
+      description: The type is not changeable — switching between public and confidential is a different client.
+      security:
+        - managementToken: [update:clients]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientUpdate'
+      responses:
+        '200':
+          description: The client, as updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    delete:
+      tags: [clients]
+      operationId: deleteClient
+      summary: Delete a client, and every code, token and grant it holds.
+      description: Refused for the client the token was issued to.
+      security:
+        - managementToken: [delete:clients]
+      responses:
+        '204':
+          description: Deleted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/clients/{client_id}/rotate-secret:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    post:
+      tags: [clients]
+      operationId: rotateClientSecret
+      summary: Replace a confidential client's secret. The old one stops working at once.
+      description: Tokens already issued are not affected; only the next token request needs the new secret.
+      security:
+        - managementToken: [update:clients]
+      responses:
+        '200':
+          description: The client, with its new secret.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientWithSecret'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/clients/{client_id}/connections:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    put:
+      tags: [clients, connections]
+      operationId: setClientConnections
+      summary: Replace the connections an application's users may sign in through.
+      description: |
+        Takes effect at the next sign-in: a session established through a connection the
+        application stops enabling no longer counts for it. A third-party application
+        cannot be given a list (422): it uses the domain connections.
+        An unknown connection is a 404, and nothing changes.
+      security:
+        - managementToken: [update:clients]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectionNames'
+      responses:
+        '200':
+          description: The connections it enables now, by name.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ConnectionName'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/connections:
+    get:
+      tags: [connections]
+      operationId: listConnections
+      summary: Every connection, by name, with whether it can work.
+      security:
+        - managementToken: [read:connections]
+      responses:
+        '200':
+          description: The connections. Few by nature, so not paged.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Connection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    post:
+      tags: [connections]
+      operationId: createConnection
+      summary: Create a pool of accounts, or register an OpenID Connect provider.
+      description: |
+        The name is permanent: accounts, sessions and identities record it, and for an OIDC
+        connection it is part of the callback URL registered at the provider,
+        `https://auth.{domain}/auth/social/{name}/callback`. A provider is discovered now —
+        an issuer that does not answer, or names endpoints this server must not fetch, is
+        refused (422) — and its client secret is stored encrypted and never returned.
+        Social connections are built in: switched, not created.
+      security:
+        - managementToken: [create:connections]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectionCreate'
+      responses:
+        '201':
+          description: The connection.
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Connection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/connections/{name}:
+    parameters:
+      - $ref: '#/components/parameters/ConnectionNameParameter'
+    get:
+      tags: [connections]
+      operationId: getConnection
+      summary: Read one connection.
+      security:
+        - managementToken: [read:connections]
+      responses:
+        '200':
+          description: The connection.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Connection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    patch:
+      tags: [connections]
+      operationId: updateConnection
+      summary: Switch a connection, open it to third parties, rename it, or change its provider settings.
+      description: |
+        Switching one off takes effect at the next sign-in: sessions established through it
+        stand until they end. A social connection the deployment has no credentials for can
+        be switched on — the intent is recorded — but stays unusable until it is configured.
+        Changed OIDC settings are discovered again; a new secret replaces the old one.
+      security:
+        - managementToken: [update:connections]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectionUpdate'
+      responses:
+        '200':
+          description: The connection, as updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Connection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    delete:
+      tags: [connections]
+      operationId: deleteConnection
+      summary: Delete a pool or an OpenID Connect provider nothing depends on.
+      description: |
+        Refused (409) while accounts belong to it or identities are linked through it, and
+        for a built-in connection — the social ones and the default pool — which is
+        switched off instead. Applications that enabled it stop listing it.
+      security:
+        - managementToken: [delete:connections]
+      responses:
+        '204':
+          description: Deleted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/resource-servers:
+    get:
+      tags: [resource-servers]
+      operationId: listResourceServers
+      summary: List APIs, newest first, optionally searching the identifier and the name.
+      security:
+        - managementToken: [read:resource_servers]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200':
+          description: One page of APIs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceServerPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    post:
+      tags: [resource-servers]
+      operationId: createResourceServer
+      summary: Register an API.
+      description: A system API — one the server depends on — cannot be created here.
+      security:
+        - managementToken: [create:resource_servers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceServerCreate'
+      responses:
+        '201':
+          description: The API, as registered.
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceServer'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/resource-servers/{resource_server_id}:
+    parameters:
+      - $ref: '#/components/parameters/ResourceServerId'
+    get:
+      tags: [resource-servers]
+      operationId: getResourceServer
+      summary: Read one API.
+      security:
+        - managementToken: [read:resource_servers]
+      responses:
+        '200':
+          description: The API.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceServer'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    patch:
+      tags: [resource-servers]
+      operationId: updateResourceServer
+      summary: Rename an API, or replace the permissions it defines.
+      description: |
+        The identifier never changes: it is the `aud` of every token already issued.
+        A system API may be renamed, but its permissions are the server's own (409).
+      security:
+        - managementToken: [update:resource_servers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceServerUpdate'
+      responses:
+        '200':
+          description: The API, as updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceServer'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    delete:
+      tags: [resource-servers]
+      operationId: deleteResourceServer
+      summary: Delete an API, its permissions and every client grant on it.
+      description: Refused for a system API (409). Every role stops granting its permissions.
+      security:
+        - managementToken: [delete:resource_servers]
+      responses:
+        '204':
+          description: Deleted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/roles:
+    get:
+      tags: [roles]
+      operationId: listRoles
+      summary: List roles, newest first, optionally searching the name and the description.
+      security:
+        - managementToken: [read:roles]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200':
+          description: One page of roles.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    post:
+      tags: [roles]
+      operationId: createRole
+      summary: Define a role, and the permissions it grants.
+      description: A permission an API does not define is refused (422).
+      security:
+        - managementToken: [create:roles]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleCreate'
+      responses:
+        '201':
+          description: The role, as defined.
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleWithPermissions'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/roles/{role_id}:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+    get:
+      tags: [roles]
+      operationId: getRole
+      summary: Read one role, with the permissions it grants.
+      security:
+        - managementToken: [read:roles]
+      responses:
+        '200':
+          description: The role.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleWithPermissions'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    patch:
+      tags: [roles]
+      operationId: updateRole
+      summary: Rename a role, describe it, or replace the permissions it grants.
+      description: |
+        `permissions`, when present, is the whole new set. Takes effect on the next token
+        each holder obtains: roles are read at issuance, never trusted from a token.
+      security:
+        - managementToken: [update:roles]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleUpdate'
+      responses:
+        '200':
+          description: The role, as updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleWithPermissions'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    delete:
+      tags: [roles]
+      operationId: deleteRole
+      summary: Delete a role, and every assignment of it.
+      description: Its holders lose what it granted at their next token.
+      security:
+        - managementToken: [delete:roles]
+      responses:
+        '204':
+          description: Deleted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/roles/{role_id}/users:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+    get:
+      tags: [roles]
+      operationId: listRoleUsers
+      summary: The users holding a role, most recently given first.
+      security:
+        - managementToken: [read:roles]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+      responses:
+        '200':
+          description: One page of users.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    post:
+      tags: [roles]
+      operationId: assignRole
+      summary: Give a role to some users.
+      description: |
+        Idempotent: giving it to somebody who holds it changes nothing. Refused whole (404)
+        when one of the users does not exist.
+      security:
+        - managementToken: [update:roles]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserIds'
+      responses:
+        '204':
+          description: Every user named holds the role.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/roles/{role_id}/users/{user_id}:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+      - $ref: '#/components/parameters/UserId'
+    delete:
+      tags: [roles]
+      operationId: unassignRole
+      summary: Take a role from a user.
+      description: Idempotent — the user does not hold the role afterwards, whether they did or not.
+      security:
+        - managementToken: [update:roles]
+      responses:
+        '204':
+          description: The user does not hold the role.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/signing-keys:
+    get:
+      tags: [signing-keys]
+      operationId: listSigningKeys
+      summary: The signing keys, newest first.
+      description: |
+        The active key, and every retired one with when it stopped signing and how long it stays
+        published. A retired key stays in the JWKS until every token it signed has expired.
+      security:
+        - managementToken: [read:signing_keys]
+      responses:
+        '200':
+          description: The keys.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SigningKey'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/v1/signing-keys/rotate:
+    post:
+      tags: [signing-keys]
+      operationId: rotateSigningKey
+      summary: Replace the active signing key.
+      description: |
+        A new key signs from now on. The one it replaces stops signing at once and stays in the
+        JWKS for the grace period — twice the longest token lifetime, plus a day — so every
+        token it signed keeps verifying until it expires. Relying parties that refetch the JWKS
+        on an unknown `kid` find the new key straight away. Recorded as `signing_key.rotated`.
+      security:
+        - managementToken: [create:signing_keys]
+      responses:
+        '200':
+          description: The key that signs now, and the one it replaced.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SigningKeyRotation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /api/v1/initial-access-tokens:
+    get:
+      tags: [initial-access-tokens]
+      operationId: listInitialAccessTokens
+      summary: List initial access tokens, newest first, optionally searching the description.
+      description: Never a token's value, which is not kept.
+      security:
+        - managementToken: [read:initial_access_tokens]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200':
+          description: One page of initial access tokens.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InitialAccessTokenPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    post:
+      tags: [initial-access-tokens]
+      operationId: issueInitialAccessToken
+      summary: Issue an initial access token.
+      description: |
+        The answer carries the token, once: store it or hand it over now, it cannot be read
+        again. Registration must also be switched on (`CLAVIA_CLIENT_REGISTRATION=token`) for the
+        token to register anything. Recorded as `initial_access_token.issued`.
+      security:
+        - managementToken: [create:initial_access_tokens]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitialAccessTokenCreate'
+      responses:
+        '201':
+          description: The token, with its value.
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssuedInitialAccessToken'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/initial-access-tokens/{initial_access_token_id}:
+    parameters:
+      - $ref: '#/components/parameters/InitialAccessTokenId'
+    delete:
+      tags: [initial-access-tokens]
+      operationId: revokeInitialAccessToken
+      summary: Revoke an initial access token.
+      description: |
+        It registers nothing more, at once. The clients it registered keep working. Revoking a
+        revoked token changes nothing. Recorded as `initial_access_token.revoked`.
+      security:
+        - managementToken: [delete:initial_access_tokens]
+      responses:
+        '204':
+          description: Revoked.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/v1/audit-events:
+    get:
+      tags: [audit]
+      operationId: listAuditEvents
+      summary: Read the audit trail, newest first.
+      description: |
+        Every filter given must hold. `client_id` matches the application that acted or that
+        a person acted through; `target_type` and `target_id` go together.
+      security:
+        - managementToken: [read:audit_events]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - name: type
+          in: query
+          description: One or more event types, comma-separated.
+          schema:
+            type: string
+            maxLength: 1024
+        - name: actor_user_id
+          in: query
+          description: The person who acted.
+          schema:
+            type: string
+            format: uuid
+        - name: client_id
+          in: query
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+        - name: target_type
+          in: query
+          schema:
+            $ref: '#/components/schemas/AuditTargetType'
+        - name: target_id
+          in: query
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+        - name: outcome
+          in: query
+          schema:
+            $ref: '#/components/schemas/AuditOutcome'
+        - name: since
+          in: query
+          description: From this instant, included.
+          schema:
+            type: string
+            format: date-time
+        - name: until
+          in: query
+          description: Up to this instant, excluded.
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: One page of audit events.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEventPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+components:
+  securitySchemes:
+    managementToken:
+      type: oauth2
+      description: |
+        An access token whose audience is the Management API. A machine client obtains one
+        with the client credentials grant, naming the API in `audience`, within the scopes
+        its client grant allows. A person — through the dashboard — obtains one with the
+        authorization code grant, within what their roles grant on this API.
+      flows:
+        clientCredentials:
+          tokenUrl: /oauth2/token
+          scopes:
+            read:users: View end users
+            create:users: Create end users
+            update:users: Modify end users
+            delete:users: Delete end users
+            read:clients: View client applications
+            create:clients: Create client applications
+            update:clients: Modify client applications
+            delete:clients: Delete client applications
+            read:resource_servers: View APIs
+            create:resource_servers: Create APIs
+            update:resource_servers: Modify APIs
+            delete:resource_servers: Delete APIs
+            read:roles: View roles and who holds them
+            create:roles: Create roles and who holds them
+            update:roles: Modify roles and who holds them
+            delete:roles: Delete roles and who holds them
+            read:connections: View connections
+            create:connections: Create pools and OpenID Connect providers
+            update:connections: Switch, rename and reconfigure connections
+            delete:connections: Delete pools and OpenID Connect providers nothing depends on
+            create:user_tickets: Mail end users a link to choose a password
+            read:audit_events: Read the audit trail
+            read:signing_keys: View the keys tokens are signed with
+            create:signing_keys: Rotate the signing key
+            read:initial_access_tokens: View the initial access tokens issued
+            create:initial_access_tokens: Issue initial access tokens, which register third-party clients
+            delete:initial_access_tokens: Revoke initial access tokens
+
+  headers:
+    Location:
+      description: Where the created resource can be read.
+      schema:
+        type: string
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      description: 1-based page number.
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PerPage:
+      name: per_page
+      in: query
+      description: Items per page.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+    Search:
+      name: q
+      in: query
+      description: A case-insensitive substring, taken literally (`%` and `_` are not wildcards).
+      schema:
+        type: string
+        maxLength: 200
+    UserId:
+      name: user_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Sid:
+      name: sid
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
+    ClientId:
+      name: client_id
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
+    ResourceServerId:
+      name: resource_server_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^rs_[A-Za-z0-9]{16}$'
+    InitialAccessTokenId:
+      name: initial_access_token_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    RoleId:
+      name: role_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^rol_[A-Za-z0-9]{16}$'
+    ConnectionNameParameter:
+      name: name
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/ConnectionName'
+    PasskeyId:
+      name: passkey_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IdentityConnection:
+      name: connection
+      in: path
+      required: true
+      description: The external connection the identity was linked through.
+      schema:
+        $ref: '#/components/schemas/ConnectionName'
+
+  responses:
+    BadRequest:
+      description: |
+        The request could not be read: malformed JSON or a parameter sent twice (a problem
+        document), or a malformed `Authorization` header (`invalid_request`, an RFC 6750
+        challenge).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BearerError'
+    Unauthorized:
+      description: |
+        No usable token: none at all (a bare `Bearer` challenge and `{}`), or one that
+        is unknown, expired, revoked, issued for another API or for an account that cannot
+        be used (`invalid_token`).
+
+        Or a token acting for a person who signed in with one factor, while this API's own
+        `mfa_policy` is `required` (`insufficient_user_authentication`, RFC 9470 §3): the
+        challenge names the `acr_values` to ask for, and the client sends the person back to
+        `/oauth2/authorize` with them to step up. Checked after the audience and before the
+        scope. A token a client obtained as itself is never refused for this.
+
+        A token bound to a DPoP key (RFC 9449) is presented as `Authorization: DPoP <token>`
+        with a fresh proof in the `DPoP` header, for this method and URL and naming the token.
+        Presented as `Bearer`, it is `invalid_token`; without a good proof, `invalid_dpop_proof`.
+        A DPoP request is challenged with `WWW-Authenticate: DPoP`, naming the `algs` accepted.
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BearerError'
+    Forbidden:
+      description: The token does not carry the scope this operation requires (`insufficient_scope`).
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BearerError'
+    UnsupportedMediaType:
+      description: The body is not `application/json`.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: No such resource.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: The request contradicts what exists — a taken address or identifier, a protected resource.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: The request does not satisfy this document, or describes something that could never work.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: A limit is reached; nothing was done. Try again later.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    ServiceUnavailable:
+      description: This deployment cannot do it now (it sends no mail, or the mail server refused); nothing was done.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+  schemas:
+    SigningKey:
+      type: object
+      additionalProperties: false
+      required: [kid, algorithm, status, published, created_at, retired_at, published_until]
+      properties:
+        kid:
+          type: string
+          description: The RFC 7638 thumbprint of the public key, as the JWKS and token headers name it.
+        algorithm:
+          type: string
+          enum: [RS256]
+        status:
+          type: string
+          enum: [active, retired]
+        published:
+          type: boolean
+          description: Whether the key is in the JWKS now.
+        created_at:
+          type: string
+          format: date-time
+        retired_at:
+          type: string
+          format: date-time
+          nullable: true
+        published_until:
+          type: string
+          format: date-time
+          nullable: true
+          description: When a retired key leaves the JWKS; null for the active key.
+    SigningKeyRotation:
+      type: object
+      additionalProperties: false
+      required: [active, retired]
+      properties:
+        active:
+          $ref: '#/components/schemas/SigningKey'
+        retired:
+          type: object
+          nullable: true
+          description: The key that was active, now retired; null when there was none.
+          additionalProperties: false
+          required: [kid, algorithm, status, published, created_at, retired_at, published_until]
+          properties:
+            kid:
+              type: string
+            algorithm:
+              type: string
+              enum: [RS256]
+            status:
+              type: string
+              enum: [retired]
+            published:
+              type: boolean
+            created_at:
+              type: string
+              format: date-time
+            retired_at:
+              type: string
+              format: date-time
+            published_until:
+              type: string
+              format: date-time
+    Problem:
+      description: An RFC 9457 problem document.
+      type: object
+      additionalProperties: false
+      required: [type, title, status, detail]
+      properties:
+        type:
+          type: string
+          description: Always `about:blank`; `title` is the HTTP status phrase.
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+          description: What went wrong, for a person to read.
+        errors:
+          type: array
+          description: For a request that did not satisfy this document, where and why.
+          items:
+            type: object
+            additionalProperties: false
+            required: [detail]
+            properties:
+              pointer:
+                type: string
+                description: An RFC 6901 JSON pointer into the request body, when the problem is there.
+              parameter:
+                type: string
+                description: The name of the parameter at fault, when the problem is one.
+              detail:
+                type: string
+
+    BearerError:
+      description: |
+        An RFC 6750 §3 error (or RFC 9449 §7.1's `invalid_dpop_proof`). Empty when the
+        request carried no credentials at all: there is nothing yet to be wrong with.
+      type: object
+      additionalProperties: false
+      properties:
+        error:
+          type: string
+          enum: [invalid_request, invalid_token, insufficient_scope, insufficient_user_authentication, invalid_dpop_proof]
+        error_description:
+          type: string
+
+    UserPage:
+      description: One page of users, newest first.
+      type: object
+      additionalProperties: false
+      required: [items, total, page, per_page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        total:
+          $ref: '#/components/schemas/Total'
+        page:
+          $ref: '#/components/schemas/PageNumber'
+        per_page:
+          $ref: '#/components/schemas/PerPage'
+
+    ClientPage:
+      description: One page of clients, newest first.
+      type: object
+      additionalProperties: false
+      required: [items, total, page, per_page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Client'
+        total:
+          $ref: '#/components/schemas/Total'
+        page:
+          $ref: '#/components/schemas/PageNumber'
+        per_page:
+          $ref: '#/components/schemas/PerPage'
+
+    ResourceServerPage:
+      description: One page of APIs, newest first.
+      type: object
+      additionalProperties: false
+      required: [items, total, page, per_page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResourceServer'
+        total:
+          $ref: '#/components/schemas/Total'
+        page:
+          $ref: '#/components/schemas/PageNumber'
+        per_page:
+          $ref: '#/components/schemas/PerPage'
+
+    AuditEventPage:
+      description: One page of audit events, newest first.
+      type: object
+      additionalProperties: false
+      required: [items, total, page, per_page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+        total:
+          $ref: '#/components/schemas/Total'
+        page:
+          $ref: '#/components/schemas/PageNumber'
+        per_page:
+          $ref: '#/components/schemas/PerPage'
+
+    AuditEvent:
+      type: object
+      additionalProperties: false
+      required: [id, type, occurred_at, outcome, actor, target, details, client_address, user_agent]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [authentication.succeeded, authentication.failed, session.ended, session.stepped_up, mfa.enrolled, mfa.removed, passkey.registered, passkey.renamed, passkey.removed, passkey.counter_regressed, consent.given, consent.refused, consent.withdrawn, device.approved, device.refused, token.issued, token.revoked, token.code_replayed, token.refresh_replayed, client.created, client.updated, client.deleted, client.secret_rotated, client.granted, user.created, user.updated, user.deleted, user.identity_unlinked, user.roles_changed, user.signed_up, user.email_verified, user.password_reset, user.password_link_sent, role.created, role.updated, role.deleted, resource_server.created, resource_server.updated, resource_server.deleted, connection.created, connection.updated, connection.deleted, signing_key.created, signing_key.rotated, initial_access_token.issued, initial_access_token.revoked]
+        occurred_at:
+          type: string
+          format: date-time
+        outcome:
+          $ref: '#/components/schemas/AuditOutcome'
+        actor:
+          type: object
+          additionalProperties: false
+          required: [kind, user_id, client_id]
+          description: |
+            Who acted: a `person` (with the application they acted through, if any), an
+            `application` as itself, the `system` console, or `anonymous` — nobody known yet.
+          properties:
+            kind:
+              type: string
+              enum: [person, application, system, anonymous]
+            user_id:
+              type: string
+              format: uuid
+              nullable: true
+            client_id:
+              type: string
+              nullable: true
+        target:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [type, id]
+          properties:
+            type:
+              $ref: '#/components/schemas/AuditTargetType'
+            id:
+              type: string
+        details:
+          type: object
+          description: Short, flat values — a grant type, a scope, a reason. Never a credential.
+          additionalProperties:
+            oneOf:
+              - type: string
+              - type: integer
+              - type: boolean
+              - type: array
+                items:
+                  type: string
+        client_address:
+          type: string
+          nullable: true
+        user_agent:
+          type: string
+          nullable: true
+
+    AuditOutcome:
+      type: string
+      enum: [success, failure]
+
+    AuditTargetType:
+      type: string
+      enum: [user, client, resource_server, role, connection, signing_key, initial_access_token]
+
+    InitialAccessTokenPage:
+      description: One page of initial access tokens, newest first.
+      type: object
+      additionalProperties: false
+      required: [items, total, page, per_page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InitialAccessToken'
+        total:
+          $ref: '#/components/schemas/Total'
+        page:
+          $ref: '#/components/schemas/PageNumber'
+        per_page:
+          $ref: '#/components/schemas/PerPage'
+
+    InitialAccessTokenCreate:
+      type: object
+      additionalProperties: false
+      required: [description]
+      properties:
+        description:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: Who it is for. The token itself is never shown again, so this is how it is told apart.
+        expires_in:
+          type: integer
+          minimum: 60
+          maximum: 7776000
+          default: 604800
+          description: Seconds until it expires, from a minute to ninety days. Seven days by default.
+        max_uses:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          default: 1
+          description: How many clients it may register.
+
+    InitialAccessToken:
+      type: object
+      additionalProperties: false
+      required: [id, description, created_at, expires_at, max_uses, uses, state, revoked_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        max_uses:
+          type: integer
+          minimum: 1
+        uses:
+          type: integer
+          minimum: 0
+          description: How many clients it has registered.
+        state:
+          $ref: '#/components/schemas/InitialAccessTokenState'
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    IssuedInitialAccessToken:
+      description: A token just issued, with its value, which is never shown again.
+      type: object
+      additionalProperties: false
+      required: [id, description, created_at, expires_at, max_uses, uses, state, revoked_at, token]
+      properties:
+        id:
+          type: string
+          format: uuid
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        max_uses:
+          type: integer
+          minimum: 1
+        uses:
+          type: integer
+          minimum: 0
+        state:
+          $ref: '#/components/schemas/InitialAccessTokenState'
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+        token:
+          type: string
+          description: |
+            The value software sends as `Authorization: Bearer` to `/oauth2/register`. Only its
+            digest is kept.
+
+    InitialAccessTokenState:
+      type: string
+      enum: [active, expired, used_up, revoked]
+      description: |
+        `active` registers clients; `revoked` was stopped by an operator, `expired` passed its
+        date, `used_up` registered as many clients as it allows.
+
+    RolePage:
+      description: One page of roles, newest first.
+      type: object
+      additionalProperties: false
+      required: [items, total, page, per_page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+        total:
+          $ref: '#/components/schemas/Total'
+        page:
+          $ref: '#/components/schemas/PageNumber'
+        per_page:
+          $ref: '#/components/schemas/PerPage'
+
+    Total:
+      type: integer
+      minimum: 0
+      description: Matching items across every page.
+    PageNumber:
+      type: integer
+      minimum: 1
+    PerPage:
+      type: integer
+      minimum: 1
+      maximum: 100
+
+    ProfileName:
+      type: string
+      minLength: 1
+      maxLength: 255
+
+    User:
+      type: object
+      additionalProperties: false
+      required: [id, connection, email, email_verified, is_active, has_password, mfa_enrolled, passkey_count,
+        name, given_name, family_name, nickname, picture, locale, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The OIDC `sub`. Stable and opaque.
+        connection:
+          type: string
+          pattern: '^[a-z][a-z0-9-]{0,31}$'
+          description: |
+            The pool the account was created in, or the external connection that created it.
+            Fixed for good. The same address may exist in two pools as two accounts.
+        email:
+          type: string
+        email_verified:
+          type: boolean
+        is_active:
+          type: boolean
+        has_password:
+          type: boolean
+          description: Whether the account can be signed into with a password at all.
+        mfa_enrolled:
+          type: boolean
+          description: |
+            Whether signing in asks for a second factor: a confirmed TOTP authenticator, or a
+            passkey. Set by the account holder at `/auth/mfa/enroll` or `/auth/passkeys`;
+            cleared by them, by `DELETE /api/v1/users/{user_id}/mfa` for the authenticator, and
+            by `DELETE /api/v1/users/{user_id}/passkeys/{passkey_id}` for each passkey.
+        passkey_count:
+          type: integer
+          minimum: 0
+          description: How many passkeys the account holds (`GET /api/v1/users/{user_id}/passkeys`).
+        name:
+          type: string
+          nullable: true
+        given_name:
+          type: string
+          nullable: true
+        family_name:
+          type: string
+          nullable: true
+        nickname:
+          type: string
+          nullable: true
+        picture:
+          type: string
+          nullable: true
+        locale:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    UserCreate:
+      type: object
+      additionalProperties: false
+      required: [email]
+      properties:
+        connection:
+          type: string
+          pattern: '^[a-z][a-z0-9-]{0,31}$'
+          description: |
+            The pool to create it in; the default pool, `password`, when omitted. An external
+            connection's accounts are made by signing in through it (422).
+        email:
+          type: string
+          minLength: 3
+          maxLength: 320
+        password:
+          type: string
+          minLength: 8
+          maxLength: 256
+          description: |
+            At least 8 characters, at most 72 bytes once encoded. With
+            `CLAVIA_BREACHED_PASSWORD_CHECK` on, a password found in Have I Been Pwned's Pwned
+            Passwords is refused (422). Omit it to create the account without one; it is then
+            invited with `POST /users/{user_id}/password-reset`.
+        email_verified:
+          type: boolean
+          default: false
+        is_active:
+          type: boolean
+          default: true
+        name:
+          $ref: '#/components/schemas/ProfileName'
+        given_name:
+          $ref: '#/components/schemas/ProfileName'
+        family_name:
+          $ref: '#/components/schemas/ProfileName'
+        nickname:
+          $ref: '#/components/schemas/ProfileName'
+        picture:
+          type: string
+          maxLength: 2048
+          description: An absolute http(s) URL.
+        locale:
+          type: string
+          maxLength: 35
+          description: A BCP 47 language tag, such as `en-GB`.
+
+    UserUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        email:
+          type: string
+          minLength: 3
+          maxLength: 320
+        password:
+          type: string
+          minLength: 8
+          maxLength: 256
+          description: A new password, under the same rules as at creation.
+        email_verified:
+          type: boolean
+        is_active:
+          type: boolean
+        name:
+          type: string
+          maxLength: 255
+          nullable: true
+        given_name:
+          type: string
+          maxLength: 255
+          nullable: true
+        family_name:
+          type: string
+          maxLength: 255
+          nullable: true
+        nickname:
+          type: string
+          maxLength: 255
+          nullable: true
+        picture:
+          type: string
+          maxLength: 2048
+          nullable: true
+        locale:
+          type: string
+          maxLength: 35
+          nullable: true
+
+    ClientType:
+      type: string
+      enum: [public, confidential]
+    AuthMethod:
+      type: string
+      enum: [none, client_secret_basic, client_secret_post]
+    GrantType:
+      type: string
+      enum: [authorization_code, client_credentials, refresh_token, 'urn:ietf:params:oauth:grant-type:device_code']
+      description: |
+        `refresh_token` goes with `authorization_code` or the device code grant (RFC 8628): a
+        refresh token is issued with a person's tokens, and rotates on every use. The device
+        code grant is for first-party applications only.
+    ResponseType:
+      type: string
+      enum: [code]
+    RedirectUri:
+      type: string
+      minLength: 1
+      maxLength: 2048
+      description: An absolute URI without a fragment, matched exactly.
+
+    Client:
+      type: object
+      additionalProperties: false
+      required: [client_id, name, client_type, token_endpoint_auth_method, redirect_uris, grant_types,
+        response_types, post_logout_redirect_uris, is_first_party, connections, backchannel_logout_uri,
+        backchannel_logout_session_required, require_pkce, mfa_policy, require_pushed_authorization_requests,
+        dpop_bound_access_tokens, registration, created_at]
+      properties:
+        client_id:
+          type: string
+        name:
+          type: string
+        client_type:
+          $ref: '#/components/schemas/ClientType'
+        token_endpoint_auth_method:
+          $ref: '#/components/schemas/AuthMethod'
+        redirect_uris:
+          type: array
+          items:
+            type: string
+        grant_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/GrantType'
+        response_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResponseType'
+        post_logout_redirect_uris:
+          type: array
+          items:
+            type: string
+        is_first_party:
+          $ref: '#/components/schemas/IsFirstParty'
+        connections:
+          type: array
+          description: |
+            The connections its users may sign in through, by name. Always empty for a
+            third-party application: it uses the domain connections.
+          items:
+            $ref: '#/components/schemas/ConnectionName'
+        backchannel_logout_uri:
+          type: string
+          nullable: true
+          description: |
+            Where a logout token is posted when a session the client signed in through ends
+            (OpenID Connect Back-Channel Logout 1.0). Null: the client is not told.
+        backchannel_logout_session_required:
+          type: boolean
+          description: Whether the client needs the session named (`sid`). It always is.
+        require_pkce:
+          type: boolean
+          description: |
+            Whether every authorization request must carry PKCE. False only for a
+            confidential client, whose OpenID Connect requests carrying a `nonce` may then
+            omit it (OAuth 2.1 §7.5.1).
+        mfa_policy:
+          $ref: '#/components/schemas/MfaPolicy'
+        require_pushed_authorization_requests:
+          type: boolean
+          description: |
+            Whether its authorization requests must be pushed to `/oauth2/par` first and reach
+            `/oauth2/authorize` by `request_uri` (RFC 9126 §6). A request sent any other way is
+            refused with `invalid_request`.
+        dpop_bound_access_tokens:
+          type: boolean
+          description: |
+            Whether every token it is issued must be bound to a DPoP key (RFC 9449 §5.2): a token
+            request without a `DPoP` proof is refused (`invalid_dpop_proof`). Off by default, when a
+            proof is welcome but not required. Takes effect from its next token request: tokens
+            already issued keep working as they were.
+        registration:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [initial_access_token_id, registered_at]
+          description: |
+            For a client that registered itself at `/oauth2/register` (RFC 7591): which initial
+            access token let it in, and when. Null for a client an operator made. Such a client is
+            always third-party.
+          properties:
+            initial_access_token_id:
+              type: string
+              format: uuid
+              nullable: true
+              description: Null once that token no longer exists.
+            registered_at:
+              type: string
+              format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    IsFirstParty:
+      type: boolean
+      description: |
+        Who runs the application. First-party — the operator's own — skips the consent screen
+        unless the API it asks for insists. Third-party — somebody else's, its id starting
+        with `tpc_` — puts every scope to the person on the consent screen, and is never
+        given a token for a system API, on anybody's behalf or as itself.
+
+    ClientWithSecret:
+      description: A client, with the only copy of its secret there will ever be.
+      type: object
+      additionalProperties: false
+      required: [client_id, name, client_type, token_endpoint_auth_method, redirect_uris, grant_types,
+        response_types, post_logout_redirect_uris, is_first_party, connections, backchannel_logout_uri,
+        backchannel_logout_session_required, require_pkce, mfa_policy, require_pushed_authorization_requests,
+        dpop_bound_access_tokens, registration, created_at, client_secret]
+      properties:
+        client_id:
+          type: string
+        name:
+          type: string
+        client_type:
+          $ref: '#/components/schemas/ClientType'
+        token_endpoint_auth_method:
+          $ref: '#/components/schemas/AuthMethod'
+        redirect_uris:
+          type: array
+          items:
+            type: string
+        grant_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/GrantType'
+        response_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResponseType'
+        post_logout_redirect_uris:
+          type: array
+          items:
+            type: string
+        is_first_party:
+          $ref: '#/components/schemas/IsFirstParty'
+        connections:
+          type: array
+          description: |
+            The connections its users may sign in through, by name. Always empty for a
+            third-party application: it uses the domain connections.
+          items:
+            $ref: '#/components/schemas/ConnectionName'
+        backchannel_logout_uri:
+          type: string
+          nullable: true
+          description: |
+            Where a logout token is posted when a session the client signed in through ends
+            (OpenID Connect Back-Channel Logout 1.0). Null: the client is not told.
+        backchannel_logout_session_required:
+          type: boolean
+          description: Whether the client needs the session named (`sid`). It always is.
+        require_pkce:
+          type: boolean
+          description: |
+            Whether every authorization request must carry PKCE. False only for a
+            confidential client, whose OpenID Connect requests carrying a `nonce` may then
+            omit it (OAuth 2.1 §7.5.1).
+        mfa_policy:
+          $ref: '#/components/schemas/MfaPolicy'
+        require_pushed_authorization_requests:
+          type: boolean
+          description: |
+            Whether its authorization requests must be pushed to `/oauth2/par` first and reach
+            `/oauth2/authorize` by `request_uri` (RFC 9126 §6). A request sent any other way is
+            refused with `invalid_request`.
+        dpop_bound_access_tokens:
+          type: boolean
+          description: |
+            Whether every token it is issued must be bound to a DPoP key (RFC 9449 §5.2): a token
+            request without a `DPoP` proof is refused (`invalid_dpop_proof`). Off by default, when a
+            proof is welcome but not required. Takes effect from its next token request: tokens
+            already issued keep working as they were.
+        registration:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [initial_access_token_id, registered_at]
+          description: |
+            For a client that registered itself at `/oauth2/register` (RFC 7591): which initial
+            access token let it in, and when. Null for a client an operator made. Such a client is
+            always third-party.
+          properties:
+            initial_access_token_id:
+              type: string
+              format: uuid
+              nullable: true
+              description: Null once that token no longer exists.
+            registered_at:
+              type: string
+              format: date-time
+        created_at:
+          type: string
+          format: date-time
+        client_secret:
+          type: string
+          nullable: true
+          description: Null for a public client, which has none.
+
+    ClientCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          maxLength: 120
+          default: ''
+        client_type:
+          $ref: '#/components/schemas/ClientType'
+        token_endpoint_auth_method:
+          $ref: '#/components/schemas/AuthMethod'
+        redirect_uris:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/RedirectUri'
+        grant_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/GrantType'
+        response_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResponseType'
+        post_logout_redirect_uris:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/RedirectUri'
+          description: |
+            Where a sign-out the client starts at `/oidc/logout` may send the browser back
+            (OpenID Connect RP-Initiated Logout 1.0 §3.1). Matched exactly.
+        is_first_party:
+          type: boolean
+          default: true
+          description: |
+            `false` registers a third-party application: its id starts with `tpc_`. See
+            `IsFirstParty`. Fixed for good: there is no such field on an update.
+        connections:
+          type: array
+          maxItems: 64
+          description: |
+            The connections its users may sign in through. Every connection there is when
+            omitted, for a first-party application; a third-party one cannot have a list (422).
+            An unknown name is a 404. Changed afterwards with `PUT …/connections`.
+          items:
+            $ref: '#/components/schemas/ConnectionName'
+        backchannel_logout_uri:
+          type: string
+          nullable: true
+          maxLength: 2048
+          description: |
+            Where to post a logout token when a session the client signed in through ends
+            (OpenID Connect Back-Channel Logout 1.0 §2.2): an absolute https URL without a
+            fragment, and not at this server or its internal network (422). Null for none.
+        backchannel_logout_session_required:
+          type: boolean
+        require_pkce:
+          type: boolean
+          description: |
+            False relieves a confidential client of PKCE for OpenID Connect requests that
+            carry a `nonce` (OAuth 2.1 §7.5.1); a public client is refused (422). Defaults
+            to true.
+        mfa_policy:
+          $ref: '#/components/schemas/MfaPolicy'
+        require_pushed_authorization_requests:
+          type: boolean
+          description: |
+            Whether its authorization requests must be pushed to `/oauth2/par` first and reach
+            `/oauth2/authorize` by `request_uri` (RFC 9126 §6). A request sent any other way is
+            refused with `invalid_request`.
+        dpop_bound_access_tokens:
+          type: boolean
+          description: |
+            Whether every token it is issued must be bound to a DPoP key (RFC 9449 §5.2): a token
+            request without a `DPoP` proof is refused (`invalid_dpop_proof`). Off by default, when a
+            proof is welcome but not required. Takes effect from its next token request: tokens
+            already issued keep working as they were.
+      description: |
+        `client_type` defaults to `public`; `token_endpoint_auth_method` to `none` for a
+        public client and `client_secret_basic` for a confidential one.
+
+    ClientUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: |
+        `client_type` and `is_first_party` are identity, not configuration: neither can change
+        (422 if sent). Register another client instead.
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        token_endpoint_auth_method:
+          $ref: '#/components/schemas/AuthMethod'
+        redirect_uris:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/RedirectUri'
+        grant_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/GrantType'
+        response_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResponseType'
+        post_logout_redirect_uris:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/RedirectUri'
+        backchannel_logout_uri:
+          type: string
+          nullable: true
+          maxLength: 2048
+          description: |
+            Where to post a logout token when a session the client signed in through ends
+            (OpenID Connect Back-Channel Logout 1.0 §2.2): an absolute https URL without a
+            fragment, and not at this server or its internal network (422). Null removes it.
+        backchannel_logout_session_required:
+          type: boolean
+        require_pkce:
+          type: boolean
+          description: |
+            False relieves a confidential client of PKCE for OpenID Connect requests that
+            carry a `nonce` (OAuth 2.1 §7.5.1); a public client is refused (422).
+        mfa_policy:
+          $ref: '#/components/schemas/MfaPolicy'
+        require_pushed_authorization_requests:
+          type: boolean
+          description: |
+            Whether its authorization requests must be pushed to `/oauth2/par` first and reach
+            `/oauth2/authorize` by `request_uri` (RFC 9126 §6). A request sent any other way is
+            refused with `invalid_request`.
+        dpop_bound_access_tokens:
+          type: boolean
+          description: |
+            Whether every token it is issued must be bound to a DPoP key (RFC 9449 §5.2): a token
+            request without a `DPoP` proof is refused (`invalid_dpop_proof`). Off by default, when a
+            proof is welcome but not required. Takes effect from its next token request: tokens
+            already issued keep working as they were.
+
+    Permission:
+      type: object
+      additionalProperties: false
+      required: [value, description]
+      properties:
+        value:
+          type: string
+        description:
+          type: string
+
+    PermissionInput:
+      type: object
+      additionalProperties: false
+      required: [value]
+      properties:
+        value:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^[!#-\[\]-~]+$'
+          description: A scope token (RFC 6749 §3.3).
+        description:
+          type: string
+          maxLength: 500
+          default: ''
+
+    ResourceServer:
+      type: object
+      additionalProperties: false
+      required: [id, identifier, name, permissions, is_system, enforce_policies, allow_skipping_consent,
+        access_token_format, mfa_policy, created_at]
+      properties:
+        id:
+          type: string
+        identifier:
+          type: string
+          description: The `audience` a client names and the `aud` its token carries.
+        name:
+          type: string
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+        is_system:
+          type: boolean
+          description: An API the server itself depends on. Not deletable; its permissions are the server's own.
+        enforce_policies:
+          $ref: '#/components/schemas/EnforcePolicies'
+        allow_skipping_consent:
+          $ref: '#/components/schemas/AllowSkippingConsent'
+        access_token_format:
+          $ref: '#/components/schemas/AccessTokenFormat'
+        mfa_policy:
+          $ref: '#/components/schemas/MfaPolicy'
+        created_at:
+          type: string
+          format: date-time
+
+    EnforcePolicies:
+      type: boolean
+      description: |
+        Whether a token issued on a person's behalf carries only the permissions their roles
+        grant on this API, and is refused to somebody holding none. Machine clients are
+        governed by their client grants either way. Always on for a system API.
+
+    AllowSkippingConsent:
+      type: boolean
+      description: |
+        Whether a first-party application asking for this API's permissions on a person's
+        behalf may do without the consent screen: the operator runs both, so signing in is
+        the consent. A third-party application asks whatever this says. Always on for a
+        system API, which no third-party application reaches.
+
+    MfaPolicy:
+      type: string
+      enum: [optional, required]
+      default: optional
+      description: |
+        Whether people must sign in with more than one factor to be let in: through this
+        application, or to be issued a token for this API. Required on either one is required.
+
+        - `optional`: what the authorization request asks with `acr_values`, and nothing more.
+          A person who enrolled a second factor is asked for it anyway.
+        - `required`: more than one factor (the `acr`
+          `http://schemas.openid.net/pape/policies/2007/06/multi-factor`). A signed-in person
+          who used one gives another without signing in again; someone with no second factor
+          sets one up on the way, if their address is verified.
+
+        It applies from the next authorization on: tokens already issued keep working.
+
+    AccessTokenFormat:
+      type: string
+      enum: [opaque, jwt]
+      description: |
+        The form of the access tokens issued for this API, from the next token on.
+
+        - `opaque`: a random string the API resolves at the introspection endpoint
+          (RFC 7662), which reports a revocation the moment it happens.
+        - `jwt`: a JWT access token (RFC 9068, `typ: at+jwt`) signed with the keys published
+          at the JWKS, which the API validates on its own. Revocation cannot reach it: a
+          revoked JWT is accepted by an API that validates it locally until it expires, so the
+          access token lifetime bounds how long that lasts. This server still refuses it
+          wherever it is presented here (introspection, userinfo, this API).
+
+        A token naming no API is always opaque.
+
+    ResourceServerCreate:
+      type: object
+      additionalProperties: false
+      required: [identifier]
+      properties:
+        identifier:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: An absolute URI without a fragment, on a domain you own. Never dereferenced.
+        name:
+          type: string
+          maxLength: 120
+          default: ''
+        permissions:
+          type: array
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/PermissionInput'
+        enforce_policies:
+          type: boolean
+          default: false
+          description: See `ResourceServer.enforce_policies`.
+        allow_skipping_consent:
+          type: boolean
+          default: true
+          description: See `ResourceServer.allow_skipping_consent`.
+        access_token_format:
+          type: string
+          enum: [opaque, jwt]
+          default: opaque
+          description: See `ResourceServer.access_token_format`.
+        mfa_policy:
+          $ref: '#/components/schemas/MfaPolicy'
+
+    ResourceServerUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: |
+        A system API may be renamed and nothing else: its permissions are the server's own,
+        turning its roles off would hand them to anybody who can sign in, and no
+        third-party application reaches it to be asked about (409).
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        permissions:
+          type: array
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/PermissionInput'
+        enforce_policies:
+          type: boolean
+        allow_skipping_consent:
+          type: boolean
+        access_token_format:
+          $ref: '#/components/schemas/AccessTokenFormat'
+        mfa_policy:
+          $ref: '#/components/schemas/MfaPolicy'
+
+    ConnectionName:
+      type: string
+      pattern: '^[a-z][a-z0-9-]{0,31}$'
+      description: Lower-case letters, digits and dashes, starting with a letter; at most 32.
+
+    ConnectionNames:
+      type: object
+      additionalProperties: false
+      required: [connections]
+      properties:
+        connections:
+          type: array
+          maxItems: 64
+          items:
+            $ref: '#/components/schemas/ConnectionName'
+
+    ConnectionStrategy:
+      type: string
+      enum: [database, social, oidc, passwordless]
+      description: |
+        `database`: a pool of accounts with passwords, held here. `social`: a provider the
+        code implements (Google, GitHub), credentials from the deployment's settings.
+        `oidc`: any OpenID Connect provider, registered from its issuer. `passwordless`:
+        the built-in `email` connection — a code or a link sent by email; never created.
+
+    Connection:
+      type: object
+      additionalProperties: false
+      required: [name, display_name, strategy, is_enabled, is_domain_connection, allow_sign_up,
+        require_verified_email, configured, usable, oidc_issuer, oidc_client_id, oidc_scope, created_at]
+      properties:
+        name:
+          $ref: '#/components/schemas/ConnectionName'
+        display_name:
+          type: string
+        strategy:
+          $ref: '#/components/schemas/ConnectionStrategy'
+        is_enabled:
+          type: boolean
+          description: The global switch. Off means off for every application.
+        is_domain_connection:
+          type: boolean
+          description: |
+            A domain connection: open to every third-party application, which gets no other
+            kind. A first-party application goes by its own list.
+        allow_sign_up:
+          type: boolean
+          description: |
+            A pool only: people may create their own account in it, from the sign-up page of an
+            application that enables it.
+        require_verified_email:
+          type: boolean
+          description: |
+            A pool only: an account in it signs in with its password only once it has followed the
+            verification link it is sent. With sign-up open, this stops anyone registering a
+            stranger's address.
+        configured:
+          type: boolean
+          description: |
+            Whether it could work if switched on: always for a pool; for the passwordless one,
+            when the deployment sends mail; for a social connection, when the deployment set its
+            credentials; for an OIDC one, when its secret decrypts.
+        usable:
+          type: boolean
+          description: Switched on and configured — what the login page actually offers.
+        oidc_issuer:
+          type: string
+          nullable: true
+        oidc_client_id:
+          type: string
+          nullable: true
+        oidc_scope:
+          type: string
+          nullable: true
+          description: What is asked of the provider. The client secret is never returned.
+        created_at:
+          type: string
+          format: date-time
+
+    ConnectionDisplayName:
+      type: string
+      minLength: 1
+      maxLength: 120
+
+    ConnectionCreate:
+      type: object
+      additionalProperties: false
+      required: [name, display_name, strategy]
+      properties:
+        name:
+          $ref: '#/components/schemas/ConnectionName'
+        display_name:
+          $ref: '#/components/schemas/ConnectionDisplayName'
+        strategy:
+          $ref: '#/components/schemas/ConnectionStrategy'
+        is_enabled:
+          type: boolean
+          default: true
+        is_domain_connection:
+          type: boolean
+          default: false
+        allow_sign_up:
+          type: boolean
+          default: false
+          description: A pool only. Refused for any other kind.
+        require_verified_email:
+          type: boolean
+          default: false
+          description: A pool only. Refused for any other kind.
+        oidc_issuer:
+          type: string
+          maxLength: 2048
+          description: An `oidc` connection's issuer, https. Required for one, refused for any other.
+        oidc_client_id:
+          type: string
+          minLength: 1
+          maxLength: 255
+        oidc_client_secret:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        oidc_scope:
+          type: string
+          maxLength: 512
+          description: Must include `openid`; `openid profile email` when omitted.
+
+    ConnectionUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        display_name:
+          $ref: '#/components/schemas/ConnectionDisplayName'
+        is_enabled:
+          type: boolean
+        is_domain_connection:
+          type: boolean
+        allow_sign_up:
+          type: boolean
+          description: A pool only. Refused for any other kind.
+        require_verified_email:
+          type: boolean
+          description: A pool only. Refused for any other kind.
+        oidc_issuer:
+          type: string
+          maxLength: 2048
+        oidc_client_id:
+          type: string
+          minLength: 1
+          maxLength: 255
+        oidc_client_secret:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        oidc_scope:
+          type: string
+          maxLength: 512
+
+    Identity:
+      type: object
+      additionalProperties: false
+      required: [connection, subject, email, linked_at]
+      properties:
+        connection:
+          $ref: '#/components/schemas/ConnectionName'
+        subject:
+          type: string
+          description: The provider's identifier for the person — what the link is keyed on.
+        email:
+          type: string
+          nullable: true
+          description: What the provider reported when the link was made. Informational.
+        linked_at:
+          type: string
+          format: date-time
+
+    UserPasskey:
+      type: object
+      additionalProperties: false
+      required: [id, name, synced, backed_up, aaguid, created_at, last_used_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: What the account holder calls it.
+        synced:
+          type: boolean
+          description: Whether a credential manager backs it up across devices; false for one bound to a device.
+        backed_up:
+          type: boolean
+          description: Whether it was backed up when last used.
+        aaguid:
+          type: string
+          format: uuid
+          nullable: true
+          description: The make of the authenticator, when it says. A label, never a reason to refuse.
+        created_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    UserSession:
+      type: object
+      additionalProperties: false
+      required: [sid, created_at, expires_at, amr, connection, clients]
+      description: |
+        One browser session at `auth.*`. The cookie is never shown: nothing outside the
+        browser holds it.
+      properties:
+        sid:
+          type: string
+          description: |
+            The session's identifier for relying parties — the `sid` of the ID tokens issued
+            through it — and the handle for ending it.
+        created_at:
+          type: string
+          format: date-time
+          description: When the person signed in.
+        expires_at:
+          type: string
+          format: date-time
+          description: The absolute ceiling; being idle may end it sooner.
+        amr:
+          type: array
+          items:
+            type: string
+        connection:
+          $ref: '#/components/schemas/ConnectionName'
+        clients:
+          type: array
+          description: The applications that signed in through it — the ones ending it tells.
+          items:
+            type: object
+            additionalProperties: false
+            required: [client_id, name]
+            properties:
+              client_id:
+                type: string
+              name:
+                type: string
+
+    PasswordLinkSent:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [invitation, reset]
+          description: |
+            Which email went out: `invitation` for an account with no password yet, `reset`
+            for one that has a password.
+
+    UserConsent:
+      type: object
+      additionalProperties: false
+      required: [client_id, client_name, is_first_party, audience, scopes, granted_at, updated_at]
+      properties:
+        client_id:
+          type: string
+        client_name:
+          type: string
+        is_first_party:
+          $ref: '#/components/schemas/IsFirstParty'
+        audience:
+          type: string
+          nullable: true
+          description: The identifier of the API it is for; null for a request that named none.
+        scopes:
+          type: array
+          description: Everything agreed to, OpenID Connect scopes included, sorted.
+          items:
+            type: string
+        granted_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          description: When the scopes last widened.
+
+    RoleName:
+      type: string
+      minLength: 1
+      maxLength: 64
+      description: One line; unique across roles, matched exactly.
+
+    RoleDescription:
+      type: string
+      maxLength: 500
+      description: One line.
+
+    Role:
+      type: object
+      additionalProperties: false
+      required: [id, name, description, created_at]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    RoleWithPermissions:
+      description: A role, with what it grants.
+      type: object
+      additionalProperties: false
+      required: [id, name, description, created_at, permissions]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        permissions:
+          type: array
+          description: By API identifier, then value.
+          items:
+            $ref: '#/components/schemas/RolePermission'
+
+    RolePermission:
+      description: |
+        A permission and the API that defines it — a role spans APIs, so a bare value would
+        be ambiguous.
+      type: object
+      additionalProperties: false
+      required: [resource_server_id, resource_server_identifier, value, description]
+      properties:
+        resource_server_id:
+          type: string
+        resource_server_identifier:
+          type: string
+        value:
+          type: string
+        description:
+          type: string
+
+    EffectivePermission:
+      description: A permission a user holds, and every one of their roles that grants it.
+      type: object
+      additionalProperties: false
+      required: [resource_server_id, resource_server_identifier, value, description, roles]
+      properties:
+        resource_server_id:
+          type: string
+        resource_server_identifier:
+          type: string
+        value:
+          type: string
+        description:
+          type: string
+        roles:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name]
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+
+    PermissionReference:
+      description: A permission, named by the API that defines it and its value.
+      type: object
+      additionalProperties: false
+      required: [resource_server_id, value]
+      properties:
+        resource_server_id:
+          type: string
+          pattern: '^rs_[A-Za-z0-9]{16}$'
+        value:
+          type: string
+          minLength: 1
+          maxLength: 128
+
+    RoleCreate:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          $ref: '#/components/schemas/RoleName'
+        description:
+          $ref: '#/components/schemas/RoleDescription'
+        permissions:
+          type: array
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/PermissionReference'
+
+    RoleUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          $ref: '#/components/schemas/RoleName'
+        description:
+          $ref: '#/components/schemas/RoleDescription'
+        permissions:
+          type: array
+          maxItems: 500
+          description: The whole new set.
+          items:
+            $ref: '#/components/schemas/PermissionReference'
+
+    UserIds:
+      type: object
+      additionalProperties: false
+      required: [user_ids]
+      properties:
+        user_ids:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: string
+            format: uuid
+
+    RoleIds:
+      type: object
+      additionalProperties: false
+      required: [role_ids]
+      properties:
+        role_ids:
+          type: array
+          maxItems: 100
+          description: Every role the user is to hold; empty takes them all away.
+          items:
+            type: string
+            pattern: '^rol_[A-Za-z0-9]{16}$'
