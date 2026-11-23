@@ -762,6 +762,26 @@ final class ManagementApiTest extends AcceptanceTestCase
         self::assertSame(1, self::document($this->api('GET', self::CLIENTS, query: ['q' => 'machine']))['total']);
     }
 
+    public function testAClientMayBeRequiredToPushItsAuthorizationRequests(): void
+    {
+        $this->adminToken();
+
+        $created = $this->api('POST', self::CLIENTS, [
+            'name' => 'Banking',
+            'redirect_uris' => ['https://bank.test/cb'],
+            'grant_types' => ['authorization_code'],
+            'response_types' => ['code'],
+            'require_pushed_authorization_requests' => true,
+        ]);
+        self::assertSame(201, $created->getStatusCode(), (string) $created->getBody());
+        self::assertTrue(self::document($created)['require_pushed_authorization_requests']);
+        $path = self::CLIENTS . '/' . rawurlencode((string) self::document($created)['client_id']);
+
+        $patched = $this->api('PATCH', $path, ['require_pushed_authorization_requests' => false]);
+
+        self::assertFalse(self::document($patched)['require_pushed_authorization_requests']);
+    }
+
     // ── Resource servers ───────────────────────────────────────────────────────
 
     public function testResourceServerLifecycle(): void

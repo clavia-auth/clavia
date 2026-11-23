@@ -63,6 +63,7 @@ final readonly class Client
         public ?BackChannelLogout $backChannelLogout,
         public bool $requiresPkce,
         public MfaPolicy $mfaPolicy,
+        public bool $requiresPushedAuthorizationRequests,
     ) {
     }
 
@@ -82,6 +83,8 @@ final readonly class Client
      * @param bool               $requiresPkce  False lets an OpenID Connect request carrying a `nonce`
      *                                          go without PKCE; only for a confidential client.
      * @param MfaPolicy          $mfaPolicy     Whether its users must sign in with more than one factor.
+     * @param bool               $requiresPushedAuthorizationRequests Whether its authorization requests must
+     *                                          be pushed first (RFC 9126 §6), and arrive by reference.
      *
      * @throws InvalidValue When the registration contradicts itself, or a third-party client would
      *                      list connections.
@@ -101,6 +104,7 @@ final readonly class Client
         ?BackChannelLogout $backChannelLogout = null,
         bool $requiresPkce = true,
         MfaPolicy $mfaPolicy = MfaPolicy::Optional,
+        bool $requiresPushedAuthorizationRequests = false,
     ): self {
         $secretHash = $secretHash === '' ? null : $secretHash;
 
@@ -196,6 +200,7 @@ final readonly class Client
             $backChannelLogout,
             $requiresPkce,
             $mfaPolicy,
+            $requiresPushedAuthorizationRequests,
         );
     }
 
@@ -223,6 +228,7 @@ final readonly class Client
             $this->backChannelLogout,
             $this->requiresPkce,
             $this->mfaPolicy,
+            $this->requiresPushedAuthorizationRequests,
         );
     }
 
@@ -273,6 +279,7 @@ final readonly class Client
             $this->backChannelLogout,
             $this->requiresPkce,
             $this->mfaPolicy,
+            $this->requiresPushedAuthorizationRequests,
         );
     }
 
@@ -296,6 +303,7 @@ final readonly class Client
             $backChannelLogout,
             $this->requiresPkce,
             $this->mfaPolicy,
+            $this->requiresPushedAuthorizationRequests,
         );
     }
 
@@ -321,6 +329,7 @@ final readonly class Client
             $this->backChannelLogout,
             $required,
             $this->mfaPolicy,
+            $this->requiresPushedAuthorizationRequests,
         );
     }
 
@@ -344,6 +353,31 @@ final readonly class Client
             $this->backChannelLogout,
             $this->requiresPkce,
             $policy,
+            $this->requiresPushedAuthorizationRequests,
+        );
+    }
+
+    /**
+     * The same client, its authorization requests required to be pushed first (RFC 9126 §6) or not.
+     */
+    public function withPushedAuthorizationRequestsRequired(bool $required): self
+    {
+        return self::register(
+            $this->id,
+            $this->name,
+            $this->type,
+            $this->authMethod,
+            $this->secretHash,
+            $this->redirectUris,
+            $this->grantTypes,
+            $this->responseTypes,
+            $this->createdAt,
+            $this->postLogoutRedirectUris,
+            $this->connections,
+            $this->backChannelLogout,
+            $this->requiresPkce,
+            $this->mfaPolicy,
+            $required,
         );
     }
 
@@ -375,6 +409,7 @@ final readonly class Client
             $this->backChannelLogout,
             $this->requiresPkce,
             $this->mfaPolicy,
+            $this->requiresPushedAuthorizationRequests,
         );
     }
 

@@ -80,6 +80,7 @@ use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\DeviceAuthorizationHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\IntrospectionHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\OAuth2Responder;
+use Clavia\Adapter\Primary\Http\OAuth2\PushedAuthorizationRequestHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\RevocationHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\TokenHandler;
 use Clavia\Adapter\Primary\Http\Oidc\DiscoveryHandler;
@@ -214,6 +215,7 @@ use Clavia\Application\Management\Users\UnlinkIdentity;
 use Clavia\Application\Management\Users\UpdateUser;
 use Clavia\Application\Management\Users\UserSessions;
 use Clavia\Application\Management\Users\WithdrawConsent;
+use Clavia\Application\OAuth2\Authorize\AuthorizationRequestRules;
 use Clavia\Application\OAuth2\Authorize\Authorize;
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
 use Clavia\Application\OAuth2\ClientAuthentication\ClientFailureThrottle;
@@ -225,6 +227,7 @@ use Clavia\Application\OAuth2\Device\DescribeDeviceRequest;
 use Clavia\Application\OAuth2\Device\PendingDeviceRequests;
 use Clavia\Application\OAuth2\Device\RequestDeviceAuthorization;
 use Clavia\Application\OAuth2\Device\UserCodeThrottle;
+use Clavia\Application\OAuth2\Par\PushAuthorizationRequest;
 use Clavia\Application\OAuth2\ReadRequestedAccess;
 use Clavia\Application\OAuth2\Token\AccessTokenMinter;
 use Clavia\Application\OAuth2\Token\AuthorizationCodeGrant;
@@ -266,6 +269,7 @@ use Clavia\Application\Port\OutboundUrls;
 use Clavia\Application\Port\PasskeyVerifier;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Application\Port\PasswordlessChallengeStore;
+use Clavia\Application\Port\PushedAuthorizationRequestStore;
 use Clavia\Application\Port\SchemaMigrator;
 use Clavia\Application\Port\SecretCipher;
 use Clavia\Application\Port\SessionStore;
@@ -402,6 +406,10 @@ final class ConfigProvider
                     ClientAuthenticator::class => Container\ClientAuthenticatorFactory::class,
                     ClientFailureThrottle::class => Container\ClientFailureThrottleFactory::class,
                     Authorize::class => Container\AuthorizeFactory::class,
+                    AuthorizationRequestRules::class => Container\AuthorizationRequestRulesFactory::class,
+                    PushAuthorizationRequest::class => Container\PushAuthorizationRequestFactory::class,
+                    PushedAuthorizationRequestHandler::class
+                        => Container\PushedAuthorizationRequestHandlerFactory::class,
                     HeldConsents::class => Container\HeldConsentsFactory::class,
                     DescribeConsent::class => Container\DescribeConsentFactory::class,
                     DecideConsent::class => Container\DecideConsentFactory::class,
@@ -587,6 +595,7 @@ final class ConfigProvider
                     RoleRepository::class => Container\RoleRepositoryFactory::class,
                     ConsentRepository::class => Container\ConsentRepositoryFactory::class,
                     LoginStateStore::class => Container\LoginStateStoreFactory::class,
+                    PushedAuthorizationRequestStore::class => Container\PushedAuthorizationRequestStoreFactory::class,
                     ConsentStateStore::class => Container\ConsentStateStoreFactory::class,
                     WebAuthnChallengeStore::class => Container\WebAuthnChallengeStoreFactory::class,
                     PasskeyVerifier::class => Container\PasskeyVerifierFactory::class,

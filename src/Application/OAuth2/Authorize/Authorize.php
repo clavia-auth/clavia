@@ -16,34 +16,28 @@ use Clavia\Application\Authentication\Mfa\BeginEnrolmentOnTheWay;
 use Clavia\Application\Authentication\Mfa\BeginStepUp;
 use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Connection\ConnectionAccess;
-use Clavia\Application\OAuth2\ReadRequestedAccess;
 use Clavia\Application\OAuth2\RequestParameters;
 use Clavia\Application\Port\ConsentStateStore;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Application\Port\NonceRegistry;
+use Clavia\Application\Port\PushedAuthorizationRequestStore;
 use Clavia\Domain\Authentication\AuthenticationRequirement;
 use Clavia\Domain\Authentication\LoginState;
 use Clavia\Domain\Client\Client;
-use Clavia\Domain\Client\ClientId;
-use Clavia\Domain\Client\ClientRepository;
-use Clavia\Domain\Client\ResponseType;
 use Clavia\Domain\Consent\ConsentPolicy;
 use Clavia\Domain\Consent\ConsentRepository;
 use Clavia\Domain\Consent\PendingConsent;
 use Clavia\Domain\OAuth2\AuthorizationCode;
 use Clavia\Domain\OAuth2\AuthorizationCodeId;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
-use Clavia\Domain\OAuth2\CodeChallenge;
 use Clavia\Domain\OAuth2\MaxAge;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use Clavia\Domain\OAuth2\Prompt;
-use Clavia\Domain\Oidc\Nonce;
-use Clavia\Domain\Oidc\OidcScope;
+use Clavia\Domain\OAuth2\PushedAuthorizationRequest;
 use Clavia\Domain\Rbac\RoleRepository;
 use Clavia\Domain\ResourceServer\ResourceServer;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\Digest;
-use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\RandomSource;
 use Clavia\Domain\Shared\ScopeSet;
 use Clavia\Domain\Shared\SecretGenerator;
@@ -89,16 +83,16 @@ final readonly class Authorize
      *                                           remain valid.
      */
     public function __construct(
-        private ClientRepository $clients,
+        private AuthorizationRequestRules $rules,
         private AuthorizationCodeRepository $codes,
         private LoginStateStore $loginStates,
         private NonceRegistry $nonces,
-        private ReadRequestedAccess $requestedAccess,
         private RoleRepository $roles,
         private ConsentRepository $consents,
         private ConsentStateStore $consentStates,
         private ConnectionAccess $connections,
         private Sessions $sessions,
+        private PushedAuthorizationRequestStore $pushedRequests,
         private BeginStepUp $beginStepUp,
         private BeginEnrolmentOnTheWay $beginEnrolment,
         private SecretGenerator $secrets,
@@ -115,22 +109,27 @@ final readonly class Authorize
      */
     public function __invoke(AuthorizationRequest $request): AuthorizationOutcome
     {
+        [$request, $pushed] = $this->readByReference($request);
         $parameters = $request->parameters;
 
-        $client = $this->client($parameters);
-        $redirectUri = $this->redirectUri($parameters, $client);
+        $client = $this->rules->client($parameters);
+        $redirectUri = $this->rules->redirectUri($parameters, $client);
 
         // `state` is only echoed when it is unambiguous.
         $state = $parameters->isRepeated('state') ? null : $parameters->get('state');
 
         try {
-            self::refuseRequestObjects($parameters);
-            [$scope, $target] = $this->validate($parameters, $client);
-            $nonce = $this->nonce($parameters, $client, $scope);
-            $challenge = self::challenge($parameters, $client, $nonce);
+            if ($client->requiresPushedAuthorizationRequests && $pushed === null) {
+                // RFC 9126 §6: this client's requests come pushed, or not at all.
+                throw OAuth2Error::invalidRequest('This client must push its authorization requests to /oauth2/par.');
+            }
+            AuthorizationRequestRules::refuseRequestObjects($parameters);
+            [$scope, $target] = $this->rules->validate($parameters, $client);
+            $nonce = $this->rules->nonce($parameters, $client, $scope);
+            $challenge = AuthorizationRequestRules::challenge($parameters, $client, $nonce);
             $prompt = Prompt::fromParameter($parameters->get('prompt'));
             $maxAge = MaxAge::fromParameter($parameters->get('max_age'));
-            $requirement = self::requirement($parameters);
+            $requirement = AuthorizationRequestRules::requirement($parameters);
         } catch (OAuth2Error $refusal) {
             return new RequestRefused($redirectUri, $refusal, $state);
         }
@@ -164,13 +163,14 @@ final readonly class Authorize
                 $resumed = $resumed->with('max_age', null);
             }
             $handle = $this->secrets->token();
-            $this->loginStates->put($handle, new LoginState($request->resumption($resumed), $client->id));
+            $returnTo = $this->resume($request, $resumed, $client, $pushed);
+            $this->loginStates->put($handle, new LoginState($returnTo, $client->id));
 
             return new LoginRequired($handle);
         }
 
         if (! $requirement->isMetBy($endUser->session?->methods ?? [])) {
-            return $this->stepUp($request, $endUser, $client, $redirectUri, $state, $requirement, $prompt);
+            return $this->stepUp($request, $endUser, $client, $redirectUri, $state, $requirement, $prompt, $pushed);
         }
 
         // On an API that enforces roles, somebody holding nothing there is refused now —
@@ -199,13 +199,32 @@ final readonly class Authorize
                 );
             }
 
-            return $this->holdForConsent($request, $endUser, $client, $redirectUri, $state, $scope, $target, $prompt);
+            return $this->holdForConsent(
+                $request,
+                $endUser,
+                $client,
+                $redirectUri,
+                $state,
+                $scope,
+                $target,
+                $prompt,
+                $pushed,
+            );
+        }
+
+        // A pushed request yields one code (RFC 9126 §4); spent now, atomically, like the nonce.
+        if ($pushed !== null && ! $this->pushedRequests->spend($pushed)) {
+            return new RequestRefused(
+                $redirectUri,
+                OAuth2Error::invalidRequest("The 'request_uri' has already been used."),
+                $state,
+            );
         }
 
         // Spent only now that a code is about to exist; atomic, so of two concurrent
         // requests carrying it only one gets a code.
         if ($nonce !== null && ! $this->nonces->claim($client->id, $nonce, $this->nonceLifetimeSeconds)) {
-            return new RequestRefused($redirectUri, self::nonceReplayed(), $state);
+            return new RequestRefused($redirectUri, AuthorizationRequestRules::nonceReplayed(), $state);
         }
 
         $code = $this->secrets->token();
@@ -233,6 +252,68 @@ final readonly class Authorize
     }
 
     /**
+     * A request by reference (RFC 9126 §4): the parameters it pushed replace the query, which
+     * carries only `client_id` — required, and the pushing client's — and `request_uri`. Anything
+     * else in the query is ignored, as RFC 9101 §5 has the parameters of a request object win.
+     * A `request_uri` this server did not hand out is left for the rules to refuse
+     * (`request_uri_not_supported`).
+     *
+     * @return array{AuthorizationRequest, string|null} The request to decide, and the pushed request's
+     *                                                 handle when there is one.
+     *
+     * @throws OAuth2Error When the `request_uri` is unknown, expired or another client's: there is
+     *                     then no redirect URI to trust, so it is shown, never redirected.
+     */
+    private function readByReference(AuthorizationRequest $request): array
+    {
+        $query = $request->parameters;
+        $requestUri = $query->get('request_uri');
+        $handle = $requestUri === null || $query->isRepeated('request_uri')
+            ? null
+            : PushedAuthorizationRequest::handleOf($requestUri);
+        if ($handle === null || $handle === '') {
+            return [$request, null];
+        }
+
+        $client = $this->rules->client($query);
+        $pushed = $this->pushedRequests->find($handle);
+        if ($pushed === null || ! $pushed->clientId->equals($client->id)) {
+            throw OAuth2Error::invalidRequest("The 'request_uri' is unknown, has expired, or is another client's.");
+        }
+
+        return [$request->withParameters(RequestParameters::fromPairs($pushed->parameters)), $handle];
+    }
+
+    /**
+     * Where the browser comes back to make this request again, after it signed in, consented or
+     * stepped up. A pushed request comes back pushed again — by reference, its parameters never in
+     * the address bar — under a new handle that lives as long as the login state holding it; the
+     * one it came under is spent, so it yields no second request.
+     *
+     * @param string|null $pushed The handle of the pushed request this is, if it is one.
+     */
+    private function resume(
+        AuthorizationRequest $request,
+        RequestParameters $parameters,
+        Client $client,
+        ?string $pushed,
+    ): string {
+        if ($pushed === null) {
+            return $request->resumption($parameters);
+        }
+
+        $_ = $this->pushedRequests->spend($pushed);
+        $handle = $this->secrets->token();
+        $this->pushedRequests->push(
+            $handle,
+            new PushedAuthorizationRequest($client->id, $parameters->pairs()),
+            LoginState::LIFETIME_SECONDS,
+        );
+
+        return $request->byReference($client->id, PushedAuthorizationRequest::uriFor($handle));
+    }
+
+    /**
      * Whether the person behind the request has to sign in again although they are
      * signed in: the client asked to see them (`prompt=login`, `select_account`), or their
      * sign-in is older than `max_age` — or of an unknown time, which no `max_age` accepts.
@@ -241,21 +322,6 @@ final readonly class Authorize
     {
         return $prompt->demandsSignIn()
             || ($maxAge?->isExceededBy($endUser->session?->authenticatedAt, $this->clock->now()) ?? false);
-    }
-
-    /**
-     * What the request asks of the sign-in: `acr_values`, of which only the levels this server
-     * knows count (docs/design/mfa-policies.md §2).
-     *
-     * @throws OAuth2Error
-     */
-    private static function requirement(RequestParameters $parameters): AuthenticationRequirement
-    {
-        try {
-            return AuthenticationRequirement::fromAcrValues($parameters->get('acr_values'));
-        } catch (InvalidValue) {
-            throw OAuth2Error::invalidRequest("'acr_values' must name at least one value.");
-        }
     }
 
     /**
@@ -271,6 +337,7 @@ final readonly class Authorize
         ?string $state,
         AuthenticationRequirement $requirement,
         Prompt $prompt,
+        ?string $pushed,
     ): StepUpRequired|EnrolmentRequired|RequestRefused {
         if ($prompt->forbidsInteraction()) {
             return new RequestRefused(
@@ -282,7 +349,7 @@ final readonly class Authorize
 
         // Without a session (the development auto-login) there is nothing to raise.
         $session = $endUser->session;
-        $resumed = $request->resumption($request->parameters);
+        $resumed = $this->resume($request, $request->parameters, $client, $pushed);
         $challenge = $session === null ? null : ($this->beginStepUp)($session, $requirement, $resumed, $client->id);
         if ($challenge !== null) {
             return new StepUpRequired($challenge);
@@ -300,22 +367,6 @@ final readonly class Authorize
     }
 
     /**
-     * OIDC Core §6: this server takes no request object, by value or by reference, and
-     * says so with the errors defined for that.
-     *
-     * @throws OAuth2Error
-     */
-    private static function refuseRequestObjects(RequestParameters $parameters): void
-    {
-        if ($parameters->get('request') !== null) {
-            throw OAuth2Error::requestNotSupported('Request objects are not supported: send the parameters as such.');
-        }
-        if ($parameters->get('request_uri') !== null) {
-            throw OAuth2Error::requestUriNotSupported('Request objects by reference are not supported.');
-        }
-    }
-
-    /**
      * Put the request on hold behind a fresh handle, for the consent screen to show and
      * decide. Allowing sends the browser back to the request — without the `consent` it
      * may have prompted for, which has then been given, or it would ask forever.
@@ -329,10 +380,16 @@ final readonly class Authorize
         ScopeSet $scope,
         ?ResourceServer $target,
         Prompt $prompt,
+        ?string $pushed,
     ): ConsentRequired {
         $handle = $this->secrets->token();
         $this->consentStates->park($handle, new PendingConsent(
-            $request->resumption($request->parameters->with('prompt', $prompt->without(Prompt::CONSENT))),
+            $this->resume(
+                $request,
+                $request->parameters->with('prompt', $prompt->without(Prompt::CONSENT)),
+                $client,
+                $pushed,
+            ),
             $redirectUri,
             $state,
             $endUser->userId,
@@ -342,168 +399,5 @@ final readonly class Authorize
         ));
 
         return new ConsentRequired($handle);
-    }
-
-    /**
-     * @throws OAuth2Error
-     */
-    private function client(RequestParameters $parameters): Client
-    {
-        $clientId = $parameters->get('client_id');
-        if ($clientId === null || $parameters->isRepeated('client_id')) {
-            throw OAuth2Error::invalidClient("Missing or repeated 'client_id' parameter.");
-        }
-
-        try {
-            $client = $this->clients->find(ClientId::fromString($clientId));
-        } catch (InvalidValue) {
-            $client = null;
-        }
-
-        return $client ?? throw OAuth2Error::invalidClient('The client does not exist on this server.');
-    }
-
-    /**
-     * The redirect URI the response will be sent to, checked by exact match against the
-     * client's registration (OAuth 2.1 §2.3.1).
-     *
-     * @throws OAuth2Error
-     */
-    private function redirectUri(RequestParameters $parameters, Client $client): string
-    {
-        if ($parameters->isRepeated('redirect_uri')) {
-            throw OAuth2Error::invalidRequest("Repeated 'redirect_uri' parameter.");
-        }
-
-        $redirectUri = $parameters->get('redirect_uri');
-        if ($redirectUri === null) {
-            // RFC 6749 §3.1.2.3: it may be omitted only when exactly one is registered.
-            $sole = $client->soleRedirectUri();
-            if ($sole === null) {
-                throw OAuth2Error::invalidRequest("Missing 'redirect_uri' parameter.");
-            }
-
-            return $sole->value;
-        }
-
-        if (! $client->hasRedirectUri($redirectUri)) {
-            throw OAuth2Error::invalidRequest('The redirect URI is not registered for this client.');
-        }
-
-        return $redirectUri;
-    }
-
-    /**
-     * Everything that can be reported back to the client: repetition, the response
-     * type, the audience — which a third-party application may not set to a system API —
-     * and the scope.
-     *
-     * @return array{ScopeSet, ResourceServer|null} The scope, and the API it was checked against.
-     *
-     * @throws OAuth2Error
-     */
-    private function validate(RequestParameters $parameters, Client $client): array
-    {
-        $repeated = $parameters->repeated();
-        if ($repeated !== []) {
-            // RFC 6749 §3.1: "Request and response parameters MUST NOT be included more than once."
-            throw OAuth2Error::invalidRequest(sprintf("Repeated '%s' parameter.", $repeated[0]));
-        }
-
-        $responseType = $parameters->get('response_type');
-        if ($responseType === null) {
-            throw OAuth2Error::invalidRequest("Missing 'response_type' parameter.");
-        }
-
-        $type = ResponseType::tryFrom($responseType);
-        if ($type === null) {
-            throw OAuth2Error::unsupportedResponseType(
-                'This server only supports response_type=code.',
-            );
-        }
-        if (! $client->mayUseResponseType($type)) {
-            throw OAuth2Error::unauthorizedClient(
-                sprintf("The client is not authorized to use 'response_type=%s'.", $type->value),
-            );
-        }
-
-        $access = ($this->requestedAccess)($parameters, $client);
-
-        return [$access->scope, $access->target];
-    }
-
-    /**
-     * The `nonce` of an OpenID Connect request (OIDC Core §3.1.2.1), refused when this
-     * client has used it before: a captured authorization URL must not be answered twice.
-     *
-     * Only an OpenID Connect request — one asking for `openid` — has a nonce. Anywhere
-     * else the parameter means nothing, and an unknown parameter is ignored (RFC 6749
-     * §3.1). Optional in the code flow, so its absence is not an error.
-     *
-     * @throws OAuth2Error
-     */
-    private function nonce(RequestParameters $parameters, Client $client, ScopeSet $scope): ?Nonce
-    {
-        $value = $parameters->get('nonce');
-        if ($value === null || ! $scope->contains(OidcScope::OPENID)) {
-            return null;
-        }
-
-        try {
-            $nonce = Nonce::fromString($value);
-        } catch (InvalidValue) {
-            throw OAuth2Error::invalidRequest("Invalid 'nonce'.");
-        }
-
-        if ($this->nonces->isUsed($client->id, $nonce)) {
-            throw self::nonceReplayed();
-        }
-
-        return $nonce;
-    }
-
-    private static function nonceReplayed(): OAuth2Error
-    {
-        return OAuth2Error::invalidRequest("The 'nonce' has already been used.");
-    }
-
-    /**
-     * PKCE is mandatory for every client — confidential ones included — and `S256` is
-     * the only method. A missing method is not defaulted: RFC 7636's default is
-     * `plain`, the downgrade PKCE exists to prevent.
-     *
-     * The one exception is OAuth 2.1 §7.5.1's: a confidential client the operator relieved
-     * of PKCE may omit it from an OpenID Connect request that carries a `nonce`, which
-     * then binds the code to the client's own request instead — the ID token repeats it.
-     * A challenge it does send is checked like any other.
-     *
-     * @throws OAuth2Error
-     */
-    private static function challenge(RequestParameters $parameters, Client $client, ?Nonce $nonce): ?CodeChallenge
-    {
-        $challenge = $parameters->get('code_challenge');
-        if ($challenge === null && ! $client->requiresPkce && $nonce !== null) {
-            return null;
-        }
-        if ($challenge === null) {
-            throw OAuth2Error::invalidRequest($client->requiresPkce
-                ? "Missing 'code_challenge' parameter: PKCE is required."
-                : "Missing 'code_challenge' parameter: PKCE is required unless an OpenID Connect request carries "
-                    . "a 'nonce'.");
-        }
-
-        $method = $parameters->get('code_challenge_method');
-        if ($method === null) {
-            throw OAuth2Error::invalidRequest("Missing 'code_challenge_method' parameter.");
-        }
-        if ($method !== CodeChallenge::METHOD) {
-            throw OAuth2Error::invalidRequest("Unsupported 'code_challenge_method': only S256 is accepted.");
-        }
-
-        try {
-            return CodeChallenge::fromString($challenge);
-        } catch (InvalidValue) {
-            throw OAuth2Error::invalidRequest("Invalid 'code_challenge'.");
-        }
     }
 }

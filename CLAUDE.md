@@ -312,10 +312,15 @@ identity providers (`IdentityProvider[s]`, `OidcDiscovery`), outbound URLs (`Out
 `CodeIssued`, `RequestRefused`, `LoginRequired` or `ConsentRequired`. It throws `OAuth2Error`
 only when the error must not be redirected. The order is fixed:
 
+0. **A pushed request** (RFC 9126): a `request_uri` this server handed out at `/oauth2/par`
+   replaces the query with the parameters pushed, the query keeping only `client_id` (which
+   must be the pushing client's); anything else in it is ignored. An unknown, expired or
+   another client's `request_uri` is thrown, never redirected.
 1. **Settle the client and the redirect URI**, or throw. That error is shown to the person,
-   never redirected. Redirect URIs match as exact strings.
-2. **Refuse repeated parameters** (RFC 6749 §3.1) and request objects (`request`,
-   `request_uri`).
+   never redirected. Redirect URIs match as exact strings. A client registered with
+   `require_pushed_authorization_requests` is refused (`invalid_request`) anything not pushed.
+2. **Refuse repeated parameters** (RFC 6749 §3.1) and request objects: `request`, and any
+   `request_uri` but a pushed request's (`request_uri_not_supported`).
 3. **Validate everything else**: response type, PKCE (S256), scope, `audience` (the API whose
    permissions the scope may hold; unknown is `invalid_target`), `nonce`, `prompt`, `max_age`.
    Failures are sent *to* the redirect URI with `state` and `iss`. An invalid request never
@@ -362,6 +367,19 @@ dispatches to a `Token\Grant`. `AuthorizationCodeGrant`, inside one transaction:
 
 A refusal that must survive (a replay) is returned from the transaction and thrown after
 commit, because throwing inside would roll the spend back.
+
+### Pushed authorization requests
+
+`POST /oauth2/par` (RFC 9126, `Par\PushAuthorizationRequest`) takes an authorization request
+over the back channel: the client authenticates as at the token endpoint (a public one names
+itself), the request is held to the authorization endpoint's rules (`AuthorizationRequestRules`,
+shared by both), and a `request_uri` (`urn:ietf:params:oauth:request_uri:…`) comes back, `201`,
+good for `CLAVIA_PAR_LIFETIME` (60 s by default). A `request_uri` in the push is refused, and
+`client_secret` is never stored. The pushed request lives in Redis
+(`PushedAuthorizationRequestStore`): read as often as the browser comes back, spent when it
+yields a code, and pushed again under a new handle — as long as the login state — when it is held
+for the sign-in page, consent or a step-up. Discovery names the endpoint;
+`require_pushed_authorization_requests` is per client (RFC 9126 §6), off by default.
 
 ### Client authentication
 
@@ -722,7 +740,10 @@ These follow from the RFCs and from mistakes already made once. Breaking one is 
 - Passwords and client secrets are bcrypt hashes (cost 12; more than 72 bytes or a NUL is
   refused, never truncated). Codes and tokens are stored as SHA-256 digests, for indexed lookup.
 - `prompt`, `max_age`, `request` and `request_uri` are one decision at the authorization
-  endpoint (see the flow above).
+  endpoint (see the flow above). The one `request_uri` accepted is a pushed request's
+  (RFC 9126): the URN `/oauth2/par` handed out, for the client that pushed it. It yields one
+  code; a held request resumes pushed again, by reference, so its parameters never reach the
+  address bar.
 - Any repeated request parameter is refused.
 
 **Browser**

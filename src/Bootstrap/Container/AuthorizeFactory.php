@@ -15,13 +15,13 @@ use Clavia\Application\Authentication\Mfa\BeginEnrolmentOnTheWay;
 use Clavia\Application\Authentication\Mfa\BeginStepUp;
 use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Connection\ConnectionAccess;
+use Clavia\Application\OAuth2\Authorize\AuthorizationRequestRules;
 use Clavia\Application\OAuth2\Authorize\Authorize;
-use Clavia\Application\OAuth2\ReadRequestedAccess;
 use Clavia\Application\Port\ConsentStateStore;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Application\Port\NonceRegistry;
+use Clavia\Application\Port\PushedAuthorizationRequestStore;
 use Clavia\Configuration\Settings;
-use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Consent\ConsentRepository;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
 use Clavia\Domain\Rbac\RoleRepository;
@@ -34,16 +34,16 @@ final class AuthorizeFactory
 {
     public function __invoke(ContainerInterface $container): Authorize
     {
-        /** @var ClientRepository $clients */
-        $clients = $container->get(ClientRepository::class);
+        /** @var AuthorizationRequestRules $rules */
+        $rules = $container->get(AuthorizationRequestRules::class);
+        /** @var PushedAuthorizationRequestStore $pushedRequests */
+        $pushedRequests = $container->get(PushedAuthorizationRequestStore::class);
         /** @var AuthorizationCodeRepository $codes */
         $codes = $container->get(AuthorizationCodeRepository::class);
         /** @var LoginStateStore $loginStates */
         $loginStates = $container->get(LoginStateStore::class);
         /** @var NonceRegistry $nonces */
         $nonces = $container->get(NonceRegistry::class);
-        /** @var ReadRequestedAccess $requestedAccess */
-        $requestedAccess = $container->get(ReadRequestedAccess::class);
         /** @var RoleRepository $roles */
         $roles = $container->get(RoleRepository::class);
         /** @var ConsentRepository $consents */
@@ -77,16 +77,16 @@ final class AuthorizeFactory
         $beginStepUp = $container->get(BeginStepUp::class);
 
         return new Authorize(
-            $clients,
+            $rules,
             $codes,
             $loginStates,
             $nonces,
-            $requestedAccess,
             $roles,
             $consents,
             $consentStates,
             $connections,
             $sessions,
+            $pushedRequests,
             $beginStepUp,
             $beginEnrolment,
             $secrets,

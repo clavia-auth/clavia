@@ -40,6 +40,7 @@ final readonly class ProviderMetadata
     public const string AUTHORIZATION_ENDPOINT = '/oauth2/authorize';
     public const string TOKEN_ENDPOINT = '/oauth2/token';
     public const string INTROSPECTION_ENDPOINT = '/oauth2/introspect';
+    public const string PUSHED_AUTHORIZATION_REQUEST_ENDPOINT = '/oauth2/par';
     public const string REVOCATION_ENDPOINT = '/oauth2/revoke';
     public const string DEVICE_AUTHORIZATION_ENDPOINT = '/oauth2/device/code';
     public const string USERINFO_ENDPOINT = '/oidc/userinfo';
@@ -109,6 +110,9 @@ final readonly class ProviderMetadata
             // RFC 8414 §2: introspection (RFC 7662) takes a secret; revocation (RFC 7009) a public
             // client's id too.
             'introspection_endpoint' => $this->issuer . self::INTROSPECTION_ENDPOINT,
+            // RFC 9126 §5. Whether a client must use it is its own registration's to say (§6).
+            'pushed_authorization_request_endpoint' => $this->issuer . self::PUSHED_AUTHORIZATION_REQUEST_ENDPOINT,
+            'require_pushed_authorization_requests' => false,
             'introspection_endpoint_auth_methods_supported' => self::methods(IntrospectToken::AUTH_METHODS),
             'revocation_endpoint' => $this->issuer . self::REVOCATION_ENDPOINT,
             'revocation_endpoint_auth_methods_supported' => self::methods(RevokeToken::AUTH_METHODS),
@@ -120,7 +124,9 @@ final readonly class ProviderMetadata
             'prompt_values_supported' => Prompt::SUPPORTED,
             'claims_parameter_supported' => false,
             'request_parameter_supported' => false,
-            // The default is true.
+            // The default is true. This is OIDC's `request_uri`: a request object fetched from a URL,
+            // which this server never does. A pushed request's `request_uri` (RFC 9126) is another
+            // thing, advertised by `pushed_authorization_request_endpoint`.
             'request_uri_parameter_supported' => false,
             // RFC 8414 §2: absent would mean "no PKCE". `plain` is not offered.
             'code_challenge_methods_supported' => [CodeChallenge::METHOD],

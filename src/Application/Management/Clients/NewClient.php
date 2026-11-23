@@ -34,6 +34,8 @@ final readonly class NewClient
      *                                    `nonce` go without PKCE (OAuth 2.1 §7.5.1).
      * @param string       $mfaPolicy     `optional` or `required`: whether its users must sign in with more
      *                                    than one factor ({@see \Clavia\Domain\Authentication\MfaPolicy}).
+     * @param bool         $requirePushedAuthorizationRequests Whether its authorization requests must be
+     *                                    pushed first (RFC 9126 §6).
      */
     public function __construct(
         public string $name = '',
@@ -49,6 +51,7 @@ final readonly class NewClient
         public bool $backChannelLogoutSessionRequired = false,
         public bool $requirePkce = true,
         public string $mfaPolicy = 'optional',
+        public bool $requirePushedAuthorizationRequests = false,
     ) {
     }
 }

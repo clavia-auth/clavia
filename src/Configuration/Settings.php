@@ -180,6 +180,13 @@ final readonly class Settings
         /** How long such a failure counts, seconds; every new one restarts it. */
         #[Range(min: 1)]
         public int $tokenFailureWindow = 300,
+        /**
+         * How long a `request_uri` from `/oauth2/par` is good for, seconds (RFC 9126 §2.2: short,
+         * since it only has to last until the browser reaches the authorization endpoint). A
+         * request held for the sign-in page is pushed again for as long as the login state.
+         */
+        #[Range(min: 5, max: 600)]
+        public int $parLifetime = 60,
         /** How long the audit trail keeps an event, days; `clavia audit:purge` removes what is older. */
         #[Range(min: 1)]
         public int $auditRetentionDays = 90,
