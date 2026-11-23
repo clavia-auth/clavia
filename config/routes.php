@@ -55,6 +55,7 @@ use Clavia\Adapter\Primary\Http\Management\UserRolesHandler;
 use Clavia\Adapter\Primary\Http\Management\UserSessionsHandler;
 use Clavia\Adapter\Primary\Http\Management\UsersHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
+use Clavia\Adapter\Primary\Http\OAuth2\ClientConfigurationHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\ClientRegistrationHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\DeviceAuthorizationHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\IntrospectionHandler;
@@ -92,6 +93,12 @@ return static function (Application $app, ContainerInterface $container): void {
     // RFC 7591: only for a bearer of an initial access token, and only when an operator allows it.
     if ($settings->clientRegistration !== ClientRegistration::Off) {
         $app->post('/oauth2/register', ClientRegistrationHandler::class, 'oauth2.register');
+        $app->route(
+            '/oauth2/register/{client_id}',
+            ClientConfigurationHandler::class,
+            ['GET', 'PUT', 'DELETE'],
+            'oauth2.register.client',
+        );
     }
 
     // ── /.well-known/* — the provider's metadata, public and cacheable. One document at

@@ -35,6 +35,7 @@ use Clavia\Domain\Shared\ScopeSet;
 use Clavia\Domain\Shared\SecretGenerator;
 use ClaviaTest\Support\Fake\FakePasswordHasher;
 use ClaviaTest\Support\Fake\FrozenClock;
+use ClaviaTest\Support\Fake\InMemoryClientRegistrationRepository;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
 use ClaviaTest\Support\Fake\InMemoryConnectionRepository;
 use ClaviaTest\Support\Fake\InMemoryDomainEvents;
@@ -189,7 +190,9 @@ final class ClientsTest extends TestCase
     {
         $this->expectException(NotFound::class);
 
-        new ReadClients($this->clients)->one(ClientId::fromString('nobody'));
+        $read = new ReadClients($this->clients, new InMemoryClientRegistrationRepository());
+
+        $read->one(ClientId::fromString('nobody'));
     }
 
     public function testTheGrantTypesAreKeptAsRegistered(): void

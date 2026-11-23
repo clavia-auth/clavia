@@ -605,6 +605,20 @@ answer. Redirect and post-logout URIs are https without a fragment, or, for a pu
 on `127.0.0.1` or `[::1]` (RFC 8252 §7.3), never `localhost`. The `201` (§3.2.1) carries the
 client secret (`client_secret_expires_at: 0`) and the registration access token, once.
 
+`GET | PUT | DELETE /oauth2/register/{client_id}` (RFC 7592, `RegisteredClients` the one door) answer
+only to the registration access token of the client in the path, `Authorization: Bearer`: an
+operator's client has no registration, so no token reaches it, and every miss is one `401
+invalid_token`. `GET` describes the client without its secret and rotates nothing. `PUT` replaces
+the metadata under the same `RegistrationMetadata` (an omitted field takes its default): it needs
+`client_id`, refuses the server's own fields (`registration_access_token`,
+`registration_client_uri`, `client_secret_expires_at`, `client_id_issued_at`), a `client_secret`
+that is not the current one, and a change of client type; it keeps the id, the secret and the
+operator's settings, rotates the registration access token and returns the new one once.
+`DELETE` deletes the client as the Management API does (`204`), but in its own use case:
+`DeleteClient` refuses the client a token was issued to, which is the point here. Both changes
+are the client acting as itself in the trail. The Management API shows a client's `registration`
+(`initial_access_token_id`, `registered_at`, or null), read with the client (`ReadClients`).
+
 ### Device authorization (RFC 8628)
 
 `POST /oauth2/device/code` validates like an authorization request (`ReadRequestedAccess` is

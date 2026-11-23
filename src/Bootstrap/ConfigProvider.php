@@ -81,6 +81,7 @@ use Clavia\Adapter\Primary\Http\Management\UserRolesHandler;
 use Clavia\Adapter\Primary\Http\Management\UserSessionsHandler;
 use Clavia\Adapter\Primary\Http\Management\UsersHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
+use Clavia\Adapter\Primary\Http\OAuth2\ClientConfigurationHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\ClientRegistrationHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\DeviceAuthorizationHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\IntrospectionHandler;
@@ -172,8 +173,12 @@ use Clavia\Application\Authentication\SignIn\SignInWithPassword;
 use Clavia\Application\Authentication\SignOut;
 use Clavia\Application\Authentication\SignOutEverywhere;
 use Clavia\Application\Clients\RegisterMachineClient;
+use Clavia\Application\Clients\Registration\DeleteClientConfiguration;
+use Clavia\Application\Clients\Registration\ReadClientConfiguration;
 use Clavia\Application\Clients\Registration\RegisterClientDynamically;
+use Clavia\Application\Clients\Registration\RegisteredClients;
 use Clavia\Application\Clients\Registration\RegistrationMetadata;
+use Clavia\Application\Clients\Registration\UpdateClientConfiguration;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\Development\BuildAuthorizationUrl;
 use Clavia\Application\Development\SeedDashboardClient;
@@ -429,6 +434,7 @@ final class ConfigProvider
                     InitialAccessTokensHandler::class => Container\InitialAccessTokensHandlerFactory::class,
                     InitialAccessTokenHandler::class => Container\InitialAccessTokenHandlerFactory::class,
                     ClientRegistrationHandler::class => Container\ClientRegistrationHandlerFactory::class,
+                    ClientConfigurationHandler::class => Container\ClientConfigurationHandlerFactory::class,
                     PushedAuthorizationRequestHandler::class
                         => Container\PushedAuthorizationRequestHandlerFactory::class,
                     HeldConsents::class => Container\HeldConsentsFactory::class,
@@ -592,6 +598,10 @@ final class ConfigProvider
                     ReadInitialAccessTokens::class => Container\ReadInitialAccessTokensFactory::class,
                     RegistrationMetadata::class => Container\RegistrationMetadataFactory::class,
                     RegisterClientDynamically::class => Container\RegisterClientDynamicallyFactory::class,
+                    RegisteredClients::class => Container\RegisteredClientsFactory::class,
+                    ReadClientConfiguration::class => Container\ReadClientConfigurationFactory::class,
+                    UpdateClientConfiguration::class => Container\UpdateClientConfigurationFactory::class,
+                    DeleteClientConfiguration::class => Container\DeleteClientConfigurationFactory::class,
                     UpdateRole::class => Container\UpdateRoleFactory::class,
                     DeleteRole::class => Container\DeleteRoleFactory::class,
                     RoleAssignments::class => Container\RoleAssignmentsFactory::class,

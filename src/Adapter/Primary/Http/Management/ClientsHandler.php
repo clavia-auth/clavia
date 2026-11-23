@@ -68,7 +68,8 @@ final readonly class ClientsHandler implements RequestHandlerInterface
         ));
 
         return $this->responder->created(
-            ManagementViews::clientWithSecret($registered),
+            // An operator's client: it did not register itself.
+            ManagementViews::clientWithSecret($registered, null),
             '/api/v1/clients/' . rawurlencode($registered->client->id->value),
         );
     }

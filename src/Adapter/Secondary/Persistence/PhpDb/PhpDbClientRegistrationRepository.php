@@ -25,6 +25,8 @@ use Clavia\Domain\Shared\Digest;
  */
 final readonly class PhpDbClientRegistrationRepository implements ClientRegistrationRepository
 {
+    private const string COLUMNS = 'client_id, access_token_hash, initial_access_token_id, registered_at';
+
     public function __construct(private Database $database)
     {
     }
@@ -52,14 +54,53 @@ final readonly class PhpDbClientRegistrationRepository implements ClientRegistra
     {
         /** @var RegistrationRow|null $row */
         $row = $this->database->fetchOne(
-            'SELECT client_id, access_token_hash, initial_access_token_id, registered_at '
-            . 'FROM client_registrations WHERE client_id = :client_id',
+            'SELECT ' . self::COLUMNS . ' FROM client_registrations WHERE client_id = :client_id',
             ['client_id' => $clientId->value],
         );
 
-        if ($row === null) {
-            return null;
+        return $row === null ? null : self::hydrate($row);
+    }
+
+    #[\Override]
+    public function findByAccessToken(Digest $digest): ?ClientRegistration
+    {
+        /** @var RegistrationRow|null $row */
+        $row = $this->database->fetchOne(
+            'SELECT ' . self::COLUMNS . ' FROM client_registrations WHERE access_token_hash = :hash',
+            ['hash' => $digest->toString()],
+        );
+
+        return $row === null ? null : self::hydrate($row);
+    }
+
+    #[\Override]
+    public function ofClients(array $clientIds): array
+    {
+        if ($clientIds === []) {
+            return [];
         }
+        /** @var list<RegistrationRow> $rows */
+        $rows = $this->database->fetchAll(
+            'SELECT ' . self::COLUMNS . ' FROM client_registrations '
+            . 'WHERE client_id IN (SELECT jsonb_array_elements_text(CAST(:client_ids AS jsonb)))',
+            ['client_ids' => Jsonb::encode(array_map(static fn (ClientId $id): string => $id->value, $clientIds))],
+        );
+
+        return array_map(self::hydrate(...), $rows);
+    }
+
+    #[\Override]
+    public function save(ClientRegistration $registration): void
+    {
+        $this->database->execute(
+            'UPDATE client_registrations SET access_token_hash = :hash WHERE client_id = :client_id',
+            ['hash' => $registration->accessTokenDigest->toString(), 'client_id' => $registration->clientId->value],
+        );
+    }
+
+    /** @param RegistrationRow $row */
+    private static function hydrate(array $row): ClientRegistration
+    {
         $initialAccessTokenId = $row['initial_access_token_id'];
 
         return new ClientRegistration(

@@ -13,6 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Adapter\Primary\Http\Management\ManagementResponder;
 use Clavia\Adapter\Primary\Http\Management\RotateClientSecretHandler;
+use Clavia\Application\Management\Clients\ReadClients;
 use Clavia\Application\Management\Clients\RotateClientSecret;
 use Psr\Container\ContainerInterface;
 
@@ -22,9 +23,11 @@ final class RotateClientSecretHandlerFactory
     {
         /** @var RotateClientSecret $rotate */
         $rotate = $container->get(RotateClientSecret::class);
+        /** @var ReadClients $read */
+        $read = $container->get(ReadClients::class);
         /** @var ManagementResponder $responder */
         $responder = $container->get(ManagementResponder::class);
 
-        return new RotateClientSecretHandler($rotate, $responder);
+        return new RotateClientSecretHandler($rotate, $read, $responder);
     }
 }

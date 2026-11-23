@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Domain\Client\Registration;
 
 use Clavia\Domain\Client\ClientId;
+use Clavia\Domain\Shared\Digest;
 
 /**
  * The registrations of clients that registered themselves. Deleting a client deletes its
@@ -22,4 +23,20 @@ interface ClientRegistrationRepository
     public function add(ClientRegistration $registration): void;
 
     public function find(ClientId $clientId): ?ClientRegistration;
+
+    /** The registration a registration access token answers for, by the token's digest. */
+    public function findByAccessToken(Digest $digest): ?ClientRegistration;
+
+    /**
+     * The registrations of these clients, those that have one: a page of clients is described in
+     * one query.
+     *
+     * @param list<ClientId> $clientIds
+     *
+     * @return list<ClientRegistration>
+     */
+    public function ofClients(array $clientIds): array;
+
+    /** Record a new registration access token. */
+    public function save(ClientRegistration $registration): void;
 }

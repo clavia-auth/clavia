@@ -15,29 +15,61 @@ use Clavia\Application\Management\NotFound;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
+use Clavia\Domain\Client\Registration\ClientRegistration;
+use Clavia\Domain\Client\Registration\ClientRegistrationRepository;
 use Clavia\Domain\Shared\Page;
 use Clavia\Domain\Shared\PageRequest;
 
 /**
- * `GET /api/v1/clients` and `GET /api/v1/clients/{client_id}`: the queries, side by side.
+ * `GET /api/v1/clients` and `GET /api/v1/clients/{client_id}`: the queries, side by side, and the
+ * description every client answer carries — the client with its registration, when it has one.
  */
 final readonly class ReadClients
 {
-    public function __construct(private ClientRepository $clients)
-    {
+    public function __construct(
+        private ClientRepository $clients,
+        private ClientRegistrationRepository $registrations,
+    ) {
     }
 
-    /** @return Page<Client> */
+    /**
+     * A page of clients, their registrations read in one query.
+     *
+     * @return Page<DescribedClient>
+     */
     public function page(PageRequest $request): Page
     {
-        return $this->clients->page($request);
+        $page = $this->clients->page($request);
+        $registrations = [];
+        $ids = array_map(static fn (Client $client): ClientId => $client->id, $page->items);
+        foreach ($this->registrations->ofClients($ids) as $registration) {
+            $registrations[$registration->clientId->value] = $registration;
+        }
+
+        return $page->map(
+            static fn (Client $client): DescribedClient => new DescribedClient(
+                $client,
+                $registrations[$client->id->value] ?? null,
+            ),
+        );
     }
 
     /**
      * @throws NotFound
      */
-    public function one(ClientId $id): Client
+    public function one(ClientId $id): DescribedClient
     {
-        return $this->clients->find($id) ?? throw NotFound::of('client');
+        return $this->describe($this->clients->find($id) ?? throw NotFound::of('client'));
+    }
+
+    public function describe(Client $client): DescribedClient
+    {
+        return new DescribedClient($client, $this->registrations->find($client->id));
+    }
+
+    /** The registration of a client, when it registered itself. */
+    public function registrationOf(Client $client): ?ClientRegistration
+    {
+        return $this->registrations->find($client->id);
     }
 }
