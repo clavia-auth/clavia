@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Management\Caller\AuthenticateManagementCaller;
+use Clavia\Application\OAuth2\ProtectedResource\CheckSenderConstraint;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
@@ -32,6 +33,8 @@ final class AuthenticateManagementCallerFactory
         $clock = $container->get(Clock::class);
         /** @var ResourceServerRepository $resourceServers */
         $resourceServers = $container->get(ResourceServerRepository::class);
+        /** @var CheckSenderConstraint $senderConstraint */
+        $senderConstraint = $container->get(CheckSenderConstraint::class);
         /** @var Settings $settings */
         $settings = $container->get(Settings::class);
 
@@ -41,6 +44,7 @@ final class AuthenticateManagementCallerFactory
             $clock,
             Audience::fromString($settings->managementApiAudience()),
             $resourceServers,
+            $senderConstraint,
         );
     }
 }

@@ -230,6 +230,7 @@ use Clavia\Application\OAuth2\Device\RequestDeviceAuthorization;
 use Clavia\Application\OAuth2\Device\UserCodeThrottle;
 use Clavia\Application\OAuth2\Dpop\ReadDpopProof;
 use Clavia\Application\OAuth2\Par\PushAuthorizationRequest;
+use Clavia\Application\OAuth2\ProtectedResource\CheckSenderConstraint;
 use Clavia\Application\OAuth2\ReadRequestedAccess;
 use Clavia\Application\OAuth2\Token\AccessTokenMinter;
 use Clavia\Application\OAuth2\Token\AuthorizationCodeGrant;
@@ -410,6 +411,7 @@ final class ConfigProvider
                     Authorize::class => Container\AuthorizeFactory::class,
                     AuthorizationRequestRules::class => Container\AuthorizationRequestRulesFactory::class,
                     ReadDpopProof::class => Container\ReadDpopProofFactory::class,
+                    CheckSenderConstraint::class => Container\CheckSenderConstraintFactory::class,
                     PushAuthorizationRequest::class => Container\PushAuthorizationRequestFactory::class,
                     SigningKeysHandler::class => Container\SigningKeysHandlerFactory::class,
                     PushedAuthorizationRequestHandler::class

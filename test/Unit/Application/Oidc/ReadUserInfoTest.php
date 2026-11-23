@@ -11,6 +11,12 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Application\Oidc;
 
+use ClaviaTest\Support\Fake\FakeDpopProofVerifier;
+use ClaviaTest\Support\Fake\InMemoryDpopNonces;
+use ClaviaTest\Support\Fake\InMemoryDpopReplayCache;
+use Clavia\Application\OAuth2\Dpop\ReadDpopProof;
+use Clavia\Application\OAuth2\ProtectedResource\CheckSenderConstraint;
+use Clavia\Application\OAuth2\ProtectedResource\PresentedCredentials;
 use Clavia\Application\Oidc\UserInfo\ReadUserInfo;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\Profile;
@@ -43,7 +49,13 @@ final class ReadUserInfoTest extends TestCase
         $this->clock = new FrozenClock('2026-01-15T10:00:00Z');
         $this->tokens = new InMemoryAccessTokenRepository();
         $this->users = new InMemoryUserRepository();
-        $this->readUserInfo = new ReadUserInfo($this->tokens, $this->users, $this->clock);
+        $this->readUserInfo = new ReadUserInfo(
+            $this->tokens,
+            $this->users,
+            $this->clock,
+            self::senderConstraint(),
+            'https://auth.clavia.test/oidc/userinfo',
+        );
 
         $this->user = User::register(
             UserId::generate(new SeededRandomSource(1)),
@@ -61,7 +73,7 @@ final class ReadUserInfoTest extends TestCase
 
         self::assertSame(
             ['sub' => $this->user->id->value, 'name' => 'Ada', 'updated_at' => $this->clock->now()->getTimestamp()],
-            ($this->readUserInfo)('t-1'),
+            ($this->readUserInfo)(PresentedCredentials::bearer('t-1'), 'GET'),
         );
     }
 
@@ -106,7 +118,7 @@ final class ReadUserInfoTest extends TestCase
         $this->token('t-1', 'profile');
 
         try {
-            ($this->readUserInfo)('t-1');
+            ($this->readUserInfo)(PresentedCredentials::bearer('t-1'), 'GET');
             self::fail('The token was accepted.');
         } catch (BearerTokenError $error) {
             self::assertSame(BearerErrorCode::InsufficientScope, $error->error);
@@ -135,14 +147,30 @@ final class ReadUserInfoTest extends TestCase
         ));
     }
 
+    /**
+     * @param non-empty-string $token
+     */
     private function assertRefused(BearerErrorCode $expected, string $token): void
     {
         try {
-            ($this->readUserInfo)($token);
+            ($this->readUserInfo)(PresentedCredentials::bearer($token), 'GET');
             self::fail('The token was accepted.');
         } catch (BearerTokenError $error) {
             self::assertSame($expected, $error->error);
             self::assertNull($error->requiredScope);
         }
+    }
+
+    private static function senderConstraint(): CheckSenderConstraint
+    {
+        $clock = new FrozenClock();
+
+        return new CheckSenderConstraint(new ReadDpopProof(
+            new FakeDpopProofVerifier(),
+            new InMemoryDpopReplayCache($clock),
+            new InMemoryDpopNonces($clock),
+            $clock,
+            60,
+        ));
     }
 }

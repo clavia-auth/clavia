@@ -11,10 +11,16 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Application\Management;
 
+use ClaviaTest\Support\Fake\FakeDpopProofVerifier;
+use ClaviaTest\Support\Fake\InMemoryDpopNonces;
+use ClaviaTest\Support\Fake\InMemoryDpopReplayCache;
 use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
 use Clavia\Application\Management\Caller\AuthenticateManagementCaller;
 use Clavia\Application\Management\Caller\ManagementCaller;
 use Clavia\Application\Management\ManagementPermission;
+use Clavia\Application\OAuth2\Dpop\ReadDpopProof;
+use Clavia\Application\OAuth2\ProtectedResource\CheckSenderConstraint;
+use Clavia\Application\OAuth2\ProtectedResource\PresentedCredentials;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
@@ -36,6 +42,8 @@ use PHPUnit\Framework\TestCase;
  */
 final class CallerTest extends TestCase
 {
+    private const string URL = 'https://management.clavia.test/api/v1/users';
+
     private const string MANAGEMENT_API = 'https://management.clavia.test/api/v1/';
 
     private InMemoryAccessTokenRepository $tokens;
@@ -54,7 +62,7 @@ final class CallerTest extends TestCase
     {
         $this->issue('token', self::MANAGEMENT_API, 'read:users read:clients');
 
-        $caller = $this->authenticate()('token');
+        $caller = $this->authenticate()(PresentedCredentials::bearer('token'), 'GET', self::URL);
 
         self::assertTrue($caller->isClient(ClientId::fromString('machine')));
         self::assertNull($caller->userId);
@@ -85,7 +93,9 @@ final class CallerTest extends TestCase
         $this->users->save($user);
         $this->issue('token', self::MANAGEMENT_API, 'read:users', $user->id);
 
-        self::assertTrue($this->authenticate()('token')->isActingAs($user->id));
+        $caller = $this->authenticate()(PresentedCredentials::bearer('token'), 'GET', self::URL);
+
+        self::assertTrue($caller->isActingAs($user->id));
 
         $user->deactivate($this->clock->now());
         $this->users->save($user);
@@ -134,10 +144,13 @@ final class CallerTest extends TestCase
         ));
     }
 
+    /**
+     * @param non-empty-string $token
+     */
     private function assertRefused(string $token): void
     {
         try {
-            $this->authenticate()($token);
+            $this->authenticate()(PresentedCredentials::bearer($token), 'GET', self::URL);
             self::fail('The token was accepted.');
         } catch (BearerTokenError $refusal) {
             self::assertSame(BearerErrorCode::InvalidToken, $refusal->error);
@@ -152,6 +165,20 @@ final class CallerTest extends TestCase
             $this->clock,
             Audience::fromString(self::MANAGEMENT_API),
             new InMemoryResourceServerRepository(),
+            self::senderConstraint(),
         );
+    }
+
+    private static function senderConstraint(): CheckSenderConstraint
+    {
+        $clock = new FrozenClock();
+
+        return new CheckSenderConstraint(new ReadDpopProof(
+            new FakeDpopProofVerifier(),
+            new InMemoryDpopReplayCache($clock),
+            new InMemoryDpopNonces($clock),
+            $clock,
+            60,
+        ));
     }
 }

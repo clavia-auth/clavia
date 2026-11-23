@@ -13,11 +13,12 @@ namespace Clavia\Adapter\Primary\Http\Management;
 
 use Clavia\Adapter\Primary\Http\OpenApi\Validation\RequestRejected;
 use Clavia\Adapter\Primary\Http\Shared\BearerChallenger;
-use Clavia\Adapter\Primary\Http\Shared\BearerCredentials;
+use Clavia\Adapter\Primary\Http\Shared\AccessTokenCredentials;
 use Clavia\Application\Audit\AuditContext;
 use Clavia\Application\Management\Caller\AuthenticateManagementCaller;
 use Clavia\Application\Management\Conflict;
 use Clavia\Application\Management\NotFound;
+use Clavia\Application\OAuth2\ProtectedResource\TokenScheme;
 use Clavia\Domain\Connection\BuiltInConnection;
 use Clavia\Domain\OAuth2\BearerTokenError;
 use Clavia\Domain\ResourceServer\SystemApiProtected;
@@ -36,8 +37,8 @@ use stdClass;
  *
  * In this order, each step answering for itself:
  *
- *  1. **Credentials** — a bearer token in the `Authorization` header, and nowhere else
- *     (none: a bare challenge, 401).
+ *  1. **Credentials** — an access token in the `Authorization` header, and nowhere else:
+ *     `Bearer`, or `DPoP` with its proof (RFC 9449 §7.1); none: a bare challenge, 401.
  *  2. **The token** — live, issued for this API, its subject usable
  *     ({@see AuthenticateManagementCaller}; `invalid_token`, 401). The audience is
  *     checked before any scope: a scope means nothing without one.
@@ -55,12 +56,16 @@ use stdClass;
  */
 final readonly class ManagementApiMiddleware implements MiddlewareInterface
 {
+    /**
+     * @param non-empty-string $origin This API's origin, as configured: what a DPoP proof's `htu` starts with.
+     */
     public function __construct(
         private ManagementContract $contract,
         private AuthenticateManagementCaller $authenticate,
         private BearerChallenger $challenger,
         private ManagementResponder $responder,
         private AuditContext $audit,
+        private string $origin,
     ) {
     }
 
@@ -73,16 +78,20 @@ final readonly class ManagementApiMiddleware implements MiddlewareInterface
             $request->getUri()->getPath(),
         ));
 
+        $credentials = null;
         try {
-            $token = BearerCredentials::fromRequest($request);
-            if ($token === null) {
+            $credentials = AccessTokenCredentials::fromRequest($request);
+            if ($credentials === null) {
                 return $this->challenger->missing();
             }
-            $caller = ($this->authenticate)($token);
+            $method = $request->getMethod();
+            assert($method !== '');
+            // The URL a DPoP proof names: this API's origin as configured, and the routed path.
+            $caller = ($this->authenticate)($credentials, $method, $this->origin . $request->getUri()->getPath());
             $this->audit->actAs($caller->actor());
             $caller->require($this->contract->requiredPermission($operation));
         } catch (BearerTokenError $error) {
-            return $this->challenger->refuse($error);
+            return $this->challenger->refuse($error, $credentials->scheme ?? TokenScheme::Bearer);
         }
 
         try {

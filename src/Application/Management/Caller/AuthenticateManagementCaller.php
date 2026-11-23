@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Management\Caller;
 
+use Clavia\Application\OAuth2\ProtectedResource\CheckSenderConstraint;
+use Clavia\Application\OAuth2\ProtectedResource\PresentedCredentials;
 use Clavia\Domain\Authentication\AuthenticationRequirement;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
@@ -31,6 +33,9 @@ use Clavia\Domain\Shared\Digest;
  * 2. **It was issued for this API.** A scope means nothing without an audience:
  *    `read:users` on another API is a different permission spelled the same way. A
  *    token naming no API at all is refused too, whatever its scope says.
+ *
+ * A token bound to a DPoP key is accepted only with a proof from it, and never as a bearer token
+ * ({@see CheckSenderConstraint}).
  *
  * Then, for a token acting for a person, **the sign-in is strong enough** when the
  * Management API's own MFA policy is `required` (docs/design/mfa-policies.md §5.6): a token
@@ -53,15 +58,19 @@ final readonly class AuthenticateManagementCaller
         private Clock $clock,
         private Audience $managementApi,
         private ResourceServerRepository $resourceServers,
+        private CheckSenderConstraint $senderConstraint,
     ) {
     }
 
     /**
-     * @throws BearerTokenError `invalid_token`, or `insufficient_user_authentication`.
+     * @param non-empty-string $method
+     * @param non-empty-string $url    The resource's URL as this server knows it: a DPoP proof's `htu`.
+     *
+     * @throws BearerTokenError `invalid_token`, `invalid_dpop_proof`, or `insufficient_user_authentication`.
      */
-    public function __invoke(#[\SensitiveParameter] string $accessToken): ManagementCaller
+    public function __invoke(PresentedCredentials $credentials, string $method, string $url): ManagementCaller
     {
-        $token = $this->tokens->findByDigest(Digest::of($accessToken));
+        $token = $this->tokens->findByDigest(Digest::of($credentials->accessToken));
 
         if (
             $token === null
@@ -71,6 +80,8 @@ final readonly class AuthenticateManagementCaller
         ) {
             throw self::refused();
         }
+        // A bound token only with a proof from its key, a bearer one only as bearer (RFC 9449 §7).
+        ($this->senderConstraint)($token, $credentials, $method, $url);
 
         if ($token->userId !== null) {
             $user = $this->users->find($token->userId);

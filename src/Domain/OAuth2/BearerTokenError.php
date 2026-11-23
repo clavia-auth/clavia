@@ -28,6 +28,7 @@ final class BearerTokenError extends DomainException
         public readonly string $description,
         public readonly ?ScopeSet $requiredScope,
         public readonly ?AuthenticationRequirement $requiredAuthentication = null,
+        public readonly ?string $reason = null,
     ) {
         parent::__construct($error->value . ': ' . $description);
     }
@@ -35,6 +36,18 @@ final class BearerTokenError extends DomainException
     public static function invalidRequest(string $description): self
     {
         return new self(BearerErrorCode::InvalidRequest, $description, null);
+    }
+
+    /** RFC 9449 §7.1: one answer, whatever was wrong with the proof; `$reason` is for the log. */
+    public static function invalidDpopProof(string $reason): self
+    {
+        return new self(
+            BearerErrorCode::InvalidDpopProof,
+            'The DPoP proof is not valid for this request.',
+            null,
+            null,
+            $reason,
+        );
     }
 
     public static function invalidToken(string $description): self

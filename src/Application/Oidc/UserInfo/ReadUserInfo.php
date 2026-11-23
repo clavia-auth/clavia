@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Oidc\UserInfo;
 
+use Clavia\Application\OAuth2\ProtectedResource\CheckSenderConstraint;
+use Clavia\Application\OAuth2\ProtectedResource\PresentedCredentials;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\BearerTokenError;
@@ -26,32 +28,43 @@ use Clavia\Domain\Shared\ScopeSet;
  *
  * The token is looked up on every call, so revocation takes effect immediately, and
  * the account is re-checked, so a deactivated person stops being described. A token
- * that names nobody — a machine acting as itself — has nobody to describe.
+ * that names nobody — a machine acting as itself — has nobody to describe. A token bound to a
+ * DPoP key is accepted only with a proof from it ({@see CheckSenderConstraint}).
  */
 final readonly class ReadUserInfo
 {
+    /**
+     * @param non-empty-string $url This endpoint's URL, as discovery names it: a DPoP proof's `htu`.
+     */
     public function __construct(
         private AccessTokenRepository $tokens,
         private UserRepository $users,
         private Clock $clock,
+        private CheckSenderConstraint $senderConstraint,
+        private string $url,
     ) {
     }
 
     /**
      * @return array<non-empty-string, string|bool|int>
      *
-     * @throws BearerTokenError `invalid_token` for a token that cannot be used here,
-     *                          `insufficient_scope` for one not granted `openid`.
+     * @param non-empty-string $method
+     *
+     * @throws BearerTokenError `invalid_token` for a token that cannot be used here, `invalid_dpop_proof`
+     *                          for a bound one without a good proof, `insufficient_scope` for one not
+     *                          granted `openid`.
      */
-    public function __invoke(#[\SensitiveParameter] string $accessToken): array
+    public function __invoke(PresentedCredentials $credentials, string $method): array
     {
-        $token = $this->tokens->findByDigest(Digest::of($accessToken));
+        $token = $this->tokens->findByDigest(Digest::of($credentials->accessToken));
 
         // One answer for unknown, revoked and expired: the caller learns nothing about
         // which tokens exist.
         if ($token === null || ! $token->isActiveAt($this->clock->now())) {
             throw BearerTokenError::invalidToken('The access token is invalid, expired or revoked.');
         }
+
+        ($this->senderConstraint)($token, $credentials, $method, $this->url);
 
         if ($token->userId === null) {
             throw BearerTokenError::invalidToken('The access token was not issued for a person.');

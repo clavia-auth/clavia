@@ -12,7 +12,8 @@ declare(strict_types=1);
 namespace ClaviaTest\Unit\Adapter\Primary\Http;
 
 use Clavia\Adapter\Primary\Http\Shared\BearerChallenger;
-use Clavia\Adapter\Primary\Http\Shared\BearerCredentials;
+use Clavia\Adapter\Primary\Http\Shared\AccessTokenCredentials;
+use Clavia\Application\OAuth2\ProtectedResource\TokenScheme;
 use Clavia\Domain\OAuth2\BearerErrorCode;
 use Clavia\Domain\OAuth2\BearerTokenError;
 use Clavia\Domain\Shared\ScopeSet;
@@ -32,9 +33,28 @@ final class BearerTest extends TestCase
 
     public function testTheTokenIsReadFromTheAuthorizationHeader(): void
     {
-        self::assertSame('mF_9.B5f-4.1JqM', BearerCredentials::fromRequest($this->request('Bearer mF_9.B5f-4.1JqM')));
+        self::assertSame(
+            'mF_9.B5f-4.1JqM',
+            AccessTokenCredentials::fromRequest($this->request('Bearer mF_9.B5f-4.1JqM'))?->accessToken,
+        );
         // The scheme is case-insensitive (RFC 9110 §11.1), and b64token allows trailing "=".
-        self::assertSame('abc+/==', BearerCredentials::fromRequest($this->request('bearer abc+/==')));
+        self::assertSame(
+            'abc+/==',
+            AccessTokenCredentials::fromRequest($this->request('bearer abc+/=='))?->accessToken,
+        );
+    }
+
+    public function testADpopTokenComesWithItsProofs(): void
+    {
+        // RFC 9449 §7.1: the `DPoP` scheme, and the proof in its own header.
+        $credentials = AccessTokenCredentials::fromRequest(
+            $this->request('DPoP mF_9.B5f-4.1JqM')->withHeader('DPoP', 'the.proof.jwt'),
+        );
+
+        self::assertNotNull($credentials);
+        self::assertSame(TokenScheme::Dpop, $credentials->scheme);
+        self::assertSame('mF_9.B5f-4.1JqM', $credentials->accessToken);
+        self::assertSame(['the.proof.jwt'], $credentials->dpopProofs);
     }
 
     /**
@@ -43,7 +63,7 @@ final class BearerTest extends TestCase
     #[DataProvider('noBearerCredentials')]
     public function testARequestWithoutBearerCredentialsHasNone(array $headers): void
     {
-        self::assertNull(BearerCredentials::fromRequest($this->request(...$headers)));
+        self::assertNull(AccessTokenCredentials::fromRequest($this->request(...$headers)));
     }
 
     /** @return iterable<string, array{list<string>}> */
@@ -61,7 +81,7 @@ final class BearerTest extends TestCase
     public function testAMalformedRequestIsAnInvalidRequest(array $headers, string $query = '', string $body = ''): void
     {
         try {
-            BearerCredentials::fromRequest($this->request(...$headers)->withUri(
+            AccessTokenCredentials::fromRequest($this->request(...$headers)->withUri(
                 new ServerRequest()->getUri()->withQuery($query),
             )->withBody(new StreamFactory()->createStream($body)));
             self::fail('The request was accepted.');
