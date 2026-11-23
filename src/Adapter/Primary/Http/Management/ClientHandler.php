@@ -47,7 +47,7 @@ final readonly class ClientHandler implements RequestHandlerInterface
             case 'PATCH':
                 $body = $management->body;
 
-                return $this->responder->json(ManagementViews::client(($this->update)($id, new ClientChanges(
+                $updated = ($this->update)($id, new ClientChanges(
                     $body->string('name'),
                     $body->string('token_endpoint_auth_method'),
                     $body->strings('redirect_uris'),
@@ -61,7 +61,9 @@ final readonly class ClientHandler implements RequestHandlerInterface
                     $body->string('mfa_policy'),
                     $body->bool('require_pushed_authorization_requests'),
                     $body->bool('dpop_bound_access_tokens'),
-                ))));
+                ));
+
+                return $this->responder->json(ManagementViews::client($this->read->describe($updated)));
             case 'DELETE':
                 ($this->delete)($id, $management->caller);
 

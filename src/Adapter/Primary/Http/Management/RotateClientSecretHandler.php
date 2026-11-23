@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Management;
 
+use Clavia\Application\Management\Clients\ReadClients;
 use Clavia\Application\Management\Clients\RotateClientSecret;
 use Clavia\Domain\Client\ClientId;
 use Psr\Http\Message\ResponseInterface;
@@ -25,6 +26,7 @@ final readonly class RotateClientSecretHandler implements RequestHandlerInterfac
 {
     public function __construct(
         private RotateClientSecret $rotate,
+        private ReadClients $read,
         private ManagementResponder $responder,
     ) {
     }
@@ -34,6 +36,10 @@ final readonly class RotateClientSecretHandler implements RequestHandlerInterfac
     {
         $id = ClientId::fromString(ManagementRequest::of($request)->path('client_id'));
 
-        return $this->responder->json(ManagementViews::clientWithSecret(($this->rotate)($id)));
+        $rotated = ($this->rotate)($id);
+
+        return $this->responder->json(
+            ManagementViews::clientWithSecret($rotated, $this->read->registrationOf($rotated->client)),
+        );
     }
 }

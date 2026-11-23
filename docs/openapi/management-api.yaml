@@ -2409,7 +2409,7 @@ components:
       required: [client_id, name, client_type, token_endpoint_auth_method, redirect_uris, grant_types,
         response_types, post_logout_redirect_uris, is_first_party, connections, backchannel_logout_uri,
         backchannel_logout_session_required, require_pkce, mfa_policy, require_pushed_authorization_requests,
-        dpop_bound_access_tokens, created_at]
+        dpop_bound_access_tokens, registration, created_at]
       properties:
         client_id:
           type: string
@@ -2474,6 +2474,24 @@ components:
             request without a `DPoP` proof is refused (`invalid_dpop_proof`). Off by default, when a
             proof is welcome but not required. Takes effect from its next token request: tokens
             already issued keep working as they were.
+        registration:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [initial_access_token_id, registered_at]
+          description: |
+            For a client that registered itself at `/oauth2/register` (RFC 7591): which initial
+            access token let it in, and when. Null for a client an operator made. Such a client is
+            always third-party.
+          properties:
+            initial_access_token_id:
+              type: string
+              format: uuid
+              nullable: true
+              description: Null once that token no longer exists.
+            registered_at:
+              type: string
+              format: date-time
         created_at:
           type: string
           format: date-time
@@ -2493,7 +2511,7 @@ components:
       required: [client_id, name, client_type, token_endpoint_auth_method, redirect_uris, grant_types,
         response_types, post_logout_redirect_uris, is_first_party, connections, backchannel_logout_uri,
         backchannel_logout_session_required, require_pkce, mfa_policy, require_pushed_authorization_requests,
-        dpop_bound_access_tokens, created_at, client_secret]
+        dpop_bound_access_tokens, registration, created_at, client_secret]
       properties:
         client_id:
           type: string
@@ -2558,6 +2576,24 @@ components:
             request without a `DPoP` proof is refused (`invalid_dpop_proof`). Off by default, when a
             proof is welcome but not required. Takes effect from its next token request: tokens
             already issued keep working as they were.
+        registration:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [initial_access_token_id, registered_at]
+          description: |
+            For a client that registered itself at `/oauth2/register` (RFC 7591): which initial
+            access token let it in, and when. Null for a client an operator made. Such a client is
+            always third-party.
+          properties:
+            initial_access_token_id:
+              type: string
+              format: uuid
+              nullable: true
+              description: Null once that token no longer exists.
+            registered_at:
+              type: string
+              format: date-time
         created_at:
           type: string
           format: date-time

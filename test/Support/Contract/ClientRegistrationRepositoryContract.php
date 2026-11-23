@@ -55,6 +55,58 @@ trait ClientRegistrationRepositoryContract
     }
 
     #[Test]
+    public function aRegistrationIsFoundByItsAccessTokenUntilItIsRotated(): void
+    {
+        $client = $this->aSelfRegisteredClient('tpc_rotating');
+        $registration = new ClientRegistration(
+            $client->id,
+            Digest::of('first-token'),
+            null,
+            new DateTimeImmutable('2026-01-15T10:00:00Z'),
+        );
+        $this->clientRegistrations()->add($registration);
+
+        $this->clientRegistrations()->save($registration->rotate(Digest::of('second-token')));
+
+        self::assertNull($this->clientRegistrations()->findByAccessToken(Digest::of('first-token')));
+        self::assertTrue(
+            $this->clientRegistrations()->findByAccessToken(Digest::of('second-token'))?->clientId->equals($client->id),
+        );
+        self::assertEquals(
+            new DateTimeImmutable('2026-01-15T10:00:00Z'),
+            $this->clientRegistrations()->find($client->id)?->registeredAt,
+        );
+    }
+
+    #[Test]
+    public function theRegistrationsOfSeveralClientsAreReadTogether(): void
+    {
+        $first = $this->aSelfRegisteredClient('tpc_first');
+        $second = $this->aSelfRegisteredClient('tpc_second');
+        $this->aSelfRegisteredClient('tpc_operators');
+        foreach ([$first, $second] as $client) {
+            $this->clientRegistrations()->add(new ClientRegistration(
+                $client->id,
+                Digest::of('token-' . $client->id->value),
+                null,
+                new DateTimeImmutable('2026-01-15T10:00:00Z'),
+            ));
+        }
+
+        $found = $this->clientRegistrations()->ofClients([
+            $first->id,
+            ClientId::fromString('tpc_operators'),
+            $second->id,
+        ]);
+
+        self::assertEqualsCanonicalizing(
+            ['tpc_first', 'tpc_second'],
+            array_map(static fn (ClientRegistration $registration): string => $registration->clientId->value, $found),
+        );
+        self::assertSame([], $this->clientRegistrations()->ofClients([]));
+    }
+
+    #[Test]
     public function aRegistrationGoesWithItsClient(): void
     {
         $client = $this->aSelfRegisteredClient('tpc_deleted');

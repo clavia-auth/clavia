@@ -14,6 +14,7 @@ namespace ClaviaTest\Support\Fake;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\Registration\ClientRegistration;
 use Clavia\Domain\Client\Registration\ClientRegistrationRepository;
+use Clavia\Domain\Shared\Digest;
 
 /**
  * Registrations in memory, honouring the foreign key PostgreSQL enforces: given the clients, a
@@ -42,5 +43,31 @@ final class InMemoryClientRegistrationRepository implements ClientRegistrationRe
         }
 
         return $this->registrations[$clientId->value] ?? null;
+    }
+
+    #[\Override]
+    public function findByAccessToken(Digest $digest): ?ClientRegistration
+    {
+        foreach ($this->registrations as $registration) {
+            if ($registration->accessTokenDigest->equals($digest)) {
+                return $this->find($registration->clientId);
+            }
+        }
+
+        return null;
+    }
+
+    #[\Override]
+    public function ofClients(array $clientIds): array
+    {
+        return array_values(array_filter(array_map($this->find(...), $clientIds)));
+    }
+
+    #[\Override]
+    public function save(ClientRegistration $registration): void
+    {
+        if (isset($this->registrations[$registration->clientId->value])) {
+            $this->registrations[$registration->clientId->value] = $registration;
+        }
     }
 }

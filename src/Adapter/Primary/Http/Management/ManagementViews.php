@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Management;
 
 use Clavia\Application\Management\Clients\ClientWithSecret;
+use Clavia\Application\Management\Clients\DescribedClient;
 use Clavia\Application\Management\Connections\DescribedConnection;
 use Clavia\Application\Management\InitialAccessTokens\IssuedInitialAccessToken;
 use Clavia\Application\Management\Roles\DescribedPermission;
@@ -27,6 +28,7 @@ use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\Passkey\Passkey;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\GrantType;
+use Clavia\Domain\Client\Registration\ClientRegistration;
 use Clavia\Domain\Client\Registration\InitialAccessToken;
 use Clavia\Domain\Client\ResponseType;
 use Clavia\Domain\Connection\ConnectionName;
@@ -103,7 +105,23 @@ final class ManagementViews
     /**
      * @return array<string, mixed>
      */
-    public static function client(Client $client): array
+    public static function client(DescribedClient $described): array
+    {
+        return self::clientOf($described->client, $described->registration);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public static function clientWithSecret(ClientWithSecret $registered, ?ClientRegistration $registration): array
+    {
+        return self::clientOf($registered->client, $registration) + ['client_secret' => $registered->secret];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function clientOf(Client $client, ?ClientRegistration $registration): array
     {
         return [
             'client_id' => $client->id->value,
@@ -131,16 +149,13 @@ final class ManagementViews
             'mfa_policy' => $client->mfaPolicy->value,
             'require_pushed_authorization_requests' => $client->requiresPushedAuthorizationRequests,
             'dpop_bound_access_tokens' => $client->requiresDpop,
+            // RFC 7591: which initial access token let it in, and when; null for the operator's own.
+            'registration' => $registration === null ? null : [
+                'initial_access_token_id' => $registration->initialAccessTokenId?->value,
+                'registered_at' => self::instant($registration->registeredAt),
+            ],
             'created_at' => self::instant($client->createdAt),
         ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public static function clientWithSecret(ClientWithSecret $registered): array
-    {
-        return self::client($registered->client) + ['client_secret' => $registered->secret];
     }
 
     /**

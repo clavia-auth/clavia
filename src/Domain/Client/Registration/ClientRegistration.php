@@ -33,4 +33,13 @@ final readonly class ClientRegistration
         public DateTimeImmutable $registeredAt,
     ) {
     }
+
+    /**
+     * The same registration, answered from now on by another registration access token: each
+     * update hands out a new one (RFC 7592 §3), so one that leaked stops working at the next.
+     */
+    public function rotate(Digest $accessTokenDigest): self
+    {
+        return clone($this, ['accessTokenDigest' => $accessTokenDigest]);
+    }
 }
