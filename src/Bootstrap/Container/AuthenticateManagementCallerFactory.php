@@ -15,6 +15,7 @@ use Clavia\Application\Management\Caller\AuthenticateManagementCaller;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
+use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\Clock;
 use Psr\Container\ContainerInterface;
@@ -29,6 +30,8 @@ final class AuthenticateManagementCallerFactory
         $users = $container->get(UserRepository::class);
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
+        /** @var ResourceServerRepository $resourceServers */
+        $resourceServers = $container->get(ResourceServerRepository::class);
         /** @var Settings $settings */
         $settings = $container->get(Settings::class);
 
@@ -37,6 +40,7 @@ final class AuthenticateManagementCallerFactory
             $users,
             $clock,
             Audience::fromString($settings->managementApiAudience()),
+            $resourceServers,
         );
     }
 }

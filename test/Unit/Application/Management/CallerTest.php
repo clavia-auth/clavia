@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Application\Management;
 
+use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
 use Clavia\Application\Management\Caller\AuthenticateManagementCaller;
 use Clavia\Application\Management\Caller\ManagementCaller;
 use Clavia\Application\Management\ManagementPermission;
@@ -150,6 +151,7 @@ final class CallerTest extends TestCase
             $this->users,
             $this->clock,
             Audience::fromString(self::MANAGEMENT_API),
+            new InMemoryResourceServerRepository(),
         );
     }
 }

@@ -100,12 +100,11 @@ final readonly class SeedDevelopmentData
         $user = $this->users->findByEmail(ConnectionName::defaultPool(), $email);
         $userCreated = $user === null;
         if ($user === null) {
-            $this->users->save(User::register(
-                UserId::generate($this->random),
-                $email,
-                $this->hasher->hash($password),
-                $now,
-            ));
+            $user = User::register(UserId::generate($this->random), $email, $this->hasher->hash($password), $now);
+            // Verified, as a real account would be before an operator relied on it: it may then set a
+            // second factor up on the way to the dashboard, whose API requires one.
+            $user->recordEmailVerification(true, $now);
+            $this->users->save($user);
         }
 
         $client = $this->clients->findByName(self::CLIENT_NAME);

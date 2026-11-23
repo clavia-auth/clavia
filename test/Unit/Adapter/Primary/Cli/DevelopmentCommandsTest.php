@@ -318,6 +318,7 @@ final class DevelopmentCommandsTest extends TestCase
 
         return new SeedManagementAccess(
             $this->clients,
+            $apis,
             new RegisterManagementApi(
                 $apis,
                 new InMemoryTransactionManager(),
