@@ -66,6 +66,7 @@ use Clavia\Adapter\Primary\Http\Management\RoleHandler;
 use Clavia\Adapter\Primary\Http\Management\RolesHandler;
 use Clavia\Adapter\Primary\Http\Management\RoleUsersHandler;
 use Clavia\Adapter\Primary\Http\Management\RotateClientSecretHandler;
+use Clavia\Adapter\Primary\Http\Management\SigningKeysHandler;
 use Clavia\Adapter\Primary\Http\Management\UserConsentsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserHandler;
 use Clavia\Adapter\Primary\Http\Management\UserIdentitiesHandler;
@@ -408,6 +409,7 @@ final class ConfigProvider
                     Authorize::class => Container\AuthorizeFactory::class,
                     AuthorizationRequestRules::class => Container\AuthorizationRequestRulesFactory::class,
                     PushAuthorizationRequest::class => Container\PushAuthorizationRequestFactory::class,
+                    SigningKeysHandler::class => Container\SigningKeysHandlerFactory::class,
                     PushedAuthorizationRequestHandler::class
                         => Container\PushedAuthorizationRequestHandlerFactory::class,
                     HeldConsents::class => Container\HeldConsentsFactory::class,

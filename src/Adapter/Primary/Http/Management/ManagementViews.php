@@ -19,6 +19,8 @@ use Clavia\Application\Management\Roles\EffectivePermission;
 use Clavia\Application\Management\Users\DescribedConsent;
 use Clavia\Application\Management\Users\ManagedSession;
 use Clavia\Application\Management\Users\ManagedUser;
+use Clavia\Application\Oidc\Keys\ListedSigningKey;
+use Clavia\Application\Oidc\Keys\Rotation;
 use Clavia\Domain\Audit\AuditEvent;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\Passkey\Passkey;
@@ -292,6 +294,46 @@ final class ManagementViews
             'aaguid' => $passkey->aaguid?->value,
             'created_at' => self::instant($passkey->createdAt),
             'last_used_at' => $passkey->lastUsedAt === null ? null : self::instant($passkey->lastUsedAt),
+        ];
+    }
+
+    /**
+     * A signing key as an operator sees it: its `kid`, algorithm and place in the rotation — never
+     * its material. The public key is the JWKS's to publish; the private one never leaves the
+     * signing backend.
+     *
+     * @return array<string, mixed>
+     */
+    public static function signingKey(ListedSigningKey $listed): array
+    {
+        $key = $listed->key;
+        $retiredAt = $key->retiredAt();
+        $until = $key->publishedUntil();
+
+        return [
+            'kid' => $key->kid(),
+            'algorithm' => $key->algorithm()->value,
+            'status' => $key->status()->value,
+            'published' => $listed->published,
+            'created_at' => self::instant($key->createdAt),
+            'retired_at' => $retiredAt === null ? null : self::instant($retiredAt),
+            'published_until' => $until === null ? null : self::instant($until),
+        ];
+    }
+
+    /**
+     * What a rotation did: the key that signs now, and the one it replaced, which stays published
+     * for the grace period.
+     *
+     * @return array<string, mixed>
+     */
+    public static function rotation(Rotation $rotation): array
+    {
+        return [
+            'active' => self::signingKey(new ListedSigningKey($rotation->active, true)),
+            'retired' => $rotation->retired === null
+                ? null
+                : self::signingKey(new ListedSigningKey($rotation->retired, true)),
         ];
     }
 

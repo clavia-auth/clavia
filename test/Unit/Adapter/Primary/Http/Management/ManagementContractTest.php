@@ -72,6 +72,7 @@ final class ManagementContractTest extends TestCase
             self::assertSame(
                 in_array($operation->method, ['POST', 'PATCH', 'PUT'], true)
                     && ! str_ends_with($operation->path->template, 'rotate-secret')
+                    && ! str_ends_with($operation->path->template, '/rotate')
                     && ! str_ends_with($operation->path->template, 'password-reset'),
                 $operation->requestBody !== null,
                 (string) $operation,
