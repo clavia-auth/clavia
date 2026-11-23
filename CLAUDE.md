@@ -112,6 +112,7 @@ src/
 templates/                  server-rendered pages: layout/, auth/, error/, partial/
 migrations/                 NNNN_name.sql, forward only
 docs/openapi/               management-api.yaml, the Management API's contract
+docs/site/                  the published API reference: Scalar over that document (docs.yml)
 docs/SECURITY-REVIEW.md     review of every adapter against the invariants
 docs/RELEASING.md           how a release is made: changelog, version, tag, the Release workflow
 CHANGELOG.md                what each release changed, for operators
@@ -731,7 +732,10 @@ and each tag has an `x-displayName` (`ManagementDocumentationTest`); each reques
 response and shared refusal has an example, named in `components/examples` and reused across
 operations (one cast: Ada, Acme Reports, the Reports API), and `ManagementExamplesTest` validates
 every example against its schema with this validator, so none drifts from the contract. Example
-secrets say they are not real.
+secrets say they are not real. `info.version` is the API's own version (`1`, the `v1` of its
+paths), never the server release. The Docs workflow publishes the reference (`docs/site/`, Scalar
+pinned) to GitHub Pages for each release, `/vX.Y.Z/` and the root following the newest stable one
+(`docs/RELEASING.md` §6).
 
 The validator is Clavia's own (`Adapter\Primary\Http\OpenApi`). What it cannot enforce, it
 refuses at load (unknown keywords, OpenAPI 3.1 forms, external references, non-JSON media
