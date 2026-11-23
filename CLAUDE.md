@@ -726,6 +726,13 @@ No error repeats the value at fault, and nothing is cacheable. Lists are
 collection small by nature (an account's roles) is a plain array. Acceptance tests check every
 response against the document (`ManagementFixtures::api()`).
 
+The document is also the published reference, so it reads as one: each `summary` is a short label
+and each tag has an `x-displayName` (`ManagementDocumentationTest`); each request body, success
+response and shared refusal has an example, named in `components/examples` and reused across
+operations (one cast: Ada, Acme Reports, the Reports API), and `ManagementExamplesTest` validates
+every example against its schema with this validator, so none drifts from the contract. Example
+secrets say they are not real.
+
 The validator is Clavia's own (`Adapter\Primary\Http\OpenApi`). What it cannot enforce, it
 refuses at load (unknown keywords, OpenAPI 3.1 forms, external references, non-JSON media
 types, unsupported parameter styles). It reports every violation, never repeats a value,
@@ -1033,8 +1040,9 @@ Tests state behaviour from the specifications, and name the RFC section where it
 - **An endpoint**: a route in `config/routes.php` (with the methods it answers), a handler that
   translates, one use case. If it is advertised, add it to `ProviderMetadata`; `OidcTest` fetches
   it.
-- **A Management API operation**: the path in `docs/openapi/management-api.yaml`, a route behind
-  `ManagementApiMiddleware`, a handler, a use case. `ManagementApiTest` fails if the routes and the
+- **A Management API operation**: the path in `docs/openapi/management-api.yaml` (a short
+  `summary`, examples of its body and its success), a route behind `ManagementApiMiddleware`, a
+  handler, a use case. `ManagementApiTest` fails if the routes and the
   document disagree; `ManagementContractTest` if the document's scopes differ from
   `ManagementPermission::cases()`. The dashboard regenerates its types from the document.
 - **A domain event**: a readonly class in the context's `Event` namespace, dispatched by the use
