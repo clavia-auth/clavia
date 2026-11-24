@@ -79,7 +79,7 @@ The console is `bin/clavia`:
 | `management-api:register`, `management-api:scopes` | Register the Management API; list its scopes |
 | `clients:create-m2m [--third-party]`, `clients:grant` | Machine clients and their grants on an API |
 | `clients:registration-token` | An initial access token for client registration, printed once |
-| `jobs:run` | Run the queued bulk jobs on the users (imports), then exit; run every minute |
+| `jobs:run` | Run the queued bulk jobs on the users (imports, exports), then exit; run every minute |
 | `users:import-sqs <queue-url>` | Import accounts from an AWS SQS queue, one per message, until stopped |
 | `clients:purge-unused` | Delete self-registered clients never issued a token after `CLAVIA_CLIENT_REGISTRATION_UNUSED_LIFETIME` days; run daily |
 | `roles:create`, `roles:assign`, `roles:list` | Roles, including the first administrator |
@@ -763,6 +763,17 @@ Refused lines are reported by number and reason (`invalid_json`, `invalid_field`
 no input (a database check), only its report, `GET /api/v1/jobs/{job_id}` (`read:users`), for seven
 days. A job running for an hour has lost its worker and is failed. Password sign-in replaces a hash
 `needsRehash()` at today's count, which is how an imported one reaches 600,000 iterations.
+
+**Exports** (`POST /api/v1/jobs/users-exports`, `read:users`, `?connection=` any connection, the
+default pool without one; `QueueUserExport`) are jobs too, with no input (a database check).
+`jobs:run` writes the connection out (`Export\ExportUsers`, by id a page at a time,
+`UserRepository::inConnection()`) in the shape an import line takes, plus `user_id`, `connection`,
+`created_at` and `updated_at`, which `ImportLine` ignores, so an export imports as it is. **Never a
+password hash**, nor a factor, a passkey, a linked identity or a session. In one transaction the job
+completes (`summary.total` the accounts written), its output is kept in `user_job_outputs` (apart from
+the job row, which every status read loads; deleted with the job) and `UsersExported` is dispatched
+(`user.exported`, the connection as target, the count, never who). `GET /api/v1/jobs/{job_id}/output`
+(`read:users`) downloads it: `409` until the export is completed, `404` for an import.
 
 **One door for an imported account**: `Import\UserImport` (`ImportUser`) reads a line, checks
 the pool, and creates the account in its own transaction, or answers an `ImportRefusal` (the codes

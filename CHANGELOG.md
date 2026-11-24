@@ -14,6 +14,10 @@ All notable changes to Clavia are written here, for the people who run it. The f
   and replaced at today's count at the account's first sign-in. An address already in the pool is
   refused, never updated; refused lines are reported by number and reason. The file, hashes included, is
   let go when the job ends.
+- **Bulk export of users** (#19): `POST /api/v1/jobs/users-exports` (`read:users`) queues an export
+  of one connection; `GET /api/v1/jobs/{job_id}/output` downloads it, NDJSON in the shape an import
+  takes, so an export imports as it is. **Never a password hash.** Each export is recorded in the
+  audit trail (`user.exported`); its output is kept seven days, like the job. **Migration `0037`**.
 - **`bin/clavia jobs:run`**, to run every minute: it runs the queued jobs, fails a job whose worker
   stopped, and purges finished jobs after seven days. **Migration `0036`**.
 - **`bin/clavia users:import-sqs <queue-url>`** (#108): imports accounts from an AWS SQS queue, one per

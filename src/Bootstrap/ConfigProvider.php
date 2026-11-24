@@ -75,10 +75,12 @@ use Clavia\Adapter\Primary\Http\Management\RoleUsersHandler;
 use Clavia\Adapter\Primary\Http\Management\RotateClientSecretHandler;
 use Clavia\Adapter\Primary\Http\Management\SigningKeysHandler;
 use Clavia\Adapter\Primary\Http\Management\UserConsentsHandler;
+use Clavia\Adapter\Primary\Http\Management\UserExportsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserHandler;
 use Clavia\Adapter\Primary\Http\Management\UserIdentitiesHandler;
 use Clavia\Adapter\Primary\Http\Management\UserImportsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserJobHandler;
+use Clavia\Adapter\Primary\Http\Management\UserJobOutputHandler;
 use Clavia\Adapter\Primary\Http\Management\UserMfaHandler;
 use Clavia\Adapter\Primary\Http\Management\UserPasskeysHandler;
 use Clavia\Adapter\Primary\Http\Management\UserPasswordLinkHandler;
@@ -227,8 +229,10 @@ use Clavia\Application\Management\Roles\RolePermissions;
 use Clavia\Application\Management\Roles\UpdateRole;
 use Clavia\Application\Management\Users\CreateUser;
 use Clavia\Application\Management\Users\DeleteUser;
+use Clavia\Application\Management\Users\Export\ExportUsers;
 use Clavia\Application\Management\Users\Import\ImportLine;
 use Clavia\Application\Management\Users\Import\UserImport;
+use Clavia\Application\Management\Users\Jobs\QueueUserExport;
 use Clavia\Application\Management\Users\Jobs\QueueUserImport;
 use Clavia\Application\Management\Users\Jobs\ReadUserJobs;
 use Clavia\Application\Management\Users\Jobs\RunUserJobs;
@@ -454,6 +458,8 @@ final class ConfigProvider
                     ClientRegistrationHandler::class => Container\ClientRegistrationHandlerFactory::class,
                     UserImportsHandler::class => Container\UserImportsHandlerFactory::class,
                     UserJobHandler::class => Container\UserJobHandlerFactory::class,
+                    UserExportsHandler::class => Container\UserExportsHandlerFactory::class,
+                    UserJobOutputHandler::class => Container\UserJobOutputHandlerFactory::class,
                     ClientConfigurationHandler::class => Container\ClientConfigurationHandlerFactory::class,
                     PushedAuthorizationRequestHandler::class
                         => Container\PushedAuthorizationRequestHandlerFactory::class,
@@ -621,6 +627,8 @@ final class ConfigProvider
                     ImportLine::class => Container\ImportLineFactory::class,
                     UserImport::class => Container\ImportUserFactory::class,
                     QueueUserImport::class => Container\QueueUserImportFactory::class,
+                    QueueUserExport::class => Container\QueueUserExportFactory::class,
+                    ExportUsers::class => Container\ExportUsersFactory::class,
                     RunUserJobs::class => Container\RunUserJobsFactory::class,
                     ReadUserJobs::class => Container\ReadUserJobsFactory::class,
                     RegisteredClients::class => Container\RegisteredClientsFactory::class,

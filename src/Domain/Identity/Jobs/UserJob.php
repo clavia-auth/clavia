@@ -95,6 +95,31 @@ final class UserJob
         );
     }
 
+    /** An export of the accounts of `$connection`, whatever its kind. It reads the directory: no input. */
+    public static function queueExport(
+        UserJobId $id,
+        ConnectionName $connection,
+        Actor $requestedBy,
+        DateTimeImmutable $now,
+    ): self {
+        return new self(
+            $id,
+            UserJobKind::Export,
+            UserJobStatus::Queued,
+            $connection,
+            $requestedBy,
+            $now,
+            null,
+            null,
+            null,
+            0,
+            0,
+            0,
+            [],
+            null,
+        );
+    }
+
     /**
      * A job as storage holds it.
      *
@@ -199,6 +224,17 @@ final class UserJob
     {
         ++$this->total;
         ++$this->created;
+    }
+
+    /**
+     * An export done: `total` is the accounts it wrote.
+     *
+     * @param int<0, max> $exported
+     */
+    public function completeExport(int $exported, DateTimeImmutable $now): void
+    {
+        $this->total = $exported;
+        $this->complete($now);
     }
 
     public function recordRefused(LineError $error): void

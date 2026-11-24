@@ -285,6 +285,37 @@ trait UserRepositoryContract
         self::assertNull($this->users()->findByEmail(ConnectionName::defaultPool(), 'jane@example.com'));
     }
 
+    #[Test]
+    public function theAccountsOfAConnectionAreWalkedByIdAPageAtATime(): void
+    {
+        $emails = ['a@example.com', 'b@example.com', 'c@example.com', 'd@example.com', 'e@example.com'];
+        foreach ($emails as $email) {
+            $this->users()->save($this->aUser($email));
+        }
+        $this->users()->save(User::registerFromProvider(
+            UserId::generate(new SeededRandomSource(99)),
+            'a@example.com',
+            ConnectionName::fromString('google'),
+            new DateTimeImmutable('2026-01-15T10:00:00Z'),
+        ));
+
+        $seen = [];
+        $after = null;
+        do {
+            $page = $this->users()->inConnection(ConnectionName::defaultPool(), $after, 2);
+            self::assertLessThanOrEqual(2, count($page));
+            foreach ($page as $user) {
+                $seen[] = $user->id->value;
+                $after = $user->id;
+            }
+        } while ($page !== []);
+
+        $sorted = $seen;
+        sort($sorted);
+        self::assertSame($sorted, $seen, 'By id.');
+        self::assertCount(5, $seen, 'Each account of the pool once, and none of another connection.');
+    }
+
     private function aUser(string $email): User
     {
         return User::register(

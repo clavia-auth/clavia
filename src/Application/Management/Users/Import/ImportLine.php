@@ -24,6 +24,8 @@ use stdClass;
  * - `password_hash` is one this server can verify (`PBKDF2-HMAC-SHA-256`, at any count from 1,000):
  *   anything else is refused, never stored for a sign-in that could not succeed. A hash at another
  *   count is replaced at the account's first sign-in;
+ * - `user_id`, `connection`, `created_at` and `updated_at`, which an export writes, are ignored: the
+ *   account gets a new id, the job's pool, and today as its creation;
  * - a plaintext `password`, or any member not listed, refuses the line: an import is as strict as
  *   the API, and a password is never carried in a file.
  *
@@ -33,6 +35,9 @@ final readonly class ImportLine
 {
     private const array PROFILE = ['name', 'given_name', 'family_name', 'nickname', 'picture', 'locale'];
     private const array KNOWN = ['email', 'email_verified', 'is_active', 'password_hash', ...self::PROFILE];
+
+    /** What an export adds, saying where an account came from: ignored, so an export imports as it is. */
+    private const array EXPORTED = ['user_id', 'connection', 'created_at', 'updated_at'];
 
     public function __construct(private PasswordHasher $hasher)
     {
@@ -49,7 +54,7 @@ final readonly class ImportLine
         if (! $decoded instanceof stdClass) {
             return new ImportRefusal('invalid_json', 'The line is not a JSON object.');
         }
-        $members = get_object_vars($decoded);
+        $members = array_diff_key(get_object_vars($decoded), array_flip(self::EXPORTED));
         foreach (array_keys($members) as $name) {
             if (! in_array($name, self::KNOWN, true)) {
                 return new ImportRefusal('invalid_field', sprintf("'%s' is not a field an import takes.", $name));

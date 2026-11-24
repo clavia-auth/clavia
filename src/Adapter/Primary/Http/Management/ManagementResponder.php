@@ -60,6 +60,20 @@ final readonly class ManagementResponder
         return $this->json($document, 201)->withHeader('Location', $location);
     }
 
+    /**
+     * NDJSON to download: an export's output, as an attachment, never cached.
+     */
+    public function ndjson(string $content, string $filename): ResponseInterface
+    {
+        $response = $this->responses->createResponse(200)
+            ->withHeader('Content-Type', 'application/x-ndjson')
+            ->withHeader('Content-Disposition', sprintf('attachment; filename="%s"', $filename))
+            ->withHeader('Cache-Control', 'no-store');
+        $response->getBody()->write($content);
+
+        return $response;
+    }
+
     public function noContent(): ResponseInterface
     {
         return $this->responses->createResponse(204)->withHeader('Cache-Control', 'no-store');

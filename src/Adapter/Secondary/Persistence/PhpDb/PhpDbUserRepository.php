@@ -90,6 +90,19 @@ final readonly class PhpDbUserRepository implements UserRepository
     }
 
     #[\Override]
+    public function inConnection(ConnectionName $connection, ?UserId $after, int $limit): array
+    {
+        $rows = $this->database->fetchAll(
+            'SELECT ' . self::COLUMNS . ' FROM users WHERE connection = :connection'
+            . ($after === null ? '' : ' AND id > :after') . ' ORDER BY id LIMIT :limit',
+            ['connection' => $connection->value, 'limit' => $limit]
+                + ($after === null ? [] : ['after' => $after->value]),
+        );
+
+        return array_map($this->hydrate(...), $rows);
+    }
+
+    #[\Override]
     public function save(User $user): void
     {
         try {

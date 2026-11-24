@@ -127,6 +127,28 @@ final readonly class PhpDbUserJobRepository implements UserJobRepository
         ));
     }
 
+    #[\Override]
+    public function writeOutput(UserJobId $id, string $content): void
+    {
+        $this->database->execute(
+            'INSERT INTO user_job_outputs (job_id, content) VALUES (:id, :content) '
+            . 'ON CONFLICT (job_id) DO UPDATE SET content = EXCLUDED.content',
+            ['id' => $id->value, 'content' => $content],
+        );
+    }
+
+    #[\Override]
+    public function output(UserJobId $id): ?string
+    {
+        /** @var string|null $content */
+        $content = $this->database->fetchValue(
+            'SELECT content FROM user_job_outputs WHERE job_id = :id',
+            ['id' => $id->value],
+        );
+
+        return $content;
+    }
+
     /** @return array<string, string|int|null> */
     private static function row(UserJob $job): array
     {
