@@ -12,8 +12,11 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Audit\AuditContext;
+use Clavia\Application\Management\Users\Export\ExportUsers;
 use Clavia\Application\Management\Users\Import\UserImport;
 use Clavia\Application\Management\Users\Jobs\RunUserJobs;
+use Clavia\Application\Port\DomainEvents;
+use Clavia\Application\Port\TransactionManager;
 use Clavia\Domain\Identity\Jobs\UserJobRepository;
 use Clavia\Domain\Shared\Clock;
 use Psr\Container\ContainerInterface;
@@ -26,11 +29,17 @@ final class RunUserJobsFactory
         $jobs = $container->get(UserJobRepository::class);
         /** @var UserImport $imports */
         $imports = $container->get(UserImport::class);
+        /** @var ExportUsers $exports */
+        $exports = $container->get(ExportUsers::class);
+        /** @var TransactionManager $transactions */
+        $transactions = $container->get(TransactionManager::class);
         /** @var AuditContext $audit */
         $audit = $container->get(AuditContext::class);
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
-        return new RunUserJobs($jobs, $imports, $audit, $clock);
+        return new RunUserJobs($jobs, $imports, $exports, $transactions, $audit, $clock, $events);
     }
 }

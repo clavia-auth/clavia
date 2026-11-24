@@ -45,10 +45,12 @@ use Clavia\Adapter\Primary\Http\Management\RoleUsersHandler;
 use Clavia\Adapter\Primary\Http\Management\RotateClientSecretHandler;
 use Clavia\Adapter\Primary\Http\Management\SigningKeysHandler;
 use Clavia\Adapter\Primary\Http\Management\UserConsentsHandler;
+use Clavia\Adapter\Primary\Http\Management\UserExportsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserHandler;
 use Clavia\Adapter\Primary\Http\Management\UserIdentitiesHandler;
 use Clavia\Adapter\Primary\Http\Management\UserImportsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserJobHandler;
+use Clavia\Adapter\Primary\Http\Management\UserJobOutputHandler;
 use Clavia\Adapter\Primary\Http\Management\UserMfaHandler;
 use Clavia\Adapter\Primary\Http\Management\UserPasskeysHandler;
 use Clavia\Adapter\Primary\Http\Management\UserPasswordLinkHandler;
@@ -286,7 +288,9 @@ return static function (Application $app, ContainerInterface $container): void {
         'api.initial-access-token',
     );
     $app->post('/api/v1/jobs/users-imports', $management(UserImportsHandler::class), 'api.jobs.users-imports');
+    $app->post('/api/v1/jobs/users-exports', $management(UserExportsHandler::class), 'api.jobs.users-exports');
     $app->get('/api/v1/jobs/{job_id}', $management(UserJobHandler::class), 'api.job');
+    $app->get('/api/v1/jobs/{job_id}/output', $management(UserJobOutputHandler::class), 'api.job.output');
     $app->route('/api/v1/audit-events', $management(AuditEventsHandler::class), ['GET'], 'api.audit-events');
     $app->route(
         '/api/v1/roles/{role_id}',

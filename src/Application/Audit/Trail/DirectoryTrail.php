@@ -24,6 +24,7 @@ use Clavia\Domain\Identity\Event\UserChanged;
 use Clavia\Domain\Identity\Event\UserCreated;
 use Clavia\Domain\Identity\Event\UserSignedUp;
 use Clavia\Domain\Identity\Event\UserDeleted;
+use Clavia\Domain\Identity\Event\UsersExported;
 use Clavia\Domain\Rbac\Event\RoleChanged;
 use Clavia\Domain\Rbac\Event\RoleCreated;
 use Clavia\Domain\Rbac\Event\RoleDeleted;
@@ -56,6 +57,7 @@ final readonly class DirectoryTrail implements EventSubscriber
             PasswordLinkSent::class => $this->passwordLinkSent(...),
             UserChanged::class => $this->userChanged(...),
             UserDeleted::class => $this->userDeleted(...),
+            UsersExported::class => $this->usersExported(...),
             IdentityUnlinked::class => $this->identityUnlinked(...),
             RoleCreated::class => $this->roleCreated(...),
             RoleChanged::class => $this->roleChanged(...),
@@ -123,6 +125,15 @@ final readonly class DirectoryTrail implements EventSubscriber
     {
         $this->audit->record(AuditEventType::UserDeleted, AuditTarget::user($event->user->id), [
             'email' => $event->user->email,
+        ]);
+    }
+
+    /** Who asked is the actor; the target is the connection, the detail how many and which job, never who. */
+    private function usersExported(UsersExported $event): void
+    {
+        $this->audit->record(AuditEventType::UsersExported, AuditTarget::connection($event->connection), [
+            'job_id' => $event->job->value,
+            'count' => $event->count,
         ]);
     }
 

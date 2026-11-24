@@ -17,6 +17,7 @@ use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\Jobs\LineError;
 use Clavia\Domain\Identity\Jobs\UserJob;
 use Clavia\Domain\Identity\Jobs\UserJobId;
+use Clavia\Domain\Identity\Jobs\UserJobKind;
 use Clavia\Domain\Identity\Jobs\UserJobRepository;
 use Clavia\Domain\Identity\Jobs\UserJobStatus;
 use ClaviaTest\Support\Fake\SeededRandomSource;
@@ -115,6 +116,36 @@ trait UserJobRepositoryContract
         self::assertNull($this->userJobs()->find($done->id));
         self::assertNotNull($this->userJobs()->find($stalled->id), 'A running job is never purged.');
         self::assertNotNull($this->userJobs()->find($waiting->id));
+    }
+
+    #[Test]
+    public function anExportsOutputIsKeptBesideItAndPurgedWithIt(): void
+    {
+        $export = UserJob::queueExport(
+            UserJobId::generate(new SeededRandomSource(4)),
+            ConnectionName::defaultPool(),
+            Actor::application(ClientId::fromString('operator-app')),
+            new DateTimeImmutable('2026-01-15T10:00:00Z'),
+        );
+        $import = $this->aJob(5, '2026-01-15T10:00:00Z');
+        $this->userJobs()->add($export);
+        $this->userJobs()->add($import);
+        self::assertNull($this->userJobs()->output($export->id), 'Nothing until it is written.');
+
+        $export->start(new DateTimeImmutable('2026-01-15T10:01:00Z'));
+        $export->completeExport(1, new DateTimeImmutable('2026-01-15T10:02:00Z'));
+        $this->userJobs()->save($export);
+        $this->userJobs()->writeOutput($export->id, "{\"email\":\"ada@example.com\"}\n");
+
+        $stored = $this->userJobs()->find($export->id);
+        self::assertNotNull($stored);
+        self::assertSame(UserJobKind::Export, $stored->kind);
+        self::assertSame(1, $stored->total());
+        self::assertSame("{\"email\":\"ada@example.com\"}\n", $this->userJobs()->output($export->id));
+        self::assertNull($this->userJobs()->output($import->id));
+
+        self::assertSame(1, $this->userJobs()->purgeFinishedBefore(new DateTimeImmutable('2026-01-20T00:00:00Z')));
+        self::assertNull($this->userJobs()->output($export->id));
     }
 
     private function aJob(int $seed, string $at): UserJob

@@ -25,6 +25,9 @@ final class InMemoryUserJobRepository implements UserJobRepository
     /** @var array<string, UserJob> By id, in insertion order. */
     private array $jobs = [];
 
+    /** @var array<string, string> Outputs by job id; purged with their job. */
+    private array $outputs = [];
+
     #[\Override]
     public function add(UserJob $job): void
     {
@@ -77,11 +80,25 @@ final class InMemoryUserJobRepository implements UserJobRepository
         $purged = 0;
         foreach ($this->jobs as $key => $job) {
             if ($job->isFinished() && $job->finishedAt() < $before) {
-                unset($this->jobs[$key]);
+                unset($this->jobs[$key], $this->outputs[$key]);
                 ++$purged;
             }
         }
 
         return $purged;
+    }
+
+    #[\Override]
+    public function writeOutput(UserJobId $id, string $content): void
+    {
+        if (isset($this->jobs[$id->value])) {
+            $this->outputs[$id->value] = $content;
+        }
+    }
+
+    #[\Override]
+    public function output(UserJobId $id): ?string
+    {
+        return $this->outputs[$id->value] ?? null;
     }
 }

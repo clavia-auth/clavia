@@ -68,6 +68,19 @@ final class InMemoryUserRepository implements UserRepository
     }
 
     #[\Override]
+    public function inConnection(ConnectionName $connection, ?UserId $after, int $limit): array
+    {
+        $found = array_filter(
+            $this->users,
+            static fn (User $user): bool => $user->connection->equals($connection)
+                && ($after === null || strcmp($user->id->value, $after->value) > 0),
+        );
+        usort($found, static fn (User $a, User $b): int => strcmp($a->id->value, $b->id->value));
+
+        return array_map(static fn (User $user): User => clone $user, array_slice($found, 0, $limit));
+    }
+
+    #[\Override]
     public function save(User $user): void
     {
         $other = $this->findByEmail($user->connection, $user->email);

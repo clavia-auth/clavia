@@ -67,13 +67,15 @@ final class ManagementContractTest extends TestCase
     public function testOnlyCreationsAndUpdatesTakeABody(): void
     {
         // A DELETE never does: OpenAPI 3.0 gives a body on it no meaning, so taking a role
-        // from somebody names them in the path.
+        // from somebody names them in the path. Neither does an action with nothing to say
+        // (a rotation, a mail sent, an export queued).
         foreach (self::contract()->operations() as $operation) {
             self::assertSame(
                 in_array($operation->method, ['POST', 'PATCH', 'PUT'], true)
                     && ! str_ends_with($operation->path->template, 'rotate-secret')
                     && ! str_ends_with($operation->path->template, '/rotate')
-                    && ! str_ends_with($operation->path->template, 'password-reset'),
+                    && ! str_ends_with($operation->path->template, 'password-reset')
+                    && ! str_ends_with($operation->path->template, 'users-exports'),
                 $operation->requestBody !== null,
                 (string) $operation,
             );

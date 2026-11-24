@@ -159,7 +159,7 @@ the server sees. The essentials:
   can register someone else's:
   `PATCH /api/v1/connections/password` with `{"allow_sign_up": true, "require_verified_email": true}`.
 - **Purge old audit events daily**: `0 3 * * * bin/clavia audit:purge`.
-- **Run bulk jobs every minute** (user imports): `* * * * * bin/clavia jobs:run`.
+- **Run bulk jobs every minute** (user imports and exports): `* * * * * bin/clavia jobs:run`.
 - **Import accounts from an AWS SQS queue**, one account per message (the JSON object of an import
   line; the pool in a `connection` message attribute, the default pool without one):
   `bin/clavia users:import-sqs https://sqs.<region>.amazonaws.com/<account>/<queue>`, run as a

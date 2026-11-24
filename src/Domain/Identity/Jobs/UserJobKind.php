@@ -16,4 +16,7 @@ enum UserJobKind: string
 {
     /** Creates the accounts of an NDJSON file in one pool, line by line. */
     case Import = 'users_import';
+
+    /** Writes the accounts of one connection out as NDJSON, never with a password hash. */
+    case Export = 'users_export';
 }

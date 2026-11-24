@@ -53,6 +53,16 @@ interface UserRepository
     public function delete(UserId $id): void;
 
     /**
+     * The accounts of one connection by id, after `$after`: a walk through all of them, a page at a
+     * time, that an account made or deleted meanwhile never throws off (an export).
+     *
+     * @param positive-int $limit
+     *
+     * @return list<User>
+     */
+    public function inConnection(ConnectionName $connection, ?UserId $after, int $limit): array;
+
+    /**
      * Accounts newest first, searching the email address — the one thing an operator has
      * to hand when a support request arrives.
      *

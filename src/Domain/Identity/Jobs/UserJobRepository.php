@@ -44,4 +44,14 @@ interface UserJobRepository
      * @return non-negative-int How many.
      */
     public function purgeFinishedBefore(DateTimeImmutable $before): int;
+
+    /**
+     * Keep what an export wrote, beside the job and gone with it.
+     *
+     * @param string $content NDJSON, one account per line.
+     */
+    public function writeOutput(UserJobId $id, string $content): void;
+
+    /** What an export wrote, or null when the job wrote nothing (an import, an export not finished). */
+    public function output(UserJobId $id): ?string;
 }
