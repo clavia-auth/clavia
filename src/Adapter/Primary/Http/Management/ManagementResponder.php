@@ -66,7 +66,7 @@ final readonly class ManagementResponder
      */
     public function ndjson(string $content, string $filename): ResponseInterface
     {
-        $response = $this->responses->createResponse(200)
+        $response = $this->responses->createResponse(StatusCodeInterface::STATUS_OK)
             ->withHeader('Content-Type', 'application/x-ndjson')
             ->withHeader('Content-Disposition', sprintf('attachment; filename="%s"', $filename))
             ->withHeader('Cache-Control', 'no-store');
