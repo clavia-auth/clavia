@@ -198,6 +198,10 @@ final readonly class RequestValidator
         if ($mediaType->charset !== null && $mediaType->charset !== 'utf-8') {
             throw new UnsupportedMediaType('A JSON body is UTF-8 (RFC 8259 §8.1).');
         }
+        if (! $entry[0]->isJson()) {
+            // Opaque bytes ({type: string, format: binary}): the operation reads them itself.
+            return [true, $raw, []];
+        }
 
         try {
             /** @var mixed $body */

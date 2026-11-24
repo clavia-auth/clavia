@@ -29,6 +29,7 @@ use Clavia\Adapter\Primary\Cli\PurgeAuditEventsCommand;
 use Clavia\Adapter\Primary\Cli\PurgeUnusedClientsCommand;
 use Clavia\Adapter\Primary\Cli\RegisterManagementApiCommand;
 use Clavia\Adapter\Primary\Cli\RotateSigningKeyCommand;
+use Clavia\Adapter\Primary\Cli\RunJobsCommand;
 use Clavia\Adapter\Primary\Cli\SeedDevelopmentDataCommand;
 use Clavia\Adapter\Primary\Cli\ShowConfigCommand;
 use Clavia\Adapter\Primary\Http\Auth\AuthCookies;
@@ -74,6 +75,8 @@ use Clavia\Adapter\Primary\Http\Management\SigningKeysHandler;
 use Clavia\Adapter\Primary\Http\Management\UserConsentsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserHandler;
 use Clavia\Adapter\Primary\Http\Management\UserIdentitiesHandler;
+use Clavia\Adapter\Primary\Http\Management\UserImportsHandler;
+use Clavia\Adapter\Primary\Http\Management\UserJobHandler;
 use Clavia\Adapter\Primary\Http\Management\UserMfaHandler;
 use Clavia\Adapter\Primary\Http\Management\UserPasskeysHandler;
 use Clavia\Adapter\Primary\Http\Management\UserPasswordLinkHandler;
@@ -222,6 +225,10 @@ use Clavia\Application\Management\Roles\RolePermissions;
 use Clavia\Application\Management\Roles\UpdateRole;
 use Clavia\Application\Management\Users\CreateUser;
 use Clavia\Application\Management\Users\DeleteUser;
+use Clavia\Application\Management\Users\Jobs\ImportLine;
+use Clavia\Application\Management\Users\Jobs\QueueUserImport;
+use Clavia\Application\Management\Users\Jobs\ReadUserJobs;
+use Clavia\Application\Management\Users\Jobs\RunUserJobs;
 use Clavia\Application\Management\Users\ReadConsents;
 use Clavia\Application\Management\Users\ReadIdentities;
 use Clavia\Application\Management\Users\ReadUserPasskeys;
@@ -311,6 +318,7 @@ use Clavia\Domain\Client\Registration\InitialAccessTokenRepository;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Consent\ConsentRepository;
 use Clavia\Domain\Identity\ExternalIdentityRepository;
+use Clavia\Domain\Identity\Jobs\UserJobRepository;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
@@ -370,6 +378,7 @@ final class ConfigProvider
         'mail:outbox' => MailOutboxCommand::class,
         'audit:purge' => PurgeAuditEventsCommand::class,
         'clients:purge-unused' => PurgeUnusedClientsCommand::class,
+        'jobs:run' => RunJobsCommand::class,
     ];
 
     /**
@@ -439,6 +448,8 @@ final class ConfigProvider
                     InitialAccessTokensHandler::class => Container\InitialAccessTokensHandlerFactory::class,
                     InitialAccessTokenHandler::class => Container\InitialAccessTokenHandlerFactory::class,
                     ClientRegistrationHandler::class => Container\ClientRegistrationHandlerFactory::class,
+                    UserImportsHandler::class => Container\UserImportsHandlerFactory::class,
+                    UserJobHandler::class => Container\UserJobHandlerFactory::class,
                     ClientConfigurationHandler::class => Container\ClientConfigurationHandlerFactory::class,
                     PushedAuthorizationRequestHandler::class
                         => Container\PushedAuthorizationRequestHandlerFactory::class,
@@ -603,6 +614,10 @@ final class ConfigProvider
                     ReadInitialAccessTokens::class => Container\ReadInitialAccessTokensFactory::class,
                     RegistrationMetadata::class => Container\RegistrationMetadataFactory::class,
                     RegisterClientDynamically::class => Container\RegisterClientDynamicallyFactory::class,
+                    ImportLine::class => Container\ImportLineFactory::class,
+                    QueueUserImport::class => Container\QueueUserImportFactory::class,
+                    RunUserJobs::class => Container\RunUserJobsFactory::class,
+                    ReadUserJobs::class => Container\ReadUserJobsFactory::class,
                     RegisteredClients::class => Container\RegisteredClientsFactory::class,
                     ReadClientConfiguration::class => Container\ReadClientConfigurationFactory::class,
                     UpdateClientConfiguration::class => Container\UpdateClientConfigurationFactory::class,
@@ -638,6 +653,7 @@ final class ConfigProvider
                     RoleRepository::class => Container\RoleRepositoryFactory::class,
                     InitialAccessTokenRepository::class => Container\InitialAccessTokenRepositoryFactory::class,
                     ClientRegistrationRepository::class => Container\ClientRegistrationRepositoryFactory::class,
+                    UserJobRepository::class => Container\UserJobRepositoryFactory::class,
                     ConsentRepository::class => Container\ConsentRepositoryFactory::class,
                     LoginStateStore::class => Container\LoginStateStoreFactory::class,
                     PushedAuthorizationRequestStore::class => Container\PushedAuthorizationRequestStoreFactory::class,
@@ -725,6 +741,7 @@ final class ConfigProvider
                     CreateMachineClientCommand::class => Container\CreateMachineClientCommandFactory::class,
                     IssueRegistrationTokenCommand::class => Container\IssueRegistrationTokenCommandFactory::class,
                     PurgeUnusedClientsCommand::class => Container\PurgeUnusedClientsCommandFactory::class,
+                    RunJobsCommand::class => Container\RunJobsCommandFactory::class,
                     GrantClientAccessCommand::class => Container\GrantClientAccessCommandFactory::class,
                     RegisterManagementApiCommand::class => Container\RegisterManagementApiCommandFactory::class,
                     CreateRoleCommand::class => Container\CreateRoleCommandFactory::class,

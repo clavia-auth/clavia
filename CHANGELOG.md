@@ -6,7 +6,20 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ## [Unreleased]
 
+### Added
+
+- **Bulk import of users** (#19): `POST /api/v1/jobs/users-imports` (`create:users`) queues an NDJSON
+  file, one account per line, at most 10,000 lines and 5 MiB, into one pool; `GET /api/v1/jobs/{job_id}`
+  (`read:users`) follows it. A password hash is taken only in a format Clavia verifies (PBKDF2-HMAC-SHA-256),
+  and replaced at today's count at the account's first sign-in. An address already in the pool is
+  refused, never updated; refused lines are reported by number and reason. The file, hashes included, is
+  let go when the job ends.
+- **`bin/clavia jobs:run`**, to run every minute: it runs the queued jobs, fails a job whose worker
+  stopped, and purges finished jobs after seven days. **Migration `0036`**.
+
 ### Changed
+
+- Password sign-in replaces a hash at another iteration count with one at today's.
 
 - **Passwords and client secrets are hashed with PBKDF2-HMAC-SHA-256**, for FIPS 140 (NIST
   SP 800-132): 600,000 iterations, a 16-byte random salt each, derived through OpenSSL, so its FIPS

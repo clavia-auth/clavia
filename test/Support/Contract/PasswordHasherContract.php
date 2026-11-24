@@ -70,6 +70,12 @@ abstract class PasswordHasherContract extends TestCase
     public function testAMalformedHashIsNotAMatchAndNotAnError(string $hash): void
     {
         self::assertFalse($this->hasher()->verify('a-secret', $hash));
+        self::assertFalse($this->hasher()->canVerify($hash));
+    }
+
+    public function testItRecognisesItsOwnHashes(): void
+    {
+        self::assertTrue($this->hasher()->canVerify($this->hasher()->hash('a-secret')));
     }
 
     public function testASecretOfMoreThan1024BytesIsRefused(): void

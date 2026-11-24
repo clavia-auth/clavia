@@ -89,6 +89,12 @@ final readonly class Pbkdf2PasswordHasher implements PasswordHasher
     }
 
     #[\Override]
+    public function canVerify(string $hash): bool
+    {
+        return self::parse($hash) !== null;
+    }
+
+    #[\Override]
     public function needsRehash(string $hash): bool
     {
         return (self::parse($hash)[0] ?? null) !== $this->iterations;

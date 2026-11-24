@@ -58,6 +58,12 @@ final class FakePasswordHasher implements PasswordHasher
     }
 
     #[\Override]
+    public function canVerify(string $hash): bool
+    {
+        return count(explode('$', $hash)) === 4 && str_starts_with($hash, self::PREFIX);
+    }
+
+    #[\Override]
     public function needsRehash(string $hash): bool
     {
         return $this->outdated || ! str_starts_with($hash, self::PREFIX);

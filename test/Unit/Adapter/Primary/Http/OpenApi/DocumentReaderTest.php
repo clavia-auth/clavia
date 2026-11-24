@@ -189,6 +189,24 @@ final class DocumentReaderTest extends TestCase
             ]]]],
             'is not a JSON media type',
         ];
+        yield 'opaque bytes described as something else' => [
+            ['paths' => ['/a' => ['post' => [
+                'requestBody' => ['content' => ['application/x-ndjson' => ['schema' => [
+                    'type' => 'string',
+                    'format' => 'binary',
+                    'maxLength' => 10,
+                ]]]],
+                'responses' => ['200' => ['description' => 'ok']],
+            ]]]],
+            'its schema must be {type: string, format: binary}',
+        ];
+        yield 'opaque bytes without a schema' => [
+            ['paths' => ['/a' => ['post' => [
+                'requestBody' => ['content' => ['application/x-ndjson' => new stdClass()]],
+                'responses' => ['200' => ['description' => 'ok']],
+            ]]]],
+            'its schema must be {type: string, format: binary}',
+        ];
         yield 'an operation without responses' => [
             ['paths' => ['/a' => ['get' => ['responses' => new stdClass()]]]],
             'must describe at least one response',
@@ -234,7 +252,7 @@ final class DocumentReaderTest extends TestCase
     {
         $document = Document::fromYamlFile(__DIR__ . '/../../../../../../docs/openapi/management-api.yaml');
 
-        self::assertCount(50, $document->operations());
+        self::assertCount(52, $document->operations());
     }
 
     /**

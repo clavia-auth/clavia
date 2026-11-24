@@ -79,6 +79,7 @@ The console is `bin/clavia`:
 | `management-api:register`, `management-api:scopes` | Register the Management API; list its scopes |
 | `clients:create-m2m [--third-party]`, `clients:grant` | Machine clients and their grants on an API |
 | `clients:registration-token` | An initial access token for client registration, printed once |
+| `jobs:run` | Run the queued bulk jobs on the users (imports), then exit; run every minute |
 | `clients:purge-unused` | Delete self-registered clients never issued a token after `CLAVIA_CLIENT_REGISTRATION_UNUSED_LIFETIME` days; run daily |
 | `roles:create`, `roles:assign`, `roles:list` | Roles, including the first administrator |
 | `audit:purge` | Delete audit events older than `CLAVIA_AUDIT_RETENTION_DAYS`; run daily |
@@ -743,6 +744,24 @@ types, unsupported parameter styles). It reports every violation, never repeats 
 coerces exactly (`"02"` is not an integer), and is strict where the specification is loose
 (undescribed query parameters, a body sent to an operation without one, a single value sent
 twice).
+
+### Bulk jobs on the users
+
+`POST /api/v1/jobs/users-imports` (`create:users`, `?connection=` a pool) takes NDJSON, one account
+per line, at most 10,000 lines and 5 MiB, and only queues a `UserJob` (`QueueUserImport`): the
+body is opaque to the contract (`application/x-ndjson`, `{type: string, format: binary}`, the one
+non-JSON schema the validator takes), and nothing is read line by line in the request.
+`bin/clavia jobs:run` (`RunUserJobs`, every minute) claims queued jobs one by one (`FOR UPDATE SKIP
+LOCKED`, so workers never share one), and takes each line in its own transaction: `ImportLine`
+holds it to the API's rules for a new user, with a `password_hash` instead of a password (only a
+hash `PasswordHasher::canVerify()`, so PBKDF2 at any count from 1,000; a plaintext `password` or
+any other member refuses the line), and an address already in the pool is refused, never updated.
+Refused lines are reported by number and reason (`invalid_json`, `invalid_field`,
+`unsupported_hash`, `already_exists`), never content, the first thousand listed. Each account is a
+`UserCreated` by the caller who queued the job (its `Actor` is kept on the job). A finished job keeps
+no input (a database check), only its report, `GET /api/v1/jobs/{job_id}` (`read:users`), for seven
+days. A job running for an hour has lost its worker and is failed. Password sign-in replaces a hash
+`needsRehash()` at today's count, which is how an imported one reaches 600,000 iterations.
 
 ### Domain events and the audit trail
 

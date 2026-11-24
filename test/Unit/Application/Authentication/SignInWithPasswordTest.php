@@ -132,6 +132,7 @@ final class SignInWithPasswordTest extends TestCase
                 86400,
                 1800,
             ),
+            $this->clock,
         );
 
         $this->user = User::register(
@@ -179,6 +180,30 @@ final class SignInWithPasswordTest extends TestCase
     {
         self::assertInstanceOf(SignedIn::class, $this->signInWith());
         self::assertSame([], $this->mailer->sent);
+    }
+
+    public function testAnOutdatedHashIsReplacedAtTheNextSignIn(): void
+    {
+        // An imported hash at another iteration count: the password is at hand only now.
+        $before = $this->users->find($this->user->id)?->passwordHash();
+        $this->hasher->outdated = true;
+
+        $outcome = $this->signInWith();
+        $this->hasher->outdated = false;
+
+        self::assertInstanceOf(SignedIn::class, $outcome);
+        $after = $this->users->find($this->user->id)?->passwordHash();
+        self::assertNotSame($before, $after);
+        self::assertTrue($this->hasher->verify(self::PASSWORD, (string) $after));
+    }
+
+    public function testACurrentHashIsLeftAlone(): void
+    {
+        $before = $this->users->find($this->user->id)?->passwordHash();
+
+        $this->signInWith();
+
+        self::assertSame($before, $this->users->find($this->user->id)?->passwordHash());
     }
 
     public function testTheRightPasswordStartsAPasswordSessionForTheAccount(): void

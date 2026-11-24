@@ -36,6 +36,12 @@ interface PasswordHasher
      */
     public function verify(#[\SensitiveParameter] string $secret, string $hash): bool;
 
+    /**
+     * Whether `$hash` is one this hasher can verify, whatever its cost: what an import may carry
+     * (a hash made elsewhere, never a password).
+     */
+    public function canVerify(string $hash): bool;
+
     /** Whether a hash that just verified should be replaced by a fresh one at today's cost. */
     public function needsRehash(string $hash): bool;
 

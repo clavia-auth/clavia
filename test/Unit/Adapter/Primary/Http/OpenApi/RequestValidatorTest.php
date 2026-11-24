@@ -69,7 +69,33 @@ final class RequestValidatorTest extends TestCase
           /items/latest:
             get:
               responses: {'200': {description: ok}}
+          /imports:
+            post:
+              requestBody:
+                required: true
+                content:
+                  application/x-ndjson:
+                    schema: {type: string, format: binary}
+              responses: {'202': {description: queued}}
         YAML;
+
+    public function testAnOpaqueBodyComesBackAsItsBytes(): void
+    {
+        // NDJSON is not JSON: the operation reads it line by line, and the validator leaves it whole.
+        $lines = "{\"email\":\"ada@example.com\"}\nnot json at all\n";
+
+        $validated = self::validator()->validate(self::request('POST', '/v2/imports', $lines, 'application/x-ndjson'));
+
+        self::assertSame($lines, $validated->body);
+        self::assertTrue($validated->hasBody);
+    }
+
+    public function testAnOpaqueBodyOfAnotherMediaTypeIsUnsupported(): void
+    {
+        $this->expectException(UnsupportedMediaType::class);
+
+        self::validator()->validate(self::request('POST', '/v2/imports', '{"email":"a@example.com"}'));
+    }
 
     public function testAValidRequestComesBackDecoded(): void
     {

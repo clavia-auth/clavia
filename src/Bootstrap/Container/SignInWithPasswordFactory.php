@@ -21,6 +21,7 @@ use Clavia\Application\Port\LoginStateStore;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Identity\UserRepository;
+use Clavia\Domain\Shared\Clock;
 use Psr\Container\ContainerInterface;
 
 final class SignInWithPasswordFactory
@@ -43,6 +44,8 @@ final class SignInWithPasswordFactory
         $completeFirstFactor = $container->get(CompleteFirstFactor::class);
         /** @var DomainEvents $events */
         $events = $container->get(DomainEvents::class);
+        /** @var Clock $clock */
+        $clock = $container->get(Clock::class);
         /** @var SendAccountLink $verificationLinks */
         $verificationLinks = $container->get(SendAccountLink::class);
 
@@ -56,6 +59,7 @@ final class SignInWithPasswordFactory
             $completeFirstFactor,
             $events,
             $verificationLinks,
+            $clock,
         );
     }
 }
