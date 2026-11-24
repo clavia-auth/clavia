@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace ClaviaTest\Support\Fake;
 
 use Clavia\Adapter\Secondary\Signing\Remote\Gcp\GcpKmsKey;
+use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
@@ -39,7 +40,15 @@ final class FakeCloudKms
     public function __invoke(RequestInterface $request): ResponseInterface
     {
         if ($request->getHeaderLine('Authorization') !== 'Bearer ' . $this->token) {
-            return new JsonResponse(['error' => ['code' => 401, 'message' => 'Request had invalid credentials.']], 401);
+            return new JsonResponse(
+                [
+                    'error' => [
+                        'code' => StatusCodeInterface::STATUS_UNAUTHORIZED,
+                        'message' => 'Request had invalid credentials.',
+                    ],
+                ],
+                StatusCodeInterface::STATUS_UNAUTHORIZED,
+            );
         }
 
         return match ([$request->getMethod(), (string) $request->getUri()]) {
@@ -50,7 +59,10 @@ final class FakeCloudKms
                 'pemCrc32c' => self::crc32c($this->hsm->publicPem()),
                 'name' => $this->keyVersion,
             ]),
-            default => new JsonResponse(['error' => ['code' => 404, 'message' => 'Not found.']], 404),
+            default => new JsonResponse(
+                ['error' => ['code' => StatusCodeInterface::STATUS_NOT_FOUND, 'message' => 'Not found.']],
+                StatusCodeInterface::STATUS_NOT_FOUND,
+            ),
         };
     }
 
@@ -60,7 +72,15 @@ final class FakeCloudKms
         $body = json_decode((string) $request->getBody(), true, flags: JSON_THROW_ON_ERROR);
         $digest = base64_decode($body['digest']['sha256'] ?? '', true);
         if ($digest === false || strlen($digest) !== 32) {
-            return new JsonResponse(['error' => ['code' => 400, 'message' => 'Digest is not a SHA-256.']], 400);
+            return new JsonResponse(
+                [
+                    'error' => [
+                        'code' => StatusCodeInterface::STATUS_BAD_REQUEST,
+                        'message' => 'Digest is not a SHA-256.',
+                    ],
+                ],
+                StatusCodeInterface::STATUS_BAD_REQUEST,
+            );
         }
 
         $signature = $this->hsm->signDigest($digest);

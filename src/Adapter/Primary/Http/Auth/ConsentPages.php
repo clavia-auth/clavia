@@ -13,6 +13,7 @@ namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
 use Clavia\Application\OAuth2\Consent\ConsentScreen;
+use Fig\Http\Message\StatusCodeInterface;
 
 /**
  * The view models of the consent screen: the question, and the page for a request that
@@ -37,7 +38,7 @@ final class ConsentPages
         ConsentScreen $screen,
         string $consentState,
         ?string $error = null,
-        int $status = 200,
+        int $status = StatusCodeInterface::STATUS_OK,
     ): HtmlPage {
         return new HtmlPage(
             template: 'auth::consent',
@@ -71,7 +72,7 @@ final class ConsentPages
             heading: 'Request expired',
             returnTo: self::PATH,
             error: self::EXPIRED,
-            status: 400,
+            status: StatusCodeInterface::STATUS_BAD_REQUEST,
         );
     }
 

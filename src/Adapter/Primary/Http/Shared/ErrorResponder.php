@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Shared;
 
+use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -57,7 +58,12 @@ final readonly class ErrorResponder
     /** No route matches the path. */
     public function notFound(ServerRequestInterface $request): ResponseInterface
     {
-        return $this->respond($request, 404, ErrorPage::notFound(), ['detail' => 'Not Found']);
+        return $this->respond(
+            $request,
+            StatusCodeInterface::STATUS_NOT_FOUND,
+            ErrorPage::notFound(),
+            ['detail' => 'Not Found'],
+        );
     }
 
     /**
@@ -69,7 +75,7 @@ final readonly class ErrorResponder
     {
         return $this->respond(
             $request,
-            405,
+            StatusCodeInterface::STATUS_METHOD_NOT_ALLOWED,
             ErrorPage::methodNotAllowed(),
             ['detail' => 'Method Not Allowed'],
             ['Allow' => implode(', ', $allowed)],

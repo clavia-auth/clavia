@@ -37,6 +37,7 @@ use ClaviaTest\Support\LoginFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\SoftwareAuthenticator;
 use DateTimeImmutable;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -71,11 +72,11 @@ final class PasskeySecondFactorTest extends AcceptanceTestCase
 
         $signIn = $this->submitLogin(nextUrl: '/oauth2/authorize?next');
 
-        self::assertSame(303, $signIn->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $signIn->getStatusCode());
         self::assertSame('/auth/mfa', $signIn->getHeaderLine('Location'));
         self::assertNull($this->cookie(self::SESSION_COOKIE), 'No session before the second factor.');
         $page = $this->get('/auth/mfa');
-        self::assertSame(200, $page->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $page->getStatusCode());
         self::assertStringContainsString('Use a passkey', (string) $page->getBody());
         // No authenticator app: the code the page asks for is a recovery code.
         self::assertStringContainsString('Recovery code', (string) $page->getBody());
@@ -98,7 +99,11 @@ final class PasskeySecondFactorTest extends AcceptanceTestCase
 
         $answered = $this->answerWithPasskey($authenticator, $user, signCount: 4);
 
-        self::assertSame(303, $answered->getStatusCode(), (string) $answered->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_SEE_OTHER,
+            $answered->getStatusCode(),
+            (string) $answered->getBody(),
+        );
         self::assertSame('/auth/after', $answered->getHeaderLine('Location'));
         $session = $this->session($this->cookie(self::SESSION_COOKIE));
         self::assertNotNull($session);
@@ -133,7 +138,7 @@ final class PasskeySecondFactorTest extends AcceptanceTestCase
 
         $refused = $this->answerWithPasskey($stranger, $user);
 
-        self::assertSame(401, $refused->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $refused->getStatusCode());
         self::assertStringContainsString('That passkey did not work', (string) $refused->getBody());
         self::assertNull($this->cookie(self::SESSION_COOKIE));
         $failed = $this->audited(AuditEventType::SignInFailed);
@@ -150,7 +155,7 @@ final class PasskeySecondFactorTest extends AcceptanceTestCase
 
         $refused = $this->answerWithPasskey($authenticator, $user, origin: 'https://evil.example');
 
-        self::assertSame(401, $refused->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $refused->getStatusCode());
         self::assertSame(
             'wrong_second_factor',
             $this->audited(AuditEventType::SignInFailed)[0]->details['reason'] ?? null,
@@ -166,7 +171,7 @@ final class PasskeySecondFactorTest extends AcceptanceTestCase
 
         $refused = $this->answerWithPasskey($authenticator, $user, signCount: 3);
 
-        self::assertSame(401, $refused->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $refused->getStatusCode());
         $regressed = $this->audited(AuditEventType::PasskeyCounterRegressed);
         self::assertCount(1, $regressed);
         self::assertSame(10, $regressed[0]->details['stored'] ?? null);
@@ -183,11 +188,11 @@ final class PasskeySecondFactorTest extends AcceptanceTestCase
 
         for ($attempt = 1; $attempt < 5; $attempt++) {
             $refused = $this->answerWithPasskey($authenticator, $user, origin: 'https://evil.example');
-            self::assertSame(401, $refused->getStatusCode());
+            self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $refused->getStatusCode());
         }
         $last = $this->answerWithPasskey($authenticator, $user, origin: 'https://evil.example');
 
-        self::assertSame(303, $last->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $last->getStatusCode());
         self::assertSame('/auth/login', $last->getHeaderLine('Location'));
     }
 
@@ -223,7 +228,7 @@ final class PasskeySecondFactorTest extends AcceptanceTestCase
             ]),
         ], body: http_build_query($form));
 
-        self::assertSame(401, $replayed->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $replayed->getStatusCode());
         self::assertNull($this->cookie(self::SESSION_COOKIE));
     }
 
@@ -241,7 +246,11 @@ final class PasskeySecondFactorTest extends AcceptanceTestCase
 
         $answered = $this->post('/auth/mfa', ['code' => 'abcd-efgh-jkmn', 'csrf_token' => self::csrfTokenFrom($page)]);
 
-        self::assertSame(303, $answered->getStatusCode(), (string) $answered->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_SEE_OTHER,
+            $answered->getStatusCode(),
+            (string) $answered->getBody(),
+        );
         self::assertSame(['pwd', 'mfa'], array_map(
             static fn ($m): string => $m->value,
             $this->session($this->cookie(self::SESSION_COOKIE))?->methods ?? [],
@@ -287,7 +296,7 @@ final class PasskeySecondFactorTest extends AcceptanceTestCase
         ?string $origin = null,
     ): ResponseInterface {
         $page = $this->get('/auth/mfa');
-        self::assertSame(200, $page->getStatusCode(), (string) $page->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $page->getStatusCode(), (string) $page->getBody());
 
         return $this->post('/auth/mfa/passkey', [
             'credential' => $authenticator->authenticate(

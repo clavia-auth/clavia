@@ -28,6 +28,7 @@ use Clavia\Domain\OAuth2\CodeVerifier;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\RandomSource;
 use Clavia\Domain\Shared\Url;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -185,7 +186,11 @@ trait OAuth2Fixtures
     /** Pull the authorization code out of a redirect to the client. */
     protected function extractCode(ResponseInterface $response): string
     {
-        self::assertSame(302, $response->getStatusCode(), 'expected a redirect: ' . (string) $response->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_FOUND,
+            $response->getStatusCode(),
+            'expected a redirect: ' . (string) $response->getBody(),
+        );
         $query = self::locationQuery($response);
         self::assertArrayHasKey('code', $query, 'no code in redirect: ' . $response->getHeaderLine('Location'));
 

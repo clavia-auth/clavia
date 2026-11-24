@@ -18,6 +18,7 @@ use Clavia\Application\Authentication\SignIn\PasskeySignIn;
 use Clavia\Application\Authentication\SignIn\SecondFactorRequired;
 use Clavia\Application\Authentication\SignIn\SignedIn;
 use Clavia\Application\Authentication\SignIn\SignInWithPasskey;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
@@ -47,7 +48,13 @@ final readonly class PasskeySignInHandler implements RequestHandlerInterface
         $form = RequestParameterReader::form($request);
         $loginState = $form->get('state');
         if (! CsrfToken::isValid($request, $form->get('csrf_token'))) {
-            return $this->loginForm->render($request, $loginState, null, LoginPages::EXPIRED_FORM, 400);
+            return $this->loginForm->render(
+                $request,
+                $loginState,
+                null,
+                LoginPages::EXPIRED_FORM,
+                StatusCodeInterface::STATUS_BAD_REQUEST,
+            );
         }
 
         $outcome = ($this->signIn)(new PasskeySignIn(
@@ -72,6 +79,12 @@ final readonly class PasskeySignInHandler implements RequestHandlerInterface
             ]);
         }
 
-        return $this->loginForm->render($request, $loginState, null, LoginPages::INVALID_CREDENTIALS, 401);
+        return $this->loginForm->render(
+            $request,
+            $loginState,
+            null,
+            LoginPages::INVALID_CREDENTIALS,
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
+        );
     }
 }

@@ -18,6 +18,7 @@ use Clavia\Application\Authentication\Passwordless\PasswordlessCodeSent;
 use Clavia\Application\Authentication\Passwordless\PasswordlessLinkSent;
 use Clavia\Application\Authentication\Passwordless\PasswordlessStart;
 use Clavia\Application\Authentication\Passwordless\StartPasswordlessSignIn;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
@@ -50,7 +51,13 @@ final readonly class PasswordlessStartHandler implements RequestHandlerInterface
         $loginState = $form->get('state');
 
         if (! CsrfToken::isValid($request, $form->get('csrf_token'))) {
-            return $this->refuse($request, $loginState, $email, LoginPages::EXPIRED_FORM, 400);
+            return $this->refuse(
+                $request,
+                $loginState,
+                $email,
+                LoginPages::EXPIRED_FORM,
+                StatusCodeInterface::STATUS_BAD_REQUEST,
+            );
         }
 
         $outcome = ($this->start)(new PasswordlessStart(

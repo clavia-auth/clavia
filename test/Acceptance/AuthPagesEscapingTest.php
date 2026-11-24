@@ -42,6 +42,7 @@ use Clavia\Domain\Identity\UserId;
 use ClaviaTest\Support\AcceptanceTestCase;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use DateTimeImmutable;
+use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\ServerRequest;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -82,7 +83,7 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
                 new SignInMethods(true, true, [new ExternalProviderOption(self::HOSTILE, self::HOSTILE)], true, true),
                 self::HOSTILE,
                 self::HOSTILE,
-                401,
+                StatusCodeInterface::STATUS_UNAUTHORIZED,
             ),
         ];
         yield 'the signed-in page' => [LoginPages::signedIn(self::HOSTILE)];
@@ -110,7 +111,7 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
             new SignInMethods(true, false, [], false, false, true),
             self::HOSTILE,
             self::HOSTILE,
-            401,
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
             new AssertionOptions(
                 self::HOSTILE,
                 RelyingParty::of('auth.clavia.test', 'Clavia', 'https://auth.clavia.test'),
@@ -125,7 +126,14 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
             ),
         )];
         yield 'the sign-up form: state, address and error' => [
-            AccountPages::signUp(self::HOSTILE, [], true, self::HOSTILE, self::HOSTILE, 400),
+            AccountPages::signUp(
+                self::HOSTILE,
+                [],
+                true,
+                self::HOSTILE,
+                self::HOSTILE,
+                StatusCodeInterface::STATUS_BAD_REQUEST,
+            ),
         ];
         yield 'check your inbox: address and handle' => [
             AccountPages::checkInbox(self::HOSTILE, 'sign-up', self::HOSTILE),
@@ -135,22 +143,37 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
             AccountPages::checkInbox(self::HOSTILE, 'unverified', null),
         ];
         yield 'the verification link: address, token and error' => [
-            AccountPages::confirmEmail(self::HOSTILE, self::HOSTILE, self::HOSTILE, 400),
+            AccountPages::confirmEmail(
+                self::HOSTILE,
+                self::HOSTILE,
+                self::HOSTILE,
+                StatusCodeInterface::STATUS_BAD_REQUEST,
+            ),
         ];
         yield 'the confirmed address: address and handle' => [
             AccountPages::emailVerified(self::HOSTILE, self::HOSTILE),
         ];
         yield 'the forgot form: state, address and error' => [
-            AccountPages::forgot(self::HOSTILE, self::HOSTILE, self::HOSTILE, 400),
+            AccountPages::forgot(self::HOSTILE, self::HOSTILE, self::HOSTILE, StatusCodeInterface::STATUS_BAD_REQUEST),
         ];
         yield 'the reset form: address, token and error' => [
-            AccountPages::resetForm(self::HOSTILE, self::HOSTILE, self::HOSTILE, 400),
+            AccountPages::resetForm(
+                self::HOSTILE,
+                self::HOSTILE,
+                self::HOSTILE,
+                StatusCodeInterface::STATUS_BAD_REQUEST,
+            ),
         ];
         yield 'the changed password: address and handle' => [
             AccountPages::passwordChanged(self::HOSTILE, self::HOSTILE),
         ];
         yield 'the second step: error' => [
-            MfaPages::challenge(new SecondFactorPage([], true, false), null, self::HOSTILE, 401),
+            MfaPages::challenge(
+                new SecondFactorPage([], true, false),
+                null,
+                self::HOSTILE,
+                StatusCodeInterface::STATUS_UNAUTHORIZED,
+            ),
         ];
         yield 'a step-up, for an application named by an operator' => [
             MfaPages::challenge(new SecondFactorPage([], true, false, true, true, self::HOSTILE), null, self::HOSTILE),
@@ -171,10 +194,14 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
                 300,
             ),
             self::HOSTILE,
-            401,
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
         )];
         yield 'the code page: address and error' => [
-            PasswordlessPages::code(new PasswordlessPrompt(self::HOSTILE, []), self::HOSTILE, 401),
+            PasswordlessPages::code(
+                new PasswordlessPrompt(self::HOSTILE, []),
+                self::HOSTILE,
+                StatusCodeInterface::STATUS_UNAUTHORIZED,
+            ),
         ];
         yield 'the link sent: address' => [PasswordlessPages::linkSent(self::HOSTILE)];
         yield 'the link confirmation: address, token and error' => [
@@ -182,7 +209,7 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
                 new PasswordlessPrompt(self::HOSTILE, []),
                 self::HOSTILE,
                 self::HOSTILE,
-                400,
+                StatusCodeInterface::STATUS_BAD_REQUEST,
             ),
         ];
         yield 'the consent screen: application, account, scopes, API and handle' => [ConsentPages::question(
@@ -195,7 +222,7 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
             ),
             self::HOSTILE,
             self::HOSTILE,
-            400,
+            StatusCodeInterface::STATUS_BAD_REQUEST,
         )];
         yield 'the expired consent screen' => [new HtmlPage(
             template: 'auth::consent-expired',
@@ -240,7 +267,7 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
                 10,
             ),
             self::HOSTILE,
-            400,
+            StatusCodeInterface::STATUS_BAD_REQUEST,
         )];
         yield 'the page that makes a passkey: address, names and options' => [PasskeyPages::create(
             new RegistrationOptions(
@@ -269,7 +296,12 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
             )),
         ];
         yield 'an error page: message, advice and reference' => [
-            new ErrorPage(self::HOSTILE, self::HOSTILE, self::HOSTILE, self::HOSTILE)->toHtmlPage(400),
+            new ErrorPage(
+                self::HOSTILE,
+                self::HOSTILE,
+                self::HOSTILE,
+                self::HOSTILE,
+            )->toHtmlPage(StatusCodeInterface::STATUS_BAD_REQUEST),
         ];
     }
 

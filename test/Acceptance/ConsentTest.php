@@ -42,6 +42,7 @@ use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
 use DateTimeImmutable;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -84,7 +85,7 @@ final class ConsentTest extends AcceptanceTestCase
         $state = $this->consentState($this->asThirdParty('openid email'));
         $page = $this->get('/auth/consent', ['state' => $state]);
 
-        self::assertSame(200, $page->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $page->getStatusCode());
         $body = (string) $page->getBody();
         self::assertStringContainsString('Partner Analytics', $body);
         self::assertStringContainsString(self::TEST_USER_EMAIL, $body);
@@ -138,7 +139,7 @@ final class ConsentTest extends AcceptanceTestCase
 
         // Back to the authorization request — minus the `consent` it asked for, which has
         // now been given, so the request does not loop back here forever.
-        self::assertSame(303, $allowed->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $allowed->getStatusCode());
         $location = $allowed->getHeaderLine('Location');
         self::assertStringStartsWith('/oauth2/authorize?', $location);
         self::assertStringNotContainsString('prompt', $location);
@@ -153,7 +154,7 @@ final class ConsentTest extends AcceptanceTestCase
 
         $response = $this->asThirdParty(overrides: ['prompt' => 'none']);
 
-        self::assertSame(302, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_FOUND, $response->getStatusCode());
         $query = self::locationQuery($response);
         self::assertSame('consent_required', $query['error']);
         self::assertSame('test-state-value', $query['state']);
@@ -165,7 +166,7 @@ final class ConsentTest extends AcceptanceTestCase
 
         $response = $this->authorize(['prompt' => 'none']);
 
-        self::assertSame(302, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_FOUND, $response->getStatusCode());
         self::assertSame('login_required', self::locationQuery($response)['error']);
     }
 
@@ -179,7 +180,7 @@ final class ConsentTest extends AcceptanceTestCase
 
         $allowed = $this->decide($state, 'allow');
 
-        self::assertSame(303, $allowed->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $allowed->getStatusCode());
         $this->extractCode($this->get($allowed->getHeaderLine('Location')));
         $consents = $this->storedConsents();
         self::assertCount(1, $consents);
@@ -188,7 +189,10 @@ final class ConsentTest extends AcceptanceTestCase
         self::assertNull($consents[0]['resource_server_id']);
         self::assertSame('openid email', $consents[0]['scope']);
         // The handle was spent by the decision.
-        self::assertSame(400, $this->get('/auth/consent', ['state' => $state])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_BAD_REQUEST,
+            $this->get('/auth/consent', ['state' => $state])->getStatusCode(),
+        );
     }
 
     public function testARecordedConsentIsNotAskedForAgain(): void
@@ -234,7 +238,7 @@ final class ConsentTest extends AcceptanceTestCase
 
         $refused = $this->decide($state, 'deny');
 
-        self::assertSame(302, $refused->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_FOUND, $refused->getStatusCode());
         self::assertStringStartsWith(self::TEST_REDIRECT_URI . '?', $refused->getHeaderLine('Location'));
         $query = self::locationQuery($refused);
         self::assertSame('access_denied', $query['error']);
@@ -299,7 +303,7 @@ final class ConsentTest extends AcceptanceTestCase
 
         $page = $this->get('/auth/consent', ['state' => $state]);
 
-        self::assertSame(400, $page->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $page->getStatusCode());
         self::assertStringContainsString('expired', strtolower((string) $page->getBody()));
         self::assertStringNotContainsString('Partner Analytics', (string) $page->getBody());
     }
@@ -308,7 +312,7 @@ final class ConsentTest extends AcceptanceTestCase
     {
         $response = $this->get('/auth/consent', ['state' => 'anything']);
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertStringStartsWith('/auth/login?state=', $response->getHeaderLine('Location'));
         // And comes back to the same screen afterwards.
         self::assertSame(
@@ -325,10 +329,10 @@ final class ConsentTest extends AcceptanceTestCase
 
         $response = $this->decide($state, 'allow', csrfToken: 'forged');
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame([], $this->storedConsents());
         // Still on hold: only the click is lost.
-        self::assertSame(303, $this->decide($state, 'allow')->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $this->decide($state, 'allow')->getStatusCode());
     }
 
     public function testAnUnknownHandleIsAnExpiredRequest(): void
@@ -337,7 +341,7 @@ final class ConsentTest extends AcceptanceTestCase
 
         $page = $this->get('/auth/consent', ['state' => 'never-issued']);
 
-        self::assertSame(400, $page->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $page->getStatusCode());
         self::assertStringContainsString('expired', strtolower((string) $page->getBody()));
     }
 
@@ -355,7 +359,7 @@ final class ConsentTest extends AcceptanceTestCase
             'audience' => self::MANAGEMENT_API,
         ]);
 
-        self::assertSame(302, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_FOUND, $response->getStatusCode());
         $query = self::locationQuery($response);
         self::assertSame('access_denied', $query['error']);
         self::assertSame('test-state-value', $query['state']);
@@ -390,7 +394,7 @@ final class ConsentTest extends AcceptanceTestCase
             basicAuth: ['tpc_test-machine', self::TEST_M2M_SECRET],
         );
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('access_denied', self::json($response)['error']);
     }
 
@@ -403,7 +407,7 @@ final class ConsentTest extends AcceptanceTestCase
 
         $response = $this->requestMachineToken(['audience' => self::MANAGEMENT_API]);
 
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
     }
 
     // ── Registration and administration ─────────────────────────────────────────
@@ -420,14 +424,17 @@ final class ConsentTest extends AcceptanceTestCase
             'redirect_uris' => ['https://partner.test/callback'],
             'is_first_party' => false,
         ]);
-        self::assertSame(201, $created->getStatusCode(), (string) $created->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_CREATED, $created->getStatusCode(), (string) $created->getBody());
         $body = self::document($created);
         self::assertFalse($body['is_first_party']);
         self::assertMatchesRegularExpression('/^tpc_[A-Za-z0-9]{32}$/D', (string) $body['client_id']);
 
         // Identity, not configuration: the contract has no such field on an update.
         $path = '/api/v1/clients/' . (string) $body['client_id'];
-        self::assertSame(422, $this->api('PATCH', $path, ['is_first_party' => true])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
+            $this->api('PATCH', $path, ['is_first_party' => true])->getStatusCode(),
+        );
         self::assertFalse(self::document($this->api('GET', $path))['is_first_party']);
     }
 
@@ -459,7 +466,7 @@ final class ConsentTest extends AcceptanceTestCase
 
         $listed = $this->api('GET', $consents);
 
-        self::assertSame(200, $listed->getStatusCode(), (string) $listed->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $listed->getStatusCode(), (string) $listed->getBody());
         $document = self::document($listed);
         self::assertCount(1, $document);
         self::assertIsArray($document[0]);
@@ -469,8 +476,14 @@ final class ConsentTest extends AcceptanceTestCase
         self::assertNull($document[0]['audience']);
         self::assertSame(['email', 'openid'], $document[0]['scopes']);
 
-        self::assertSame(204, $this->api('DELETE', $consents . '/' . self::THIRD_PARTY_CLIENT_ID)->getStatusCode());
-        self::assertSame(204, $this->api('DELETE', $consents . '/' . self::THIRD_PARTY_CLIENT_ID)->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_NO_CONTENT,
+            $this->api('DELETE', $consents . '/' . self::THIRD_PARTY_CLIENT_ID)->getStatusCode(),
+        );
+        self::assertSame(
+            StatusCodeInterface::STATUS_NO_CONTENT,
+            $this->api('DELETE', $consents . '/' . self::THIRD_PARTY_CLIENT_ID)->getStatusCode(),
+        );
         self::assertSame([], self::document($this->api('GET', $consents)));
         // Withdrawn: the application has to ask again.
         $this->consentState($this->asThirdParty('openid email'));
@@ -481,8 +494,11 @@ final class ConsentTest extends AcceptanceTestCase
         $this->adminToken();
         $unknown = '/api/v1/users/00000000-0000-4000-8000-000000000999/consents';
 
-        self::assertSame(404, $this->api('GET', $unknown)->getStatusCode());
-        self::assertSame(404, $this->api('DELETE', $unknown . '/spa')->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $this->api('GET', $unknown)->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_NOT_FOUND,
+            $this->api('DELETE', $unknown . '/spa')->getStatusCode(),
+        );
     }
 
     public function testAnApiCanStopFirstPartyApplicationsSkippingConsent(): void
@@ -494,7 +510,7 @@ final class ConsentTest extends AcceptanceTestCase
             'name' => 'Strict',
             'allow_skipping_consent' => false,
         ]);
-        self::assertSame(201, $created->getStatusCode(), (string) $created->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_CREATED, $created->getStatusCode(), (string) $created->getBody());
         self::assertFalse(self::document($created)['allow_skipping_consent']);
 
         $patched = $this->api(
@@ -512,7 +528,7 @@ final class ConsentTest extends AcceptanceTestCase
 
         $response = $this->api('PATCH', '/api/v1/resource-servers/' . $id, ['allow_skipping_consent' => false]);
 
-        self::assertSame(409, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_CONFLICT, $response->getStatusCode());
         $read = self::document($this->api('GET', '/api/v1/resource-servers/' . $id));
         self::assertTrue($read['allow_skipping_consent']);
     }
@@ -593,7 +609,11 @@ final class ConsentTest extends AcceptanceTestCase
     /** The handle `/oauth2/authorize` sent the browser to the consent screen with. */
     private function consentState(ResponseInterface $response): string
     {
-        self::assertSame(303, $response->getStatusCode(), $response->getHeaderLine('Location'));
+        self::assertSame(
+            StatusCodeInterface::STATUS_SEE_OTHER,
+            $response->getStatusCode(),
+            $response->getHeaderLine('Location'),
+        );
         $location = $response->getHeaderLine('Location');
         self::assertStringStartsWith('/auth/consent?state=', $location);
 
@@ -604,7 +624,7 @@ final class ConsentTest extends AcceptanceTestCase
     private function decide(string $state, string $decision, ?string $csrfToken = null): ResponseInterface
     {
         $page = $this->get('/auth/consent', ['state' => $state]);
-        self::assertSame(200, $page->getStatusCode(), (string) $page->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $page->getStatusCode(), (string) $page->getBody());
 
         return $this->post('/auth/consent', [
             'csrf_token' => $csrfToken ?? self::csrfTokenFrom($page),

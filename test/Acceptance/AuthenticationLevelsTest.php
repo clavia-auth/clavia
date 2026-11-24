@@ -21,6 +21,7 @@ use ClaviaTest\Support\LoginFixtures;
 use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\OidcFixtures;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -146,7 +147,7 @@ final class AuthenticationLevelsTest extends AcceptanceTestCase
             'code' => Totp::codeAt($secret, $this->clock->now()),
             'csrf_token' => self::csrfTokenFrom($page),
         ]);
-        self::assertSame(303, $done->getStatusCode(), (string) $done->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $done->getStatusCode(), (string) $done->getBody());
     }
 
     private function introspect(string $token): ResponseInterface

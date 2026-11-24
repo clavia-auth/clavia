@@ -15,6 +15,7 @@ use Clavia\Domain\Client\GrantType;
 use ClaviaTest\Support\AcceptanceTestCase;
 use ClaviaTest\Support\DpopClient;
 use ClaviaTest\Support\OAuth2Fixtures;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -45,7 +46,7 @@ final class DpopBindingTest extends AcceptanceTestCase
             headers: self::dpop($proof),
         ));
 
-        self::assertSame(200, $redeemed->getStatusCode(), (string) $redeemed->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $redeemed->getStatusCode(), (string) $redeemed->getBody());
         self::assertSame('DPoP', self::json($redeemed)['token_type']);
     }
 
@@ -107,7 +108,7 @@ final class DpopBindingTest extends AcceptanceTestCase
             $this->authorizeParams($challenge),
             headers: self::dpop($proof),
         ));
-        self::assertSame(201, $pushed->getStatusCode(), (string) $pushed->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_CREATED, $pushed->getStatusCode(), (string) $pushed->getBody());
         self::assertNotSame('', $pushed->getHeaderLine('DPoP-Nonce'));
         $requestUri = self::json($pushed)['request_uri'];
         self::assertIsString($requestUri);
@@ -122,7 +123,7 @@ final class DpopBindingTest extends AcceptanceTestCase
             headers: self::dpop($proof),
         ));
 
-        self::assertSame(200, $redeemed->getStatusCode(), (string) $redeemed->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $redeemed->getStatusCode(), (string) $redeemed->getBody());
         self::assertSame('DPoP', self::json($redeemed)['token_type']);
     }
 
@@ -189,7 +190,7 @@ final class DpopBindingTest extends AcceptanceTestCase
         self::assertSame('invalid_grant', self::json($withoutProof)['error']);
         self::assertSame('invalid_grant', self::json($withAnotherKey)['error']);
         // Neither spent it: a wrong proof is not a replay.
-        self::assertSame(200, $withItsKey->getStatusCode(), (string) $withItsKey->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $withItsKey->getStatusCode(), (string) $withItsKey->getBody());
         self::assertSame('DPoP', self::json($withItsKey)['token_type']);
     }
 
@@ -214,7 +215,7 @@ final class DpopBindingTest extends AcceptanceTestCase
             'refresh_token' => $tokens['refresh_token'],
         ] + $credentials);
 
-        self::assertSame(200, $refreshed->getStatusCode(), (string) $refreshed->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $refreshed->getStatusCode(), (string) $refreshed->getBody());
         self::assertSame('Bearer', self::json($refreshed)['token_type']);
     }
 

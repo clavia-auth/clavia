@@ -27,6 +27,7 @@
         "ext-redis": "*",
         "ext-uri": "*",
         "bacon/bacon-qr-code": "^3.0",
+        "fig/http-message-util": "^1.1",
         "guzzlehttp/guzzle": "^8.5",
         "laminas/laminas-config-aggregator": "^1.21",
         "laminas/laminas-diactoros": "^3.10",

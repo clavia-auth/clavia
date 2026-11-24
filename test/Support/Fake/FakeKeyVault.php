@@ -13,6 +13,7 @@ namespace ClaviaTest\Support\Fake;
 
 use Clavia\Adapter\Secondary\Signing\Remote\Azure\AzureKeyVaultKey;
 use Clavia\Domain\Shared\Base64Url;
+use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
@@ -42,10 +43,16 @@ final class FakeKeyVault
     public function __invoke(RequestInterface $request): ResponseInterface
     {
         if ($request->getHeaderLine('Authorization') !== 'Bearer ' . $this->token) {
-            return new JsonResponse(['error' => ['code' => 'Unauthorized', 'message' => 'AKV10000: no token.']], 401);
+            return new JsonResponse(
+                ['error' => ['code' => 'Unauthorized', 'message' => 'AKV10000: no token.']],
+                StatusCodeInterface::STATUS_UNAUTHORIZED,
+            );
         }
         if ($request->getUri()->getQuery() !== 'api-version=' . AzureKeyVaultKey::API_VERSION) {
-            return new JsonResponse(['error' => ['code' => 'BadParameter', 'message' => 'api-version.']], 400);
+            return new JsonResponse(
+                ['error' => ['code' => 'BadParameter', 'message' => 'api-version.']],
+                StatusCodeInterface::STATUS_BAD_REQUEST,
+            );
         }
 
         $kid = $this->answeringKid ?? $this->keyUrl;
@@ -63,7 +70,10 @@ final class FakeKeyVault
                 ],
                 'attributes' => ['enabled' => $this->enabled],
             ]),
-            default => new JsonResponse(['error' => ['code' => 'KeyNotFound', 'message' => 'No such key.']], 404),
+            default => new JsonResponse(
+                ['error' => ['code' => 'KeyNotFound', 'message' => 'No such key.']],
+                StatusCodeInterface::STATUS_NOT_FOUND,
+            ),
         };
     }
 
@@ -72,7 +82,10 @@ final class FakeKeyVault
         /** @var array{alg?: string, value?: string} $body */
         $body = json_decode((string) $request->getBody(), true, flags: JSON_THROW_ON_ERROR);
         if (($body['alg'] ?? null) !== 'RS256') {
-            return new JsonResponse(['error' => ['code' => 'BadParameter', 'message' => 'Unknown alg.']], 400);
+            return new JsonResponse(
+                ['error' => ['code' => 'BadParameter', 'message' => 'Unknown alg.']],
+                StatusCodeInterface::STATUS_BAD_REQUEST,
+            );
         }
 
         return new JsonResponse([

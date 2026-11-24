@@ -21,6 +21,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Symfony\Component\Console\Tester\CommandTester;
 
@@ -60,7 +61,7 @@ final class ManagementUserImportsTest extends AcceptanceTestCase
 
         $queued = $this->import(self::ndjson($lines));
 
-        self::assertSame(202, $queued->getStatusCode(), (string) $queued->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_ACCEPTED, $queued->getStatusCode(), (string) $queued->getBody());
         $job = self::document($queued);
         self::assertSame('queued', $job['status']);
         self::assertIsString($job['id']);
@@ -108,9 +109,18 @@ final class ManagementUserImportsTest extends AcceptanceTestCase
     {
         $this->adminToken();
 
-        self::assertSame(404, $this->import('{"email":"a@example.com"}', 'nowhere')->getStatusCode());
-        self::assertSame(422, $this->import('{"email":"a@example.com"}', 'google')->getStatusCode());
-        self::assertSame(415, $this->api('POST', self::IMPORTS, rawBody: '{"email":"a@example.com"}')->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_NOT_FOUND,
+            $this->import('{"email":"a@example.com"}', 'nowhere')->getStatusCode(),
+        );
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
+            $this->import('{"email":"a@example.com"}', 'google')->getStatusCode(),
+        );
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNSUPPORTED_MEDIA_TYPE,
+            $this->api('POST', self::IMPORTS, rawBody: '{"email":"a@example.com"}')->getStatusCode(),
+        );
         self::assertSame(0, (int) TestStorage::database()->fetchValue('SELECT count(*) FROM user_jobs'));
     }
 
@@ -121,16 +131,22 @@ final class ManagementUserImportsTest extends AcceptanceTestCase
         $tooMany = $this->import(str_repeat("{\"email\":\"a@example.com\"}\n", 10_001));
         $empty = $this->import("\n\n");
 
-        self::assertSame(422, $tooMany->getStatusCode());
-        self::assertSame(422, $empty->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $tooMany->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $empty->getStatusCode());
     }
 
     public function testEachOperationNeedsItsScope(): void
     {
         $this->adminToken(['read:users']);
 
-        self::assertSame(403, $this->import('{"email":"a@example.com"}')->getStatusCode());
-        self::assertSame(404, $this->api('GET', '/api/v1/jobs/0b0f5a3e-8f2c-4d1a-9b7e-3c2d1e0f9a8b')->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_FORBIDDEN,
+            $this->import('{"email":"a@example.com"}')->getStatusCode(),
+        );
+        self::assertSame(
+            StatusCodeInterface::STATUS_NOT_FOUND,
+            $this->api('GET', '/api/v1/jobs/0b0f5a3e-8f2c-4d1a-9b7e-3c2d1e0f9a8b')->getStatusCode(),
+        );
     }
 
     private function import(string $ndjson, ?string $connection = null): ResponseInterface

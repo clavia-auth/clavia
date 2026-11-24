@@ -30,6 +30,7 @@ use Clavia\Application\Authentication\RequireSignIn;
 use Clavia\Application\Authentication\ResolveEndUser;
 use Clavia\Domain\Authentication\LocalPath;
 use Clavia\Domain\Authentication\Session;
+use Fig\Http\Message\StatusCodeInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -120,7 +121,7 @@ final readonly class PasskeysHandler implements RequestHandlerInterface
         ServerRequestInterface $request,
         Session $session,
         ?string $error = null,
-        int $status = 200,
+        int $status = StatusCodeInterface::STATUS_OK,
     ): ResponseInterface {
         $passkeys = ($this->describe)($session->userId);
 
@@ -139,7 +140,12 @@ final readonly class PasskeysHandler implements RequestHandlerInterface
         return match (true) {
             $options === null => $this->responder->redirect('/auth/login'),
             $options instanceof SignInAgain => $this->signInFirst(),
-            $options instanceof PasskeyLimitReached => $this->list($request, $session, self::limit($options), 409),
+            $options instanceof PasskeyLimitReached => $this->list(
+                $request,
+                $session,
+                self::limit($options),
+                StatusCodeInterface::STATUS_CONFLICT,
+            ),
             default => $this->responder->page(
                 $request,
                 PasskeyPages::create($options, onTheWay: $onTheWay),
@@ -161,7 +167,12 @@ final readonly class PasskeysHandler implements RequestHandlerInterface
 
         return match (true) {
             $outcome instanceof SignInAgain => $this->signInFirst(),
-            $outcome instanceof PasskeyLimitReached => $this->list($request, $session, self::limit($outcome), 409),
+            $outcome instanceof PasskeyLimitReached => $this->list(
+                $request,
+                $session,
+                self::limit($outcome),
+                StatusCodeInterface::STATUS_CONFLICT,
+            ),
             $outcome instanceof PasskeyAdded => $outcome->recoveryCodes === null
                 ? $this->responder->redirect(
                     $onTheWay === null
@@ -196,7 +207,7 @@ final readonly class PasskeysHandler implements RequestHandlerInterface
                 PasskeyNotAdded::InvalidName => PasskeyPages::INVALID_NAME,
                 PasskeyNotAdded::CeremonyGone, PasskeyNotAdded::Rejected => PasskeyPages::START_AGAIN,
             },
-            400,
+            StatusCodeInterface::STATUS_BAD_REQUEST,
         );
     }
 
@@ -207,9 +218,24 @@ final readonly class PasskeysHandler implements RequestHandlerInterface
     ): ResponseInterface {
         return match ($outcome) {
             PasskeyChange::Done => $this->responder->redirect(PasskeyPages::PATH),
-            PasskeyChange::NotFound => $this->list($request, $session, PasskeyPages::NOT_FOUND, 404),
-            PasskeyChange::InvalidName => $this->list($request, $session, PasskeyPages::INVALID_NAME, 400),
-            PasskeyChange::LastWayIn => $this->list($request, $session, PasskeyPages::LAST_WAY_IN, 409),
+            PasskeyChange::NotFound => $this->list(
+                $request,
+                $session,
+                PasskeyPages::NOT_FOUND,
+                StatusCodeInterface::STATUS_NOT_FOUND,
+            ),
+            PasskeyChange::InvalidName => $this->list(
+                $request,
+                $session,
+                PasskeyPages::INVALID_NAME,
+                StatusCodeInterface::STATUS_BAD_REQUEST,
+            ),
+            PasskeyChange::LastWayIn => $this->list(
+                $request,
+                $session,
+                PasskeyPages::LAST_WAY_IN,
+                StatusCodeInterface::STATUS_CONFLICT,
+            ),
             default => $this->signInFirst(),
         };
     }

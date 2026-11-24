@@ -18,6 +18,7 @@ use Clavia\Adapter\Primary\Http\OpenApi\Validation\RequestRejected;
 use Clavia\Adapter\Primary\Http\OpenApi\Validation\ResponseDoesNotMatch;
 use Clavia\Application\Management\ManagementPermission;
 use Clavia\Bootstrap\Container\ManagementContractFactory;
+use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\Response;
 use Laminas\Diactoros\Response\JsonResponse;
 use Laminas\Diactoros\ServerRequest;
@@ -101,7 +102,7 @@ final class ManagementContractTest extends TestCase
             '{"identifier":"https://x.test/","permissions":[{"value":"has space"}]}',
         ));
 
-        self::assertSame(422, $problem->status);
+        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $problem->status);
         self::assertSame('/permissions/0/value', $problem->errors[0]['pointer'] ?? null);
         self::assertStringNotContainsString('has space', $problem->errors[0]['detail']);
     }
@@ -110,7 +111,7 @@ final class ManagementContractTest extends TestCase
     {
         $problem = self::problem(self::request('GET', '/api/v1/users?page=0'));
 
-        self::assertSame(422, $problem->status);
+        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $problem->status);
         self::assertSame(
             [['parameter' => 'page', 'detail' => 'Must be greater than or equal to 1.']],
             $problem->errors,
@@ -130,10 +131,16 @@ final class ManagementContractTest extends TestCase
 
     public function testUnreadableRequestsAreBadRequestsAndOtherMediaTypesUnsupported(): void
     {
-        self::assertSame(400, self::problem(self::request('POST', '/api/v1/users', '{"email":'))->status);
-        self::assertSame(400, self::problem(self::request('GET', '/api/v1/users?page=1&page=2'))->status);
         self::assertSame(
-            415,
+            StatusCodeInterface::STATUS_BAD_REQUEST,
+            self::problem(self::request('POST', '/api/v1/users', '{"email":'))->status,
+        );
+        self::assertSame(
+            StatusCodeInterface::STATUS_BAD_REQUEST,
+            self::problem(self::request('GET', '/api/v1/users?page=1&page=2'))->status,
+        );
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNSUPPORTED_MEDIA_TYPE,
             self::problem(self::request('POST', '/api/v1/users', 'email=a', 'application/x-www-form-urlencoded'))
                 ->status,
         );
@@ -145,15 +152,23 @@ final class ManagementContractTest extends TestCase
             self::request('DELETE', '/api/v1/users/6f1c8a52-1b1e-4c8e-9d38-0f2b3d7c9e10'),
         );
         self::assertNotNull($delete);
-        self::contract()->validateResponse($delete, new Response(status: 204));
+        self::contract()->validateResponse($delete, new Response(status: StatusCodeInterface::STATUS_NO_CONTENT));
 
         $responses = [
             // A status the operation does not list.
-            new Response(status: 200),
+            new Response(status: StatusCodeInterface::STATUS_OK),
             // A body where the status has none.
-            new JsonResponse(['deleted' => true], 204),
+            new JsonResponse(['deleted' => true], StatusCodeInterface::STATUS_NO_CONTENT),
             // The wrong media type for a problem.
-            new JsonResponse(['type' => 'about:blank', 'title' => 'Not Found', 'status' => 404, 'detail' => 'x'], 404),
+            new JsonResponse(
+                [
+                    'type' => 'about:blank',
+                    'title' => 'Not Found',
+                    'status' => StatusCodeInterface::STATUS_NOT_FOUND,
+                    'detail' => 'x',
+                ],
+                StatusCodeInterface::STATUS_NOT_FOUND,
+            ),
         ];
         foreach ($responses as $response) {
             try {

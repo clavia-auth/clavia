@@ -16,6 +16,7 @@ use Clavia\Adapter\Primary\Http\Shared\PageRenderer;
 use Clavia\Adapter\Primary\Http\Shared\RequestCookies;
 use Clavia\Adapter\Primary\Http\Shared\SetCookie;
 use Clavia\Domain\Shared\SecretGenerator;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -68,7 +69,7 @@ final readonly class AuthPageResponder
      */
     public function redirect(string $location, array $cookies = []): ResponseInterface
     {
-        $response = $this->responses->createResponse(303)
+        $response = $this->responses->createResponse(StatusCodeInterface::STATUS_SEE_OTHER)
             ->withHeader('Location', $location)
             ->withHeader('Cache-Control', 'no-store');
 

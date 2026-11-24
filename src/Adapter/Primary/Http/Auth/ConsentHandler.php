@@ -22,6 +22,7 @@ use Clavia\Application\OAuth2\Consent\ConsentGiven;
 use Clavia\Application\OAuth2\Consent\DecideConsent;
 use Clavia\Application\OAuth2\Consent\DescribeConsent;
 use Clavia\Domain\Authentication\LocalPath;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
@@ -67,7 +68,13 @@ final readonly class ConsentHandler implements RequestHandlerInterface
             return $this->question($request, $handle, $endUser);
         }
         if (! CsrfToken::isValid($request, $form->get('csrf_token'))) {
-            return $this->question($request, $handle, $endUser, LoginPages::EXPIRED_FORM, 400);
+            return $this->question(
+                $request,
+                $handle,
+                $endUser,
+                LoginPages::EXPIRED_FORM,
+                StatusCodeInterface::STATUS_BAD_REQUEST,
+            );
         }
 
         $outcome = ($this->decide)($handle, $endUser, $form->get('decision') === 'allow');
@@ -90,7 +97,7 @@ final readonly class ConsentHandler implements RequestHandlerInterface
         string $handle,
         EndUser $endUser,
         ?string $error = null,
-        int $status = 200,
+        int $status = StatusCodeInterface::STATUS_OK,
     ): ResponseInterface {
         $screen = $handle === '' ? null : ($this->describe)($handle, $endUser);
         if ($screen === null || $handle === '') {

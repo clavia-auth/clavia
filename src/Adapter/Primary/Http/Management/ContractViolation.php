@@ -16,6 +16,7 @@ use Clavia\Adapter\Primary\Http\OpenApi\Validation\MalformedRequest;
 use Clavia\Adapter\Primary\Http\OpenApi\Validation\RequestRejected;
 use Clavia\Adapter\Primary\Http\OpenApi\Validation\UnsupportedMediaType;
 use Clavia\Adapter\Primary\Http\OpenApi\Validation\Violation;
+use Fig\Http\Message\StatusCodeInterface;
 
 /**
  * A request the contract refused, as the problem document the caller gets back: 400
@@ -40,9 +41,15 @@ final class ContractViolation
     public static function problem(RequestRejected $rejection): Problem
     {
         [$status, $detail] = match (true) {
-            $rejection instanceof MalformedRequest => [400, 'The request cannot be read.'],
-            $rejection instanceof UnsupportedMediaType => [415, $rejection->getMessage()],
-            default => [422, self::DETAIL],
+            $rejection instanceof MalformedRequest => [
+                StatusCodeInterface::STATUS_BAD_REQUEST,
+                'The request cannot be read.',
+            ],
+            $rejection instanceof UnsupportedMediaType => [
+                StatusCodeInterface::STATUS_UNSUPPORTED_MEDIA_TYPE,
+                $rejection->getMessage(),
+            ],
+            default => [StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, self::DETAIL],
         };
 
         return new Problem($status, $detail, array_map(

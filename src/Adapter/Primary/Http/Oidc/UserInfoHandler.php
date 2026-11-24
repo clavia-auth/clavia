@@ -16,6 +16,7 @@ use Clavia\Adapter\Primary\Http\Shared\AccessTokenCredentials;
 use Clavia\Application\OAuth2\ProtectedResource\TokenScheme;
 use Clavia\Application\Oidc\UserInfo\ReadUserInfo;
 use Clavia\Domain\OAuth2\BearerTokenError;
+use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -55,7 +56,7 @@ final readonly class UserInfoHandler implements RequestHandlerInterface
 
         return new JsonResponse(
             $claims,
-            200,
+            StatusCodeInterface::STATUS_OK,
             ['Cache-Control' => 'no-store'],
             JsonResponse::DEFAULT_JSON_FLAGS | JSON_UNESCAPED_SLASHES,
         );

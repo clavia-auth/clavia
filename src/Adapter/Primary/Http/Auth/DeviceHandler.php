@@ -24,6 +24,7 @@ use Clavia\Application\OAuth2\Device\DeviceStrongerSignInRequired;
 use Clavia\Application\OAuth2\Device\UserCodeThrottle;
 use Clavia\Domain\Authentication\LocalPath;
 use Clavia\Domain\Client\ClientId;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
@@ -64,13 +65,19 @@ final readonly class DeviceHandler implements RequestHandlerInterface
         }
 
         if ($isPost && ! CsrfToken::isValid($request, $form->get('csrf_token'))) {
-            return $this->responder->page($request, DevicePages::entry($typed, LoginPages::EXPIRED_FORM, 400));
+            return $this->responder->page(
+                $request,
+                DevicePages::entry($typed, LoginPages::EXPIRED_FORM, StatusCodeInterface::STATUS_BAD_REQUEST),
+            );
         }
         if ($typed === '') {
             return $this->responder->page($request, DevicePages::entry());
         }
         if ($this->throttle->isThrottled($endUser->userId, ClientAddress::of($request))) {
-            return $this->responder->page($request, DevicePages::entry($typed, DevicePages::TOO_MANY_CODES, 429));
+            return $this->responder->page(
+                $request,
+                DevicePages::entry($typed, DevicePages::TOO_MANY_CODES, StatusCodeInterface::STATUS_TOO_MANY_REQUESTS),
+            );
         }
 
         $decision = $isPost ? $form->get('decision') : null;
@@ -106,7 +113,10 @@ final readonly class DeviceHandler implements RequestHandlerInterface
     {
         $this->throttle->recordMiss($endUser->userId, ClientAddress::of($request));
 
-        return $this->responder->page($request, DevicePages::entry($typed, DevicePages::INVALID_CODE, 400));
+        return $this->responder->page(
+            $request,
+            DevicePages::entry($typed, DevicePages::INVALID_CODE, StatusCodeInterface::STATUS_BAD_REQUEST),
+        );
     }
 
     /**
@@ -131,7 +141,10 @@ final readonly class DeviceHandler implements RequestHandlerInterface
             );
         }
 
-        return $this->responder->page($request, DevicePages::entry($typed, DevicePages::STRONGER_SIGN_IN, 403));
+        return $this->responder->page(
+            $request,
+            DevicePages::entry($typed, DevicePages::STRONGER_SIGN_IN, StatusCodeInterface::STATUS_FORBIDDEN),
+        );
     }
 
     private function signInFirst(string $returnTo, ?ClientId $for = null): ResponseInterface

@@ -21,6 +21,7 @@ use Clavia\Domain\Authentication\Passkey\CoseAlgorithm;
 use Clavia\Domain\Authentication\Passkey\Passkey;
 use Clavia\Domain\Authentication\Passkey\Transport;
 use Clavia\Domain\Shared\Base64Url;
+use Fig\Http\Message\StatusCodeInterface;
 
 /**
  * The view models of the passkey pages: the account's passkeys, and the page that makes one.
@@ -51,8 +52,11 @@ final class PasskeyPages
     }
 
     /** The account's passkeys, and the way to add, rename or remove one. */
-    public static function list(AccountPasskeys $passkeys, ?string $error = null, int $status = 200): HtmlPage
-    {
+    public static function list(
+        AccountPasskeys $passkeys,
+        ?string $error = null,
+        int $status = StatusCodeInterface::STATUS_OK,
+    ): HtmlPage {
         return new HtmlPage(
             template: 'auth::passkeys',
             title: 'Passkeys',
@@ -73,7 +77,7 @@ final class PasskeyPages
     public static function create(
         RegistrationOptions $options,
         ?string $error = null,
-        int $status = 200,
+        int $status = StatusCodeInterface::STATUS_OK,
         ?EnrolmentOnTheWay $onTheWay = null,
     ): HtmlPage {
         return new HtmlPage(

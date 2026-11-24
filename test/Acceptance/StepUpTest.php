@@ -24,6 +24,7 @@ use ClaviaTest\Support\LoginFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\OidcFixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -77,7 +78,7 @@ final class StepUpTest extends AcceptanceTestCase
             'acr_values' => self::MFA,
         ]));
 
-        self::assertSame(303, $asked->getStatusCode(), (string) $asked->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $asked->getStatusCode(), (string) $asked->getBody());
         self::assertSame('/auth/mfa', $asked->getHeaderLine('Location'));
         $page = $this->get('/auth/mfa');
         self::assertStringContainsString('Test public client needs one more step', (string) $page->getBody());
@@ -89,7 +90,11 @@ final class StepUpTest extends AcceptanceTestCase
             'code' => Totp::codeAt($secret, $this->clock->now()),
             'csrf_token' => self::csrfTokenFrom($page),
         ]);
-        self::assertSame(303, $answered->getStatusCode(), (string) $answered->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_SEE_OTHER,
+            $answered->getStatusCode(),
+            (string) $answered->getBody(),
+        );
         self::assertStringStartsWith('/oauth2/authorize?', $answered->getHeaderLine('Location'));
 
         // The same session, raised: same sid and expiry, new identifier, the factor added.
@@ -140,7 +145,7 @@ final class StepUpTest extends AcceptanceTestCase
 
         $response = $this->authorize(['acr_values' => 'phr']);
 
-        self::assertSame(302, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_FOUND, $response->getStatusCode());
         self::assertSame('unmet_authentication_requirements', self::locationQuery($response)['error'] ?? null);
         self::assertSame('test-state-value', self::locationQuery($response)['state'] ?? null);
     }
@@ -220,7 +225,7 @@ final class StepUpTest extends AcceptanceTestCase
             'code' => Totp::codeAt($secret, $this->clock->now()),
             'csrf_token' => self::csrfTokenFrom($setUp),
         ]);
-        self::assertSame(200, $confirmed->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $confirmed->getStatusCode());
 
         return $secret;
     }
@@ -252,7 +257,7 @@ final class StepUpTest extends AcceptanceTestCase
             'code' => Totp::codeAt($secret, $this->clock->now()),
             'csrf_token' => self::csrfTokenFrom($page),
         ]);
-        self::assertSame(303, $answered->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $answered->getStatusCode());
     }
 
     private function audited(AuditEventType $type): int

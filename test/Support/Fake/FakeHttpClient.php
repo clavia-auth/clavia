@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace ClaviaTest\Support\Fake;
 
 use Closure;
+use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestInterface;
@@ -35,7 +36,10 @@ final class FakeHttpClient implements ClientInterface
     public function __construct(?callable $handler = null)
     {
         $this->handler = $handler === null
-            ? static fn (RequestInterface $request): ResponseInterface => new JsonResponse(['error' => 'none'], 404)
+            ? static fn (RequestInterface $request): ResponseInterface => new JsonResponse(
+                ['error' => 'none'],
+                StatusCodeInterface::STATUS_NOT_FOUND,
+            )
             : $handler(...);
     }
 
@@ -66,7 +70,10 @@ final class FakeHttpClient implements ClientInterface
     public static function routes(array $byUrl): callable
     {
         return static function (RequestInterface $request) use ($byUrl): ResponseInterface {
-            $answer = $byUrl[(string) $request->getUri()->withQuery('')] ?? new JsonResponse(['error' => 'none'], 404);
+            $answer = $byUrl[(string) $request->getUri()->withQuery('')] ?? new JsonResponse(
+                ['error' => 'none'],
+                StatusCodeInterface::STATUS_NOT_FOUND,
+            );
 
             return $answer instanceof ResponseInterface ? $answer : $answer($request);
         };

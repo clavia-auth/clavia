@@ -14,6 +14,7 @@ namespace ClaviaTest\Acceptance;
 use ClaviaTest\Support\AcceptanceTestCase;
 use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -45,7 +46,7 @@ final class MachineEndpointThrottleTest extends AcceptanceTestCase
         $this->comeFrom(self::ATTACKER);
         for ($i = 0; $i < 3; ++$i) {
             $wrong = $this->requestMachineToken(credentials: [self::TEST_M2M_CLIENT_ID, 'wrong']);
-            self::assertSame(401, $wrong->getStatusCode());
+            self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $wrong->getStatusCode());
         }
 
         // Even the right secret: the address is refused before any secret is checked.
@@ -53,7 +54,7 @@ final class MachineEndpointThrottleTest extends AcceptanceTestCase
 
         // The client itself is not locked out: its id is not a secret.
         $this->comeFrom(self::NEIGHBOUR);
-        self::assertSame(200, $this->requestMachineToken()->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $this->requestMachineToken()->getStatusCode());
     }
 
     public function testAWellBehavedClientIsNeverRefused(): void
@@ -61,7 +62,7 @@ final class MachineEndpointThrottleTest extends AcceptanceTestCase
         $this->machineApi();
 
         for ($i = 0; $i < 10; ++$i) {
-            self::assertSame(200, $this->requestMachineToken()->getStatusCode());
+            self::assertSame(StatusCodeInterface::STATUS_OK, $this->requestMachineToken()->getStatusCode());
         }
     }
 
@@ -94,7 +95,10 @@ final class MachineEndpointThrottleTest extends AcceptanceTestCase
         [$verifier, $challenge] = $this->makePkcePair();
         $code = $this->authorizeAndGetCode($challenge);
 
-        self::assertSame(200, $this->post('/oauth2/token', $this->tokenRequest($code, $verifier))->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_OK,
+            $this->post('/oauth2/token', $this->tokenRequest($code, $verifier))->getStatusCode(),
+        );
     }
 
     public function testIntrospectionRevocationAndDeviceAuthorizationCountFailedAuthentication(): void
@@ -144,7 +148,11 @@ final class MachineEndpointThrottleTest extends AcceptanceTestCase
 
     private static function assertTooManyFailures(ResponseInterface $response): void
     {
-        self::assertSame(429, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_TOO_MANY_REQUESTS,
+            $response->getStatusCode(),
+            (string) $response->getBody(),
+        );
         self::assertSame('300', $response->getHeaderLine('Retry-After'));
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
         self::assertSame('temporarily_unavailable', self::json($response)['error']);

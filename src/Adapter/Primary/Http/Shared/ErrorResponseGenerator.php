@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Shared;
 
 use Clavia\Domain\Shared\SecretGenerator;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\StreamFactoryInterface;
@@ -58,7 +59,12 @@ final readonly class ErrorResponseGenerator
         if (ClientPreference::prefersHtml($request)) {
             try {
                 return $this->pages
-                    ->render($request, ErrorPage::internalError($reference)->toHtmlPage(500))
+                    ->render(
+                        $request,
+                        ErrorPage::internalError($reference)->toHtmlPage(
+                            StatusCodeInterface::STATUS_INTERNAL_SERVER_ERROR,
+                        ),
+                    )
                     ->withHeader('X-Error-Reference', $reference);
             } catch (Throwable $renderingFailure) {
                 $this->logger->error('The error page for {reference} could not be rendered: {message}', [
@@ -70,7 +76,7 @@ final readonly class ErrorResponseGenerator
         }
 
         return $response
-            ->withStatus(500)
+            ->withStatus(StatusCodeInterface::STATUS_INTERNAL_SERVER_ERROR)
             ->withHeader('Content-Type', 'text/plain; charset=utf-8')
             ->withHeader('Cache-Control', 'no-store')
             ->withHeader('X-Error-Reference', $reference)

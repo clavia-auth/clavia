@@ -17,6 +17,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\StatusCodeInterface;
 
 /**
  * Signing keys in the Management API: what `clavia keys:list` and `keys:rotate` do, for the
@@ -34,7 +35,7 @@ final class ManagementSigningKeysTest extends AcceptanceTestCase
 
         $response = $this->api('GET', '/api/v1/signing-keys');
 
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         $keys = self::document($response);
         self::assertCount(1, $keys);
         self::assertIsArray($keys[0]);
@@ -54,7 +55,7 @@ final class ManagementSigningKeysTest extends AcceptanceTestCase
 
         $rotated = $this->api('POST', '/api/v1/signing-keys/rotate');
 
-        self::assertSame(200, $rotated->getStatusCode(), (string) $rotated->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $rotated->getStatusCode(), (string) $rotated->getBody());
         $rotation = self::document($rotated);
         self::assertIsArray($rotation['active']);
         self::assertIsArray($rotation['retired']);
@@ -78,8 +79,11 @@ final class ManagementSigningKeysTest extends AcceptanceTestCase
     {
         $this->adminToken(['read:signing_keys']);
 
-        self::assertSame(200, $this->api('GET', '/api/v1/signing-keys')->getStatusCode());
-        self::assertSame(403, $this->api('POST', '/api/v1/signing-keys/rotate')->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $this->api('GET', '/api/v1/signing-keys')->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_FORBIDDEN,
+            $this->api('POST', '/api/v1/signing-keys/rotate')->getStatusCode(),
+        );
     }
 
     public function testARemoteBackendKeepsItsKeysAtTheProvider(): void
@@ -90,8 +94,14 @@ final class ManagementSigningKeysTest extends AcceptanceTestCase
         ]);
         $this->adminToken();
 
-        self::assertSame(409, $this->api('GET', '/api/v1/signing-keys')->getStatusCode());
-        self::assertSame(409, $this->api('POST', '/api/v1/signing-keys/rotate')->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_CONFLICT,
+            $this->api('GET', '/api/v1/signing-keys')->getStatusCode(),
+        );
+        self::assertSame(
+            StatusCodeInterface::STATUS_CONFLICT,
+            $this->api('POST', '/api/v1/signing-keys/rotate')->getStatusCode(),
+        );
     }
 
     /** @return list<string> */

@@ -21,6 +21,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -46,7 +47,7 @@ final class ClientConfigurationTest extends AcceptanceTestCase
 
         $response = $this->configuration('GET', $registered);
 
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
         $document = self::json($response);
         self::assertSame($registered['client_id'], $document['client_id']);
@@ -54,7 +55,11 @@ final class ClientConfigurationTest extends AcceptanceTestCase
         self::assertSame($registered['registration_client_uri'], $document['registration_client_uri']);
         self::assertArrayNotHasKey('client_secret', $document);
         self::assertArrayNotHasKey('registration_access_token', $document, 'Not rotated by a read.');
-        self::assertSame(200, $this->configuration('GET', $registered)->getStatusCode(), 'The token still works.');
+        self::assertSame(
+            StatusCodeInterface::STATUS_OK,
+            $this->configuration('GET', $registered)->getStatusCode(),
+            'The token still works.',
+        );
     }
 
     public function testAnUpdateReplacesTheMetadataAndRotatesTheToken(): void
@@ -70,15 +75,19 @@ final class ClientConfigurationTest extends AcceptanceTestCase
             'redirect_uris' => ['https://reports.acme.example/v2/callback'],
         ]);
 
-        self::assertSame(200, $updated->getStatusCode(), (string) $updated->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $updated->getStatusCode(), (string) $updated->getBody());
         $document = self::json($updated);
         self::assertSame('Acme Reports 2', $document['client_name']);
         self::assertSame('client_secret_post', $document['token_endpoint_auth_method']);
         self::assertSame(['https://reports.acme.example/v2/callback'], $document['redirect_uris']);
         self::assertIsString($document['registration_access_token']);
         self::assertNotSame($registered['registration_access_token'], $document['registration_access_token']);
-        self::assertSame(401, $this->configuration('GET', $registered)->getStatusCode(), 'The old token is spent.');
-        self::assertSame(200, $this->configuration('GET', [
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
+            $this->configuration('GET', $registered)->getStatusCode(),
+            'The old token is spent.',
+        );
+        self::assertSame(StatusCodeInterface::STATUS_OK, $this->configuration('GET', [
             'registration_access_token' => $document['registration_access_token'],
         ] + $registered)->getStatusCode());
         $client = $this->clientOf($registered);
@@ -118,9 +127,13 @@ final class ClientConfigurationTest extends AcceptanceTestCase
             'client_id' => $registered['client_id'],
         ] + self::WEB_APP);
 
-        self::assertSame(400, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_BAD_REQUEST,
+            $response->getStatusCode(),
+            (string) $response->getBody(),
+        );
         self::assertSame('invalid_client_metadata', self::json($response)['error']);
-        self::assertSame(200, $this->configuration('GET', $registered)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $this->configuration('GET', $registered)->getStatusCode());
     }
 
     /** @return iterable<string, array{array<string, mixed>}> */
@@ -142,11 +155,15 @@ final class ClientConfigurationTest extends AcceptanceTestCase
 
         $deleted = $this->configuration('DELETE', $registered);
 
-        self::assertSame(204, $deleted->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_NO_CONTENT, $deleted->getStatusCode());
         self::assertNull($this->container()->get(ClientRepository::class)->find(
             ClientId::fromString((string) $registered['client_id']),
         ));
-        self::assertSame(401, $this->configuration('GET', $registered)->getStatusCode(), 'Its token went with it.');
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
+            $this->configuration('GET', $registered)->getStatusCode(),
+            'Its token went with it.',
+        );
         self::assertSame(1, (int) TestStorage::database()->fetchValue(
             "SELECT count(*) FROM audit_events WHERE type = :type AND actor_kind = 'application'",
             ['type' => AuditEventType::ClientDeleted->value],
@@ -166,10 +183,10 @@ final class ClientConfigurationTest extends AcceptanceTestCase
         $none = $this->configuration('DELETE', ['registration_access_token' => null] + $first);
 
         foreach ([$another, $operators, $unknown] as $response) {
-            self::assertSame(401, $response->getStatusCode());
+            self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
             self::assertSame('invalid_token', self::json($response)['error']);
         }
-        self::assertSame(401, $none->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $none->getStatusCode());
         self::assertSame('Bearer realm="https://auth.clavia.test"', $none->getHeaderLine('WWW-Authenticate'));
         self::assertNotNull($this->container()->get(ClientRepository::class)->find(
             ClientId::fromString((string) $first['client_id']),
@@ -180,7 +197,10 @@ final class ClientConfigurationTest extends AcceptanceTestCase
     {
         $this->boot(['CLAVIA_CLIENT_REGISTRATION' => 'off']);
 
-        self::assertSame(404, $this->request('GET', '/oauth2/register/tpc_anything')->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_NOT_FOUND,
+            $this->request('GET', '/oauth2/register/tpc_anything')->getStatusCode(),
+        );
     }
 
     public function testTheManagementApiShowsWhichTokenLetAClientIn(): void
@@ -227,7 +247,11 @@ final class ClientConfigurationTest extends AcceptanceTestCase
             'Authorization' => 'Bearer ' . $token,
             'Content-Type' => 'application/json',
         ], body: (string) json_encode(self::WEB_APP + $extra));
-        self::assertSame(201, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_CREATED,
+            $response->getStatusCode(),
+            (string) $response->getBody(),
+        );
 
         return self::json($response);
     }

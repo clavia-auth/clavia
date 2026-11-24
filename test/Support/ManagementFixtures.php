@@ -18,6 +18,7 @@ use Clavia\Application\Management\Provisioning\RegisterManagementApi;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\ResourceServer\ResourceServer;
+use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\ServerRequest;
 use Psr\Http\Message\ResponseInterface;
 
@@ -57,7 +58,7 @@ trait ManagementFixtures
         )));
 
         $response = $this->requestMachineToken(['audience' => self::MANAGEMENT_API]);
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         $token = self::json($response)['access_token'];
         self::assertIsString($token);
 

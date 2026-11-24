@@ -21,6 +21,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\OidcFixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -99,7 +100,7 @@ final class JwtAccessTokenTest extends AcceptanceTestCase
         // And the ID token's `at_hash` is the hash of the JWT, the token the client holds.
         $idToken = $this->verifiedIdToken($response['id_token']);
         self::assertSame(self::atHash($response['access_token']), $idToken['claims']['at_hash']);
-        self::assertSame(200, $this->userinfo($response['access_token'])->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $this->userinfo($response['access_token'])->getStatusCode());
     }
 
     public function testARefreshedTokenIsAJwtToo(): void
@@ -147,9 +148,12 @@ final class JwtAccessTokenTest extends AcceptanceTestCase
             'client_id' => self::TEST_CLIENT_ID,
         ]);
 
-        self::assertSame(200, $revoked->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $revoked->getStatusCode());
         self::assertSame(['active' => false], self::json($this->introspect($token['access_token'])));
-        self::assertSame(401, $this->userinfo($token['access_token'])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
+            $this->userinfo($token['access_token'])->getStatusCode(),
+        );
     }
 
     public function testNoActiveKeyIssuesNothing(): void
@@ -160,7 +164,7 @@ final class JwtAccessTokenTest extends AcceptanceTestCase
 
         $response = $this->requestMachineToken();
 
-        self::assertSame(500, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_INTERNAL_SERVER_ERROR, $response->getStatusCode());
         self::assertSame(0, TestStorage::database()->fetchValue('SELECT count(*) FROM oauth2_access_tokens'));
     }
 
@@ -188,7 +192,7 @@ final class JwtAccessTokenTest extends AcceptanceTestCase
     /** @return array{access_token: string, refresh_token: string|null} */
     private static function issued(ResponseInterface $response): array
     {
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         $token = self::json($response);
         self::assertIsString($token['access_token']);
         $hasRefresh = isset($token['refresh_token']) && is_string($token['refresh_token']);

@@ -39,6 +39,7 @@ use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\OidcFixtures;
 use ClaviaTest\Support\SoftwareAuthenticator;
 use DateTimeImmutable;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -80,12 +81,15 @@ final class MfaPoliciesTest extends AcceptanceTestCase
             'response_types' => ['code'],
             'mfa_policy' => 'required',
         ]);
-        self::assertSame(201, $client->getStatusCode(), (string) $client->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_CREATED, $client->getStatusCode(), (string) $client->getBody());
         self::assertSame('required', self::document($client)['mfa_policy']);
         $path = '/api/v1/clients/' . rawurlencode((string) self::document($client)['client_id']);
         $patched = $this->api('PATCH', $path, ['mfa_policy' => 'optional']);
         self::assertSame('optional', self::document($patched)['mfa_policy']);
-        self::assertSame(422, $this->api('PATCH', $path, ['mfa_policy' => 'sometimes'])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
+            $this->api('PATCH', $path, ['mfa_policy' => 'sometimes'])->getStatusCode(),
+        );
 
         $api = $this->api('POST', '/api/v1/resource-servers', ['identifier' => 'https://payroll.test/api/']);
         self::assertSame('optional', self::document($api)['mfa_policy']);
@@ -152,7 +156,7 @@ final class MfaPoliciesTest extends AcceptanceTestCase
             'csrf_token' => self::csrfTokenFrom($setUp),
             'state' => self::stateIn($setUp),
         ]);
-        self::assertSame(200, $codes->getStatusCode(), (string) $codes->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $codes->getStatusCode(), (string) $codes->getBody());
 
         // Confirming the app raised the session: the same sid, now with two factors.
         $after = $this->session($this->cookie(self::SESSION_COOKIE));
@@ -190,7 +194,7 @@ final class MfaPoliciesTest extends AcceptanceTestCase
             'csrf_token' => self::csrfTokenFrom($settings),
             'state' => self::stateIn($settings),
         ]);
-        self::assertSame(200, $page->getStatusCode(), (string) $page->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $page->getStatusCode(), (string) $page->getBody());
         self::assertSame(1, preg_match('#data-webauthn-create="([^"]+)"#', (string) $page->getBody(), $m));
         /** @var array{challenge: string} $options */
         $options = json_decode(html_entity_decode($m[1], ENT_QUOTES | ENT_HTML5), true, flags: JSON_THROW_ON_ERROR);
@@ -209,7 +213,7 @@ final class MfaPoliciesTest extends AcceptanceTestCase
             'csrf_token' => self::csrfTokenFrom($page),
             'state' => self::stateIn($page),
         ]);
-        self::assertSame(200, $codes->getStatusCode(), (string) $codes->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $codes->getStatusCode(), (string) $codes->getBody());
 
         // Back to the request, where the step-up asks for the passkey just made.
         $continued = $this->post('/auth/mfa/enroll/continue', [
@@ -276,7 +280,7 @@ final class MfaPoliciesTest extends AcceptanceTestCase
             'refresh_token' => $refresh,
         ]);
 
-        self::assertSame(200, $refreshed->getStatusCode(), (string) $refreshed->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $refreshed->getStatusCode(), (string) $refreshed->getBody());
     }
 
     // ── The device flow ─────────────────────────────────────────────────────────

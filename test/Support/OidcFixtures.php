@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Support;
 
+use Fig\Http\Message\StatusCodeInterface;
 use Jose\Component\Core\AlgorithmManager;
 use Jose\Component\Core\JWKSet;
 use Jose\Component\Signature\Algorithm\RS256;
@@ -38,7 +39,7 @@ trait OidcFixtures
         $code = $this->authorizeAndGetCode($challenge, ['scope' => $scope] + $authorizeOverrides);
 
         $response = $this->post('/oauth2/token', $this->tokenRequest($code, $verifier));
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
 
         return self::json($response);
     }

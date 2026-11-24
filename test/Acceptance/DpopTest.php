@@ -18,6 +18,7 @@ use ClaviaTest\Support\DpopClient;
 use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\OidcFixtures;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -47,7 +48,7 @@ final class DpopTest extends AcceptanceTestCase
 
         $response = $this->machineToken(DpopClient::es256()->proof('POST', self::TOKEN_ENDPOINT));
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('use_dpop_nonce', self::json($response)['error']);
         self::assertNotSame('', $response->getHeaderLine('DPoP-Nonce'));
     }
@@ -60,7 +61,7 @@ final class DpopTest extends AcceptanceTestCase
 
         $response = $this->withNonce($client, fn (string $proof): ResponseInterface => $this->machineToken($proof));
 
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         $body = self::json($response);
         self::assertSame('DPoP', $body['token_type']);
         self::assertNotSame('', $response->getHeaderLine('DPoP-Nonce'), 'The next nonce, without a round trip.');
@@ -102,10 +103,10 @@ final class DpopTest extends AcceptanceTestCase
         $nonce = $this->machineToken($client->proof('POST', self::TOKEN_ENDPOINT))->getHeaderLine('DPoP-Nonce');
         $proof = $client->proof('POST', self::TOKEN_ENDPOINT, $nonce);
 
-        self::assertSame(200, $this->machineToken($proof)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $this->machineToken($proof)->getStatusCode());
         $again = $this->machineToken($proof);
 
-        self::assertSame(400, $again->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $again->getStatusCode());
         self::assertSame('invalid_dpop_proof', self::json($again)['error']);
         self::assertTrue($this->logger->hasRecordContaining('replayed'), 'The reason is in the log.');
     }
@@ -166,7 +167,7 @@ final class DpopTest extends AcceptanceTestCase
         ));
 
         self::assertSame('invalid_dpop_proof', self::json($refused)['error']);
-        self::assertSame(200, $redeemed->getStatusCode(), (string) $redeemed->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $redeemed->getStatusCode(), (string) $redeemed->getBody());
         self::assertSame('DPoP', self::json($redeemed)['token_type']);
     }
 

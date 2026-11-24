@@ -14,6 +14,7 @@ namespace Clavia\Adapter\Secondary\Http;
 use Clavia\Application\Port\BackChannelLogoutDelivery;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Shared\Url;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
@@ -68,7 +69,7 @@ final readonly class HttpBackChannelLogoutDelivery implements BackChannelLogoutD
         }
 
         // §2.8: 200 is success; anything else is the client's failure to accept it.
-        if ($status < 200 || $status > 299) {
+        if ($status < StatusCodeInterface::STATUS_OK || $status >= StatusCodeInterface::STATUS_MULTIPLE_CHOICES) {
             $this->fail($client, $uri, sprintf('it answered %d', $status));
         }
     }

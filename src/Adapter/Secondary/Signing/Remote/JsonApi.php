@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Secondary\Signing\Remote;
 
 use Clavia\Application\Port\SigningFailed;
+use Fig\Http\Message\StatusCodeInterface;
 use JsonException;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
@@ -122,7 +123,7 @@ final readonly class JsonApi
             $document = null;
         }
 
-        if ($response->getStatusCode() !== 200) {
+        if ($response->getStatusCode() !== StatusCodeInterface::STATUS_OK) {
             throw new SigningFailed(sprintf(
                 '%s refused the request (HTTP %d)%s',
                 $this->service,

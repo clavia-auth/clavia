@@ -15,6 +15,7 @@ use Clavia\Adapter\Secondary\Http\OutboundUrlPolicy;
 use Clavia\Adapter\Secondary\Http\OutboundUrlRefused;
 use Clavia\Application\Port\BreachCheckUnavailable;
 use Clavia\Application\Port\BreachedPasswords;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
@@ -69,7 +70,7 @@ final readonly class PwnedPasswordsRange implements BreachedPasswords
         } catch (ClientExceptionInterface $failure) {
             throw $this->unavailable(sprintf('it could not be reached (%s)', $failure::class));
         }
-        if ($response->getStatusCode() !== 200) {
+        if ($response->getStatusCode() !== StatusCodeInterface::STATUS_OK) {
             throw $this->unavailable(sprintf('it answered %d', $response->getStatusCode()));
         }
 

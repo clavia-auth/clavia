@@ -25,6 +25,7 @@ use ClaviaTest\Support\LoginFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\OidcFixtures;
 use DateTimeImmutable;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -62,7 +63,7 @@ final class RpLogoutTest extends AcceptanceTestCase
             'state' => 'af0ifjsldkj',
         ]);
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertSame(
             self::TEST_POST_LOGOUT_REDIRECT_URI . '?state=af0ifjsldkj',
             $response->getHeaderLine('Location'),
@@ -84,7 +85,7 @@ final class RpLogoutTest extends AcceptanceTestCase
             'state' => 'xyz',
         ]);
 
-        self::assertSame(200, $page->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $page->getStatusCode());
         $body = (string) $page->getBody();
         self::assertStringContainsString('Test public client', $body);
         self::assertStringContainsString('action="/oidc/logout"', $body);
@@ -96,7 +97,7 @@ final class RpLogoutTest extends AcceptanceTestCase
 
         $confirmed = $this->post('/oidc/logout', self::hiddenFields($body));
 
-        self::assertSame(303, $confirmed->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $confirmed->getStatusCode());
         self::assertSame(self::TEST_POST_LOGOUT_REDIRECT_URI . '?state=xyz', $confirmed->getHeaderLine('Location'));
         self::assertNull($this->session($sessionId));
     }
@@ -111,7 +112,7 @@ final class RpLogoutTest extends AcceptanceTestCase
 
         $response = $this->logout(['id_token_hint' => $adasToken]);
 
-        self::assertSame(200, $response->getStatusCode(), 'The person is asked instead.');
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), 'The person is asked instead.');
         self::assertNotNull($this->session($sessionId));
     }
 
@@ -128,7 +129,11 @@ final class RpLogoutTest extends AcceptanceTestCase
         ];
 
         foreach ($forgeries as $name => $hint) {
-            self::assertSame(200, $this->logout(['id_token_hint' => $hint])->getStatusCode(), $name);
+            self::assertSame(
+                StatusCodeInterface::STATUS_OK,
+                $this->logout(['id_token_hint' => $hint])->getStatusCode(),
+                $name,
+            );
             self::assertNotNull($this->session($sessionId), $name);
         }
     }
@@ -151,7 +156,7 @@ final class RpLogoutTest extends AcceptanceTestCase
 
         $response = $this->logout(['id_token_hint' => $accessToken]);
 
-        self::assertSame(200, $response->getStatusCode(), 'The person is asked instead.');
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), 'The person is asked instead.');
         self::assertNotNull($this->session($sessionId));
     }
 
@@ -164,7 +169,7 @@ final class RpLogoutTest extends AcceptanceTestCase
 
         $response = $this->logout(['id_token_hint' => $idToken]);
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertNull($this->session($sessionId));
     }
 
@@ -177,7 +182,7 @@ final class RpLogoutTest extends AcceptanceTestCase
         foreach ($unregistered as $uri) {
             $response = $this->logout(['id_token_hint' => $idToken, 'post_logout_redirect_uri' => $uri]);
 
-            self::assertSame(303, $response->getStatusCode());
+            self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
             self::assertSame('/auth/login', $response->getHeaderLine('Location'), $uri);
         }
     }
@@ -194,7 +199,7 @@ final class RpLogoutTest extends AcceptanceTestCase
             'post_logout_redirect_uri' => self::TEST_POST_LOGOUT_REDIRECT_URI,
         ]);
 
-        self::assertSame(200, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode());
         self::assertNotNull($this->session($sessionId));
         self::assertStringNotContainsString('client.test', (string) $response->getBody());
     }
@@ -208,7 +213,7 @@ final class RpLogoutTest extends AcceptanceTestCase
             'post_logout_redirect_uri' => self::TEST_POST_LOGOUT_REDIRECT_URI,
         ]);
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertSame(self::TEST_POST_LOGOUT_REDIRECT_URI, $response->getHeaderLine('Location'));
         self::assertSame([], self::setCookieHeaders($response, self::SESSION_COOKIE));
     }
@@ -223,7 +228,7 @@ final class RpLogoutTest extends AcceptanceTestCase
             'post_logout_redirect_uri' => self::TEST_POST_LOGOUT_REDIRECT_URI,
         ]);
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertSame(self::TEST_POST_LOGOUT_REDIRECT_URI, $response->getHeaderLine('Location'));
         self::assertNull($this->session($sessionId));
     }
@@ -233,7 +238,7 @@ final class RpLogoutTest extends AcceptanceTestCase
         $this->signInAndGetIdToken();
         $sessionId = $this->cookie(self::SESSION_COOKIE);
 
-        self::assertSame(200, $this->logout(['confirmed' => 'yes'])->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $this->logout(['confirmed' => 'yes'])->getStatusCode());
         self::assertNotNull($this->session($sessionId));
     }
 

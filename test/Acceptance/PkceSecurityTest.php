@@ -16,6 +16,7 @@ use Clavia\Domain\Shared\Clock;
 use ClaviaTest\Support\AcceptanceTestCase;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -71,7 +72,7 @@ final class PkceSecurityTest extends AcceptanceTestCase
         ])));
         $response = $this->post('/oauth2/token', $this->confidentialTokenRequest($code));
 
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         self::assertArrayHasKey('id_token', self::json($response));
     }
 
@@ -103,7 +104,7 @@ final class PkceSecurityTest extends AcceptanceTestCase
 
         $response = $this->post('/oauth2/token', $this->confidentialTokenRequest($code, str_repeat('v', 43)));
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('invalid_grant', self::json($response)['error'] ?? null);
     }
 
@@ -119,7 +120,7 @@ final class PkceSecurityTest extends AcceptanceTestCase
 
         $response = $this->post('/oauth2/token', $this->confidentialTokenRequest($code));
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('invalid_request', self::json($response)['error'] ?? null, 'The verifier is missing.');
     }
 
@@ -166,7 +167,7 @@ final class PkceSecurityTest extends AcceptanceTestCase
 
         $response = $this->post('/oauth2/token', $this->tokenRequest($code, $otherVerifier));
 
-        self::assertGreaterThanOrEqual(400, $response->getStatusCode());
+        self::assertGreaterThanOrEqual(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('invalid_grant', self::json($response)['error']);
     }
 
@@ -179,7 +180,7 @@ final class PkceSecurityTest extends AcceptanceTestCase
 
         $response = $this->post('/oauth2/token', $this->tokenRequest($code, null));
 
-        self::assertGreaterThanOrEqual(400, $response->getStatusCode());
+        self::assertGreaterThanOrEqual(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertContains(self::json($response)['error'], ['invalid_request', 'invalid_grant']);
     }
 
@@ -202,10 +203,10 @@ final class PkceSecurityTest extends AcceptanceTestCase
         $payload = $this->tokenRequest($code, $verifier);
 
         $first = $this->post('/oauth2/token', $payload);
-        self::assertSame(200, $first->getStatusCode(), (string) $first->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $first->getStatusCode(), (string) $first->getBody());
 
         $second = $this->post('/oauth2/token', $payload);
-        self::assertGreaterThanOrEqual(400, $second->getStatusCode());
+        self::assertGreaterThanOrEqual(StatusCodeInterface::STATUS_BAD_REQUEST, $second->getStatusCode());
         self::assertSame('invalid_grant', self::json($second)['error']);
 
         $token = $this->onlyRow('oauth2_access_tokens');
@@ -222,7 +223,7 @@ final class PkceSecurityTest extends AcceptanceTestCase
 
         $response = $this->post('/oauth2/token', $this->tokenRequest($code, $verifier));
 
-        self::assertGreaterThanOrEqual(400, $response->getStatusCode());
+        self::assertGreaterThanOrEqual(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('invalid_grant', self::json($response)['error']);
     }
 
@@ -259,7 +260,7 @@ final class PkceSecurityTest extends AcceptanceTestCase
             'client_secret' => self::TEST_CLIENT_SECRET,
         ]));
 
-        self::assertGreaterThanOrEqual(400, $response->getStatusCode());
+        self::assertGreaterThanOrEqual(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('invalid_grant', self::json($response)['error']);
         // Presenting someone else's code tells the presenter nothing and costs its owner nothing.
         self::assertNull($this->onlyRow('oauth2_authorization_codes')['used_at']);
@@ -288,7 +289,7 @@ final class PkceSecurityTest extends AcceptanceTestCase
             basicAuth: [self::TEST_CONFIDENTIAL_CLIENT_ID, 'not-the-secret'],
         );
 
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertSame('invalid_client', self::json($response)['error']);
         self::assertStringStartsWith('Basic ', $response->getHeaderLine('WWW-Authenticate'));
         // A failed authentication must not cost the legitimate client its code.
@@ -317,9 +318,13 @@ final class PkceSecurityTest extends AcceptanceTestCase
             $this->authorizeParams($challenge, ['redirect_uri' => 'https://attacker.test/steal']),
         );
 
-        self::assertNotSame(302, $response->getStatusCode(), 'must not redirect to an unregistered URI');
+        self::assertNotSame(
+            StatusCodeInterface::STATUS_FOUND,
+            $response->getStatusCode(),
+            'must not redirect to an unregistered URI',
+        );
         self::assertStringNotContainsString('attacker.test', $response->getHeaderLine('Location'));
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame(0, TestStorage::database()->fetchValue('SELECT count(*) FROM oauth2_authorization_codes'));
     }
 
@@ -336,7 +341,7 @@ final class PkceSecurityTest extends AcceptanceTestCase
             $this->tokenRequest($code, $verifier, ['redirect_uri' => 'https://client.test/other-callback']),
         );
 
-        self::assertGreaterThanOrEqual(400, $response->getStatusCode());
+        self::assertGreaterThanOrEqual(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('invalid_grant', self::json($response)['error']);
     }
 
@@ -368,7 +373,7 @@ final class PkceSecurityTest extends AcceptanceTestCase
 
         $response = $this->post('/oauth2/token', $this->tokenRequest('not-a-real-code', $verifier));
 
-        self::assertGreaterThanOrEqual(400, $response->getStatusCode());
+        self::assertGreaterThanOrEqual(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('invalid_grant', self::json($response)['error']);
     }
 
@@ -389,7 +394,7 @@ final class PkceSecurityTest extends AcceptanceTestCase
 
         $response = $this->post('/oauth2/token', $this->tokenRequest($code, $verifier));
 
-        self::assertGreaterThanOrEqual(400, $response->getStatusCode());
+        self::assertGreaterThanOrEqual(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('invalid_grant', self::json($response)['error']);
         self::assertSame(0, TestStorage::database()->fetchValue('SELECT count(*) FROM oauth2_access_tokens'));
     }
@@ -400,12 +405,16 @@ final class PkceSecurityTest extends AcceptanceTestCase
      */
     private function assertRejected(ResponseInterface $response, string $expectedError): void
     {
-        if ($response->getStatusCode() === 302) {
+        if ($response->getStatusCode() === StatusCodeInterface::STATUS_FOUND) {
             $query = self::locationQuery($response);
             self::assertArrayNotHasKey('code', $query, 'an authorization code was issued');
             $error = $query['error'] ?? null;
         } else {
-            self::assertGreaterThanOrEqual(400, $response->getStatusCode(), (string) $response->getBody());
+            self::assertGreaterThanOrEqual(
+                StatusCodeInterface::STATUS_BAD_REQUEST,
+                $response->getStatusCode(),
+                (string) $response->getBody(),
+            );
             /** @var mixed $error */
             $error = self::json($response)['error'] ?? null;
         }

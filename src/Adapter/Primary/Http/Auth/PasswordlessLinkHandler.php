@@ -19,6 +19,7 @@ use Clavia\Application\Authentication\Passwordless\PasswordlessFailure;
 use Clavia\Application\Authentication\SignIn\SecondFactorRequired;
 use Clavia\Application\Authentication\SignIn\SignedIn;
 use Clavia\Domain\Authentication\PasswordlessMode;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
@@ -62,7 +63,12 @@ final readonly class PasswordlessLinkHandler implements RequestHandlerInterface
                 $request,
                 $prompt === null
                     ? PasswordlessPages::failed(PasswordlessFailure::InvalidLink)
-                    : PasswordlessPages::linkConfirm($prompt, $token, LoginPages::EXPIRED_FORM, 400),
+                    : PasswordlessPages::linkConfirm(
+                        $prompt,
+                        $token,
+                        LoginPages::EXPIRED_FORM,
+                        StatusCodeInterface::STATUS_BAD_REQUEST,
+                    ),
             );
         }
 

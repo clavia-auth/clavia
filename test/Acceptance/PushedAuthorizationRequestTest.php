@@ -16,6 +16,7 @@ use ClaviaTest\Support\AcceptanceTestCase;
 use ClaviaTest\Support\LoginFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\OidcFixtures;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -44,7 +45,11 @@ final class PushedAuthorizationRequestTest extends AcceptanceTestCase
 
         $response = $this->push($this->authorizeParams($this->makePkcePair()[1]));
 
-        self::assertSame(201, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_CREATED,
+            $response->getStatusCode(),
+            (string) $response->getBody(),
+        );
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
         $body = self::json($response);
         self::assertIsString($body['request_uri']);
@@ -80,7 +85,11 @@ final class PushedAuthorizationRequestTest extends AcceptanceTestCase
         $this->extractCode($this->get('/oauth2/authorize', $by));
         $again = $this->get('/oauth2/authorize', $by);
 
-        self::assertSame(400, $again->getStatusCode(), 'Spent: there is no redirect URI to trust any more.');
+        self::assertSame(
+            StatusCodeInterface::STATUS_BAD_REQUEST,
+            $again->getStatusCode(),
+            'Spent: there is no redirect URI to trust any more.',
+        );
     }
 
     public function testTheQueryCannotChangeAPushedRequest(): void
@@ -132,7 +141,7 @@ final class PushedAuthorizationRequestTest extends AcceptanceTestCase
             'request_uri' => $requestUri,
         ]);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
     }
 
     public function testThePushIsValidatedAsTheAuthorizationEndpointWould(): void
@@ -160,7 +169,7 @@ final class PushedAuthorizationRequestTest extends AcceptanceTestCase
         $wrong = $this->post('/oauth2/par', $params + ['client_secret' => 'wrong']);
         $pushed = self::json($this->post('/oauth2/par', $params + ['client_secret' => self::TEST_CLIENT_SECRET]));
 
-        self::assertSame(401, $wrong->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $wrong->getStatusCode());
         self::assertIsString($pushed['request_uri']);
         $response = $this->get('/oauth2/authorize', [
             'client_id' => self::TEST_CONFIDENTIAL_CLIENT_ID,
@@ -217,7 +226,11 @@ final class PushedAuthorizationRequestTest extends AcceptanceTestCase
     private function pushedUri(array $parameters): string
     {
         $response = $this->push($parameters);
-        self::assertSame(201, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_CREATED,
+            $response->getStatusCode(),
+            (string) $response->getBody(),
+        );
         $uri = self::json($response)['request_uri'];
         self::assertIsString($uri);
 

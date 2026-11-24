@@ -14,6 +14,7 @@ namespace ClaviaTest\Acceptance;
 use Clavia\Adapter\Primary\Http\Shared\PageRenderer;
 use ClaviaTest\Support\AcceptanceTestCase;
 use ClaviaTest\Support\OAuth2Fixtures;
+use Fig\Http\Message\StatusCodeInterface;
 use Mezzio\Template\TemplateRendererInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -36,7 +37,7 @@ final class ErrorPagesTest extends AcceptanceTestCase
     {
         $response = $this->browse('GET', '/nothing-here');
 
-        self::assertSame(404, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $response->getStatusCode());
         $this->assertIsAPage($response);
         self::assertStringContainsString('<h1>Page not found</h1>', (string) $response->getBody());
     }
@@ -45,7 +46,7 @@ final class ErrorPagesTest extends AcceptanceTestCase
     {
         $response = $this->request('GET', '/nothing-here', ['Accept' => '*/*']);
 
-        self::assertSame(404, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $response->getStatusCode());
         self::assertSame(['detail' => 'Not Found'], self::json($response));
     }
 
@@ -62,7 +63,7 @@ final class ErrorPagesTest extends AcceptanceTestCase
     {
         $response = $this->browse('GET', '/auth/logout');
 
-        self::assertSame(405, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_METHOD_NOT_ALLOWED, $response->getStatusCode());
         self::assertSame('POST', $response->getHeaderLine('Allow'));
         $this->assertIsAPage($response);
         self::assertStringContainsString('This page cannot be opened this way', (string) $response->getBody());
@@ -72,7 +73,7 @@ final class ErrorPagesTest extends AcceptanceTestCase
     {
         $response = $this->request('GET', '/oauth2/token');
 
-        self::assertSame(405, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_METHOD_NOT_ALLOWED, $response->getStatusCode());
         self::assertSame('POST', $response->getHeaderLine('Allow'));
         self::assertSame(['detail' => 'Method Not Allowed'], self::json($response));
     }
@@ -94,7 +95,7 @@ final class ErrorPagesTest extends AcceptanceTestCase
         )));
 
         $body = (string) $response->getBody();
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertFalse($response->hasHeader('Location'));
         self::assertFalse($response->hasHeader('WWW-Authenticate'));
         $this->assertIsAPage($response);
@@ -114,7 +115,7 @@ final class ErrorPagesTest extends AcceptanceTestCase
             ['client_id' => 'no-such-client'],
         )));
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         $this->assertIsAPage($response);
         self::assertStringContainsString('invalid_client', (string) $response->getBody());
     }
@@ -128,7 +129,7 @@ final class ErrorPagesTest extends AcceptanceTestCase
             $this->authorizeParams($challenge, ['client_id' => 'no-such-client']),
         );
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('invalid_client', self::json($response)['error']);
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
     }
@@ -138,7 +139,7 @@ final class ErrorPagesTest extends AcceptanceTestCase
         // RFC 6749 §5.2 fixes the format: whoever calls it, it is a program.
         $response = $this->post('/oauth2/token', ['grant_type' => 'password'], headers: ['Accept' => self::BROWSER]);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('unsupported_grant_type', self::json($response)['error']);
     }
 
@@ -152,7 +153,7 @@ final class ErrorPagesTest extends AcceptanceTestCase
 
         $body = (string) $response->getBody();
         $reference = $response->getHeaderLine('X-Error-Reference');
-        self::assertSame(500, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_INTERNAL_SERVER_ERROR, $response->getStatusCode());
         $this->assertIsAPage($response);
         self::assertStringContainsString('<h1>Something went wrong</h1>', $body);
         self::assertMatchesRegularExpression('/^[A-Za-z0-9]{12}$/D', $reference);
@@ -167,7 +168,7 @@ final class ErrorPagesTest extends AcceptanceTestCase
 
         $response = $this->request('GET', '/boom', ['Accept' => 'application/json']);
 
-        self::assertSame(500, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_INTERNAL_SERVER_ERROR, $response->getStatusCode());
         self::assertSame('Internal Server Error', (string) $response->getBody());
         self::assertSame(
             $this->logger->records[0]['context']['reference'] ?? null,
@@ -194,7 +195,7 @@ final class ErrorPagesTest extends AcceptanceTestCase
 
         $response = $this->browse('GET', '/boom');
 
-        self::assertSame(500, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_INTERNAL_SERVER_ERROR, $response->getStatusCode());
         self::assertSame('Internal Server Error', (string) $response->getBody());
         self::assertCount(2, $this->logger->records);
     }

@@ -26,6 +26,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
 use DateTimeImmutable;
+use Fig\Http\Message\StatusCodeInterface;
 
 /**
  * Audiences: which API a token is for, with the checks made again at redemption.
@@ -50,7 +51,7 @@ final class AudienceTest extends AcceptanceTestCase
 
         $response = $this->requestMachineToken(['audience' => self::INVOICES_API]);
 
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         self::assertSame('invoices:read', self::json($response)['scope']);
         self::assertSame(self::INVOICES_API, $this->onlyRow('oauth2_access_tokens')['audience']);
     }
@@ -61,7 +62,7 @@ final class AudienceTest extends AcceptanceTestCase
 
         $response = $this->requestMachineToken(['audience' => 'https://nothing.test/']);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         // RFC 8707 §2's code for a target the server cannot issue for.
         self::assertSame('invalid_target', self::json($response)['error']);
     }
@@ -75,7 +76,7 @@ final class AudienceTest extends AcceptanceTestCase
 
         $response = $this->requestMachineToken(['audience' => self::INVOICES_API]);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('access_denied', self::json($response)['error']);
     }
 
@@ -88,7 +89,7 @@ final class AudienceTest extends AcceptanceTestCase
 
         $response = $this->requestMachineToken(['scope' => 'api:read', 'audience' => self::INVOICES_API]);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('invalid_scope', self::json($response)['error']);
     }
 
@@ -105,7 +106,7 @@ final class AudienceTest extends AcceptanceTestCase
             self::json($this->requestMachineToken(['audience' => self::INVOICES_API]))['scope'],
         );
         $refused = $this->requestMachineToken(['scope' => 'invoices:write', 'audience' => self::INVOICES_API]);
-        self::assertSame(400, $refused->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $refused->getStatusCode());
         self::assertSame('invalid_scope', self::json($refused)['error']);
     }
 
@@ -133,7 +134,7 @@ final class AudienceTest extends AcceptanceTestCase
 
         $response = $this->requestMachineToken(['audience' => null]);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('invalid_request', self::json($response)['error']);
         self::assertSame(0, TestStorage::database()->fetchValue('SELECT count(*) FROM oauth2_access_tokens'));
     }
@@ -167,7 +168,7 @@ final class AudienceTest extends AcceptanceTestCase
         );
         $response = $this->post('/oauth2/token', $this->tokenRequest($code, $verifier));
 
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         self::assertEqualsCanonicalizing(
             ['openid', 'invoices:read'],
             explode(' ', (string) self::json($response)['scope']),
@@ -189,7 +190,7 @@ final class AudienceTest extends AcceptanceTestCase
             ['scope' => 'openid invoices:delete', 'audience' => self::INVOICES_API],
         ));
 
-        self::assertSame(302, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_FOUND, $response->getStatusCode());
         $query = self::locationQuery($response);
         self::assertSame('invalid_scope', $query['error']);
         self::assertSame('test-state-value', $query['state']);
@@ -207,7 +208,7 @@ final class AudienceTest extends AcceptanceTestCase
             ['audience' => 'https://nothing.test/'],
         ));
 
-        self::assertSame(302, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_FOUND, $response->getStatusCode());
         $query = self::locationQuery($response);
         self::assertSame('invalid_target', $query['error']);
         self::assertArrayNotHasKey('code', $query);
@@ -231,7 +232,10 @@ final class AudienceTest extends AcceptanceTestCase
         [$verifier, $challenge] = $this->makePkcePair();
         $code = $this->authorizeAndGetCode($challenge);
 
-        self::assertSame(200, $this->post('/oauth2/token', $this->tokenRequest($code, $verifier))->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_OK,
+            $this->post('/oauth2/token', $this->tokenRequest($code, $verifier))->getStatusCode(),
+        );
         self::assertNull($this->onlyRow('oauth2_access_tokens')['audience']);
     }
 
@@ -252,7 +256,7 @@ final class AudienceTest extends AcceptanceTestCase
         $this->dropWritePermission($api);
         $response = $this->post('/oauth2/token', $this->tokenRequest($code, $verifier));
 
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         self::assertEqualsCanonicalizing(
             ['openid', 'invoices:read'],
             explode(' ', (string) self::json($response)['scope']),
@@ -273,7 +277,7 @@ final class AudienceTest extends AcceptanceTestCase
         $this->container()->get(ResourceServerRepository::class)->delete($api->id);
         $response = $this->post('/oauth2/token', $this->tokenRequest($code, $verifier));
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('invalid_grant', self::json($response)['error']);
         self::assertSame(0, TestStorage::database()->fetchValue('SELECT count(*) FROM oauth2_access_tokens'));
     }

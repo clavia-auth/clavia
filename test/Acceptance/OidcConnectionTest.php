@@ -24,6 +24,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\Response\JsonResponse;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Psr\Http\Client\ClientInterface;
@@ -100,7 +101,7 @@ final class OidcConnectionTest extends AcceptanceTestCase
     {
         $response = $this->registerConnection(['name' => 'elsewhere', 'oidc_issuer' => 'https://elsewhere.example']);
 
-        self::assertSame(422, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
         self::assertStringContainsString('elsewhere.example', (string) self::document($response)['detail']);
     }
 
@@ -110,7 +111,11 @@ final class OidcConnectionTest extends AcceptanceTestCase
         // An admin form must not become a request forger against the server's network.
         $response = $this->registerConnection(['name' => 'sneaky', 'oidc_issuer' => $issuer]);
 
-        self::assertSame(422, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
+            $response->getStatusCode(),
+            (string) $response->getBody(),
+        );
         self::assertStringStartsWith('The issuer must', (string) self::document($response)['detail']);
         self::assertSame([], $this->wire->requests, 'Nothing was fetched.');
     }
@@ -135,7 +140,7 @@ final class OidcConnectionTest extends AcceptanceTestCase
 
         $response = $this->registerConnection(['name' => 'sneaky']);
 
-        self::assertSame(422, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
         self::assertStringContainsString('jwks_uri', (string) self::document($response)['detail']);
     }
 
@@ -148,7 +153,7 @@ final class OidcConnectionTest extends AcceptanceTestCase
             'oidc_issuer' => FakeOpenIdProvider::ISSUER,
         ]);
 
-        self::assertSame(422, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
     }
 
     public function testThePoolTakesNoOidcSettings(): void
@@ -160,7 +165,7 @@ final class OidcConnectionTest extends AcceptanceTestCase
             'oidc_issuer' => FakeOpenIdProvider::ISSUER,
         ]);
 
-        self::assertSame(422, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
     }
 
     public function testAChangeToTheProviderSettingsIsDiscoveredAgain(): void
@@ -170,18 +175,18 @@ final class OidcConnectionTest extends AcceptanceTestCase
 
         $patched = $this->api('PATCH', self::CONNECTIONS . '/' . self::NAME, ['oidc_client_id' => 'another-id']);
 
-        self::assertSame(200, $patched->getStatusCode(), (string) $patched->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $patched->getStatusCode(), (string) $patched->getBody());
         self::assertSame('another-id', self::json($patched)['oidc_client_id']);
         $discovery = $this->wire->requests[$before] ?? null;
         self::assertNotNull($discovery, 'Discovery ran again.');
         self::assertSame(FakeOpenIdProvider::DISCOVERY_URL, (string) $discovery->getUri());
         self::assertSame(
-            422,
+            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
             $this->api('PATCH', self::CONNECTIONS . '/' . self::NAME, ['oidc_issuer' => 'https://10.0.0.5'])
                 ->getStatusCode(),
         );
         self::assertSame(
-            422,
+            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
             $this->api('PATCH', self::CONNECTIONS . '/password', ['oidc_client_id' => 'x'])->getStatusCode(),
             'A pool has no provider settings.',
         );
@@ -205,7 +210,11 @@ final class OidcConnectionTest extends AcceptanceTestCase
 
         $response = $this->finish($this->start());
 
-        self::assertSame(303, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_SEE_OTHER,
+            $response->getStatusCode(),
+            (string) $response->getBody(),
+        );
         $user = $this->users()->findByEmail(ConnectionName::fromString(self::NAME), 'ada@idp.example');
         self::assertNotNull($user);
         self::assertNull($user->passwordHash());
@@ -240,7 +249,7 @@ final class OidcConnectionTest extends AcceptanceTestCase
 
         $response = $this->finish($state);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertStringContainsString('Could not complete sign-in with Acme SSO', (string) $response->getBody());
         self::assertNull($this->cookie(self::SESSION_COOKIE));
         self::assertSame(0, TestStorage::database()->fetchValue('SELECT count(*) FROM users'));
@@ -277,22 +286,25 @@ final class OidcConnectionTest extends AcceptanceTestCase
         $this->registerAcme();
 
         self::assertSame(
-            200,
+            StatusCodeInterface::STATUS_OK,
             $this->api('PATCH', self::CONNECTIONS . '/' . self::NAME, ['is_enabled' => false])->getStatusCode(),
         );
 
-        self::assertSame(404, $this->get('/auth/social/' . self::NAME)->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_NOT_FOUND,
+            $this->get('/auth/social/' . self::NAME)->getStatusCode(),
+        );
         self::assertStringNotContainsString('Acme SSO', (string) $this->get('/auth/login')->getBody());
     }
 
     public function testAProviderWithAccountsIsNotDeleted(): void
     {
         $this->registerAcme();
-        self::assertSame(303, $this->finish($this->start())->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $this->finish($this->start())->getStatusCode());
 
         $response = $this->api('DELETE', self::CONNECTIONS . '/' . self::NAME);
 
-        self::assertSame(409, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_CONFLICT, $response->getStatusCode());
         self::assertStringContainsString('1 account belongs', (string) self::document($response)['detail']);
     }
 
@@ -300,8 +312,14 @@ final class OidcConnectionTest extends AcceptanceTestCase
     {
         $this->registerAcme();
 
-        self::assertSame(204, $this->api('DELETE', self::CONNECTIONS . '/' . self::NAME)->getStatusCode());
-        self::assertSame(404, $this->api('GET', self::CONNECTIONS . '/' . self::NAME)->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_NO_CONTENT,
+            $this->api('DELETE', self::CONNECTIONS . '/' . self::NAME)->getStatusCode(),
+        );
+        self::assertSame(
+            StatusCodeInterface::STATUS_NOT_FOUND,
+            $this->api('GET', self::CONNECTIONS . '/' . self::NAME)->getStatusCode(),
+        );
         $connections = $this->container()->get(ConnectionRepository::class);
         self::assertNull($connections->find(ConnectionName::fromString(self::NAME)));
     }
@@ -311,12 +329,15 @@ final class OidcConnectionTest extends AcceptanceTestCase
         $this->registerAcme();
         $state = $this->start();
         $this->wire->answerWith(
-            static fn (RequestInterface $request): ResponseInterface => new JsonResponse(['error' => 'down'], 503),
+            static fn (RequestInterface $request): ResponseInterface => new JsonResponse(
+                ['error' => 'down'],
+                StatusCodeInterface::STATUS_SERVICE_UNAVAILABLE,
+            ),
         );
 
         $response = $this->finish($state);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertTrue($this->logger->hasRecordContaining('answered 503'));
     }
 
@@ -344,7 +365,7 @@ final class OidcConnectionTest extends AcceptanceTestCase
     private function registerAcme(): array
     {
         $created = $this->registerConnection();
-        self::assertSame(201, $created->getStatusCode(), (string) $created->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_CREATED, $created->getStatusCode(), (string) $created->getBody());
 
         return self::json($created);
     }
@@ -356,7 +377,11 @@ final class OidcConnectionTest extends AcceptanceTestCase
     private function start(): string
     {
         $response = $this->get('/auth/social/' . self::NAME);
-        self::assertSame(303, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_SEE_OTHER,
+            $response->getStatusCode(),
+            (string) $response->getBody(),
+        );
         $location = $response->getHeaderLine('Location');
         self::assertStringStartsWith(FakeOpenIdProvider::AUTHORIZATION_ENDPOINT . '?', $location);
         parse_str((string) parse_url($location, PHP_URL_QUERY), $query);

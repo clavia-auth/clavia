@@ -29,6 +29,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use DateTimeImmutable;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -75,7 +76,7 @@ final class RbacTest extends AcceptanceTestCase
         $response = $this->userFlow('openid invoices:read invoices:write');
 
         // Narrowed, not refused: asking for more than you hold gets what you hold.
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         $token = self::json($response);
         self::assertEqualsCanonicalizing(['openid', 'invoices:read'], explode(' ', (string) $token['scope']));
         self::assertSame($token['scope'], $this->onlyRow('oauth2_access_tokens')['scope']);
@@ -91,7 +92,7 @@ final class RbacTest extends AcceptanceTestCase
 
         $response = $this->userFlow('openid invoices:read');
 
-        self::assertSame(302, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_FOUND, $response->getStatusCode());
         $query = self::locationQuery($response);
         self::assertSame('access_denied', $query['error']);
         self::assertSame('test-state-value', $query['state']);
@@ -114,7 +115,7 @@ final class RbacTest extends AcceptanceTestCase
         $this->roles()->unassign($reader->id, $user->id);
         $response = $this->post('/oauth2/token', $this->tokenRequest($code, $verifier));
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('invalid_grant', self::json($response)['error']);
     }
 
@@ -150,7 +151,7 @@ final class RbacTest extends AcceptanceTestCase
 
         $response = $this->requestMachineToken(['audience' => self::INVOICES]);
 
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         self::assertSame('invoices:read', self::json($response)['scope']);
     }
 
@@ -169,18 +170,21 @@ final class RbacTest extends AcceptanceTestCase
 
         $response = $this->userFlow('openid ' . implode(' ', $this->allManagementScopes()), $api->identifier->value);
 
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         $token = self::json($response);
         self::assertEqualsCanonicalizing(['openid', ...$readOnly], explode(' ', (string) $token['scope']));
         $accessToken = (string) $token['access_token'];
-        self::assertSame(200, $this->api('GET', '/api/v1/users', token: $accessToken)->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_OK,
+            $this->api('GET', '/api/v1/users', token: $accessToken)->getStatusCode(),
+        );
         $forbidden = $this->api(
             'POST',
             '/api/v1/users',
             ['email' => 'x@clavia.dev', 'password' => 'a-good-password'],
             token: $accessToken,
         );
-        self::assertSame(403, $forbidden->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_FORBIDDEN, $forbidden->getStatusCode());
         self::assertSame('insufficient_scope', self::document($forbidden)['error']);
     }
 
@@ -202,7 +206,7 @@ final class RbacTest extends AcceptanceTestCase
 
         $response = $this->api('PATCH', '/api/v1/resource-servers/' . $id, ['enforce_policies' => false]);
 
-        self::assertSame(409, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_CONFLICT, $response->getStatusCode());
         self::assertTrue(self::document($this->api('GET', '/api/v1/resource-servers/' . $id))['enforce_policies']);
     }
 
@@ -222,7 +226,7 @@ final class RbacTest extends AcceptanceTestCase
             '/api/v1/resource-servers/' . (string) $created['id'],
             ['enforce_policies' => false],
         );
-        self::assertSame(200, $patched->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $patched->getStatusCode());
         self::assertFalse(self::document($patched)['enforce_policies']);
     }
 
@@ -240,7 +244,7 @@ final class RbacTest extends AcceptanceTestCase
             'description' => 'Read-only for the help desk',
             'permissions' => [$reference('read:users')],
         ]);
-        self::assertSame(201, $created->getStatusCode(), (string) $created->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_CREATED, $created->getStatusCode(), (string) $created->getBody());
         $role = self::document($created);
         $id = (string) $role['id'];
         self::assertStringStartsWith('rol_', $id);
@@ -258,12 +262,18 @@ final class RbacTest extends AcceptanceTestCase
         $patched = $this->api('PATCH', self::ROLES . '/' . $id, [
             'permissions' => [$reference('read:users'), $reference('read:clients')],
         ]);
-        self::assertSame(200, $patched->getStatusCode(), (string) $patched->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $patched->getStatusCode(), (string) $patched->getBody());
         self::assertSame(['read:clients', 'read:users'], self::values(self::document($patched)['permissions']));
 
         $body = ['user_ids' => [$user->id->value]];
-        self::assertSame(204, $this->api('POST', self::ROLES . '/' . $id . '/users', $body)->getStatusCode());
-        self::assertSame(204, $this->api('POST', self::ROLES . '/' . $id . '/users', $body)->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_NO_CONTENT,
+            $this->api('POST', self::ROLES . '/' . $id . '/users', $body)->getStatusCode(),
+        );
+        self::assertSame(
+            StatusCodeInterface::STATUS_NO_CONTENT,
+            $this->api('POST', self::ROLES . '/' . $id . '/users', $body)->getStatusCode(),
+        );
         $holders = self::document($this->api('GET', self::ROLES . '/' . $id . '/users'));
         self::assertSame(1, $holders['total'], 'Giving a role again is not a second assignment.');
         /** @var list<array{email: string}> $items */
@@ -278,11 +288,17 @@ final class RbacTest extends AcceptanceTestCase
         self::assertSame([['id' => $id, 'name' => 'Support']], $effective[0]['roles']);
 
         $taken = $this->api('DELETE', self::ROLES . '/' . $id . '/users/' . $user->id->value);
-        self::assertSame(204, $taken->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_NO_CONTENT, $taken->getStatusCode());
         self::assertSame(0, self::document($this->api('GET', self::ROLES . '/' . $id . '/users'))['total']);
 
-        self::assertSame(204, $this->api('DELETE', self::ROLES . '/' . $id)->getStatusCode());
-        self::assertSame(404, $this->api('GET', self::ROLES . '/' . $id)->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_NO_CONTENT,
+            $this->api('DELETE', self::ROLES . '/' . $id)->getStatusCode(),
+        );
+        self::assertSame(
+            StatusCodeInterface::STATUS_NOT_FOUND,
+            $this->api('GET', self::ROLES . '/' . $id)->getStatusCode(),
+        );
     }
 
     public function testARoleCannotGrantWhatNoApiDefines(): void
@@ -296,7 +312,7 @@ final class RbacTest extends AcceptanceTestCase
                 'permissions' => [['resource_server_id' => $apiId, 'value' => $value]],
             ]);
 
-            self::assertSame(422, $response->getStatusCode(), $value);
+            self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode(), $value);
         }
         self::assertSame(0, self::document($this->api('GET', self::ROLES))['total']);
     }
@@ -304,9 +320,15 @@ final class RbacTest extends AcceptanceTestCase
     public function testARoleNameIsTakenOnce(): void
     {
         $this->adminToken();
-        self::assertSame(201, $this->api('POST', self::ROLES, ['name' => 'Support'])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_CREATED,
+            $this->api('POST', self::ROLES, ['name' => 'Support'])->getStatusCode(),
+        );
 
-        self::assertSame(409, $this->api('POST', self::ROLES, ['name' => 'Support'])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_CONFLICT,
+            $this->api('POST', self::ROLES, ['name' => 'Support'])->getStatusCode(),
+        );
     }
 
     public function testSettingSomebodysRolesReplacesThem(): void
@@ -321,10 +343,10 @@ final class RbacTest extends AcceptanceTestCase
 
         $response = $this->api('PUT', $path, ['role_ids' => [$b->id->value]]);
 
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         self::assertSame(['B'], array_column(self::document($response), 'name'));
         $unknown = $this->api('PUT', $path, ['role_ids' => [$a->id->value, 'rol_doesnotexist0000']]);
-        self::assertSame(404, $unknown->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $unknown->getStatusCode());
         self::assertSame(
             ['B'],
             array_map(static fn (Role $role): string => $role->name, $this->roles()->rolesOf($user->id)),
@@ -340,7 +362,7 @@ final class RbacTest extends AcceptanceTestCase
 
         $response = $this->api('PUT', '/api/v1/users/' . $user->id->value . '/roles', ['role_ids' => []]);
 
-        self::assertSame(403, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_FORBIDDEN, $response->getStatusCode());
         self::assertStringContainsString('scope="update:roles"', $response->getHeaderLine('WWW-Authenticate'));
     }
 

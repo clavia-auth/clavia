@@ -20,6 +20,7 @@ use Clavia\Application\Authentication\SignIn\PasswordSignInUnavailable;
 use Clavia\Application\Authentication\SignIn\SecondFactorRequired;
 use Clavia\Application\Authentication\SignIn\SignedIn;
 use Clavia\Application\Authentication\SignIn\SignInWithPassword;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
@@ -59,7 +60,13 @@ final readonly class LoginHandler implements RequestHandlerInterface
         $loginState = $form->get('state');
 
         if (! CsrfToken::isValid($request, $form->get('csrf_token'))) {
-            return $this->refuse($request, $loginState, $email, LoginPages::EXPIRED_FORM, 400);
+            return $this->refuse(
+                $request,
+                $loginState,
+                $email,
+                LoginPages::EXPIRED_FORM,
+                StatusCodeInterface::STATUS_BAD_REQUEST,
+            );
         }
 
         $outcome = ($this->signIn)(new PasswordSignIn(
@@ -86,10 +93,22 @@ final readonly class LoginHandler implements RequestHandlerInterface
             );
         }
         if ($outcome instanceof PasswordSignInUnavailable) {
-            return $this->refuse($request, $loginState, $email, LoginPages::PASSWORD_UNAVAILABLE, 400);
+            return $this->refuse(
+                $request,
+                $loginState,
+                $email,
+                LoginPages::PASSWORD_UNAVAILABLE,
+                StatusCodeInterface::STATUS_BAD_REQUEST,
+            );
         }
         if (! $outcome instanceof SignedIn) {
-            return $this->refuse($request, $loginState, $email, LoginPages::INVALID_CREDENTIALS, 401);
+            return $this->refuse(
+                $request,
+                $loginState,
+                $email,
+                LoginPages::INVALID_CREDENTIALS,
+                StatusCodeInterface::STATUS_UNAUTHORIZED,
+            );
         }
 
         // The CSRF cookie has done its job; the next form gets a fresh one.

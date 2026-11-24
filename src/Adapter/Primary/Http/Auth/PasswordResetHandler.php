@@ -17,6 +17,7 @@ use Clavia\Application\Authentication\Account\PasswordChanged;
 use Clavia\Application\Authentication\Account\PasswordRejected;
 use Clavia\Application\Authentication\Account\ResetPassword;
 use Clavia\Domain\Identity\AccountLinkPurpose;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
@@ -82,7 +83,12 @@ final readonly class PasswordResetHandler implements RequestHandlerInterface
 
         return $this->responder->page(
             $request,
-            $email === null ? AccountPages::invalidLink() : AccountPages::resetForm($email, $token, $error, 400),
+            $email === null ? AccountPages::invalidLink() : AccountPages::resetForm(
+                $email,
+                $token,
+                $error,
+                StatusCodeInterface::STATUS_BAD_REQUEST,
+            ),
         );
     }
 }

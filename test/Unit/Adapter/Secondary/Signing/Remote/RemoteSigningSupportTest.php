@@ -23,6 +23,7 @@ use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\LocalHsm;
 use ClaviaTest\Support\TestSigningKeys;
 use DomainException;
+use Fig\Http\Message\StatusCodeInterface;
 use Google\Auth\FetchAuthTokenInterface;
 use GuzzleHttp\Exception\ConnectException;
 use Laminas\Diactoros\RequestFactory;
@@ -73,10 +74,25 @@ final class RemoteSigningSupportTest extends TestCase
     public function testAnApiRefusalRepeatsWhatTheServiceSaid(): void
     {
         $answers = [
-            [new JsonResponse(['error' => ['code' => 403, 'message' => 'Denied.']], 403), ': Denied.'],
-            [new JsonResponse(['error' => 'invalid_scope', 'error_description' => 'Bad scope.'], 400), ': Bad scope.'],
-            [new JsonResponse(['error' => 'invalid_request'], 400), ': invalid_request'],
-            [new TextResponse('<html>gateway</html>', 502), '(HTTP 502).'],
+            [
+                new JsonResponse(
+                    ['error' => ['code' => StatusCodeInterface::STATUS_FORBIDDEN, 'message' => 'Denied.']],
+                    StatusCodeInterface::STATUS_FORBIDDEN,
+                ),
+                ': Denied.',
+            ],
+            [
+                new JsonResponse(
+                    ['error' => 'invalid_scope', 'error_description' => 'Bad scope.'],
+                    StatusCodeInterface::STATUS_BAD_REQUEST,
+                ),
+                ': Bad scope.',
+            ],
+            [
+                new JsonResponse(['error' => 'invalid_request'], StatusCodeInterface::STATUS_BAD_REQUEST),
+                ': invalid_request',
+            ],
+            [new TextResponse('<html>gateway</html>', StatusCodeInterface::STATUS_BAD_GATEWAY), '(HTTP 502).'],
         ];
 
         foreach ($answers as [$response, $said]) {

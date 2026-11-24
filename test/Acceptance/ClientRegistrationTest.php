@@ -25,6 +25,7 @@ use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\StatusCodeInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Psr\Http\Message\ResponseInterface;
 
@@ -51,7 +52,10 @@ final class ClientRegistrationTest extends AcceptanceTestCase
     {
         $this->boot(['CLAVIA_CLIENT_REGISTRATION' => 'off']);
 
-        self::assertSame(404, $this->registerItself(self::WEB_APP, 'any')->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_NOT_FOUND,
+            $this->registerItself(self::WEB_APP, 'any')->getStatusCode(),
+        );
         $discovery = self::json($this->get('/.well-known/openid-configuration'));
         self::assertArrayNotHasKey('registration_endpoint', $discovery);
     }
@@ -74,7 +78,7 @@ final class ClientRegistrationTest extends AcceptanceTestCase
 
         $response = $this->registerItself(self::WEB_APP, null);
 
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertSame('Bearer realm="https://auth.clavia.test"', $response->getHeaderLine('WWW-Authenticate'));
     }
 
@@ -86,14 +90,17 @@ final class ClientRegistrationTest extends AcceptanceTestCase
         $revoked = $this->initialAccessToken();
         $this->container()->get(RevokeInitialAccessToken::class)($this->idOf($revoked));
         $usedUp = $this->initialAccessToken();
-        self::assertSame(201, $this->registerItself(self::WEB_APP, $usedUp)->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_CREATED,
+            $this->registerItself(self::WEB_APP, $usedUp)->getStatusCode(),
+        );
         $clock->advance(60);
 
         $tokens = ['unknown' => 'not-a-token', 'expired' => $expiring, 'revoked' => $revoked, 'used up' => $usedUp];
         foreach ($tokens as $case => $token) {
             $response = $this->registerItself(self::WEB_APP, $token);
 
-            self::assertSame(401, $response->getStatusCode(), $case);
+            self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode(), $case);
             self::assertSame('invalid_token', self::json($response)['error'], $case);
         }
     }
@@ -106,8 +113,12 @@ final class ClientRegistrationTest extends AcceptanceTestCase
         $refused = $this->registerItself(['client_name' => 'No redirect'], $token);
         $accepted = $this->registerItself(self::WEB_APP, $token);
 
-        self::assertSame(400, $refused->getStatusCode());
-        self::assertSame(201, $accepted->getStatusCode(), (string) $accepted->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $refused->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_CREATED,
+            $accepted->getStatusCode(),
+            (string) $accepted->getBody(),
+        );
     }
 
     // ── Registering ─────────────────────────────────────────────────────────────
@@ -125,7 +136,11 @@ final class ClientRegistrationTest extends AcceptanceTestCase
             'logo_uri' => 'https://acme.example/logo.png',
         ], $token);
 
-        self::assertSame(201, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_CREATED,
+            $response->getStatusCode(),
+            (string) $response->getBody(),
+        );
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
         $document = self::json($response);
         self::assertIsString($document['client_id']);
@@ -191,7 +206,11 @@ final class ClientRegistrationTest extends AcceptanceTestCase
             'redirect_uris' => ['http://127.0.0.1:8400/callback', 'http://[::1]:8400/callback'],
         ], $this->initialAccessToken());
 
-        self::assertSame(201, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_CREATED,
+            $response->getStatusCode(),
+            (string) $response->getBody(),
+        );
         self::assertArrayNotHasKey('client_secret', self::json($response));
     }
 
@@ -210,7 +229,7 @@ final class ClientRegistrationTest extends AcceptanceTestCase
             'redirect_uri' => 'https://reports.acme.example/callback',
         ]));
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertStringStartsWith('/auth/consent', $response->getHeaderLine('Location'));
     }
 
@@ -252,7 +271,11 @@ final class ClientRegistrationTest extends AcceptanceTestCase
 
         $response = $this->registerItself($metadata, $this->initialAccessToken());
 
-        self::assertSame(400, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_BAD_REQUEST,
+            $response->getStatusCode(),
+            (string) $response->getBody(),
+        );
         self::assertSame($error, self::json($response)['error']);
         self::assertSame(0, (int) TestStorage::database()->fetchValue('SELECT count(*) FROM client_registrations'));
     }
@@ -335,7 +358,7 @@ final class ClientRegistrationTest extends AcceptanceTestCase
         $this->registerItself(self::WEB_APP, 'guess-2');
         $third = $this->registerItself(self::WEB_APP, $this->initialAccessToken());
 
-        self::assertSame(429, $third->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_TOO_MANY_REQUESTS, $third->getStatusCode());
         self::assertSame('3600', $third->getHeaderLine('Retry-After'));
     }
 

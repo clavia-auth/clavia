@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Management;
 
 use Clavia\Application\Management\Users\Jobs\QueueUserImport;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
@@ -36,7 +37,7 @@ final readonly class UserImportsHandler implements RequestHandlerInterface
         $connection = ManagementRequest::of($request)->query('connection');
         $job = ($this->queue)(is_string($connection) ? $connection : null, (string) $request->getBody());
 
-        return $this->responder->json(ManagementViews::userJob($job), 202)
+        return $this->responder->json(ManagementViews::userJob($job), StatusCodeInterface::STATUS_ACCEPTED)
             ->withHeader('Location', '/api/v1/jobs/' . $job->id->value);
     }
 }

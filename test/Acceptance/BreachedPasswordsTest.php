@@ -25,6 +25,7 @@ use ClaviaTest\Support\LoginFixtures;
 use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
+use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\Response\TextResponse;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\ResponseInterface;
@@ -67,7 +68,11 @@ final class BreachedPasswordsTest extends AcceptanceTestCase
 
         $response = $this->signUp(self::BREACHED);
 
-        self::assertSame(303, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_SEE_OTHER,
+            $response->getStatusCode(),
+            (string) $response->getBody(),
+        );
         self::assertNotNull($this->account());
         self::assertSame([], $this->service->requests);
     }
@@ -79,7 +84,7 @@ final class BreachedPasswordsTest extends AcceptanceTestCase
 
         $response = $this->signUp(self::BREACHED);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertStringContainsString('appeared in a data breach', (string) $response->getBody());
         self::assertNull($this->account());
         // k-anonymity: the first five characters of the SHA-1, and nothing more.
@@ -95,19 +100,25 @@ final class BreachedPasswordsTest extends AcceptanceTestCase
         $this->checkOn();
         $this->openSignUp();
 
-        self::assertSame(303, $this->signUp(self::GOOD)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $this->signUp(self::GOOD)->getStatusCode());
         self::assertNotNull($this->account());
     }
 
     public function testWhenTheServiceIsDownThePasswordIsLetThroughAndTheOutageLogged(): void
     {
-        $this->service->answerWith(static fn (): ResponseInterface => new TextResponse('', 503));
+        $this->service->answerWith(
+            static fn (): ResponseInterface => new TextResponse('', StatusCodeInterface::STATUS_SERVICE_UNAVAILABLE),
+        );
         $this->checkOn();
         $this->openSignUp();
 
         $response = $this->signUp(self::BREACHED);
 
-        self::assertSame(303, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_SEE_OTHER,
+            $response->getStatusCode(),
+            (string) $response->getBody(),
+        );
         self::assertNotNull($this->account());
         self::assertTrue($this->logger->hasRecordContaining('answered 503'));
     }
@@ -132,9 +143,9 @@ final class BreachedPasswordsTest extends AcceptanceTestCase
             'csrf_token' => self::csrfTokenFrom($form),
         ]);
 
-        self::assertSame(400, $refused->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $refused->getStatusCode());
         self::assertStringContainsString('appeared in a data breach', (string) $refused->getBody());
-        self::assertSame(200, $this->get($link)->getStatusCode(), 'The link is still good.');
+        self::assertSame(StatusCodeInterface::STATUS_OK, $this->get($link)->getStatusCode(), 'The link is still good.');
     }
 
     public function testAnOperatorCannotSetABreachedPassword(): void
@@ -143,16 +154,16 @@ final class BreachedPasswordsTest extends AcceptanceTestCase
         $this->adminToken();
 
         $created = $this->api('POST', '/api/v1/users', ['email' => self::EMAIL, 'password' => self::BREACHED]);
-        self::assertSame(422, $created->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $created->getStatusCode());
         self::assertNull($this->account());
 
         $created = $this->api('POST', '/api/v1/users', ['email' => self::EMAIL, 'password' => self::GOOD]);
-        self::assertSame(201, $created->getStatusCode(), (string) $created->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_CREATED, $created->getStatusCode(), (string) $created->getBody());
         $id = self::document($created)['id'];
         self::assertIsString($id);
 
         $patched = $this->api('PATCH', '/api/v1/users/' . $id, ['password' => self::BREACHED]);
-        self::assertSame(422, $patched->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $patched->getStatusCode());
         // The refusal does not repeat the value at fault.
         self::assertStringNotContainsString(self::BREACHED, (string) $patched->getBody());
     }

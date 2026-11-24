@@ -15,6 +15,7 @@ use Clavia\Adapter\Primary\Http\Shared\ClientAddress;
 use Clavia\Application\Management\Users\PasswordLinkRefused;
 use Clavia\Application\Management\Users\SendPasswordLink;
 use Clavia\Domain\Identity\UserId;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
@@ -45,12 +46,21 @@ final readonly class UserPasswordLinkHandler implements RequestHandlerInterface
 
         return match ($outcome) {
             PasswordLinkRefused::LimitReached => $this->responder->problem(
-                new Problem(429, 'Too many emails have been sent to this address or from this one. Try again later.'),
+                new Problem(
+                    StatusCodeInterface::STATUS_TOO_MANY_REQUESTS,
+                    'Too many emails have been sent to this address or from this one. Try again later.',
+                ),
             ),
             PasswordLinkRefused::MailUnavailable => $this->responder->problem(
-                new Problem(503, 'The email could not be sent. Try again later.'),
+                new Problem(
+                    StatusCodeInterface::STATUS_SERVICE_UNAVAILABLE,
+                    'The email could not be sent. Try again later.',
+                ),
             ),
-            default => $this->responder->json(['kind' => $outcome->invitation ? 'invitation' : 'reset'], 202),
+            default => $this->responder->json(
+                ['kind' => $outcome->invitation ? 'invitation' : 'reset'],
+                StatusCodeInterface::STATUS_ACCEPTED,
+            ),
         };
     }
 }

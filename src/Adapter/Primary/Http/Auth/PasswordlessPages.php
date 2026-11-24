@@ -14,6 +14,7 @@ namespace Clavia\Adapter\Primary\Http\Auth;
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
 use Clavia\Application\Authentication\Passwordless\PasswordlessFailure;
 use Clavia\Application\Authentication\Passwordless\PasswordlessPrompt;
+use Fig\Http\Message\StatusCodeInterface;
 
 /**
  * The pages of a passwordless sign-in: where the code is typed, and the link's three
@@ -33,8 +34,11 @@ final class PasswordlessPages
     {
     }
 
-    public static function code(PasswordlessPrompt $prompt, ?string $error = null, int $status = 200): HtmlPage
-    {
+    public static function code(
+        PasswordlessPrompt $prompt,
+        ?string $error = null,
+        int $status = StatusCodeInterface::STATUS_OK,
+    ): HtmlPage {
         return new HtmlPage(
             template: 'auth::passwordless-code',
             title: 'Check your email',
@@ -70,7 +74,7 @@ final class PasswordlessPages
         PasswordlessPrompt $prompt,
         #[\SensitiveParameter] string $token,
         ?string $error = null,
-        int $status = 200,
+        int $status = StatusCodeInterface::STATUS_OK,
     ): HtmlPage {
         return new HtmlPage(
             template: 'auth::passwordless-link',
@@ -116,13 +120,13 @@ final class PasswordlessPages
     public static function status(PasswordlessFailure $reason): int
     {
         return match ($reason) {
-            PasswordlessFailure::TooManyEmails => 429,
-            PasswordlessFailure::MailUnavailable => 503,
-            PasswordlessFailure::AccountDisabled => 403,
+            PasswordlessFailure::TooManyEmails => StatusCodeInterface::STATUS_TOO_MANY_REQUESTS,
+            PasswordlessFailure::MailUnavailable => StatusCodeInterface::STATUS_SERVICE_UNAVAILABLE,
+            PasswordlessFailure::AccountDisabled => StatusCodeInterface::STATUS_FORBIDDEN,
             PasswordlessFailure::InvalidRequest,
             PasswordlessFailure::NotAvailable,
             PasswordlessFailure::Expired,
-            PasswordlessFailure::InvalidLink => 400,
+            PasswordlessFailure::InvalidLink => StatusCodeInterface::STATUS_BAD_REQUEST,
         };
     }
 

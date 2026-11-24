@@ -14,6 +14,7 @@ namespace Clavia\Adapter\Primary\Http\Auth;
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
 use Clavia\Application\Authentication\Account\AccountMail;
 use Clavia\Application\Authentication\Account\SignUpFailure;
+use Fig\Http\Message\StatusCodeInterface;
 
 /**
  * The self-service account pages: sign-up, "check your inbox", the verification link's
@@ -53,7 +54,7 @@ final class AccountPages
         bool $requiresVerification,
         string $email = '',
         ?string $error = null,
-        int $status = 200,
+        int $status = StatusCodeInterface::STATUS_OK,
     ): HtmlPage {
         return new HtmlPage(
             template: 'auth::signup',
@@ -87,9 +88,11 @@ final class AccountPages
     public static function signUpStatus(SignUpFailure $reason): int
     {
         return match ($reason) {
-            SignUpFailure::TooManySignUps => 429,
-            SignUpFailure::AddressTaken => 409,
-            SignUpFailure::InvalidEmail, SignUpFailure::PasswordRejected, SignUpFailure::NotAvailable => 400,
+            SignUpFailure::TooManySignUps => StatusCodeInterface::STATUS_TOO_MANY_REQUESTS,
+            SignUpFailure::AddressTaken => StatusCodeInterface::STATUS_CONFLICT,
+            SignUpFailure::InvalidEmail,
+            SignUpFailure::PasswordRejected,
+            SignUpFailure::NotAvailable => StatusCodeInterface::STATUS_BAD_REQUEST,
         };
     }
 
@@ -119,7 +122,7 @@ final class AccountPages
         string $email,
         #[\SensitiveParameter] string $token,
         ?string $error = null,
-        int $status = 200,
+        int $status = StatusCodeInterface::STATUS_OK,
     ): HtmlPage {
         return new HtmlPage(
             template: 'auth::verify-email',
@@ -158,7 +161,7 @@ final class AccountPages
             returnTo: '/auth/login',
             variables: ['stage' => 'failed', 'email' => '', 'token' => '', 'loginHref' => '/auth/login'],
             error: self::INVALID_LINK,
-            status: 400,
+            status: StatusCodeInterface::STATUS_BAD_REQUEST,
         );
     }
 
@@ -166,7 +169,7 @@ final class AccountPages
         ?string $loginState,
         string $email = '',
         ?string $error = null,
-        int $status = 200,
+        int $status = StatusCodeInterface::STATUS_OK,
     ): HtmlPage {
         return new HtmlPage(
             template: 'auth::password-forgot',
@@ -188,7 +191,7 @@ final class AccountPages
         string $email,
         #[\SensitiveParameter] string $token,
         ?string $error = null,
-        int $status = 200,
+        int $status = StatusCodeInterface::STATUS_OK,
     ): HtmlPage {
         return new HtmlPage(
             template: 'auth::password-reset',

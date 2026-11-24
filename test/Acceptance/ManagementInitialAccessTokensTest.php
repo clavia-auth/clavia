@@ -18,6 +18,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\StatusCodeInterface;
 
 /**
  * Initial access tokens in the Management API (RFC 7591 §3; docs/design/
@@ -39,7 +40,7 @@ final class ManagementInitialAccessTokensTest extends AcceptanceTestCase
 
         $issued = $this->api('POST', self::TOKENS, ['description' => 'Acme partner portal', 'max_uses' => 5]);
 
-        self::assertSame(201, $issued->getStatusCode(), (string) $issued->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_CREATED, $issued->getStatusCode(), (string) $issued->getBody());
         $document = self::document($issued);
         self::assertIsString($document['token']);
         self::assertSame(43, strlen($document['token']));
@@ -95,8 +96,8 @@ final class ManagementInitialAccessTokensTest extends AcceptanceTestCase
         $revoked = $this->api('DELETE', self::TOKENS . '/' . $id);
         $again = $this->api('DELETE', self::TOKENS . '/' . $id);
 
-        self::assertSame(204, $revoked->getStatusCode());
-        self::assertSame(204, $again->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_NO_CONTENT, $revoked->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_NO_CONTENT, $again->getStatusCode());
         $items = self::document($this->api('GET', self::TOKENS))['items'];
         self::assertIsArray($items);
         self::assertIsArray($items[0]);
@@ -114,7 +115,7 @@ final class ManagementInitialAccessTokensTest extends AcceptanceTestCase
 
         $response = $this->api('DELETE', self::TOKENS . '/0b0f5a3e-8f2c-4d1a-9b7e-3c2d1e0f9a8b');
 
-        self::assertSame(404, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $response->getStatusCode());
     }
 
     /**
@@ -127,7 +128,11 @@ final class ManagementInitialAccessTokensTest extends AcceptanceTestCase
 
         $response = $this->api('POST', self::TOKENS, $body);
 
-        self::assertSame(422, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
+            $response->getStatusCode(),
+            (string) $response->getBody(),
+        );
         self::assertSame(0, (int) TestStorage::database()->fetchValue('SELECT count(*) FROM initial_access_tokens'));
     }
 
@@ -148,10 +153,13 @@ final class ManagementInitialAccessTokensTest extends AcceptanceTestCase
     {
         $this->adminToken(['read:initial_access_tokens']);
 
-        self::assertSame(200, $this->api('GET', self::TOKENS)->getStatusCode());
-        self::assertSame(403, $this->api('POST', self::TOKENS, ['description' => 'x'])->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $this->api('GET', self::TOKENS)->getStatusCode());
         self::assertSame(
-            403,
+            StatusCodeInterface::STATUS_FORBIDDEN,
+            $this->api('POST', self::TOKENS, ['description' => 'x'])->getStatusCode(),
+        );
+        self::assertSame(
+            StatusCodeInterface::STATUS_FORBIDDEN,
             $this->api('DELETE', self::TOKENS . '/0b0f5a3e-8f2c-4d1a-9b7e-3c2d1e0f9a8b')->getStatusCode(),
         );
     }

@@ -17,6 +17,7 @@ use ClaviaTest\Support\AcceptanceTestCase;
 use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -41,7 +42,7 @@ final class IntrospectionRevocationTest extends AcceptanceTestCase
 
         $response = $this->introspect($issued['access_token']);
 
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
         $body = self::json($response);
         self::assertTrue($body['active']);
@@ -98,7 +99,7 @@ final class IntrospectionRevocationTest extends AcceptanceTestCase
             ['token' => $issued['access_token'], 'client_id' => self::TEST_CLIENT_ID],
         );
 
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertSame('invalid_client', self::json($response)['error']);
     }
 
@@ -114,7 +115,7 @@ final class IntrospectionRevocationTest extends AcceptanceTestCase
             'client_secret' => self::TEST_CLIENT_SECRET,
         ]);
 
-        self::assertSame(200, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode());
         self::assertSame(['active' => false], self::json($response));
     }
 
@@ -162,7 +163,7 @@ final class IntrospectionRevocationTest extends AcceptanceTestCase
         self::assertArrayNotHasKey('token_type', $body);
 
         // Rotated: the old one is spent, and reads as dead whatever the hint says.
-        self::assertSame(200, $this->refresh($refreshToken)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $this->refresh($refreshToken)->getStatusCode());
         self::assertSame(['active' => false], self::json($this->introspect($refreshToken)));
         self::assertSame(['active' => false], self::json($this->introspect($refreshToken, 'refresh_token')));
     }
@@ -181,11 +182,11 @@ final class IntrospectionRevocationTest extends AcceptanceTestCase
         $credentials = [self::TEST_M2M_CLIENT_ID, self::TEST_M2M_SECRET];
 
         $missing = $this->post('/oauth2/introspect', [], basicAuth: $credentials);
-        self::assertSame(400, $missing->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $missing->getStatusCode());
         self::assertSame('invalid_request', self::json($missing)['error']);
 
         $badHint = $this->introspect('x', 'id_token');
-        self::assertSame(400, $badHint->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $badHint->getStatusCode());
         self::assertSame('unsupported_token_type', self::json($badHint)['error']);
 
         $repeated = $this->request(
@@ -197,11 +198,11 @@ final class IntrospectionRevocationTest extends AcceptanceTestCase
             ],
             body: 'token=a&token=b',
         );
-        self::assertSame(400, $repeated->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $repeated->getStatusCode());
         self::assertSame('invalid_request', self::json($repeated)['error']);
 
         $anonymous = $this->post('/oauth2/introspect', ['token' => 'x']);
-        self::assertSame(401, $anonymous->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $anonymous->getStatusCode());
         self::assertStringStartsWith('Basic realm=', $anonymous->getHeaderLine('WWW-Authenticate'));
     }
 
@@ -212,14 +213,17 @@ final class IntrospectionRevocationTest extends AcceptanceTestCase
         $this->loggedIn();
         $this->publicClient();
         $issued = $this->userToken();
-        self::assertSame(200, $this->userinfo($issued['access_token'])->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $this->userinfo($issued['access_token'])->getStatusCode());
 
         $response = $this->revoke($issued['access_token'], ['client_id' => self::TEST_CLIENT_ID]);
 
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         self::assertSame('', (string) $response->getBody());
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
-        self::assertSame(401, $this->userinfo($issued['access_token'])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
+            $this->userinfo($issued['access_token'])->getStatusCode(),
+        );
     }
 
     public function testRevokingARefreshTokenRevokesTheWholeFamily(): void
@@ -234,14 +238,20 @@ final class IntrospectionRevocationTest extends AcceptanceTestCase
             ['client_id' => self::TEST_CLIENT_ID, 'token_type_hint' => 'refresh_token'],
         );
 
-        self::assertSame(200, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode());
         // Every refresh token in the chain, and every access token any of them minted.
         self::assertSame(
             0,
             TestStorage::database()->fetchValue('SELECT count(*) FROM oauth2_refresh_tokens WHERE revoked_at IS NULL'),
         );
-        self::assertSame(401, $this->userinfo($first['access_token'])->getStatusCode());
-        self::assertSame(401, $this->userinfo((string) $second['access_token'])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
+            $this->userinfo($first['access_token'])->getStatusCode(),
+        );
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
+            $this->userinfo((string) $second['access_token'])->getStatusCode(),
+        );
         self::assertSame('invalid_grant', self::json($this->refresh((string) $second['refresh_token']))['error']);
     }
 
@@ -253,13 +263,16 @@ final class IntrospectionRevocationTest extends AcceptanceTestCase
         $issued = $this->userToken();
 
         self::assertSame(
-            200,
+            StatusCodeInterface::STATUS_OK,
             $this->revoke($issued['access_token'], ['client_id' => self::TEST_CLIENT_ID])->getStatusCode(),
         );
 
-        self::assertSame(401, $this->userinfo($issued['access_token'])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
+            $this->userinfo($issued['access_token'])->getStatusCode(),
+        );
         $renewed = $this->refresh((string) $issued['refresh_token']);
-        self::assertSame(200, $renewed->getStatusCode(), (string) $renewed->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $renewed->getStatusCode(), (string) $renewed->getBody());
     }
 
     public function testAMachineClientRevokesWithItsSecret(): void
@@ -269,7 +282,7 @@ final class IntrospectionRevocationTest extends AcceptanceTestCase
 
         $response = $this->revoke($issued['access_token'], [], [self::TEST_M2M_CLIENT_ID, self::TEST_M2M_SECRET]);
 
-        self::assertSame(200, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode());
         self::assertSame(['active' => false], self::json($this->introspect($issued['access_token'])));
     }
 
@@ -282,9 +295,9 @@ final class IntrospectionRevocationTest extends AcceptanceTestCase
 
         $response = $this->revoke($issued['access_token'], [], [self::TEST_M2M_CLIENT_ID, self::TEST_M2M_SECRET]);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('invalid_grant', self::json($response)['error']);
-        self::assertSame(200, $this->userinfo($issued['access_token'])->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $this->userinfo($issued['access_token'])->getStatusCode());
     }
 
     public function testAnUnknownTokenIsRevokedQuietly(): void
@@ -292,7 +305,10 @@ final class IntrospectionRevocationTest extends AcceptanceTestCase
         // RFC 7009 §2.2: an invalid token is still a 200 — there is nothing to reveal.
         $this->publicClient();
 
-        self::assertSame(200, $this->revoke('never-issued', ['client_id' => self::TEST_CLIENT_ID])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_OK,
+            $this->revoke('never-issued', ['client_id' => self::TEST_CLIENT_ID])->getStatusCode(),
+        );
     }
 
     public function testRevocationNeedsAClient(): void
@@ -303,9 +319,9 @@ final class IntrospectionRevocationTest extends AcceptanceTestCase
 
         $response = $this->revoke($issued['access_token']);
 
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertSame('invalid_client', self::json($response)['error']);
-        self::assertSame(200, $this->userinfo($issued['access_token'])->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $this->userinfo($issued['access_token'])->getStatusCode());
     }
 
     public function testDiscoveryAdvertisesBothEndpoints(): void
@@ -353,7 +369,7 @@ final class IntrospectionRevocationTest extends AcceptanceTestCase
     /** @return array{access_token: string, refresh_token: string|null} */
     private static function issued(ResponseInterface $response): array
     {
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         $token = self::json($response);
         $accessToken = $token['access_token'] ?? null;
         /** @var mixed $refreshToken Absent unless the client is registered for refresh tokens. */

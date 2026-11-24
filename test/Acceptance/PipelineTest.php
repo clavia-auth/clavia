@@ -13,6 +13,7 @@ namespace ClaviaTest\Acceptance;
 
 use Clavia\Configuration\Version;
 use ClaviaTest\Support\AcceptanceTestCase;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Log\LogLevel;
 use RuntimeException;
@@ -26,7 +27,7 @@ final class PipelineTest extends AcceptanceTestCase
     {
         $response = $this->get('/healthz');
 
-        self::assertSame(200, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode());
         self::assertSame(['status' => 'ok', 'version' => Version::CURRENT], self::json($response));
         self::assertSame('{"status":"ok","version":"' . Version::CURRENT . '"}', (string) $response->getBody());
     }
@@ -35,7 +36,7 @@ final class PipelineTest extends AcceptanceTestCase
     {
         $response = $this->get('/nothing-here');
 
-        self::assertSame(404, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $response->getStatusCode());
         self::assertSame(['detail' => 'Not Found'], self::json($response));
     }
 
@@ -43,15 +44,21 @@ final class PipelineTest extends AcceptanceTestCase
     {
         $response = $this->request('POST', '/healthz');
 
-        self::assertSame(405, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_METHOD_NOT_ALLOWED, $response->getStatusCode());
         self::assertSame('GET', $response->getHeaderLine('Allow'));
         self::assertSame(['detail' => 'Method Not Allowed'], self::json($response));
     }
 
     public function testThereIsNoImplicitHeadOrOptions(): void
     {
-        self::assertSame(405, $this->request('HEAD', '/healthz')->getStatusCode());
-        self::assertSame(405, $this->request('OPTIONS', '/healthz')->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_METHOD_NOT_ALLOWED,
+            $this->request('HEAD', '/healthz')->getStatusCode(),
+        );
+        self::assertSame(
+            StatusCodeInterface::STATUS_METHOD_NOT_ALLOWED,
+            $this->request('OPTIONS', '/healthz')->getStatusCode(),
+        );
     }
 
     public function testAnUncaughtErrorSaysNothingToTheClientAndEverythingToTheLog(): void
@@ -65,7 +72,7 @@ final class PipelineTest extends AcceptanceTestCase
 
         $response = $this->get('/boom');
 
-        self::assertSame(500, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_INTERNAL_SERVER_ERROR, $response->getStatusCode());
         self::assertSame('Internal Server Error', (string) $response->getBody());
         self::assertSame('text/plain; charset=utf-8', $response->getHeaderLine('Content-Type'));
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
@@ -87,7 +94,7 @@ final class PipelineTest extends AcceptanceTestCase
 
         $response = $this->get('/warn');
 
-        self::assertSame(500, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_INTERNAL_SERVER_ERROR, $response->getStatusCode());
         self::assertSame('Internal Server Error', (string) $response->getBody());
         self::assertSame('half-built state', $this->logger->records[0]['context']['message'] ?? null);
     }

@@ -20,6 +20,7 @@ use ClaviaTest\Support\Contract\BreachedPasswordsContract;
 use ClaviaTest\Support\Fake\FakeHttpClient;
 use ClaviaTest\Support\Fake\PwnedPasswordsService;
 use ClaviaTest\Support\RecordingLogger;
+use Fig\Http\Message\StatusCodeInterface;
 use GuzzleHttp\Exception\ConnectException;
 use Laminas\Diactoros\RequestFactory;
 use Laminas\Diactoros\Response\TextResponse;
@@ -55,7 +56,9 @@ final class PwnedPasswordsRangeTest extends BreachedPasswordsContract
     #[\Override]
     protected function unavailableCorpus(): BreachedPasswords
     {
-        $this->http->answerWith(static fn (): ResponseInterface => new TextResponse('', 503));
+        $this->http->answerWith(
+            static fn (): ResponseInterface => new TextResponse('', StatusCodeInterface::STATUS_SERVICE_UNAVAILABLE),
+        );
 
         return $this->adapter();
     }

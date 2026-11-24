@@ -15,6 +15,7 @@ use Clavia\Application\Management\Conflict;
 use Clavia\Application\Oidc\Keys\ListSigningKeys;
 use Clavia\Application\Oidc\Keys\RotateSigningKey;
 use Clavia\Application\Port\EncryptionUnavailable;
+use Fig\Http\Message\StatusCodeInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -61,7 +62,9 @@ final readonly class SigningKeysHandler implements RequestHandlerInterface
         try {
             $rotation = ($this->rotate)();
         } catch (EncryptionUnavailable $unavailable) {
-            return $this->responder->problem(new Problem(503, $unavailable->getMessage()));
+            return $this->responder->problem(
+                new Problem(StatusCodeInterface::STATUS_SERVICE_UNAVAILABLE, $unavailable->getMessage()),
+            );
         }
 
         return $this->responder->json(ManagementViews::rotation($rotation));

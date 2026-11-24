@@ -15,6 +15,7 @@ use Clavia\Domain\Shared\Digest;
 use ClaviaTest\Support\AcceptanceTestCase;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestEnvironment;
+use Fig\Http\Message\StatusCodeInterface;
 
 /**
  * The Authorization Code + PKCE flow, end to end.
@@ -31,7 +32,7 @@ final class AuthorizationCodeFlowTest extends AcceptanceTestCase
 
         $response = $this->get('/oauth2/authorize', $this->authorizeParams($challenge));
 
-        self::assertSame(302, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_FOUND, $response->getStatusCode());
         $location = $response->getHeaderLine('Location');
         $query = self::locationQuery($response);
 
@@ -70,7 +71,11 @@ final class AuthorizationCodeFlowTest extends AcceptanceTestCase
 
         $tokenResponse = $this->post('/oauth2/token', $this->tokenRequest($code, $verifier));
 
-        self::assertSame(200, $tokenResponse->getStatusCode(), (string) $tokenResponse->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_OK,
+            $tokenResponse->getStatusCode(),
+            (string) $tokenResponse->getBody(),
+        );
         // RFC 6749 §5.1: a token response must not be cached.
         self::assertSame('no-store', $tokenResponse->getHeaderLine('Cache-Control'));
         self::assertSame('no-cache', $tokenResponse->getHeaderLine('Pragma'));
@@ -118,7 +123,7 @@ final class AuthorizationCodeFlowTest extends AcceptanceTestCase
             'client_secret' => self::TEST_CLIENT_SECRET,
         ]));
 
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
     }
 
     /**
@@ -139,7 +144,7 @@ final class AuthorizationCodeFlowTest extends AcceptanceTestCase
             $this->authorizeParams($challenge, ['scope' => 'openid profile admin']),
         );
 
-        self::assertSame(302, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_FOUND, $response->getStatusCode());
         $query = self::locationQuery($response);
         self::assertArrayNotHasKey('code', $query);
         self::assertSame('invalid_scope', $query['error']);
@@ -161,7 +166,11 @@ final class AuthorizationCodeFlowTest extends AcceptanceTestCase
 
         $tokenResponse = $this->post('/oauth2/token', $this->tokenRequest($code, $verifier));
 
-        self::assertSame(200, $tokenResponse->getStatusCode(), (string) $tokenResponse->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_OK,
+            $tokenResponse->getStatusCode(),
+            (string) $tokenResponse->getBody(),
+        );
         $granted = explode(' ', (string) (self::json($tokenResponse)['scope'] ?? ''));
         self::assertEqualsCanonicalizing(['openid', 'profile', 'email'], $granted);
     }
@@ -178,13 +187,13 @@ final class AuthorizationCodeFlowTest extends AcceptanceTestCase
 
         $response = $this->get('/oauth2/authorize', $this->authorizeParams($challenge));
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertStringStartsWith('/auth/login?', $response->getHeaderLine('Location'));
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
     }
 
     public function testHealthz(): void
     {
-        self::assertSame(200, $this->get('/healthz')->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $this->get('/healthz')->getStatusCode());
     }
 }

@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Oidc;
 
 use Clavia\Application\Oidc\Discovery\ProviderMetadata;
+use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -38,7 +39,7 @@ final readonly class DiscoveryHandler implements RequestHandlerInterface
     {
         return new JsonResponse(
             $this->metadata->toArray(),
-            200,
+            StatusCodeInterface::STATUS_OK,
             ['Cache-Control' => sprintf('public, max-age=%d', self::CACHE_MAX_AGE)],
             JsonResponse::DEFAULT_JSON_FLAGS | JSON_UNESCAPED_SLASHES,
         );

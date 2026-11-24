@@ -16,6 +16,7 @@ use Clavia\Adapter\Primary\Http\Shared\ErrorResponder;
 use Clavia\Adapter\Primary\Http\Shared\PageRenderer;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use ClaviaTest\Support\Fake\RecordingTemplateRenderer;
+use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\ResponseFactory;
 use Laminas\Diactoros\ServerRequest;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -45,7 +46,7 @@ final class OAuth2ResponderTest extends TestCase
             ['token_type' => 'Bearer', 'access_token' => 'abc', 'expires_in' => 3600],
         );
 
-        self::assertSame(200, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode());
         self::assertSame('application/json', $response->getHeaderLine('Content-Type'));
         // RFC 6749 §5.1.
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
@@ -60,7 +61,7 @@ final class OAuth2ResponderTest extends TestCase
     {
         $response = $this->responder->tokenError(OAuth2Error::invalidClient('Client authentication failed.'));
 
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertSame('Basic realm="https://auth.clavia.test"', $response->getHeaderLine('WWW-Authenticate'));
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
         self::assertSame(
@@ -74,7 +75,7 @@ final class OAuth2ResponderTest extends TestCase
     {
         $response = $this->responder->tokenError($error);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertFalse($response->hasHeader('WWW-Authenticate'));
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
         self::assertSame(
@@ -105,7 +106,7 @@ final class OAuth2ResponderTest extends TestCase
         );
 
         // A Basic challenge here would make the browser ask the user for a client secret.
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertFalse($response->hasHeader('WWW-Authenticate'));
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
         self::assertStringStartsWith('text/html', $response->getHeaderLine('Content-Type'));
@@ -119,7 +120,7 @@ final class OAuth2ResponderTest extends TestCase
             OAuth2Error::invalidClient('The client does not exist.'),
         );
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertFalse($response->hasHeader('WWW-Authenticate'));
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
         self::assertSame(
@@ -136,7 +137,7 @@ final class OAuth2ResponderTest extends TestCase
             ['code' => 'a b+c', 'state' => 'x&y=z'],
         );
 
-        self::assertSame(302, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_FOUND, $response->getStatusCode());
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
         // RFC 9207: `iss` lets a client talking to several servers tell who answered.
         self::assertSame(
@@ -179,7 +180,7 @@ final class OAuth2ResponderTest extends TestCase
     {
         $response = $this->responder->redirectWithinServer('/auth/login?state=abc');
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertSame('/auth/login?state=abc', $response->getHeaderLine('Location'));
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
     }

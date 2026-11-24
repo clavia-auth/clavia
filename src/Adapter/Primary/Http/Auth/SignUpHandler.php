@@ -20,6 +20,7 @@ use Clavia\Application\Authentication\Account\SignUp;
 use Clavia\Application\Authentication\Account\SignUpRefused;
 use Clavia\Application\Authentication\Account\SignUpRequest;
 use Clavia\Application\Authentication\SignIn\SecondFactorRequired;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
@@ -56,7 +57,13 @@ final readonly class SignUpHandler implements RequestHandlerInterface
         $loginState = $form->get('state');
         $email = trim($form->get('email') ?? '');
         if (! CsrfToken::isValid($request, $form->get('csrf_token'))) {
-            return $this->form($request, $loginState, $email, LoginPages::EXPIRED_FORM, 400);
+            return $this->form(
+                $request,
+                $loginState,
+                $email,
+                LoginPages::EXPIRED_FORM,
+                StatusCodeInterface::STATUS_BAD_REQUEST,
+            );
         }
 
         $outcome = ($this->signUp)(new SignUpRequest(
@@ -96,13 +103,20 @@ final readonly class SignUpHandler implements RequestHandlerInterface
         ?string $loginState,
         string $email = '',
         ?string $error = null,
-        int $status = 200,
+        int $status = StatusCodeInterface::STATUS_OK,
     ): ResponseInterface {
         $page = ($this->describe)($loginState);
         if (! $page->available) {
             return $this->responder->page(
                 $request,
-                AccountPages::signUp($loginState, [], false, $email, AccountPages::SIGN_UP_UNAVAILABLE, 404),
+                AccountPages::signUp(
+                    $loginState,
+                    [],
+                    false,
+                    $email,
+                    AccountPages::SIGN_UP_UNAVAILABLE,
+                    StatusCodeInterface::STATUS_NOT_FOUND,
+                ),
             );
         }
 

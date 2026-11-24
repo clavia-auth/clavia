@@ -16,6 +16,7 @@ use ClaviaTest\Support\DpopClient;
 use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -43,7 +44,7 @@ final class DpopResourcesTest extends AcceptanceTestCase
 
         $response = $this->management($token, $client->proof('GET', self::USERS, accessToken: $token));
 
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
     }
 
     public function testABoundTokenIsUselessAsABearerToken(): void
@@ -53,7 +54,7 @@ final class DpopResourcesTest extends AcceptanceTestCase
 
         $response = $this->api('GET', '/api/v1/users', token: $token);
 
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertSame('invalid_token', self::json($response)['error']);
     }
 
@@ -68,7 +69,7 @@ final class DpopResourcesTest extends AcceptanceTestCase
         $anotherToken = $this->management($token, $client->proof('GET', self::USERS, accessToken: 'another'));
 
         foreach ([$noProof, $anotherKey, $anotherUrl, $anotherToken] as $response) {
-            self::assertSame(401, $response->getStatusCode());
+            self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
             self::assertSame('invalid_dpop_proof', self::json($response)['error']);
             self::assertStringStartsWith('DPoP ', $response->getHeaderLine('WWW-Authenticate'));
             self::assertStringContainsString(self::ALGS, $response->getHeaderLine('WWW-Authenticate'));
@@ -81,7 +82,7 @@ final class DpopResourcesTest extends AcceptanceTestCase
         $token = $this->boundAdminToken($client);
         $proof = $client->proof('GET', self::USERS, accessToken: $token);
 
-        self::assertSame(200, $this->management($token, $proof)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $this->management($token, $proof)->getStatusCode());
         self::assertSame('invalid_dpop_proof', self::json($this->management($token, $proof))['error']);
     }
 
@@ -117,9 +118,9 @@ final class DpopResourcesTest extends AcceptanceTestCase
         ]);
         $asBearer = $this->request('GET', '/oidc/userinfo', ['Authorization' => 'Bearer ' . $token]);
 
-        self::assertSame(200, $withProof->getStatusCode(), (string) $withProof->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $withProof->getStatusCode(), (string) $withProof->getBody());
         self::assertSame(self::TEST_USER_EMAIL, self::json($withProof)['email']);
-        self::assertSame(401, $asBearer->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $asBearer->getStatusCode());
     }
 
     /** A Management API token for the machine client, bound to `$client`'s key. */
