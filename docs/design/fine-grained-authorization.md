@@ -33,6 +33,18 @@ This design makes Clavia the **front door of a policy decision point**:
 - Clavia's identity data (roles, then groups) in OpenFGA, kept in step by an outbox.
 - People (`user:<id>`) and machines (`client:<client id>`) as subjects, both known to Clavia.
 - A deactivated or unknown person, or an unknown client, refused by Clavia before OpenFGA is asked.
+- Clavia as an information point at decision time: what it knows of the subject, added to each
+  question for OpenFGA's conditions, beyond an API's reach to forge.
+- A PSR-15 enforcement middleware for PHP APIs, speaking AuthZEN to any decision point.
+
+### The four points
+
+| Point | Who | What |
+|---|---|---|
+| **PDP** (decision) | OpenFGA, behind Clavia's AuthZEN front door | OpenFGA works the answer out; the front door authenticates the caller, confines it, refuses inactive subjects first, and fails closed |
+| **PEP** (enforcement) | Each API | Asks before acting, refuses on anything but `true`. Helped by a **PSR-15 middleware** for PHP APIs, in its own repository (slice 8), and the developer guide |
+| **PAP** (administration) | The Management API and the dashboard | Each API's model and its versions, the clients that speak for it; relationship data written by the APIs through the relationships endpoint |
+| **PIP** (information) | Clavia, and the APIs | Clavia pushes identity ahead of time (roles as tuples) **and adds what it knows of the subject to every question** (`context.clavia.subject`, §2); the APIs write their resources' relationships and send request facts in `context` |
 
 ### Not in scope
 
@@ -59,7 +71,8 @@ This design makes Clavia the **front door of a policy decision point**:
 | The identity feed | Role assignments and removals, and account deletion, are written to OpenFGA through an **outbox** in Clavia's database, in the transaction of the change; sent **after the response** (`DeferredTasks`) and retried by `bin/clavia fga:sync` every minute; `fga:resync` rebuilds a store's identity tuples from Clavia | The two databases share no transaction, so an outbox is the only way a committed change is never lost. Sending after the response makes the delay sub-second in practice; the cron covers failures. A role reaches only the stores of the APIs it holds a permission on |
 | Deactivation and deletion | **Before asking OpenFGA**, the front door refuses a subject that is unknown or deactivated (`decision: false`): a `user` must be an active account, a `client` an existing client, whatever the store says. Deleting an account or a client deletes its tuples in every store (read by subject, then deleted), through the same outbox | The feed is asynchronous; a leaver must lose access at once. Deletion cleans up so a reused id could never inherit (ids are UUIDs, but the graph should not keep the dead) |
 | Consistency | OpenFGA runs with its **check cache off** (its default), so every read is strongly consistent; Clavia never caches decisions | Zanzibar's "new enemy" problem: answering from a stale copy after a revocation. With the cache off, OpenFGA's docs state every query is strongly consistent whatever the mode asked. Caching can come later with an explicit freshness rule |
-| Context and conditions | AuthZEN's `context` is passed to OpenFGA as the check's context, for **conditions** (CEL) in the model; Clavia adds nothing to it | Conditions ("when `acr` is MFA", "amount under 10,000") come with OpenFGA. An API that wants the sign-in level in a condition sends it from the token it holds |
+| Context and conditions | AuthZEN's `context` is passed to OpenFGA as the check's context, for **conditions** (CEL) in the model. **Clavia adds `context.clavia.subject`**: for a person, `id`, `connection`, `app_metadata` (#114), `roles` (the names of their roles holding a permission on this API), `mfa_enrolled`; for a client, `id`, `type` (`confidential` or `public`) and `first_party`. An API's own `context.clavia` is **refused** (`400`) | Conditions can then read identity facts (`subject.app_metadata.department == resource.department`, a plan, a tenant) without each API fetching and resending them, and an API cannot forge what Clavia says of a person. Roles are cut to the API's, as for custom claims, so an API learns nothing of other APIs' roles. The facts go to OpenFGA only, never back to the caller |
+| Facts in a subject search | A condition reading `context.clavia.subject` **cannot hold** in a subject search, whose subject is the unknown being searched for: such relationships do not count there | Fail closed: OpenFGA cannot be told each candidate's facts in one listing, and assuming them would list people the evaluation would refuse. The document says so, and an API needing that list evaluates the candidates in a batch |
 | Batch semantics | AuthZEN's `evaluations` with its three semantics (execute all, deny on first deny, permit on first permit), mapped to OpenFGA's `batch-check`, split to its per-request maximum (50 by default) | The semantics are AuthZEN's to honour; short-circuiting is applied by Clavia over the batch results |
 | Search | Subject search → `list-users`; resource search → `list-objects`; action search → a batch check of every relation of the resource's type. Results are **capped** (OpenFGA's own maximum and deadline, both its server settings), and AuthZEN's page token is used to page through what OpenFGA returned | OpenFGA's list endpoints return up to a configured maximum, not pages. Paging over a capped result is honest: the metadata and the document state the cap, and an API needing more narrows its question |
 | Answers | `{"decision": true|false}`, no reason by default; an operator may turn on reasons for **denials** per API, returning only the category (`no_relation`, `subject_inactive`, `unknown_type`) | AuthZEN allows a context in the answer. A reason that reveals the graph (who would have granted it) leaks more than the caller should know |
@@ -101,6 +114,9 @@ A new context, `Domain\Authorization`:
 - `Authorization\Evaluate`, `EvaluateMany`, `SearchSubjects`, `SearchResources`, `SearchActions`:
   the caller's API resolved from its client; types checked against the model; the subject checked
   in Clavia (an active account, or an existing client); the engine asked; the answer mapped.
+- `Authorization\SubjectFacts` (the PIP): what Clavia knows of a subject, cut to the calling API,
+  as the `context.clavia.subject` object; read once per subject per request (a batch about one person
+  reads them once).
 - `Authorization\WriteRelationships`, `ReadRelationships`: confined to the caller's store and to
   non-reserved types.
 - `Authorization\IdentityFeed`: subscribers to `RoleGiven`, `RoleTaken`, `UserRolesReplaced`,
@@ -136,8 +152,10 @@ tuples is OpenFGA's to accept or refuse, and its refusal is a `422` with its err
 4. The subject: for a `user`, a Clavia account, active, in a connection the API may see; for a
    `client`, a client that exists; otherwise `{decision: false}` (with `subject_inactive` if reasons
    are on). Nothing is sent to OpenFGA.
-5. `check(store, model, resource, action.name, subject, context)`; `{decision}` back.
-6. OpenFGA failing or slower than the timeout: `503`.
+5. The context: the API's `context` (a `clavia` member there is `400`), with Clavia's
+   `clavia.subject` facts added (§2).
+6. `check(store, model, resource, action.name, subject, context)`; `{decision}` back.
+7. OpenFGA failing or slower than the timeout: `503`.
 
 ### 5.3 Writing relationships
 
@@ -160,7 +178,8 @@ non-reserved type of the model, and a `user` or `client` subject must exist in C
 
 - **Subject search** (`/search/subject`): `list-users` for subjects of the type asked (`user` or
   `client`) holding the relation on the resource; accounts deactivated or unknown, and clients that
-  no longer exist, are removed from the answer.
+  no longer exist, are removed from the answer; relationships whose condition reads Clavia's subject
+  facts do not count (§2).
 - **Resource search** (`/search/resource`): `list-objects` of the type the subject has the relation
   to.
 - **Action search** (`/search/action`): every relation of the resource's type checked in one batch.
@@ -190,6 +209,8 @@ non-reserved type of the model, and a `user` or `client` subject must exist in C
 - **Fail closed**: no decision without OpenFGA's answer; `503` is never a permit.
 - **A leaver is out at once**: an inactive or unknown subject, or a client that no longer exists, is
   refused before the engine is asked.
+- **No forged identity facts**: `context.clavia` is Clavia's alone; an API sending one is refused,
+  and the facts Clavia adds are cut to the calling API (its roles only).
 - **No back door into roles**: APIs never write `user`, `client`, `role` or `group` tuples; Clavia
   alone does, and every subject an API names must exist in Clavia.
 - **Confinement**: a client speaks for one API; its requests reach that API's store only; another
@@ -215,6 +236,9 @@ non-reserved type of the model, and a `user` or `client` subject must exist in C
   of an evaluation and of a search; reserved tuples refused; `503` when the
   engine fails; the metadata naming what exists; every Management API answer against the OpenAPI
   document.
+- The PIP: `context.clavia.subject` built from the account (its `app_metadata`, the API's roles only)
+  and from a client; an API's `context.clavia` refused; a condition on `app_metadata` decided both
+  ways; a subject search leaving conditional relationships on subject facts out.
 - The identity feed: a role given reaches the stores of its APIs only; taken, it leaves them; a
   deleted account's and a deleted client's tuples removed; an outbox row surviving a failed send; `fga:resync` repairing a
   drift.
@@ -235,15 +259,23 @@ non-reserved type of the model, and a `user` or `client` subject must exist in C
    *Done when* role changes reach exactly the stores they concern, survive OpenFGA being down, and a
    drift can be repaired.
 4. **AuthZEN evaluation.** Evaluation, batch evaluation, the metadata, confinement, the deactivation
-   rule, `503`, people and clients as subjects. *Done when* an API's client gets correct decisions for
+   rule, `503`, people and clients as subjects, and Clavia's subject facts in the context (the PIP;
+   `app_metadata` once #114 is in). *Done when* an API's client gets correct decisions for
    direct, computed and inherited relations, about a person and about a client, and every refusal of
-   §5.2 is covered.
+   §5.2 is covered, and a condition on a subject fact decides both ways.
 5. **Relationships for APIs.** `POST|GET /access/v1/relationships`, confined, reserved types refused.
    *Done when* an API can keep its resources' relationships through Clavia alone.
 6. **AuthZEN search.** Subject, resource and action search, caps and paging, inactive accounts
    removed. *Done when* the three searches answer the specification's examples and respect the caps.
 7. **Dashboard** (clavia-dashboard), and the developer guide. *Done when* an operator can enable
    authorization, edit a model and try a decision without the API.
+8. **A PHP enforcement middleware** (its own repository, §10 question 5): an AuthZEN client on PSR-18
+   (discovery from the metadata document, a client-credentials token cached through PSR-16), a PSR-15
+   middleware that maps a request to a subject (the token's `sub` or `client_id`), an action and a
+   resource through resolvers the API supplies, and refuses (`403`) on `false` and (`503`) when the
+   decision point fails; usable with any AuthZEN decision point. *Done when* a PHP API protects a
+   route in a few lines, and the package passes its tests against Clavia and against a recorded
+   AuthZEN interop scenario.
 
 ## 10. Open questions
 
@@ -255,6 +287,9 @@ non-reserved type of the model, and a `user` or `client` subject must exist in C
    denials can follow, once someone needs it, with its volume understood.
 4. **Rich Authorization Requests (RFC 9396)** in 0.6? *Recommendation:* a separate issue and design.
    They decide at token time, with consent, and complement this rather than depend on it.
-5. **CI**: the integration contract against a real OpenFGA needs an `openfga` service in
+5. **The middleware's repository**: a new one (`clavia-auth/authzen-php`, say), with its own release
+   cycle, published on Packagist. *Recommendation:* yes, under that name; creating the repository is
+   yours.
+6. **CI**: the integration contract against a real OpenFGA needs an `openfga` service in
    `.github/workflows/ci.yml`, which is the maintainer's file. *Recommendation:* add it with slice 1;
    until then the contract runs against the double in CI and against OpenFGA locally.
