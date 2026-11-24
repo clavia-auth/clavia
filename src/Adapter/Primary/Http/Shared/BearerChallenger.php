@@ -15,6 +15,7 @@ use Clavia\Application\OAuth2\ProtectedResource\TokenScheme;
 use Clavia\Domain\OAuth2\BearerErrorCode;
 use Clavia\Domain\OAuth2\BearerTokenError;
 use Clavia\Domain\OAuth2\Dpop\DpopAlgorithm;
+use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\ResponseInterface;
 
@@ -48,7 +49,7 @@ final readonly class BearerChallenger
     {
         return new JsonResponse(
             new \stdClass(),
-            401,
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
             self::NO_STORE + ['WWW-Authenticate' => 'Bearer ' . self::parameters(['realm' => $this->realm])],
         );
     }
@@ -78,11 +79,11 @@ final readonly class BearerChallenger
         }
 
         $status = match ($error->error) {
-            BearerErrorCode::InvalidRequest => 400,
+            BearerErrorCode::InvalidRequest => StatusCodeInterface::STATUS_BAD_REQUEST,
             BearerErrorCode::InvalidToken,
             BearerErrorCode::InsufficientUserAuthentication,
-            BearerErrorCode::InvalidDpopProof => 401,
-            BearerErrorCode::InsufficientScope => 403,
+            BearerErrorCode::InvalidDpopProof => StatusCodeInterface::STATUS_UNAUTHORIZED,
+            BearerErrorCode::InsufficientScope => StatusCodeInterface::STATUS_FORBIDDEN,
         };
         $challenge = $scheme === TokenScheme::Dpop || $error->error === BearerErrorCode::InvalidDpopProof
             ? 'DPoP '

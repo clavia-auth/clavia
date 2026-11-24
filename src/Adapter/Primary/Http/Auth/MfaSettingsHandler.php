@@ -28,6 +28,7 @@ use Clavia\Application\Authentication\ResolveEndUser;
 use Clavia\Application\Port\EncryptionUnavailable;
 use Clavia\Domain\Authentication\LocalPath;
 use Clavia\Domain\Authentication\Mfa\FactorAlreadyConfirmed;
+use Fig\Http\Message\StatusCodeInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -136,7 +137,12 @@ final readonly class MfaSettingsHandler implements RequestHandlerInterface
                 ? $this->responder->redirect('/auth/login')
                 : $this->responder->page(
                     $request,
-                    MfaPages::settings($status, MfaPages::ENCRYPTION_UNAVAILABLE, 503, $onTheWay),
+                    MfaPages::settings(
+                        $status,
+                        MfaPages::ENCRYPTION_UNAVAILABLE,
+                        StatusCodeInterface::STATUS_SERVICE_UNAVAILABLE,
+                        $onTheWay,
+                    ),
                 );
         }
 
@@ -174,7 +180,12 @@ final readonly class MfaSettingsHandler implements RequestHandlerInterface
             ? $this->responder->redirect(MfaPages::SETTINGS_PATH)
             : $this->responder->page(
                 $request,
-                MfaPages::setUp($enrollment, MfaPages::INVALID_SETUP_CODE, 401, $onTheWay),
+                MfaPages::setUp(
+                    $enrollment,
+                    MfaPages::INVALID_SETUP_CODE,
+                    StatusCodeInterface::STATUS_UNAUTHORIZED,
+                    $onTheWay,
+                ),
             );
     }
 

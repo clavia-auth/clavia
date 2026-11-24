@@ -24,6 +24,7 @@ use Clavia\Application\Authentication\Mfa\SecondFactorOutcome;
 use Clavia\Application\Authentication\Mfa\SecondFactorPage;
 use Clavia\Application\Authentication\Mfa\SecondFactorRejected;
 use Clavia\Application\Authentication\SignIn\SignedIn;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
@@ -68,7 +69,13 @@ final readonly class MfaChallengeHandler implements RequestHandlerInterface
 
         $form = RequestParameterReader::form($request);
         if (! CsrfToken::isValid($request, $form->get('csrf_token'))) {
-            return $this->page($request, $challenge, $page, LoginPages::EXPIRED_FORM, 400);
+            return $this->page(
+                $request,
+                $challenge,
+                $page,
+                LoginPages::EXPIRED_FORM,
+                StatusCodeInterface::STATUS_BAD_REQUEST,
+            );
         }
 
         if ($request->getUri()->getPath() === self::PASSKEY_PATH) {
@@ -105,7 +112,7 @@ final readonly class MfaChallengeHandler implements RequestHandlerInterface
             ]);
         }
         if ($outcome instanceof SecondFactorRejected) {
-            return $this->page($request, $challenge, $page, $rejected, 401);
+            return $this->page($request, $challenge, $page, $rejected, StatusCodeInterface::STATUS_UNAUTHORIZED);
         }
 
         return $this->backToLogin();
@@ -120,7 +127,7 @@ final readonly class MfaChallengeHandler implements RequestHandlerInterface
         string $challenge,
         SecondFactorPage $page,
         ?string $error = null,
-        int $status = 200,
+        int $status = StatusCodeInterface::STATUS_OK,
     ): ResponseInterface {
         $options = $page->passkey ? ($this->beginPasskey)($challenge) : null;
 

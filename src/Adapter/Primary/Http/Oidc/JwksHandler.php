@@ -13,6 +13,7 @@ namespace Clavia\Adapter\Primary\Http\Oidc;
 
 use Clavia\Application\Oidc\Keys\PublishSigningKeys;
 use Clavia\Domain\Oidc\PublicJwk;
+use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -38,7 +39,7 @@ final readonly class JwksHandler implements RequestHandlerInterface
 
         return new JsonResponse(
             ['keys' => $keys],
-            200,
+            StatusCodeInterface::STATUS_OK,
             ['Cache-Control' => sprintf('public, max-age=%d', PublishSigningKeys::CACHE_MAX_AGE)],
         );
     }

@@ -17,6 +17,7 @@ use Clavia\Adapter\Secondary\Signing\Remote\JsonApi;
 use Clavia\Application\Port\SigningFailed;
 use ClaviaTest\Support\Fake\FakeHttpClient;
 use ClaviaTest\Support\Fake\FrozenClock;
+use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\RequestFactory;
 use Laminas\Diactoros\Response\JsonResponse;
 use Laminas\Diactoros\StreamFactory;
@@ -189,7 +190,7 @@ final class AzureCredentialsTest extends TestCase
     {
         $this->http->answerWith(static fn (RequestInterface $request): JsonResponse => new JsonResponse(
             ['error' => 'invalid_client', 'error_description' => 'AADSTS7000215: Invalid client secret provided.'],
-            401,
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
         ));
         $tokens = $this->application('wrong');
 

@@ -19,6 +19,7 @@ use ClaviaTest\Support\DpopClient;
 use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -45,7 +46,7 @@ final class DpopRequiredTest extends AcceptanceTestCase
             'response_types' => ['code'],
             'dpop_bound_access_tokens' => true,
         ]);
-        self::assertSame(201, $created->getStatusCode(), (string) $created->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_CREATED, $created->getStatusCode(), (string) $created->getBody());
         self::assertTrue(self::document($created)['dpop_bound_access_tokens']);
         $path = self::CLIENTS . '/' . rawurlencode((string) self::document($created)['client_id']);
 
@@ -83,10 +84,10 @@ final class DpopRequiredTest extends AcceptanceTestCase
             headers: ['DPoP' => $proof],
         ));
 
-        self::assertSame(400, $refused->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $refused->getStatusCode());
         self::assertSame('invalid_dpop_proof', self::json($refused)['error']);
         // Refused before the grant ran: the code is still good, for a request carrying a proof.
-        self::assertSame(200, $redeemed->getStatusCode(), (string) $redeemed->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $redeemed->getStatusCode(), (string) $redeemed->getBody());
         self::assertSame('DPoP', self::json($redeemed)['token_type']);
     }
 

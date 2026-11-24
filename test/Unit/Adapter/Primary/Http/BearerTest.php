@@ -17,6 +17,7 @@ use Clavia\Application\OAuth2\ProtectedResource\TokenScheme;
 use Clavia\Domain\OAuth2\BearerErrorCode;
 use Clavia\Domain\OAuth2\BearerTokenError;
 use Clavia\Domain\Shared\ScopeSet;
+use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\ServerRequest;
 use Laminas\Diactoros\StreamFactory;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -108,7 +109,7 @@ final class BearerTest extends TestCase
     {
         $response = $this->challenger()->missing();
 
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertSame('Bearer realm="https://auth.clavia.test"', $response->getHeaderLine('WWW-Authenticate'));
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
         self::assertSame('{}', (string) $response->getBody());
@@ -118,9 +119,12 @@ final class BearerTest extends TestCase
     public function testEachRefusalHasItsStatusAndSaysWhyInTheChallengeAndTheBody(): void
     {
         $cases = [
-            [BearerTokenError::invalidRequest('Malformed.'), 400],
-            [BearerTokenError::invalidToken('Expired.'), 401],
-            [BearerTokenError::insufficientScope(ScopeSet::fromString('openid'), 'Needs openid.'), 403],
+            [BearerTokenError::invalidRequest('Malformed.'), StatusCodeInterface::STATUS_BAD_REQUEST],
+            [BearerTokenError::invalidToken('Expired.'), StatusCodeInterface::STATUS_UNAUTHORIZED],
+            [
+                BearerTokenError::insufficientScope(ScopeSet::fromString('openid'), 'Needs openid.'),
+                StatusCodeInterface::STATUS_FORBIDDEN,
+            ],
         ];
 
         foreach ($cases as [$error, $status]) {

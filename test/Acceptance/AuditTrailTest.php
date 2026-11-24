@@ -16,6 +16,7 @@ use ClaviaTest\Support\LoginFixtures;
 use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
+use Fig\Http\Message\StatusCodeInterface;
 
 /**
  * The audit trail, end to end: what the server writes down as it works, and how an
@@ -42,7 +43,7 @@ final class AuditTrailTest extends AcceptanceTestCase
 
         $response = $this->api('GET', self::EVENTS);
 
-        self::assertSame(403, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_FORBIDDEN, $response->getStatusCode());
         self::assertStringContainsString('scope="read:audit_events"', $response->getHeaderLine('WWW-Authenticate'));
     }
 
@@ -56,7 +57,7 @@ final class AuditTrailTest extends AcceptanceTestCase
             ['email' => 'new@clavia.dev', 'password' => 'a-good-password'],
             headers: ['User-Agent' => 'clavia-test/1.0'],
         );
-        self::assertSame(201, $created->getStatusCode(), (string) $created->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_CREATED, $created->getStatusCode(), (string) $created->getBody());
         /** @var mixed $userId */
         $userId = self::document($created)['id'];
         self::assertIsString($userId);
@@ -76,9 +77,9 @@ final class AuditTrailTest extends AcceptanceTestCase
     {
         $this->adminToken();
         $new = ['email' => 'twice@clavia.dev', 'password' => 'a-good-password'];
-        self::assertSame(201, $this->api('POST', self::USERS, $new)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_CREATED, $this->api('POST', self::USERS, $new)->getStatusCode());
 
-        self::assertSame(409, $this->api('POST', self::USERS, $new)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_CONFLICT, $this->api('POST', self::USERS, $new)->getStatusCode());
 
         $this->onlyEvent('user.created');
     }
@@ -150,7 +151,10 @@ final class AuditTrailTest extends AcceptanceTestCase
     {
         $this->adminToken();
 
-        self::assertSame(422, $this->api('GET', self::EVENTS, query: ['type' => 'user.exploded'])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
+            $this->api('GET', self::EVENTS, query: ['type' => 'user.exploded'])->getStatusCode(),
+        );
     }
 
     /**

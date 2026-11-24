@@ -19,6 +19,7 @@ use Clavia\Application\Authentication\External\ExternalCallback;
 use Clavia\Application\Authentication\External\ExternalSignInRefused;
 use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
 use Clavia\Application\Authentication\SignIn\SecondFactorRequired;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
@@ -66,7 +67,7 @@ final readonly class ExternalSignInCallbackHandler implements RequestHandlerInte
                     $this->describe->methods(null),
                     null,
                     ExternalSignInMessages::for($outcome),
-                    400,
+                    StatusCodeInterface::STATUS_BAD_REQUEST,
                 ))
                 ->withAddedHeader('Set-Cookie', $this->cookies->expireExternalSignIn()->toString());
         }

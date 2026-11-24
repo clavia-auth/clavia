@@ -17,6 +17,7 @@ use ClaviaTest\Support\AcceptanceTestCase;
 use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\StatusCodeInterface;
 use Throwable;
 
 /**
@@ -39,7 +40,7 @@ final class ClientCredentialsTest extends AcceptanceTestCase
 
         $response = $this->requestMachineToken();
 
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
         $payload = self::json($response);
         self::assertSame('Bearer', $payload['token_type']);
@@ -83,7 +84,7 @@ final class ClientCredentialsTest extends AcceptanceTestCase
             'audience' => self::TEST_M2M_AUDIENCE,
         ]);
 
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
     }
 
     public function testClientRegisteredForBasicCannotPostItsSecret(): void
@@ -97,7 +98,7 @@ final class ClientCredentialsTest extends AcceptanceTestCase
             'audience' => self::TEST_M2M_AUDIENCE,
         ]);
 
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertSame('invalid_client', self::json($response)['error']);
     }
 
@@ -118,7 +119,7 @@ final class ClientCredentialsTest extends AcceptanceTestCase
             body: http_build_query(['grant_type' => 'client_credentials', 'audience' => self::TEST_M2M_AUDIENCE]),
         );
 
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
     }
 
     public function testWrongSecretIsRefused(): void
@@ -127,7 +128,7 @@ final class ClientCredentialsTest extends AcceptanceTestCase
 
         $response = $this->requestMachineToken(credentials: [self::TEST_M2M_CLIENT_ID, 'not-the-secret']);
 
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertSame('invalid_client', self::json($response)['error']);
         self::assertSame(0, TestStorage::database()->fetchValue('SELECT count(*) FROM oauth2_access_tokens'));
     }
@@ -139,7 +140,7 @@ final class ClientCredentialsTest extends AcceptanceTestCase
 
         $response = $this->requestMachineToken(credentials: [self::TEST_M2M_CLIENT_ID, 'not-the-secret']);
 
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertStringStartsWith('Basic realm=', $response->getHeaderLine('WWW-Authenticate'));
     }
 
@@ -147,7 +148,7 @@ final class ClientCredentialsTest extends AcceptanceTestCase
     {
         $response = $this->requestMachineToken(credentials: ['no-such-client', 'irrelevant']);
 
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertSame('invalid_client', self::json($response)['error']);
     }
 
@@ -163,7 +164,7 @@ final class ClientCredentialsTest extends AcceptanceTestCase
             'audience' => self::TEST_M2M_AUDIENCE,
         ]);
 
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertSame('invalid_client', self::json($response)['error']);
     }
 
@@ -188,7 +189,7 @@ final class ClientCredentialsTest extends AcceptanceTestCase
         }
 
         $response = $this->requestMachineToken(credentials: ['mislabelled-client', 'a-real-secret']);
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
     }
 
     public function testClientNotRegisteredForTheGrantIsRefused(): void
@@ -203,7 +204,7 @@ final class ClientCredentialsTest extends AcceptanceTestCase
             'audience' => self::TEST_M2M_AUDIENCE,
         ]);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('unauthorized_client', self::json($response)['error']);
     }
 
@@ -232,7 +233,7 @@ final class ClientCredentialsTest extends AcceptanceTestCase
 
         $response = $this->requestMachineToken(['scope' => 'api:read api:delete']);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('invalid_scope', self::json($response)['error']);
         self::assertSame(0, TestStorage::database()->fetchValue('SELECT count(*) FROM oauth2_access_tokens'));
     }
@@ -244,7 +245,7 @@ final class ClientCredentialsTest extends AcceptanceTestCase
 
         $response = $this->requestMachineToken(['scope' => 'profile']);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('invalid_scope', self::json($response)['error']);
     }
 
@@ -256,7 +257,7 @@ final class ClientCredentialsTest extends AcceptanceTestCase
 
         $response = $this->requestMachineToken(['scope' => 'openid']);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('invalid_scope', self::json($response)['error']);
     }
 
@@ -271,7 +272,7 @@ final class ClientCredentialsTest extends AcceptanceTestCase
 
         $response = $this->request('GET', '/oidc/userinfo', ['Authorization' => 'Bearer ' . $token]);
 
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertSame('invalid_token', self::json($response)['error']);
     }
 
@@ -286,7 +287,7 @@ final class ClientCredentialsTest extends AcceptanceTestCase
             ['response_type' => 'code', 'client_id' => self::TEST_M2M_CLIENT_ID],
         );
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertFalse($response->hasHeader('Location'));
     }
 
@@ -313,7 +314,7 @@ final class ClientCredentialsTest extends AcceptanceTestCase
 
         $response = $this->requestMachineToken(['audience' => null]);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('invalid_request', self::json($response)['error']);
     }
 
@@ -324,7 +325,7 @@ final class ClientCredentialsTest extends AcceptanceTestCase
 
         $response = $this->requestMachineToken(['audience' => 'https://nowhere.test/api/']);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('invalid_target', self::json($response)['error']);
     }
 
@@ -335,7 +336,7 @@ final class ClientCredentialsTest extends AcceptanceTestCase
 
         $response = $this->requestMachineToken(['audience' => 'https://other.test/api/']);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('access_denied', self::json($response)['error']);
     }
 
@@ -346,7 +347,10 @@ final class ClientCredentialsTest extends AcceptanceTestCase
         $this->anApi(self::TEST_M2M_AUDIENCE, ['api:read']);
 
         self::assertSame('api:read', self::json($this->requestMachineToken())['scope']);
-        self::assertSame(400, $this->requestMachineToken(['scope' => 'api:write'])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_BAD_REQUEST,
+            $this->requestMachineToken(['scope' => 'api:write'])->getStatusCode(),
+        );
     }
 
     private static function messages(Throwable $error): string

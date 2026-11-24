@@ -16,6 +16,7 @@ use Clavia\Application\Authentication\Account\ConfirmEmail;
 use Clavia\Application\Authentication\Account\DescribeAccountLink;
 use Clavia\Application\Authentication\Account\EmailConfirmed;
 use Clavia\Domain\Identity\AccountLinkPurpose;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
@@ -59,7 +60,12 @@ final readonly class VerifyEmailHandler implements RequestHandlerInterface
                 $request,
                 $email === null
                     ? AccountPages::invalidLink()
-                    : AccountPages::confirmEmail($email, $token, LoginPages::EXPIRED_FORM, 400),
+                    : AccountPages::confirmEmail(
+                        $email,
+                        $token,
+                        LoginPages::EXPIRED_FORM,
+                        StatusCodeInterface::STATUS_BAD_REQUEST,
+                    ),
             );
         }
 

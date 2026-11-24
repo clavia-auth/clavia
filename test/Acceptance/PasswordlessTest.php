@@ -35,6 +35,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\OidcFixtures;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -74,7 +75,7 @@ final class PasswordlessTest extends AcceptanceTestCase
 
         self::assertStringNotContainsString('Email me a code', (string) $this->get('/auth/login')->getBody());
         $refused = $this->start();
-        self::assertSame(400, $refused->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $refused->getStatusCode());
         self::assertStringContainsString('not available for this application', (string) $refused->getBody());
     }
 
@@ -89,7 +90,7 @@ final class PasswordlessTest extends AcceptanceTestCase
             (string) $this->get('/auth/login', ['state' => $state])->getBody(),
         );
         $refused = $this->start(state: $state);
-        self::assertSame(400, $refused->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $refused->getStatusCode());
         self::assertStringContainsString('not available for this application', (string) $refused->getBody());
         self::assertSame([], $this->outbox()->recent(10), 'Refused, not merely hidden: nothing was sent.');
     }
@@ -100,11 +101,15 @@ final class PasswordlessTest extends AcceptanceTestCase
     {
         $started = $this->start();
 
-        self::assertSame(303, $started->getStatusCode(), (string) $started->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_SEE_OTHER,
+            $started->getStatusCode(),
+            (string) $started->getBody(),
+        );
         self::assertSame('/auth/passwordless/code', $started->getHeaderLine('Location'));
         self::assertNotNull($this->cookie(self::CODE_COOKIE, '/auth'));
         $page = $this->get('/auth/passwordless/code');
-        self::assertSame(200, $page->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $page->getStatusCode());
         self::assertStringContainsString('Check your email', (string) $page->getBody());
         self::assertStringContainsString(self::EMAIL, (string) $page->getBody());
         $mail = $this->lastMail();
@@ -113,7 +118,11 @@ final class PasswordlessTest extends AcceptanceTestCase
 
         $signedIn = $this->submitCode(self::codeIn($mail));
 
-        self::assertSame(303, $signedIn->getStatusCode(), (string) $signedIn->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_SEE_OTHER,
+            $signedIn->getStatusCode(),
+            (string) $signedIn->getBody(),
+        );
         // Nothing to return to: the login page, which says who is signed in.
         self::assertSame(LocalPath::DEFAULT, $signedIn->getHeaderLine('Location'));
         $account = $this->users()->findByEmail(ConnectionName::email(), self::EMAIL);
@@ -150,7 +159,7 @@ final class PasswordlessTest extends AcceptanceTestCase
 
         $signedIn = $this->submitCode(' ' . substr($code, 0, 3) . ' ' . substr($code, 3) . ' ');
 
-        self::assertSame(303, $signedIn->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $signedIn->getStatusCode());
         self::assertNotNull($this->cookie(self::SESSION_COOKIE));
     }
 
@@ -163,15 +172,19 @@ final class PasswordlessTest extends AcceptanceTestCase
 
         foreach ([1, 2] as $attempt) {
             $refused = $this->submitCode($wrong);
-            self::assertSame(401, $refused->getStatusCode(), 'attempt ' . $attempt);
+            self::assertSame(
+                StatusCodeInterface::STATUS_UNAUTHORIZED,
+                $refused->getStatusCode(),
+                'attempt ' . $attempt,
+            );
             self::assertStringContainsString('not valid', (string) $refused->getBody());
         }
         $ended = $this->submitCode($wrong);
-        self::assertSame(303, $ended->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $ended->getStatusCode());
         self::assertSame('/auth/login', $ended->getHeaderLine('Location'));
 
         $dead = $this->submitCode($code);
-        self::assertSame(303, $dead->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $dead->getStatusCode());
         self::assertSame('/auth/login', $dead->getHeaderLine('Location'));
         self::assertNull($this->cookie(self::SESSION_COOKIE));
     }
@@ -186,12 +199,12 @@ final class PasswordlessTest extends AcceptanceTestCase
         $this->clearCookies();
         $elsewhere = $this->submitCode($code);
 
-        self::assertSame(303, $elsewhere->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $elsewhere->getStatusCode());
         self::assertSame('/auth/login', $elsewhere->getHeaderLine('Location'));
         self::assertNull($this->cookie(self::SESSION_COOKIE));
 
         $this->setCookie(self::CODE_COOKIE, $handle, '/auth');
-        self::assertSame(303, $this->submitCode($code)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $this->submitCode($code)->getStatusCode());
         self::assertNotNull($this->cookie(self::SESSION_COOKIE), 'Still alive where it was asked.');
     }
 
@@ -216,7 +229,7 @@ final class PasswordlessTest extends AcceptanceTestCase
     {
         $response = $this->get('/auth/passwordless/code');
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertSame('/auth/login', $response->getHeaderLine('Location'));
     }
 
@@ -225,7 +238,7 @@ final class PasswordlessTest extends AcceptanceTestCase
     public function testALinkSignsInFromAnyBrowser(): void
     {
         $sent = $this->start(mode: 'link');
-        self::assertSame(200, $sent->getStatusCode(), (string) $sent->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $sent->getStatusCode(), (string) $sent->getBody());
         self::assertStringContainsString('Check your email', (string) $sent->getBody());
         $mail = $this->lastMail();
         self::assertStringContainsString('Sign in to', $mail->subject);
@@ -234,7 +247,11 @@ final class PasswordlessTest extends AcceptanceTestCase
         $this->clearCookies();
         $signedIn = $this->confirmLink($token);
 
-        self::assertSame(303, $signedIn->getStatusCode(), (string) $signedIn->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_SEE_OTHER,
+            $signedIn->getStatusCode(),
+            (string) $signedIn->getBody(),
+        );
         $session = $this->session($this->cookie(self::SESSION_COOKIE));
         self::assertSame('email', $session?->connection->value);
         self::assertSame([AuthenticationMethod::OneTimePassword], $session->methods ?? null);
@@ -248,18 +265,22 @@ final class PasswordlessTest extends AcceptanceTestCase
         $opened = $this->get('/auth/passwordless/verify', ['token' => $token]);
         $openedAgain = $this->get('/auth/passwordless/verify', ['token' => $token]);
 
-        self::assertSame(200, $opened->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $opened->getStatusCode());
         self::assertStringContainsString(self::EMAIL, (string) $openedAgain->getBody());
         self::assertStringContainsString('>Sign in</button>', (string) $openedAgain->getBody());
         self::assertNull($this->cookie(self::SESSION_COOKIE));
-        self::assertSame(303, $this->confirmLink($token)->getStatusCode(), 'A preview spent nothing.');
+        self::assertSame(
+            StatusCodeInterface::STATUS_SEE_OTHER,
+            $this->confirmLink($token)->getStatusCode(),
+            'A preview spent nothing.',
+        );
     }
 
     public function testALinkIsSingleUse(): void
     {
         $this->start(mode: 'link');
         $token = self::tokenIn($this->lastMail());
-        self::assertSame(303, $this->confirmLink($token)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $this->confirmLink($token)->getStatusCode());
 
         $this->clearCookies();
         $again = $this->post('/auth/passwordless/verify', [
@@ -267,18 +288,24 @@ final class PasswordlessTest extends AcceptanceTestCase
             'csrf_token' => self::csrfTokenFrom($this->get('/auth/login')),
         ]);
 
-        self::assertSame(400, $again->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $again->getStatusCode());
         self::assertStringContainsString('not valid or has expired', (string) $again->getBody());
-        self::assertSame(400, $this->get('/auth/passwordless/verify', ['token' => $token])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_BAD_REQUEST,
+            $this->get('/auth/passwordless/verify', ['token' => $token])->getStatusCode(),
+        );
     }
 
     public function testAnUnknownLinkIsRefused(): void
     {
         $response = $this->get('/auth/passwordless/verify', ['token' => 'no-such-link']);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertStringContainsString('not valid or has expired', (string) $response->getBody());
-        self::assertSame(400, $this->get('/auth/passwordless/verify')->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_BAD_REQUEST,
+            $this->get('/auth/passwordless/verify')->getStatusCode(),
+        );
     }
 
     public function testTheCodeBrowsersHandleIsNoLink(): void
@@ -289,7 +316,11 @@ final class PasswordlessTest extends AcceptanceTestCase
 
         $response = $this->get('/auth/passwordless/verify', ['token' => $handle]);
 
-        self::assertSame(400, $response->getStatusCode(), 'Holding the cookie is not having read the code.');
+        self::assertSame(
+            StatusCodeInterface::STATUS_BAD_REQUEST,
+            $response->getStatusCode(),
+            'Holding the cookie is not having read the code.',
+        );
     }
 
     // ── Limits and refusals ─────────────────────────────────────────────────────
@@ -298,11 +329,11 @@ final class PasswordlessTest extends AcceptanceTestCase
     {
         $this->boot(['CLAVIA_PASSWORDLESS_SEND_LIMIT' => '2']);
 
-        self::assertSame(303, $this->start()->getStatusCode());
-        self::assertSame(200, $this->start(mode: 'link')->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $this->start()->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $this->start(mode: 'link')->getStatusCode());
         $third = $this->start();
 
-        self::assertSame(429, $third->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_TOO_MANY_REQUESTS, $third->getStatusCode());
         self::assertStringContainsString('Too many', (string) $third->getBody());
         self::assertCount(2, $this->outbox()->recent(10));
     }
@@ -312,9 +343,9 @@ final class PasswordlessTest extends AcceptanceTestCase
         $badAddress = $this->start('not-an-email');
         $badMode = $this->start(mode: 'pigeon');
 
-        self::assertSame(400, $badAddress->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $badAddress->getStatusCode());
         self::assertStringContainsString('Enter the email address', (string) $badAddress->getBody());
-        self::assertSame(400, $badMode->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $badMode->getStatusCode());
         self::assertSame([], $this->outbox()->recent(10));
     }
 
@@ -324,7 +355,7 @@ final class PasswordlessTest extends AcceptanceTestCase
 
         $response = $this->post('/auth/passwordless/start', ['email' => self::EMAIL, 'mode' => 'code']);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame([], $this->outbox()->recent(10));
     }
 
@@ -335,7 +366,7 @@ final class PasswordlessTest extends AcceptanceTestCase
 
         $response = $this->start();
 
-        self::assertSame(503, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SERVICE_UNAVAILABLE, $response->getStatusCode());
         self::assertStringContainsString('not available right now', (string) $response->getBody());
         self::assertNull($this->cookie(self::CODE_COOKIE, '/auth'));
     }
@@ -366,7 +397,7 @@ final class PasswordlessTest extends AcceptanceTestCase
         $this->start();
         $response = $this->submitCode(self::codeIn($this->lastMail()));
 
-        self::assertSame(403, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_FORBIDDEN, $response->getStatusCode());
         self::assertStringContainsString('disabled', (string) $response->getBody());
         self::assertNull($this->cookie(self::SESSION_COOKIE));
     }
@@ -381,7 +412,7 @@ final class PasswordlessTest extends AcceptanceTestCase
         $this->start(state: $state);
         $signedIn = $this->submitCode(self::codeIn($this->lastMail()));
 
-        self::assertSame(303, $signedIn->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $signedIn->getStatusCode());
         self::assertStringStartsWith('/oauth2/authorize?', $signedIn->getHeaderLine('Location'));
         self::assertNull($this->loginState($state), 'The login page handle is spent.');
         $back = $this->get('/oauth2/authorize', self::locationQuery($signedIn));
@@ -419,7 +450,7 @@ final class PasswordlessTest extends AcceptanceTestCase
         $this->start(mode: 'link');
         $response = $this->confirmLink(self::tokenIn($this->lastMail()));
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertSame('/auth/mfa', $response->getHeaderLine('Location'));
         self::assertNotNull($this->cookie('clavia_mfa', '/auth'));
         self::assertNull($this->cookie(self::SESSION_COOKIE));
@@ -434,8 +465,11 @@ final class PasswordlessTest extends AcceptanceTestCase
         $email = self::json($this->api('GET', '/api/v1/connections/email'));
         self::assertSame('passwordless', $email['strategy']);
         self::assertTrue($email['usable']);
-        self::assertSame(409, $this->api('DELETE', '/api/v1/connections/email')->getStatusCode());
-        self::assertSame(422, $this->api('POST', '/api/v1/connections', [
+        self::assertSame(
+            StatusCodeInterface::STATUS_CONFLICT,
+            $this->api('DELETE', '/api/v1/connections/email')->getStatusCode(),
+        );
+        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $this->api('POST', '/api/v1/connections', [
             'name' => 'sms',
             'display_name' => 'SMS',
             'strategy' => 'passwordless',
@@ -475,7 +509,7 @@ final class PasswordlessTest extends AcceptanceTestCase
     private function confirmLink(string $token): ResponseInterface
     {
         $page = $this->get('/auth/passwordless/verify', ['token' => $token]);
-        self::assertSame(200, $page->getStatusCode(), (string) $page->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $page->getStatusCode(), (string) $page->getBody());
 
         return $this->post(
             '/auth/passwordless/verify',
@@ -529,7 +563,11 @@ final class PasswordlessTest extends AcceptanceTestCase
     {
         [, $challenge] = $this->makePkcePair();
         $response = $this->get('/oauth2/authorize', $this->authorizeParams($challenge));
-        self::assertSame(303, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_SEE_OTHER,
+            $response->getStatusCode(),
+            (string) $response->getBody(),
+        );
         $state = self::locationQuery($response)['state'] ?? null;
         self::assertIsString($state);
 

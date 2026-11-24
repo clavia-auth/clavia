@@ -28,6 +28,7 @@ use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
 use DateTimeImmutable;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -106,7 +107,7 @@ final class RefreshTokenTest extends AcceptanceTestCase
 
         $response = $this->refresh((string) $first['refresh_token']);
 
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
         $second = self::json($response);
         self::assertNotSame($first['access_token'], $second['access_token']);
@@ -114,7 +115,10 @@ final class RefreshTokenTest extends AcceptanceTestCase
         self::assertSame($first['scope'], $second['scope']);
         // A refresh renews access, not the sign-in (OIDC Core §12.2).
         self::assertArrayNotHasKey('id_token', $second);
-        self::assertSame(200, $this->userinfo((string) $second['access_token'])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_OK,
+            $this->userinfo((string) $second['access_token'])->getStatusCode(),
+        );
 
         $spent = $this->refreshRow((string) $first['refresh_token']);
         $fresh = $this->refreshRow((string) $second['refresh_token']);
@@ -136,11 +140,17 @@ final class RefreshTokenTest extends AcceptanceTestCase
 
         $replay = $this->refresh((string) $first['refresh_token']);
 
-        self::assertSame(400, $replay->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $replay->getStatusCode());
         self::assertSame('invalid_grant', self::json($replay)['error']);
         self::assertSame('invalid_grant', self::json($this->refresh((string) $second['refresh_token']))['error']);
-        self::assertSame(401, $this->userinfo((string) $first['access_token'])->getStatusCode());
-        self::assertSame(401, $this->userinfo((string) $second['access_token'])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
+            $this->userinfo((string) $first['access_token'])->getStatusCode(),
+        );
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
+            $this->userinfo((string) $second['access_token'])->getStatusCode(),
+        );
         self::assertSame(
             0,
             TestStorage::database()->fetchValue('SELECT count(*) FROM oauth2_refresh_tokens WHERE revoked_at IS NULL'),
@@ -156,7 +166,7 @@ final class RefreshTokenTest extends AcceptanceTestCase
         $first = $this->signIn('openid profile email');
 
         $widened = $this->refresh((string) $first['refresh_token'], 'openid profile email address');
-        self::assertSame(400, $widened->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $widened->getStatusCode());
         self::assertSame('invalid_scope', self::json($widened)['error']);
         // Refused before the token was spent: the session survives over-asking.
         self::assertNull($this->refreshRow((string) $first['refresh_token'])['used_at']);
@@ -220,7 +230,7 @@ final class RefreshTokenTest extends AcceptanceTestCase
         // Holding nothing: refused, and the token is not burnt by it.
         $roles->unassign($role->id, $user->id);
         $refused = $this->refresh((string) $restored['refresh_token']);
-        self::assertSame(400, $refused->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $refused->getStatusCode());
         self::assertSame('invalid_grant', self::json($refused)['error']);
         self::assertNull($this->refreshRow((string) $restored['refresh_token'])['used_at']);
         self::assertTrue($api->enforcePolicies);
@@ -242,7 +252,7 @@ final class RefreshTokenTest extends AcceptanceTestCase
         $clock->advance(601);
         $response = $this->refresh((string) $first['refresh_token']);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('invalid_grant', self::json($response)['error']);
         $stored = $this->refreshRow((string) $first['refresh_token']);
         self::assertNull($stored['used_at']);
@@ -255,7 +265,7 @@ final class RefreshTokenTest extends AcceptanceTestCase
 
         $response = $this->refresh('not-a-token-anyone-issued');
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('invalid_grant', self::json($response)['error']);
     }
 
@@ -275,9 +285,12 @@ final class RefreshTokenTest extends AcceptanceTestCase
             'refresh_token' => (string) $first['refresh_token'],
         ]);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('invalid_grant', self::json($response)['error']);
-        self::assertSame(200, $this->refresh((string) $first['refresh_token'])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_OK,
+            $this->refresh((string) $first['refresh_token'])->getStatusCode(),
+        );
     }
 
     public function testAClientNotRegisteredForTheGrantIsRefused(): void
@@ -288,7 +301,7 @@ final class RefreshTokenTest extends AcceptanceTestCase
 
         $response = $this->refresh('whatever');
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('unauthorized_client', self::json($response)['error']);
     }
 
@@ -302,7 +315,7 @@ final class RefreshTokenTest extends AcceptanceTestCase
 
         $response = $this->refresh((string) $first['refresh_token']);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('invalid_grant', self::json($response)['error']);
     }
 
@@ -318,9 +331,12 @@ final class RefreshTokenTest extends AcceptanceTestCase
 
         $replayed = $this->post('/oauth2/token', $this->tokenRequest($code, $verifier));
 
-        self::assertSame(400, $replayed->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $replayed->getStatusCode());
         self::assertSame('invalid_grant', self::json($this->refresh((string) $second['refresh_token']))['error']);
-        self::assertSame(401, $this->userinfo((string) $second['access_token'])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
+            $this->userinfo((string) $second['access_token'])->getStatusCode(),
+        );
     }
 
     // ── Registration and discovery ─────────────────────────────────────────────
@@ -335,14 +351,18 @@ final class RefreshTokenTest extends AcceptanceTestCase
             'redirect_uris' => ['https://spa.test/callback'],
         ]);
 
-        self::assertSame(422, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
         $accepted = $this->api('POST', '/api/v1/clients', [
             'client_type' => 'public',
             'grant_types' => ['authorization_code', 'refresh_token'],
             'response_types' => ['code'],
             'redirect_uris' => ['https://spa.test/callback'],
         ]);
-        self::assertSame(201, $accepted->getStatusCode(), (string) $accepted->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_CREATED,
+            $accepted->getStatusCode(),
+            (string) $accepted->getBody(),
+        );
     }
 
     public function testDiscoveryAdvertisesTheGrant(): void
@@ -372,7 +392,7 @@ final class RefreshTokenTest extends AcceptanceTestCase
         [$verifier, $challenge] = $this->makePkcePair();
         $code = $this->authorizeAndGetCode($challenge, ['scope' => $scope, 'audience' => $audience]);
         $response = $this->post('/oauth2/token', $this->tokenRequest($code, $verifier));
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
 
         return self::json($response);
     }

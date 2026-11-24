@@ -42,6 +42,7 @@ use ClaviaTest\Support\LoginFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\SoftwareAuthenticator;
 use DateTimeImmutable;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -92,7 +93,11 @@ final class PasskeySignInTest extends AcceptanceTestCase
 
         $signedIn = $this->signInWithPasskey($authenticator, $state, $user->id);
 
-        self::assertSame(303, $signedIn->getStatusCode(), (string) $signedIn->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_SEE_OTHER,
+            $signedIn->getStatusCode(),
+            (string) $signedIn->getBody(),
+        );
         self::assertSame('/oauth2/authorize?resume', $signedIn->getHeaderLine('Location'));
         self::assertSame(['swk', 'mfa'], $this->methods());
         self::assertNull($this->loginState($state), 'The handle has done its job.');
@@ -107,7 +112,11 @@ final class PasskeySignInTest extends AcceptanceTestCase
 
         $signedIn = $this->signInWithPasskey($authenticator, null, $user->id);
 
-        self::assertSame(303, $signedIn->getStatusCode(), (string) $signedIn->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_SEE_OTHER,
+            $signedIn->getStatusCode(),
+            (string) $signedIn->getBody(),
+        );
         self::assertSame(['hwk', 'mfa'], $this->methods());
     }
 
@@ -119,7 +128,7 @@ final class PasskeySignInTest extends AcceptanceTestCase
 
         $refused = $this->signInWithPasskey($authenticator, null, $user->id, userVerified: false);
 
-        self::assertSame(401, $refused->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $refused->getStatusCode());
         self::assertNull($this->cookie(self::SESSION_COOKIE));
     }
 
@@ -133,7 +142,7 @@ final class PasskeySignInTest extends AcceptanceTestCase
 
         $signIn = $this->signInWithPasskey($authenticator, null, $user->id);
 
-        self::assertSame(303, $signIn->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $signIn->getStatusCode());
         self::assertSame('/auth/mfa', $signIn->getHeaderLine('Location'));
         self::assertNull($this->cookie(self::SESSION_COOKIE));
         self::assertNotNull($this->cookie('clavia_mfa'));
@@ -157,7 +166,7 @@ final class PasskeySignInTest extends AcceptanceTestCase
             'csrf_token' => self::csrfTokenFrom($page),
         ]);
 
-        self::assertSame(401, $again->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $again->getStatusCode());
         self::assertNull($this->cookie(self::SESSION_COOKIE));
     }
 
@@ -198,7 +207,7 @@ final class PasskeySignInTest extends AcceptanceTestCase
 
         $refused = $this->signInWithPasskey($answering, $state, $handle, origin: $origin);
 
-        self::assertSame(401, $refused->getStatusCode(), $case);
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $refused->getStatusCode(), $case);
         self::assertStringContainsString(LoginPages::INVALID_CREDENTIALS, (string) $refused->getBody());
         self::assertStringContainsString('data-webauthn-get', (string) $refused->getBody(), 'A fresh ceremony.');
         self::assertNull($this->cookie(self::SESSION_COOKIE));
@@ -226,7 +235,7 @@ final class PasskeySignInTest extends AcceptanceTestCase
             'state' => '',
             'csrf_token' => self::csrfTokenFrom($page),
         ];
-        self::assertSame(303, $this->post('/auth/passkey', $form)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $this->post('/auth/passkey', $form)->getStatusCode());
         $this->clearCookies();
 
         $replayed = $this->request('POST', '/auth/passkey', [
@@ -234,7 +243,7 @@ final class PasskeySignInTest extends AcceptanceTestCase
             'Cookie' => 'clavia_webauthn=' . ($ceremony ?? '') . '; clavia_csrf=' . $form['csrf_token'],
         ], body: http_build_query($form));
 
-        self::assertSame(401, $replayed->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $replayed->getStatusCode());
     }
 
     public function testTheClientAddressIsThrottled(): void
@@ -250,7 +259,11 @@ final class PasskeySignInTest extends AcceptanceTestCase
 
         $genuine = $this->signInWithPasskey($authenticator, null, $user->id);
 
-        self::assertSame(401, $genuine->getStatusCode(), 'Throttled before the passkey is looked at.');
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
+            $genuine->getStatusCode(),
+            'Throttled before the passkey is looked at.',
+        );
         self::assertContains('throttled', array_map(
             static fn (AuditEvent $event): mixed => $event->details['reason'] ?? null,
             $this->audited(AuditEventType::SignInFailed),
@@ -261,7 +274,7 @@ final class PasskeySignInTest extends AcceptanceTestCase
     {
         $this->boot(['CLAVIA_PASSKEYS_ENABLED' => 'false']);
 
-        self::assertSame(404, $this->post('/auth/passkey', [])->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $this->post('/auth/passkey', [])->getStatusCode());
         self::assertStringNotContainsString('data-webauthn', (string) $this->get('/auth/login')->getBody());
     }
 
@@ -276,7 +289,7 @@ final class PasskeySignInTest extends AcceptanceTestCase
         ?string $origin = null,
     ): ResponseInterface {
         $page = $this->get('/auth/login', $state === null ? [] : ['state' => $state]);
-        self::assertSame(200, $page->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $page->getStatusCode());
 
         return $this->post('/auth/passkey', [
             'credential' => $authenticator->authenticate(

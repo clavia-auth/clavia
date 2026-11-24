@@ -28,6 +28,7 @@ use ClaviaTest\Support\LoginFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\OidcFixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestInterface;
@@ -70,10 +71,10 @@ final class SocialLoginTest extends AcceptanceTestCase
     {
         $this->bootWithProviders([]);
 
-        self::assertSame(404, $this->get('/auth/social/google')->getStatusCode());
-        self::assertSame(404, $this->get('/auth/social/nope')->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $this->get('/auth/social/google')->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $this->get('/auth/social/nope')->getStatusCode());
         self::assertSame(
-            404,
+            StatusCodeInterface::STATUS_NOT_FOUND,
             $this->get('/auth/social/google/callback', ['code' => 'c', 'state' => 's'])->getStatusCode(),
         );
         self::assertStringNotContainsString('Continue with', (string) $this->get('/auth/login')->getBody());
@@ -98,7 +99,7 @@ final class SocialLoginTest extends AcceptanceTestCase
 
         $response = $this->get('/auth/social/google');
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         $location = $response->getHeaderLine('Location');
         self::assertStringStartsWith(GoogleIdentityProvider::AUTHORIZATION_ENDPOINT . '?', $location);
         parse_str((string) parse_url($location, PHP_URL_QUERY), $query);
@@ -124,7 +125,11 @@ final class SocialLoginTest extends AcceptanceTestCase
 
         $response = $this->finish($this->start());
 
-        self::assertSame(303, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_SEE_OTHER,
+            $response->getStatusCode(),
+            (string) $response->getBody(),
+        );
         self::assertSame('/auth/login', $response->getHeaderLine('Location'));
         $session = $this->session($this->cookie(self::SESSION_COOKIE));
         self::assertNotNull($session);
@@ -190,7 +195,11 @@ final class SocialLoginTest extends AcceptanceTestCase
         self::assertTrue($this->session($this->cookie(self::SESSION_COOKIE))?->userId->equals($user->id));
         self::assertTrue($this->users()->find($user->id)?->isEmailVerified());
         $this->post('/auth/logout');
-        self::assertSame(303, $this->submitLogin()->getStatusCode(), 'The password still works alongside.');
+        self::assertSame(
+            StatusCodeInterface::STATUS_SEE_OTHER,
+            $this->submitLogin()->getStatusCode(),
+            'The password still works alongside.',
+        );
     }
 
     public function testAnUnverifiedAddressLinksNothingAndCreatesNothing(): void
@@ -201,7 +210,7 @@ final class SocialLoginTest extends AcceptanceTestCase
 
         $response = $this->finish($this->start());
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertStringContainsString('no verified email', (string) $response->getBody());
         self::assertNull($this->cookie(self::SESSION_COOKIE));
         self::assertSame([], $this->identities());
@@ -216,7 +225,7 @@ final class SocialLoginTest extends AcceptanceTestCase
 
         $response = $this->finish($this->start());
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertStringContainsString('Sign in with your password', (string) $response->getBody());
         self::assertNull($this->cookie(self::SESSION_COOKIE));
     }
@@ -234,7 +243,7 @@ final class SocialLoginTest extends AcceptanceTestCase
 
         $response = $this->finish($state);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertStringContainsString('did not start in this browser', (string) $response->getBody());
         self::assertNull($this->cookie(self::SESSION_COOKIE));
         self::assertSame([], $this->wire->requests, 'Nothing was exchanged.');
@@ -244,13 +253,13 @@ final class SocialLoginTest extends AcceptanceTestCase
     {
         $this->bootWithProviders(['google']);
         $state = $this->start();
-        self::assertSame(303, $this->finish($state)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $this->finish($state)->getStatusCode());
         $this->post('/auth/logout');
         $this->setCookie(self::STATE_COOKIE, $state, '/auth');
 
         $replay = $this->finish($state);
 
-        self::assertSame(400, $replay->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $replay->getStatusCode());
         self::assertStringContainsString('expired', (string) $replay->getBody());
     }
 
@@ -266,7 +275,7 @@ final class SocialLoginTest extends AcceptanceTestCase
         ]);
 
         $body = (string) $response->getBody();
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertStringNotContainsString('onerror', $body);
         self::assertStringNotContainsString('evil.example', $body);
         self::assertStringContainsString('Sign-in with Google was cancelled or failed.', $body);
@@ -278,11 +287,16 @@ final class SocialLoginTest extends AcceptanceTestCase
     public function testAFailedExchangeIsReportedGenericallyAndLogged(): void
     {
         $this->bootWithProviders(['google']);
-        $this->wire->answerWith(static fn (): ResponseInterface => new JsonResponse(['error' => 'server_error'], 500));
+        $this->wire->answerWith(
+            static fn (): ResponseInterface => new JsonResponse(
+                ['error' => 'server_error'],
+                StatusCodeInterface::STATUS_INTERNAL_SERVER_ERROR,
+            ),
+        );
 
         $response = $this->finish($this->start());
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertStringContainsString('Could not complete sign-in with Google.', (string) $response->getBody());
         self::assertTrue($this->logger->hasRecordContaining('answered 500'));
     }
@@ -306,7 +320,7 @@ final class SocialLoginTest extends AcceptanceTestCase
 
         $response = $this->finish($this->start($loginHandle));
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertStringStartsWith('/oauth2/authorize?', $response->getHeaderLine('Location'));
         self::assertStringContainsString('code_challenge', $response->getHeaderLine('Location'));
         self::assertNull($this->loginState($loginHandle), 'The login page handle is spent.');
@@ -321,7 +335,7 @@ final class SocialLoginTest extends AcceptanceTestCase
 
         $response = $this->finish($this->start());
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertSame('/auth/mfa', $response->getHeaderLine('Location'));
         self::assertNotNull($this->cookie('clavia_mfa'));
         self::assertNull($this->cookie(self::SESSION_COOKIE));
@@ -368,7 +382,11 @@ final class SocialLoginTest extends AcceptanceTestCase
 
         $response = $this->get('/auth/social/github/callback', ['code' => 'c', 'state' => $state]);
 
-        self::assertSame(303, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_SEE_OTHER,
+            $response->getStatusCode(),
+            (string) $response->getBody(),
+        );
         self::assertSame([['github', '4242']], $this->identities());
         self::assertNotNull($this->users()->findByEmail(ConnectionName::fromString('github'), 'me@clavia.dev'));
     }
@@ -394,7 +412,11 @@ final class SocialLoginTest extends AcceptanceTestCase
     private function start(?string $loginHandle = null): string
     {
         $response = $this->get('/auth/social/google', $loginHandle === null ? [] : ['state' => $loginHandle]);
-        self::assertSame(303, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_SEE_OTHER,
+            $response->getStatusCode(),
+            (string) $response->getBody(),
+        );
         parse_str((string) parse_url($response->getHeaderLine('Location'), PHP_URL_QUERY), $query);
         $state = $query['state'] ?? null;
         self::assertIsString($state);
@@ -416,7 +438,7 @@ final class SocialLoginTest extends AcceptanceTestCase
             GoogleIdentityProvider::TOKEN_ENDPOINT => new JsonResponse(['access_token' => 'provider-token']),
             GoogleIdentityProvider::USERINFO_ENDPOINT => $authorised
                 ? new JsonResponse($this->claims)
-                : new JsonResponse([], 401),
+                : new JsonResponse([], StatusCodeInterface::STATUS_UNAUTHORIZED),
         ])($request);
     }
 

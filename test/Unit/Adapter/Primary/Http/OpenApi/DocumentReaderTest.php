@@ -14,6 +14,7 @@ namespace ClaviaTest\Unit\Adapter\Primary\Http\OpenApi;
 use Clavia\Adapter\Primary\Http\OpenApi\Document;
 use Clavia\Adapter\Primary\Http\OpenApi\InvalidDocument;
 use Clavia\Adapter\Primary\Http\OpenApi\ParameterLocation;
+use Fig\Http\Message\StatusCodeInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -61,8 +62,8 @@ final class DocumentReaderTest extends TestCase
         // …and `security: []` means none at all.
         self::assertSame([], $put->security);
         self::assertTrue($put->requestBody?->required);
-        self::assertNotNull($put->responses->for(500));
-        self::assertNull($get->responses->for(404));
+        self::assertNotNull($put->responses->for(StatusCodeInterface::STATUS_INTERNAL_SERVER_ERROR));
+        self::assertNull($get->responses->for(StatusCodeInterface::STATUS_NOT_FOUND));
     }
 
     public function testHeadersTheSpecificationSaysToIgnoreAreIgnored(): void

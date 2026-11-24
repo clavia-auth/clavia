@@ -23,6 +23,7 @@ use Clavia\Domain\Shared\ScopeSet;
 use ClaviaTest\Support\AcceptanceTestCase;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\StatusCodeInterface;
 use Symfony\Component\Console\Tester\CommandTester;
 
 /**
@@ -103,6 +104,6 @@ final class PurgeUnusedClientsTest extends AcceptanceTestCase
 
         $token = $this->post('/oauth2/token', $this->tokenRequest($code, $verifier, $overrides));
 
-        self::assertSame(200, $token->getStatusCode(), (string) $token->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $token->getStatusCode(), (string) $token->getBody());
     }
 }

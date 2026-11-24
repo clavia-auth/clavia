@@ -17,6 +17,7 @@ use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Shared\Url;
 use ClaviaTest\Support\Fake\FakeHttpClient;
 use ClaviaTest\Support\RecordingLogger;
+use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\RequestFactory;
 use Laminas\Diactoros\Response\EmptyResponse;
 use Laminas\Diactoros\StreamFactory;
@@ -31,7 +32,9 @@ final class HttpBackChannelLogoutDeliveryTest extends TestCase
     #[\Override]
     protected function setUp(): void
     {
-        $this->http = new FakeHttpClient(static fn (): ResponseInterface => new EmptyResponse(200));
+        $this->http = new FakeHttpClient(
+            static fn (): ResponseInterface => new EmptyResponse(StatusCodeInterface::STATUS_OK),
+        );
         $this->logger = new RecordingLogger();
     }
 
@@ -62,7 +65,9 @@ final class HttpBackChannelLogoutDeliveryTest extends TestCase
 
     public function testARefusalIsLoggedWithoutTheToken(): void
     {
-        $this->http->answerWith(static fn (): ResponseInterface => new EmptyResponse(400));
+        $this->http->answerWith(
+            static fn (): ResponseInterface => new EmptyResponse(StatusCodeInterface::STATUS_BAD_REQUEST),
+        );
 
         $this->delivery()->deliver(
             ClientId::fromString('spa'),

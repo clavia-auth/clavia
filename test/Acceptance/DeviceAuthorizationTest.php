@@ -33,6 +33,7 @@ use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\OidcFixtures;
 use DateTimeImmutable;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -66,7 +67,7 @@ final class DeviceAuthorizationTest extends AcceptanceTestCase
 
         $response = $this->requestCode();
 
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
         $body = self::json($response);
         self::assertIsString($body['device_code']);
@@ -88,7 +89,7 @@ final class DeviceAuthorizationTest extends AcceptanceTestCase
 
         $response = $this->post('/oauth2/device/code', ['client_id' => self::TEST_CLIENT_ID, 'scope' => 'openid']);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('unauthorized_client', self::json($response)['error']);
     }
 
@@ -96,7 +97,7 @@ final class DeviceAuthorizationTest extends AcceptanceTestCase
     {
         $response = $this->post('/oauth2/device/code', ['client_id' => 'nobody', 'scope' => 'openid']);
 
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertSame('invalid_client', self::json($response)['error']);
     }
 
@@ -106,14 +107,17 @@ final class DeviceAuthorizationTest extends AcceptanceTestCase
         $this->deviceClient();
 
         $refused = $this->requestCode('openid api:delete', self::TEST_M2M_AUDIENCE);
-        self::assertSame(400, $refused->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $refused->getStatusCode());
         self::assertSame('invalid_scope', self::json($refused)['error']);
 
         self::assertSame(
             'invalid_target',
             self::json($this->requestCode('openid', 'https://nothing.test/'))['error'],
         );
-        self::assertSame(200, $this->requestCode('openid api:read', self::TEST_M2M_AUDIENCE)->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_OK,
+            $this->requestCode('openid api:read', self::TEST_M2M_AUDIENCE)->getStatusCode(),
+        );
     }
 
     public function testThirdPartyApplicationsCannotRegisterForTheGrant(): void
@@ -125,13 +129,13 @@ final class DeviceAuthorizationTest extends AcceptanceTestCase
             'grant_types' => [self::GRANT],
             'is_first_party' => false,
         ]);
-        self::assertSame(422, $refused->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $refused->getStatusCode());
 
         $allowed = $this->api('POST', '/api/v1/clients', [
             'client_type' => 'public',
             'grant_types' => [self::GRANT, 'refresh_token'],
         ]);
-        self::assertSame(201, $allowed->getStatusCode(), (string) $allowed->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_CREATED, $allowed->getStatusCode(), (string) $allowed->getBody());
     }
 
     // ── Polling ─────────────────────────────────────────────────────────────────
@@ -143,7 +147,7 @@ final class DeviceAuthorizationTest extends AcceptanceTestCase
 
         $response = $this->poll($codes['device_code']);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('authorization_pending', self::json($response)['error']);
     }
 
@@ -192,7 +196,7 @@ final class DeviceAuthorizationTest extends AcceptanceTestCase
 
         $response = $this->poll('never-issued');
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('invalid_grant', self::json($response)['error']);
     }
 
@@ -211,7 +215,7 @@ final class DeviceAuthorizationTest extends AcceptanceTestCase
     {
         $response = $this->get('/auth/device', ['user_code' => 'BCDF-GHJK']);
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertStringStartsWith('/auth/login?state=', $response->getHeaderLine('Location'));
         $state = self::locationQuery($response)['state'] ?? null;
         self::assertIsString($state);
@@ -224,7 +228,7 @@ final class DeviceAuthorizationTest extends AcceptanceTestCase
 
         $page = $this->get('/auth/device');
 
-        self::assertSame(200, $page->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $page->getStatusCode());
         self::assertStringContainsString('name="user_code"', (string) $page->getBody());
     }
 
@@ -235,7 +239,7 @@ final class DeviceAuthorizationTest extends AcceptanceTestCase
         foreach (['ZZZZ-ZZZZ', 'not a code'] as $typed) {
             $page = $this->get('/auth/device', ['user_code' => $typed]);
 
-            self::assertSame(400, $page->getStatusCode());
+            self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $page->getStatusCode());
             self::assertStringContainsString('not valid or has expired', (string) $page->getBody());
         }
     }
@@ -249,11 +253,14 @@ final class DeviceAuthorizationTest extends AcceptanceTestCase
         $codes = $this->codes();
 
         foreach (['BCDF-GHJK', 'BCDF-GHJL', 'BCDF-GHJM'] as $guess) {
-            self::assertSame(400, $this->get('/auth/device', ['user_code' => $guess])->getStatusCode());
+            self::assertSame(
+                StatusCodeInterface::STATUS_BAD_REQUEST,
+                $this->get('/auth/device', ['user_code' => $guess])->getStatusCode(),
+            );
         }
         $page = $this->get('/auth/device', ['user_code' => $codes['user_code']]);
 
-        self::assertSame(429, $page->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_TOO_MANY_REQUESTS, $page->getStatusCode());
         self::assertStringContainsString('Too many codes were not valid', (string) $page->getBody());
         self::assertStringNotContainsString('Living-room TV', (string) $page->getBody(), 'Nothing is looked up.');
     }
@@ -267,7 +274,7 @@ final class DeviceAuthorizationTest extends AcceptanceTestCase
 
         $page = $this->get('/auth/device', ['user_code' => $codes['user_code']]);
 
-        self::assertSame(200, $page->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $page->getStatusCode());
         $body = html_entity_decode((string) $page->getBody());
         self::assertStringContainsString('Living-room TV', $body);
         self::assertStringContainsString('Sign you in and know who you are', $body);
@@ -286,7 +293,7 @@ final class DeviceAuthorizationTest extends AcceptanceTestCase
 
         $page = $this->get('/auth/device', ['user_code' => $typed]);
 
-        self::assertSame(200, $page->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $page->getStatusCode());
         self::assertStringContainsString('Living-room TV', (string) $page->getBody());
     }
 
@@ -297,11 +304,11 @@ final class DeviceAuthorizationTest extends AcceptanceTestCase
         $codes = $this->codes('openid profile');
 
         $done = $this->approve($codes['user_code']);
-        self::assertSame(200, $done->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $done->getStatusCode());
         self::assertStringContainsString('Device connected', (string) $done->getBody());
 
         $token = $this->poll($codes['device_code']);
-        self::assertSame(200, $token->getStatusCode(), (string) $token->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $token->getStatusCode(), (string) $token->getBody());
         $body = self::json($token);
         self::assertIsString($body['access_token']);
         self::assertIsString($body['refresh_token'], 'Registered for refresh tokens.');
@@ -335,7 +342,7 @@ final class DeviceAuthorizationTest extends AcceptanceTestCase
             'refresh_token' => $refreshToken,
         ]);
 
-        self::assertSame(200, $refreshed->getStatusCode(), (string) $refreshed->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $refreshed->getStatusCode(), (string) $refreshed->getBody());
     }
 
     public function testRefusalReachesTheDevice(): void
@@ -371,12 +378,19 @@ final class DeviceAuthorizationTest extends AcceptanceTestCase
         $codes = $this->codes();
         $this->approve($codes['user_code']);
 
-        self::assertSame(400, $this->get('/auth/device', ['user_code' => $codes['user_code']])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_BAD_REQUEST,
+            $this->get('/auth/device', ['user_code' => $codes['user_code']])->getStatusCode(),
+        );
         self::assertStringContainsString(
             'not valid or has expired',
             (string) $this->decide($codes['user_code'], 'deny')->getBody(),
         );
-        self::assertSame(200, $this->poll($codes['device_code'])->getStatusCode(), 'Still approved.');
+        self::assertSame(
+            StatusCodeInterface::STATUS_OK,
+            $this->poll($codes['device_code'])->getStatusCode(),
+            'Still approved.',
+        );
     }
 
     public function testAFormWithoutItsCsrfTokenDecidesNothing(): void
@@ -391,7 +405,7 @@ final class DeviceAuthorizationTest extends AcceptanceTestCase
             'csrf_token' => 'forged',
         ]);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('authorization_pending', self::json($this->poll($codes['device_code']))['error']);
     }
 
@@ -432,19 +446,19 @@ final class DeviceAuthorizationTest extends AcceptanceTestCase
     {
         // Signed in with a password; the device's application allows Google only.
         $this->user();
-        self::assertSame(303, $this->submitLogin()->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $this->submitLogin()->getStatusCode());
         $this->deviceClient(connections: ['google']);
         $codes = $this->codes();
 
         $page = $this->get('/auth/device', ['user_code' => $codes['user_code']]);
-        self::assertSame(200, $page->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $page->getStatusCode());
         $response = $this->post('/auth/device', [
             'csrf_token' => self::csrfTokenFrom($page),
             'user_code' => $codes['user_code'],
             'decision' => 'allow',
         ]);
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertStringStartsWith('/auth/login?state=', $response->getHeaderLine('Location'));
         $state = self::locationQuery($response)['state'] ?? null;
         self::assertIsString($state);
@@ -513,7 +527,7 @@ final class DeviceAuthorizationTest extends AcceptanceTestCase
     private function codes(string $scope = 'openid profile', ?string $audience = null): array
     {
         $response = $this->requestCode($scope, $audience);
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         $body = self::json($response);
         $deviceCode = $body['device_code'] ?? null;
         $userCode = $body['user_code'] ?? null;
@@ -536,7 +550,7 @@ final class DeviceAuthorizationTest extends AcceptanceTestCase
     private function approve(string $userCode, string $decision = 'allow'): ResponseInterface
     {
         $page = $this->get('/auth/device', ['user_code' => $userCode]);
-        self::assertSame(200, $page->getStatusCode(), (string) $page->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $page->getStatusCode(), (string) $page->getBody());
 
         return $this->post('/auth/device', [
             'csrf_token' => self::csrfTokenFrom($page),

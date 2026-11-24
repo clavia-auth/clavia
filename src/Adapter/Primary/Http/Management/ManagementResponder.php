@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Management;
 
+use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
@@ -35,7 +36,7 @@ final readonly class ManagementResponder
     /**
      * @param array<string, mixed> $document
      */
-    public function json(array $document, int $status = 200): ResponseInterface
+    public function json(array $document, int $status = StatusCodeInterface::STATUS_OK): ResponseInterface
     {
         return new JsonResponse($document, $status, self::NO_STORE, self::JSON_FLAGS);
     }
@@ -48,7 +49,7 @@ final readonly class ManagementResponder
      */
     public function jsonList(array $items): ResponseInterface
     {
-        return new JsonResponse($items, 200, self::NO_STORE, self::JSON_FLAGS);
+        return new JsonResponse($items, StatusCodeInterface::STATUS_OK, self::NO_STORE, self::JSON_FLAGS);
     }
 
     /**
@@ -57,7 +58,7 @@ final readonly class ManagementResponder
      */
     public function created(array $document, string $location): ResponseInterface
     {
-        return $this->json($document, 201)->withHeader('Location', $location);
+        return $this->json($document, StatusCodeInterface::STATUS_CREATED)->withHeader('Location', $location);
     }
 
     /**
@@ -65,7 +66,7 @@ final readonly class ManagementResponder
      */
     public function ndjson(string $content, string $filename): ResponseInterface
     {
-        $response = $this->responses->createResponse(200)
+        $response = $this->responses->createResponse(StatusCodeInterface::STATUS_OK)
             ->withHeader('Content-Type', 'application/x-ndjson')
             ->withHeader('Content-Disposition', sprintf('attachment; filename="%s"', $filename))
             ->withHeader('Cache-Control', 'no-store');
@@ -76,7 +77,9 @@ final readonly class ManagementResponder
 
     public function noContent(): ResponseInterface
     {
-        return $this->responses->createResponse(204)->withHeader('Cache-Control', 'no-store');
+        return $this->responses->createResponse(
+            StatusCodeInterface::STATUS_NO_CONTENT,
+        )->withHeader('Cache-Control', 'no-store');
     }
 
     public function problem(Problem $problem): ResponseInterface

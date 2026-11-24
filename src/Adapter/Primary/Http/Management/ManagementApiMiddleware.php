@@ -24,6 +24,7 @@ use Clavia\Domain\OAuth2\BearerTokenError;
 use Clavia\Domain\ResourceServer\SystemApiProtected;
 use Clavia\Domain\Shared\AlreadyExists;
 use Clavia\Domain\Shared\InvalidValue;
+use Fig\Http\Message\StatusCodeInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -104,11 +105,15 @@ final readonly class ManagementApiMiddleware implements MiddlewareInterface
         try {
             return $handler->handle(new ManagementRequest($caller, $validated, $body)->attachTo($request));
         } catch (NotFound $refusal) {
-            return $this->responder->problem(new Problem(404, $refusal->getMessage()));
+            return $this->responder->problem(
+                new Problem(StatusCodeInterface::STATUS_NOT_FOUND, $refusal->getMessage()),
+            );
         } catch (Conflict | AlreadyExists | SystemApiProtected | BuiltInConnection $refusal) {
-            return $this->responder->problem(new Problem(409, $refusal->getMessage()));
+            return $this->responder->problem(new Problem(StatusCodeInterface::STATUS_CONFLICT, $refusal->getMessage()));
         } catch (InvalidValue $refusal) {
-            return $this->responder->problem(new Problem(422, $refusal->getMessage()));
+            return $this->responder->problem(
+                new Problem(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $refusal->getMessage()),
+            );
         }
     }
 }

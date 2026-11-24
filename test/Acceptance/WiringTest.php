@@ -31,6 +31,7 @@ use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\RandomSource;
 use ClaviaTest\Support\AcceptanceTestCase;
 use DateTimeImmutable;
+use Fig\Http\Message\StatusCodeInterface;
 use GuzzleHttp\Client;
 use GuzzleHttp\RequestOptions;
 use Laminas\ServiceManager\Exception\ServiceNotCreatedException;
@@ -161,7 +162,7 @@ final class WiringTest extends AcceptanceTestCase
             'CLAVIA_REDIS_URL' => 'redis://127.0.0.1:1/1',
         ]);
 
-        self::assertSame(200, $this->get('/healthz')->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $this->get('/healthz')->getStatusCode());
     }
 
     private static function social(string $name): Connection

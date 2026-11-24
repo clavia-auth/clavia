@@ -30,6 +30,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\StatusCodeInterface;
 use Mezzio\Router\RouteCollector;
 
 /**
@@ -62,7 +63,7 @@ final class ManagementApiTest extends AcceptanceTestCase
         // RFC 6750 §3.1: a request carrying nothing gets a challenge, not a diagnosis.
         $response = $this->api('GET', self::USERS);
 
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertSame('Bearer realm="' . self::MANAGEMENT_API . '"', $response->getHeaderLine('WWW-Authenticate'));
         self::assertSame([], self::document($response));
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
@@ -72,7 +73,7 @@ final class ManagementApiTest extends AcceptanceTestCase
     {
         $response = $this->api('GET', self::USERS, token: 'not-a-real-token');
 
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertSame('invalid_token', self::document($response)['error']);
         self::assertStringContainsString('error="invalid_token"', $response->getHeaderLine('WWW-Authenticate'));
     }
@@ -81,7 +82,7 @@ final class ManagementApiTest extends AcceptanceTestCase
     {
         $response = $this->api('GET', self::USERS, headers: ['Authorization' => 'Bearer two words']);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('invalid_request', self::document($response)['error']);
     }
 
@@ -96,7 +97,7 @@ final class ManagementApiTest extends AcceptanceTestCase
 
         $response = $this->api('GET', self::USERS, token: $token);
 
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertSame('invalid_token', self::document($response)['error']);
     }
 
@@ -118,7 +119,10 @@ final class ManagementApiTest extends AcceptanceTestCase
             ],
         );
 
-        self::assertSame(401, $this->api('GET', self::USERS, token: 'issued-for-no-api')->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
+            $this->api('GET', self::USERS, token: 'issued-for-no-api')->getStatusCode(),
+        );
     }
 
     public function testRevokedTokenIsRefused(): void
@@ -129,7 +133,7 @@ final class ManagementApiTest extends AcceptanceTestCase
             ['hash' => Digest::of($token)->toString()],
         );
 
-        self::assertSame(401, $this->api('GET', self::USERS)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $this->api('GET', self::USERS)->getStatusCode());
     }
 
     public function testMissingScopeIsRefusedWithTheScopeNamed(): void
@@ -138,7 +142,7 @@ final class ManagementApiTest extends AcceptanceTestCase
 
         $response = $this->api('GET', self::USERS);
 
-        self::assertSame(403, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_FORBIDDEN, $response->getStatusCode());
         self::assertSame('insufficient_scope', self::document($response)['error']);
         self::assertStringContainsString('scope="read:users"', $response->getHeaderLine('WWW-Authenticate'));
     }
@@ -150,7 +154,7 @@ final class ManagementApiTest extends AcceptanceTestCase
 
         $response = $this->api('POST', self::USERS, rawBody: '{not json');
 
-        self::assertSame(403, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_FORBIDDEN, $response->getStatusCode());
     }
 
     public function testSessionCookieIsNotAccepted(): void
@@ -160,12 +164,12 @@ final class ManagementApiTest extends AcceptanceTestCase
         // origin, which is what makes CSRF possible; a bearer token has to be put there
         // deliberately by code holding it.
         $this->user();
-        self::assertSame(303, $this->submitLogin()->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $this->submitLogin()->getStatusCode());
         self::assertNotNull($this->cookie('clavia_session'));
 
         $response = $this->api('GET', self::USERS);
 
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertStringStartsWith('Bearer', $response->getHeaderLine('WWW-Authenticate'));
     }
 
@@ -175,7 +179,12 @@ final class ManagementApiTest extends AcceptanceTestCase
         // up in access logs, referrers and browser history.
         $token = $this->adminToken();
 
-        self::assertSame(401, $this->api('GET', self::USERS, query: ['access_token' => $token], token: '')
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $this->api(
+            'GET',
+            self::USERS,
+            query: ['access_token' => $token],
+            token: '',
+        )
             ->getStatusCode());
     }
 
@@ -188,13 +197,13 @@ final class ManagementApiTest extends AcceptanceTestCase
             'UPDATE oauth2_access_tokens SET user_id = :user_id WHERE token_hash = :hash',
             ['user_id' => $user->id->value, 'hash' => Digest::of($token)->toString()],
         );
-        self::assertSame(200, $this->api('GET', self::USERS)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $this->api('GET', self::USERS)->getStatusCode());
 
         TestStorage::database()->execute('UPDATE users SET is_active = false WHERE id = :id', [
             'id' => $user->id->value,
         ]);
 
-        self::assertSame(401, $this->api('GET', self::USERS)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $this->api('GET', self::USERS)->getStatusCode());
     }
 
     public function testManagementScopesAreTheApisPermissions(): void
@@ -219,7 +228,7 @@ final class ManagementApiTest extends AcceptanceTestCase
 
             $response = $this->api($operation->method, $path, token: '');
 
-            self::assertSame(401, $response->getStatusCode(), (string) $operation);
+            self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode(), (string) $operation);
         }
     }
 
@@ -253,7 +262,7 @@ final class ManagementApiTest extends AcceptanceTestCase
 
         $response = $this->api('GET', self::USERS . '?page=1&page=2');
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('application/problem+json', $response->getHeaderLine('Content-Type'));
         self::assertSame(
             [['parameter' => 'page', 'detail' => 'Is sent more than once.']],
@@ -267,7 +276,7 @@ final class ManagementApiTest extends AcceptanceTestCase
 
         $response = $this->api('POST', self::USERS, headers: ['Content-Type' => 'text/plain'], rawBody: 'hello');
 
-        self::assertSame(415, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNSUPPORTED_MEDIA_TYPE, $response->getStatusCode());
     }
 
     public function testMalformedJsonIsABadRequest(): void
@@ -276,11 +285,11 @@ final class ManagementApiTest extends AcceptanceTestCase
 
         $response = $this->api('POST', self::USERS, rawBody: '{"email":');
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         $problem = self::document($response);
         self::assertSame('about:blank', $problem['type']);
         self::assertSame('Bad Request', $problem['title']);
-        self::assertSame(400, $problem['status']);
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $problem['status']);
     }
 
     public function testABodyThatIsNotAnObjectIsRefused(): void
@@ -289,7 +298,7 @@ final class ManagementApiTest extends AcceptanceTestCase
 
         $response = $this->api('POST', self::CLIENTS, rawBody: '[]');
 
-        self::assertSame(422, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
         self::assertSame([['pointer' => '', 'detail' => 'Must be an object.']], self::document($response)['errors']);
     }
 
@@ -299,7 +308,7 @@ final class ManagementApiTest extends AcceptanceTestCase
 
         $response = $this->api('POST', self::USERS, ['email' => 'ok@clavia.dev', 'password' => 'hunter2']);
 
-        self::assertSame(422, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
         /** @var list<array{pointer?: string, detail: string}> $errors */
         $errors = self::document($response)['errors'];
         self::assertSame('/password', $errors[0]['pointer'] ?? null);
@@ -312,7 +321,7 @@ final class ManagementApiTest extends AcceptanceTestCase
 
         $response = $this->api('GET', self::USERS . '/' . UserId::generate($this->random())->value);
 
-        self::assertSame(404, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $response->getStatusCode());
         self::assertSame('No such user.', self::document($response)['detail']);
     }
 
@@ -323,7 +332,7 @@ final class ManagementApiTest extends AcceptanceTestCase
         $this->adminToken();
 
         $created = $this->api('POST', self::USERS, ['email' => 'new@clavia.dev', 'password' => 'a-good-password']);
-        self::assertSame(201, $created->getStatusCode(), (string) $created->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_CREATED, $created->getStatusCode(), (string) $created->getBody());
         $body = self::document($created);
         $userId = $body['id'];
         self::assertIsString($userId);
@@ -339,15 +348,21 @@ final class ManagementApiTest extends AcceptanceTestCase
         self::assertSame('new@clavia.dev', self::document($this->api('GET', self::USERS . '/' . $userId))['email']);
 
         $patched = $this->api('PATCH', self::USERS . '/' . $userId, ['is_active' => false, 'name' => 'Ada']);
-        self::assertSame(200, $patched->getStatusCode(), (string) $patched->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $patched->getStatusCode(), (string) $patched->getBody());
         self::assertFalse(self::document($patched)['is_active']);
         self::assertSame('Ada', self::document($patched)['name']);
 
         $cleared = $this->api('PATCH', self::USERS . '/' . $userId, ['name' => null]);
         self::assertNull(self::document($cleared)['name']);
 
-        self::assertSame(204, $this->api('DELETE', self::USERS . '/' . $userId)->getStatusCode());
-        self::assertSame(404, $this->api('GET', self::USERS . '/' . $userId)->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_NO_CONTENT,
+            $this->api('DELETE', self::USERS . '/' . $userId)->getStatusCode(),
+        );
+        self::assertSame(
+            StatusCodeInterface::STATUS_NOT_FOUND,
+            $this->api('GET', self::USERS . '/' . $userId)->getStatusCode(),
+        );
     }
 
     public function testCreatedUserCanActuallyLogIn(): void
@@ -356,7 +371,10 @@ final class ManagementApiTest extends AcceptanceTestCase
         $this->adminToken();
         $this->api('POST', self::USERS, ['email' => 'real@clavia.dev', 'password' => 'a-good-password']);
 
-        self::assertSame(303, $this->submitLogin('real@clavia.dev', 'a-good-password')->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_SEE_OTHER,
+            $this->submitLogin('real@clavia.dev', 'a-good-password')->getStatusCode(),
+        );
     }
 
     public function testAUserCreatedWithoutAPasswordCannotSignInWithOne(): void
@@ -365,10 +383,16 @@ final class ManagementApiTest extends AcceptanceTestCase
 
         $created = $this->api('POST', self::USERS, ['email' => 'invited@clavia.dev']);
 
-        self::assertSame(201, $created->getStatusCode(), (string) $created->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_CREATED, $created->getStatusCode(), (string) $created->getBody());
         self::assertFalse(self::document($created)['has_password']);
-        self::assertSame(401, $this->submitLogin('invited@clavia.dev', '')->getStatusCode());
-        self::assertSame(401, $this->submitLogin('invited@clavia.dev', 'a-good-password')->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
+            $this->submitLogin('invited@clavia.dev', '')->getStatusCode(),
+        );
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
+            $this->submitLogin('invited@clavia.dev', 'a-good-password')->getStatusCode(),
+        );
     }
 
     public function testAPasswordGivenWithNoValueIsNotTheSameAsNone(): void
@@ -377,7 +401,7 @@ final class ManagementApiTest extends AcceptanceTestCase
 
         $response = $this->api('POST', self::USERS, ['email' => 'null@clavia.dev', 'password' => null]);
 
-        self::assertSame(422, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
         self::assertSame('/password', self::document($response)['errors'][0]['pointer'] ?? null);
     }
 
@@ -404,7 +428,7 @@ final class ManagementApiTest extends AcceptanceTestCase
             ['email' => self::TEST_USER_EMAIL, 'password' => 'a-good-password'],
         );
 
-        self::assertSame(409, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_CONFLICT, $response->getStatusCode());
     }
 
     public function testInvalidEmailAndShortPasswordAreRejected(): void
@@ -412,23 +436,23 @@ final class ManagementApiTest extends AcceptanceTestCase
         $this->adminToken();
 
         self::assertSame(
-            422,
+            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
             $this->api('POST', self::USERS, ['email' => 'not-an-email', 'password' => 'a-good-password'])
                 ->getStatusCode(),
         );
         self::assertSame(
-            422,
+            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
             $this->api('POST', self::USERS, ['email' => 'ok@clavia.dev', 'password' => 'short'])->getStatusCode(),
         );
         // Past the contract's 256 characters: refused, never truncated.
         self::assertSame(
-            422,
+            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
             $this->api('POST', self::USERS, ['email' => 'ok@clavia.dev', 'password' => str_repeat('é', 257)])
                 ->getStatusCode(),
         );
         // What bcrypt could not take (80 bytes) is an ordinary password now.
         self::assertSame(
-            201,
+            StatusCodeInterface::STATUS_CREATED,
             $this->api('POST', self::USERS, ['email' => 'long@clavia.dev', 'password' => str_repeat('é', 40)])
                 ->getStatusCode(),
         );
@@ -444,7 +468,7 @@ final class ManagementApiTest extends AcceptanceTestCase
             ['email' => 'x@clavia.dev', 'password' => 'a-good-password', 'role' => 'admin'],
         );
 
-        self::assertSame(422, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
         self::assertSame([['pointer' => '/role', 'detail' => 'Is not allowed.']], self::document($response)['errors']);
     }
 
@@ -454,7 +478,7 @@ final class ManagementApiTest extends AcceptanceTestCase
 
         $response = $this->api('POST', self::USERS, ['password' => 'short', 'name' => 5, 'role' => 'admin']);
 
-        self::assertSame(422, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
         self::assertEqualsCanonicalizing(
             ['/email', '/password', '/name', '/role'],
             array_column((array) self::document($response)['errors'], 'pointer'),
@@ -467,7 +491,7 @@ final class ManagementApiTest extends AcceptanceTestCase
 
         $response = $this->api('GET', self::USERS, query: ['sort' => 'email']);
 
-        self::assertSame(422, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
         self::assertSame(
             [['parameter' => 'sort', 'detail' => 'Is not a parameter of this operation.']],
             self::document($response)['errors'],
@@ -486,7 +510,7 @@ final class ManagementApiTest extends AcceptanceTestCase
 
         $response = $this->api('POST', $path, ['x' => 1]);
 
-        self::assertSame(422, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
     }
 
     public function testAUserTheTokenActsAsCannotBeDeleted(): void
@@ -498,7 +522,10 @@ final class ManagementApiTest extends AcceptanceTestCase
             ['user_id' => $user->id->value, 'hash' => Digest::of($token)->toString()],
         );
 
-        self::assertSame(409, $this->api('DELETE', self::USERS . '/' . $user->id->value)->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_CONFLICT,
+            $this->api('DELETE', self::USERS . '/' . $user->id->value)->getStatusCode(),
+        );
     }
 
     public function testUsersArePaginatedAndSearchable(): void
@@ -522,7 +549,10 @@ final class ManagementApiTest extends AcceptanceTestCase
         self::assertSame(2, self::document($this->api('GET', self::USERS, query: ['q' => 'ALICE']))['total']);
         // `%` is a literal, not a wildcard.
         self::assertSame(1, self::document($this->api('GET', self::USERS, query: ['q' => '100%']))['total']);
-        self::assertSame(422, $this->api('GET', self::USERS, query: ['per_page' => '500'])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
+            $this->api('GET', self::USERS, query: ['per_page' => '500'])->getStatusCode(),
+        );
     }
 
     // ── Clients ─────────────────────────────────────────────────────────────────
@@ -536,7 +566,7 @@ final class ManagementApiTest extends AcceptanceTestCase
             'client_type' => 'confidential',
             'grant_types' => ['client_credentials'],
         ]);
-        self::assertSame(201, $created->getStatusCode(), (string) $created->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_CREATED, $created->getStatusCode(), (string) $created->getBody());
         $body = self::document($created);
         $clientId = $body['client_id'];
         $secret = $body['client_secret'];
@@ -556,7 +586,7 @@ final class ManagementApiTest extends AcceptanceTestCase
         // And it really authenticates — once granted an API, which is a shell operation.
         $this->grant($clientId, self::MANAGEMENT_API, 'read:users');
         $token = $this->requestMachineToken(['audience' => self::MANAGEMENT_API], [$clientId, $secret]);
-        self::assertSame(200, $token->getStatusCode(), (string) $token->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $token->getStatusCode(), (string) $token->getBody());
     }
 
     public function testClientIdCannotBeChosen(): void
@@ -565,7 +595,7 @@ final class ManagementApiTest extends AcceptanceTestCase
 
         $response = $this->api('POST', self::CLIENTS, ['client_id' => 'attacker-chosen', 'client_type' => 'public']);
 
-        self::assertSame(422, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
     }
 
     public function testPublicClientGetsNoSecret(): void
@@ -579,7 +609,7 @@ final class ManagementApiTest extends AcceptanceTestCase
             'redirect_uris' => ['https://spa.test/callback'],
         ]);
 
-        self::assertSame(201, $created->getStatusCode(), (string) $created->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_CREATED, $created->getStatusCode(), (string) $created->getBody());
         self::assertNull(self::document($created)['client_secret']);
         self::assertSame('none', self::document($created)['token_endpoint_auth_method']);
     }
@@ -595,7 +625,7 @@ final class ManagementApiTest extends AcceptanceTestCase
             'redirect_uris' => ['https://spa.test/callback'],
             'post_logout_redirect_uris' => ['https://spa.test/signed-out'],
         ]);
-        self::assertSame(201, $created->getStatusCode(), (string) $created->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_CREATED, $created->getStatusCode(), (string) $created->getBody());
         self::assertSame(['https://spa.test/signed-out'], self::document($created)['post_logout_redirect_uris']);
         $path = self::CLIENTS . '/' . (string) self::document($created)['client_id'];
 
@@ -604,11 +634,11 @@ final class ManagementApiTest extends AcceptanceTestCase
         $changed = self::document($this->api('PATCH', $path, ['post_logout_redirect_uris' => []]));
         self::assertSame([], $changed['post_logout_redirect_uris']);
         self::assertSame(
-            422,
+            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
             $this->api('PATCH', $path, ['post_logout_redirect_uris' => ['https://spa.test/bye#x']])->getStatusCode(),
         );
         self::assertSame(
-            422,
+            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
             $this->api('PATCH', $path, ['post_logout_redirect_uris' => ['/relative']])->getStatusCode(),
         );
     }
@@ -625,14 +655,20 @@ final class ManagementApiTest extends AcceptanceTestCase
         $this->grant($clientId, self::MANAGEMENT_API, 'read:users');
 
         $rotated = $this->api('POST', self::CLIENTS . '/' . $clientId . '/rotate-secret');
-        self::assertSame(200, $rotated->getStatusCode(), (string) $rotated->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $rotated->getStatusCode(), (string) $rotated->getBody());
         $newSecret = self::document($rotated)['client_secret'];
         self::assertIsString($newSecret);
         self::assertNotSame($oldSecret, $newSecret);
 
         $form = ['audience' => self::MANAGEMENT_API];
-        self::assertSame(401, $this->requestMachineToken($form, [$clientId, $oldSecret])->getStatusCode());
-        self::assertSame(200, $this->requestMachineToken($form, [$clientId, $newSecret])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
+            $this->requestMachineToken($form, [$clientId, $oldSecret])->getStatusCode(),
+        );
+        self::assertSame(
+            StatusCodeInterface::STATUS_OK,
+            $this->requestMachineToken($form, [$clientId, $newSecret])->getStatusCode(),
+        );
     }
 
     public function testRotatingAPublicClientsSecretIsRefused(): void
@@ -641,7 +677,7 @@ final class ManagementApiTest extends AcceptanceTestCase
         $client = $this->publicClient();
 
         self::assertSame(
-            422,
+            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
             $this->api('POST', self::CLIENTS . '/' . $client->id->value . '/rotate-secret')->getStatusCode(),
         );
     }
@@ -692,7 +728,7 @@ final class ManagementApiTest extends AcceptanceTestCase
 
         foreach ($cases as $body) {
             self::assertSame(
-                422,
+                StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
                 $this->api('POST', self::CLIENTS, $body)->getStatusCode(),
                 json_encode($body, JSON_THROW_ON_ERROR),
             );
@@ -731,9 +767,12 @@ final class ManagementApiTest extends AcceptanceTestCase
         $client = $this->publicClient();
         $path = self::CLIENTS . '/' . $client->id->value;
 
-        self::assertSame(422, $this->api('PATCH', $path, ['redirect_uris' => []])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
+            $this->api('PATCH', $path, ['redirect_uris' => []])->getStatusCode(),
+        );
         $renamed = $this->api('PATCH', $path, ['name' => 'Renamed']);
-        self::assertSame(200, $renamed->getStatusCode(), (string) $renamed->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $renamed->getStatusCode(), (string) $renamed->getBody());
         self::assertSame('Renamed', self::document($renamed)['name']);
     }
 
@@ -741,7 +780,10 @@ final class ManagementApiTest extends AcceptanceTestCase
     {
         $this->adminToken();
 
-        self::assertSame(409, $this->api('DELETE', self::CLIENTS . '/' . self::TEST_M2M_CLIENT_ID)->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_CONFLICT,
+            $this->api('DELETE', self::CLIENTS . '/' . self::TEST_M2M_CLIENT_ID)->getStatusCode(),
+        );
     }
 
     public function testDeletingAClientRemovesIt(): void
@@ -749,7 +791,10 @@ final class ManagementApiTest extends AcceptanceTestCase
         $this->adminToken();
         $client = $this->publicClient();
 
-        self::assertSame(204, $this->api('DELETE', self::CLIENTS . '/' . $client->id->value)->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_NO_CONTENT,
+            $this->api('DELETE', self::CLIENTS . '/' . $client->id->value)->getStatusCode(),
+        );
         self::assertSame(
             0,
             TestStorage::database()->fetchValue(
@@ -779,7 +824,7 @@ final class ManagementApiTest extends AcceptanceTestCase
             'response_types' => ['code'],
             'require_pushed_authorization_requests' => true,
         ]);
-        self::assertSame(201, $created->getStatusCode(), (string) $created->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_CREATED, $created->getStatusCode(), (string) $created->getBody());
         self::assertTrue(self::document($created)['require_pushed_authorization_requests']);
         $path = self::CLIENTS . '/' . rawurlencode((string) self::document($created)['client_id']);
 
@@ -799,7 +844,7 @@ final class ManagementApiTest extends AcceptanceTestCase
             'name' => 'Invoices',
             'permissions' => [['value' => 'invoices:read', 'description' => 'Read invoices']],
         ]);
-        self::assertSame(201, $created->getStatusCode(), (string) $created->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_CREATED, $created->getStatusCode(), (string) $created->getBody());
         $body = self::document($created);
         $id = (string) $body['id'];
         self::assertStringStartsWith('rs_', $id);
@@ -811,13 +856,19 @@ final class ManagementApiTest extends AcceptanceTestCase
         $patched = $this->api('PATCH', self::APIS . '/' . $id, [
             'permissions' => [['value' => 'invoices:read'], ['value' => 'invoices:write']],
         ]);
-        self::assertSame(200, $patched->getStatusCode(), (string) $patched->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $patched->getStatusCode(), (string) $patched->getBody());
         $permissions = self::document($patched)['permissions'];
         self::assertIsArray($permissions);
         self::assertSame(['invoices:read', 'invoices:write'], array_column($permissions, 'value'));
 
-        self::assertSame(204, $this->api('DELETE', self::APIS . '/' . $id)->getStatusCode());
-        self::assertSame(404, $this->api('GET', self::APIS . '/' . $id)->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_NO_CONTENT,
+            $this->api('DELETE', self::APIS . '/' . $id)->getStatusCode(),
+        );
+        self::assertSame(
+            StatusCodeInterface::STATUS_NOT_FOUND,
+            $this->api('GET', self::APIS . '/' . $id)->getStatusCode(),
+        );
     }
 
     public function testAnApiChoosesTheFormOfItsAccessTokens(): void
@@ -828,15 +879,18 @@ final class ManagementApiTest extends AcceptanceTestCase
             'identifier' => 'https://invoices.test/api/',
             'access_token_format' => 'jwt',
         ]);
-        self::assertSame(201, $created->getStatusCode(), (string) $created->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_CREATED, $created->getStatusCode(), (string) $created->getBody());
         self::assertSame('jwt', self::document($created)['access_token_format']);
         $path = self::APIS . '/' . (string) self::document($created)['id'];
 
         $patched = $this->api('PATCH', $path, ['access_token_format' => 'opaque']);
-        self::assertSame(200, $patched->getStatusCode(), (string) $patched->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $patched->getStatusCode(), (string) $patched->getBody());
         self::assertSame('opaque', self::document($patched)['access_token_format']);
 
-        self::assertSame(422, $this->api('PATCH', $path, ['access_token_format' => 'jwe'])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
+            $this->api('PATCH', $path, ['access_token_format' => 'jwe'])->getStatusCode(),
+        );
     }
 
     public function testTheManagementApiMayTakeJwtAccessTokens(): void
@@ -847,22 +901,25 @@ final class ManagementApiTest extends AcceptanceTestCase
 
         $response = $this->api('PATCH', self::APIS . '/' . $api->id->value, ['access_token_format' => 'jwt']);
 
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         self::assertSame('jwt', self::document($response)['access_token_format']);
 
         // The next token is a JWT, and the Management API takes it like any other.
         $jwt = $this->adminToken();
         self::assertCount(3, explode('.', $jwt));
-        self::assertSame(200, $this->api('GET', self::APIS)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $this->api('GET', self::APIS)->getStatusCode());
     }
 
     public function testIdentifierMustBeAnAbsoluteUri(): void
     {
         $this->adminToken();
 
-        self::assertSame(422, $this->api('POST', self::APIS, ['identifier' => 'invoices'])->getStatusCode());
         self::assertSame(
-            422,
+            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
+            $this->api('POST', self::APIS, ['identifier' => 'invoices'])->getStatusCode(),
+        );
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
             $this->api('POST', self::APIS, ['identifier' => 'https://x.test/#frag'])->getStatusCode(),
         );
     }
@@ -876,14 +933,17 @@ final class ManagementApiTest extends AcceptanceTestCase
             'permissions' => [['value' => 'a'], ['value' => 'a']],
         ]);
 
-        self::assertSame(422, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
     }
 
     public function testDuplicateIdentifierIsAConflict(): void
     {
         $this->adminToken();
 
-        self::assertSame(409, $this->api('POST', self::APIS, ['identifier' => self::MANAGEMENT_API])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_CONFLICT,
+            $this->api('POST', self::APIS, ['identifier' => self::MANAGEMENT_API])->getStatusCode(),
+        );
     }
 
     public function testTheManagementApiCannotBeDeleted(): void
@@ -891,8 +951,14 @@ final class ManagementApiTest extends AcceptanceTestCase
         $this->adminToken();
         $api = $this->managementApi();
 
-        self::assertSame(409, $this->api('DELETE', self::APIS . '/' . $api->id->value)->getStatusCode());
-        self::assertSame(200, $this->api('GET', self::APIS . '/' . $api->id->value)->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_CONFLICT,
+            $this->api('DELETE', self::APIS . '/' . $api->id->value)->getStatusCode(),
+        );
+        self::assertSame(
+            StatusCodeInterface::STATUS_OK,
+            $this->api('GET', self::APIS . '/' . $api->id->value)->getStatusCode(),
+        );
     }
 
     public function testTheManagementApiPermissionsCannotBeEdited(): void
@@ -905,7 +971,7 @@ final class ManagementApiTest extends AcceptanceTestCase
             'permissions' => [['value' => 'read:users']],
         ]);
 
-        self::assertSame(409, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_CONFLICT, $response->getStatusCode());
         $unchanged = self::document($this->api('GET', self::APIS . '/' . $api->id->value))['permissions'];
         self::assertIsArray($unchanged);
         self::assertEqualsCanonicalizing(self::allScopes(), array_column($unchanged, 'value'));
@@ -918,7 +984,7 @@ final class ManagementApiTest extends AcceptanceTestCase
 
         $response = $this->api('PATCH', self::APIS . '/' . $api->id->value, ['name' => 'Admin']);
 
-        self::assertSame(200, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode());
         self::assertSame('Admin', self::document($response)['name']);
         // And registering again keeps the operator's name.
         self::assertSame('Admin', $this->managementApi()->name);

@@ -26,6 +26,7 @@ use ClaviaTest\Support\OidcFixtures;
 use ClaviaTest\Support\TestEnvironment;
 use ClaviaTest\Support\TestStorage;
 use DateTimeImmutable;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -49,7 +50,7 @@ final class OidcTest extends AcceptanceTestCase
         $response = $this->get('/.well-known/openid-configuration');
         $document = self::json($response);
 
-        self::assertSame(200, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode());
         self::assertSame(self::ISSUER, $document['issuer']);
         self::assertSame(self::ISSUER . '/oauth2/authorize', $document['authorization_endpoint']);
         self::assertSame(self::ISSUER . '/oauth2/token', $document['token_endpoint']);
@@ -107,7 +108,7 @@ final class OidcTest extends AcceptanceTestCase
         $oidc = $this->get('/.well-known/openid-configuration');
         $oauth = $this->get('/.well-known/oauth-authorization-server');
 
-        self::assertSame(200, $oauth->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $oauth->getStatusCode());
         self::assertSame(self::json($oidc), self::json($oauth));
         self::assertSame($oidc->getHeaderLine('Cache-Control'), $oauth->getHeaderLine('Cache-Control'));
     }
@@ -133,7 +134,11 @@ final class OidcTest extends AcceptanceTestCase
             self::assertStringStartsWith(self::ISSUER . '/', $url, $field);
             $path = substr($url, strlen(self::ISSUER));
 
-            self::assertNotSame(404, $this->get($path)->getStatusCode(), "{$field} points at a 404");
+            self::assertNotSame(
+                StatusCodeInterface::STATUS_NOT_FOUND,
+                $this->get($path)->getStatusCode(),
+                "{$field} points at a 404",
+            );
         }
     }
 
@@ -281,7 +286,7 @@ final class OidcTest extends AcceptanceTestCase
         $this->extractCode($this->get('/oauth2/authorize', $params));
         $second = $this->get('/oauth2/authorize', $params);
 
-        self::assertSame(302, $second->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_FOUND, $second->getStatusCode());
         $query = self::locationQuery($second);
         self::assertArrayNotHasKey('code', $query, 'the nonce was accepted twice');
         self::assertSame('invalid_request', $query['error']);
@@ -383,14 +388,14 @@ final class OidcTest extends AcceptanceTestCase
         $code = $this->authorizeAndGetCode($challenge, ['scope' => 'openid']);
         $failed = $this->post('/oauth2/token', $this->tokenRequest($code, $verifier));
 
-        self::assertSame(500, $failed->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_INTERNAL_SERVER_ERROR, $failed->getStatusCode());
         self::assertTrue($this->logger->hasRecordContaining('No active signing key'));
         self::assertSame(0, TestStorage::database()->fetchValue('SELECT count(*) FROM oauth2_access_tokens'));
 
         // Nothing was issued, so nothing was spent: once a key exists, the same code works.
         $this->container()->get(GenerateSigningKey::class)();
         $retried = $this->post('/oauth2/token', $this->tokenRequest($code, $verifier));
-        self::assertSame(200, $retried->getStatusCode(), (string) $retried->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $retried->getStatusCode(), (string) $retried->getBody());
         self::assertArrayHasKey('id_token', self::json($retried));
     }
 
@@ -404,7 +409,7 @@ final class OidcTest extends AcceptanceTestCase
 
         $response = $this->userinfo($payload['access_token']);
 
-        self::assertSame(200, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode());
         self::assertSame(
             ['sub' => $user->id->value, 'email' => $user->email, 'email_verified' => false],
             self::json($response),
@@ -437,19 +442,19 @@ final class OidcTest extends AcceptanceTestCase
 
         $response = $this->userinfo($payload['access_token']);
 
-        self::assertSame(200, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode());
         self::assertSame(['sub' => $user->id->value], self::json($response));
     }
 
     public function testUserinfoRejectsAMissingOrUnknownToken(): void
     {
         $missing = $this->get('/oidc/userinfo');
-        self::assertSame(401, $missing->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $missing->getStatusCode());
         // RFC 6750 §3.1: no credentials, so no error code — only the scheme to use.
         self::assertSame(sprintf('Bearer realm="%s"', self::ISSUER), $missing->getHeaderLine('WWW-Authenticate'));
 
         $unknown = $this->userinfo('nope');
-        self::assertSame(401, $unknown->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $unknown->getStatusCode());
         self::assertStringStartsWith(
             sprintf('Bearer realm="%s", error="invalid_token"', self::ISSUER),
             $unknown->getHeaderLine('WWW-Authenticate'),
@@ -465,7 +470,10 @@ final class OidcTest extends AcceptanceTestCase
         $payload = $this->completeFlow();
         TestStorage::database()->execute('UPDATE oauth2_access_tokens SET revoked_at = now()');
 
-        self::assertSame(401, $this->userinfo($payload['access_token'])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
+            $this->userinfo($payload['access_token'])->getStatusCode(),
+        );
     }
 
     public function testUserinfoRejectsADeactivatedUser(): void
@@ -476,7 +484,10 @@ final class OidcTest extends AcceptanceTestCase
         $user->deactivate(new DateTimeImmutable());
         $this->container()->get(UserRepository::class)->save($user);
 
-        self::assertSame(401, $this->userinfo($payload['access_token'])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
+            $this->userinfo($payload['access_token'])->getStatusCode(),
+        );
     }
 
     public function testUserinfoRequiresTheOpenidScope(): void
@@ -487,7 +498,7 @@ final class OidcTest extends AcceptanceTestCase
 
         $response = $this->userinfo($payload['access_token']);
 
-        self::assertSame(403, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_FORBIDDEN, $response->getStatusCode());
         self::assertSame('insufficient_scope', self::json($response)['error']);
         self::assertStringContainsString('scope="openid"', $response->getHeaderLine('WWW-Authenticate'));
     }
@@ -504,7 +515,7 @@ final class OidcTest extends AcceptanceTestCase
 
         $response = $this->post('/oidc/userinfo', headers: ['Authorization' => 'Bearer ' . $token]);
 
-        self::assertSame(200, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode());
         self::assertSame(['sub' => $user->id->value], self::json($response));
     }
 
@@ -516,7 +527,7 @@ final class OidcTest extends AcceptanceTestCase
         self::assertIsString($payload['access_token']);
 
         $malformed = $this->request('GET', '/oidc/userinfo', ['Authorization' => 'Bearer two tokens']);
-        self::assertSame(400, $malformed->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $malformed->getStatusCode());
         self::assertSame('invalid_request', self::json($malformed)['error']);
 
         // RFC 6750 §2: one way of sending the token per request.
@@ -525,11 +536,11 @@ final class OidcTest extends AcceptanceTestCase
             '/oidc/userinfo?access_token=' . rawurlencode($payload['access_token']),
             ['Authorization' => 'Bearer ' . $payload['access_token']],
         );
-        self::assertSame(400, $twice->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $twice->getStatusCode());
 
         // Another scheme is not bearer credentials at all.
         $basic = $this->request('GET', '/oidc/userinfo', ['Authorization' => 'Basic ' . base64_encode('a:b')]);
-        self::assertSame(401, $basic->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $basic->getStatusCode());
         self::assertSame(sprintf('Bearer realm="%s"', self::ISSUER), $basic->getHeaderLine('WWW-Authenticate'));
     }
 
@@ -541,7 +552,7 @@ final class OidcTest extends AcceptanceTestCase
             'Authorization' => 'Bearer nope',
         ]);
 
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertSame('invalid_token', self::json($response)['error']);
     }
 
@@ -568,7 +579,7 @@ final class OidcTest extends AcceptanceTestCase
             'nonce' => str_repeat('n', 513),
         ]));
 
-        self::assertSame(302, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_FOUND, $response->getStatusCode());
         self::assertSame('invalid_request', self::locationQuery($response)['error']);
     }
 
@@ -584,7 +595,7 @@ final class OidcTest extends AcceptanceTestCase
         $this->boot();
         $replayed = $this->get('/oauth2/authorize', $params);
 
-        self::assertSame(302, $replayed->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_FOUND, $replayed->getStatusCode());
         self::assertStringStartsWith(self::TEST_REDIRECT_URI, $replayed->getHeaderLine('Location'));
         self::assertSame('invalid_request', self::locationQuery($replayed)['error']);
     }

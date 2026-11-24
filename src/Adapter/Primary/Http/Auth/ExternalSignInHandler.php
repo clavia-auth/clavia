@@ -16,6 +16,7 @@ use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\Authentication\External\BeginExternalSignIn;
 use Clavia\Application\Authentication\External\ExternalSignInUnavailable;
 use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
@@ -57,7 +58,7 @@ final readonly class ExternalSignInHandler implements RequestHandlerInterface
                 $this->describe->methods($loginState),
                 null,
                 ExternalSignInMessages::notAvailable($started->providerLabel),
-                400,
+                StatusCodeInterface::STATUS_BAD_REQUEST,
             ));
         }
 

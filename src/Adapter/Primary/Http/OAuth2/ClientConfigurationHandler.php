@@ -21,6 +21,7 @@ use Clavia\Application\Clients\Registration\RegistrationRefused;
 use Clavia\Application\Clients\Registration\UpdateClientConfiguration;
 use Clavia\Application\OAuth2\ProtectedResource\TokenScheme;
 use Clavia\Domain\OAuth2\BearerTokenError;
+use Fig\Http\Message\StatusCodeInterface;
 use LogicException;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
@@ -93,6 +94,8 @@ final readonly class ClientConfigurationHandler implements RequestHandlerInterfa
     {
         ($this->delete)($token, $clientId);
 
-        return $this->responses->createResponse(204)->withHeader('Cache-Control', 'no-store');
+        return $this->responses->createResponse(
+            StatusCodeInterface::STATUS_NO_CONTENT,
+        )->withHeader('Cache-Control', 'no-store');
     }
 }

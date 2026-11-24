@@ -16,6 +16,7 @@ use Clavia\Adapter\Secondary\IdentityProvider\HttpOidcDiscovery;
 use Clavia\Application\Port\DiscoveryFailed;
 use ClaviaTest\Support\Fake\FakeHttpClient;
 use ClaviaTest\Support\Fake\FakeOpenIdProvider;
+use Fig\Http\Message\StatusCodeInterface;
 use GuzzleHttp\Exception\ConnectException;
 use Laminas\Diactoros\RequestFactory;
 use Laminas\Diactoros\Response\HtmlResponse;
@@ -121,7 +122,10 @@ final class HttpOidcDiscoveryTest extends TestCase
             static fn (RequestInterface $request): never => throw new ConnectException('down', $request),
             'could not be reached',
         ];
-        yield 'not found' => [static fn (): ResponseInterface => new JsonResponse([], 404), 'answered 404'];
+        yield 'not found' => [
+            static fn (): ResponseInterface => new JsonResponse([], StatusCodeInterface::STATUS_NOT_FOUND),
+            'answered 404',
+        ];
         yield 'not JSON' => [static fn (): ResponseInterface => new HtmlResponse('<html>'), 'is not JSON'];
     }
 

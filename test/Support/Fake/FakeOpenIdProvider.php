@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace ClaviaTest\Support\Fake;
 
 use ClaviaTest\Support\TestSigningKeys;
+use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
@@ -74,7 +75,7 @@ final class FakeOpenIdProvider
             self::DISCOVERY_URL => new JsonResponse($this->discoveryDocument ?? $this->discovery()),
             self::TOKEN_ENDPOINT => $this->token($request),
             self::JWKS_URI => $this->jwks(),
-            default => new JsonResponse(['error' => 'not_found'], 404),
+            default => new JsonResponse(['error' => 'not_found'], StatusCodeInterface::STATUS_NOT_FOUND),
         };
     }
 

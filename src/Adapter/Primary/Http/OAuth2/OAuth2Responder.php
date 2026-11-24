@@ -17,6 +17,7 @@ use Clavia\Application\Clients\Registration\RegistrationRefused;
 use Clavia\Application\OAuth2\ClientAuthentication\TooManyFailedRequests;
 use Clavia\Domain\OAuth2\ErrorCode;
 use Clavia\Domain\OAuth2\OAuth2Error;
+use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
@@ -55,7 +56,7 @@ final readonly class OAuth2Responder
      */
     public function success(array $payload): ResponseInterface
     {
-        return new JsonResponse($payload, 200, self::NO_STORE);
+        return new JsonResponse($payload, StatusCodeInterface::STATUS_OK, self::NO_STORE);
     }
 
     /**
@@ -65,13 +66,13 @@ final readonly class OAuth2Responder
      */
     public function created(array $payload): ResponseInterface
     {
-        return new JsonResponse($payload, 201, self::NO_STORE);
+        return new JsonResponse($payload, StatusCodeInterface::STATUS_CREATED, self::NO_STORE);
     }
 
     /** A request that succeeded with nothing to say: `200`, an empty body, not cached. */
     public function done(): ResponseInterface
     {
-        $response = $this->responses->createResponse(200);
+        $response = $this->responses->createResponse(StatusCodeInterface::STATUS_OK);
         foreach (self::NO_STORE as $name => $value) {
             $response = $response->withHeader($name, $value);
         }
@@ -92,19 +93,19 @@ final readonly class OAuth2Responder
             // RFC 9449 §8: `use_dpop_nonce` is a 400 carrying the nonce to use.
             return new JsonResponse(
                 self::document($error),
-                400,
+                StatusCodeInterface::STATUS_BAD_REQUEST,
                 self::NO_STORE + ['DPoP-Nonce' => $error->dpopNonce],
             );
         }
         if ($error->error === ErrorCode::InvalidClient) {
             return new JsonResponse(
                 self::document($error),
-                401,
+                StatusCodeInterface::STATUS_UNAUTHORIZED,
                 self::NO_STORE + ['WWW-Authenticate' => sprintf('Basic realm="%s"', $this->issuer)],
             );
         }
 
-        return new JsonResponse(self::document($error), 400, self::NO_STORE);
+        return new JsonResponse(self::document($error), StatusCodeInterface::STATUS_BAD_REQUEST, self::NO_STORE);
     }
 
     /**
@@ -123,7 +124,7 @@ final readonly class OAuth2Responder
                 'error' => ErrorCode::TemporarilyUnavailable->value,
                 'error_description' => 'Too many failed requests. Retry later.',
             ],
-            429,
+            StatusCodeInterface::STATUS_TOO_MANY_REQUESTS,
             self::NO_STORE + ['Retry-After' => (string) $refusal->retryAfter],
         );
     }
@@ -135,7 +136,7 @@ final readonly class OAuth2Responder
     {
         return new JsonResponse(
             ['error' => $refusal->error->value, 'error_description' => $refusal->getMessage()],
-            400,
+            StatusCodeInterface::STATUS_BAD_REQUEST,
             self::NO_STORE,
         );
     }
@@ -153,7 +154,7 @@ final readonly class OAuth2Responder
                 'error' => ErrorCode::TemporarilyUnavailable->value,
                 'error_description' => 'Too many registrations. Retry later.',
             ],
-            429,
+            StatusCodeInterface::STATUS_TOO_MANY_REQUESTS,
             self::NO_STORE + ['Retry-After' => (string) $retryAfterSeconds],
         );
     }
@@ -172,7 +173,7 @@ final readonly class OAuth2Responder
     {
         return $this->errors->respond(
             $request,
-            400,
+            StatusCodeInterface::STATUS_BAD_REQUEST,
             ErrorPage::authorizationRefused($error->description, $error->error->value),
             self::document($error),
             self::NO_STORE,
@@ -204,7 +205,7 @@ final readonly class OAuth2Responder
         // Appended, never substituted: whatever query the registered URI already has is kept as it is.
         $location = $redirectUri . (str_contains($redirectUri, '?') ? '&' : '?') . $query;
 
-        return $this->responses->createResponse(302)
+        return $this->responses->createResponse(StatusCodeInterface::STATUS_FOUND)
             ->withHeader('Location', $location)
             ->withHeader('Cache-Control', 'no-store');
     }
@@ -217,7 +218,7 @@ final readonly class OAuth2Responder
      */
     public function redirectWithinServer(string $pathAndQuery): ResponseInterface
     {
-        return $this->responses->createResponse(303)
+        return $this->responses->createResponse(StatusCodeInterface::STATUS_SEE_OTHER)
             ->withHeader('Location', $pathAndQuery)
             ->withHeader('Cache-Control', 'no-store');
     }

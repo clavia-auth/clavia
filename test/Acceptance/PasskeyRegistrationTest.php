@@ -31,6 +31,7 @@ use ClaviaTest\Support\LoginFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\SoftwareAuthenticator;
 use DateTimeImmutable;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -63,7 +64,7 @@ final class PasskeyRegistrationTest extends AcceptanceTestCase
 
         $response = $this->get('/auth/passkeys');
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         $state = self::locationQuery($response)['state'] ?? null;
         self::assertIsString($state);
         self::assertSame('/auth/passkeys', $this->loginState($state)?->nextUrl);
@@ -77,7 +78,7 @@ final class PasskeyRegistrationTest extends AcceptanceTestCase
 
         $created = $this->registerPasskey(SoftwareAuthenticator::generate(CoseAlgorithm::ES256), 'Work laptop');
 
-        self::assertSame(200, $created->getStatusCode(), (string) $created->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $created->getStatusCode(), (string) $created->getBody());
         self::assertStringContainsString('Your passkey is ready', (string) $created->getBody());
         self::assertSame(10, preg_match_all('#<li>[^<]+</li>#', (string) $created->getBody()));
         self::assertSame(10, $this->container()->get(RecoveryCodeRepository::class)->unusedCount($user->id));
@@ -104,7 +105,7 @@ final class PasskeyRegistrationTest extends AcceptanceTestCase
 
         $second = $this->registerPasskey(SoftwareAuthenticator::generate(CoseAlgorithm::RS256, synced: true), '');
 
-        self::assertSame(303, $second->getStatusCode(), (string) $second->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $second->getStatusCode(), (string) $second->getBody());
         self::assertSame('/auth/passkeys', $second->getHeaderLine('Location'));
         $passkeys = $this->passkeysOf($user);
         self::assertCount(2, $passkeys);
@@ -183,7 +184,7 @@ final class PasskeyRegistrationTest extends AcceptanceTestCase
             'csrf_token' => self::csrfTokenFrom($page),
         ]);
 
-        self::assertSame(400, $refused->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $refused->getStatusCode());
         self::assertStringContainsString('That did not work.', (string) $refused->getBody());
         self::assertSame([], $this->passkeysOf($user));
         self::assertSame([], $this->audited(AuditEventType::PasskeyRegistered));
@@ -216,7 +217,7 @@ final class PasskeyRegistrationTest extends AcceptanceTestCase
             ]),
         ], body: http_build_query($form));
 
-        self::assertSame(400, $replayed->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $replayed->getStatusCode());
         self::assertCount(1, $this->passkeysOf($user));
     }
 
@@ -237,7 +238,7 @@ final class PasskeyRegistrationTest extends AcceptanceTestCase
             'csrf_token' => self::csrfTokenFrom($page),
         ]);
 
-        self::assertNotSame(200, $late->getStatusCode());
+        self::assertNotSame(StatusCodeInterface::STATUS_OK, $late->getStatusCode());
         self::assertSame([], $this->passkeysOf($user));
     }
 
@@ -250,7 +251,7 @@ final class PasskeyRegistrationTest extends AcceptanceTestCase
 
         $again = $this->registerPasskey($authenticator, 'Again');
 
-        self::assertSame(400, $again->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $again->getStatusCode());
         self::assertStringContainsString('already registered', (string) $again->getBody());
         self::assertCount(1, $this->passkeysOf($user));
     }
@@ -263,11 +264,15 @@ final class PasskeyRegistrationTest extends AcceptanceTestCase
 
         $begin = $this->post('/auth/passkeys/new', ['csrf_token' => self::csrfTokenFrom($this->get('/auth/passkeys'))]);
 
-        self::assertSame(303, $begin->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $begin->getStatusCode());
         self::assertStringStartsWith('/auth/login?state=', $begin->getHeaderLine('Location'));
         $state = self::locationQuery($begin)['state'] ?? '';
         self::assertSame('/auth/passkeys', $this->submitLogin(state: $state)->getHeaderLine('Location'));
-        self::assertSame(200, $this->beginRegistration()->getStatusCode(), 'Signed in again, it works.');
+        self::assertSame(
+            StatusCodeInterface::STATUS_OK,
+            $this->beginRegistration()->getStatusCode(),
+            'Signed in again, it works.',
+        );
         self::assertSame([], $this->passkeysOf($user));
     }
 
@@ -280,7 +285,7 @@ final class PasskeyRegistrationTest extends AcceptanceTestCase
 
         $begin = $this->post('/auth/passkeys/new', []);
 
-        self::assertSame(303, $begin->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $begin->getStatusCode());
         self::assertSame('/auth/passkeys', $begin->getHeaderLine('Location'));
         self::assertSame($before, $this->cookie(self::CEREMONY_COOKIE), 'No registration ceremony was opened.');
         self::assertSame([], $this->passkeysOf($user));
@@ -296,7 +301,7 @@ final class PasskeyRegistrationTest extends AcceptanceTestCase
 
         $begin = $this->post('/auth/passkeys/new', ['csrf_token' => self::csrfTokenFrom($this->get('/auth/passkeys'))]);
 
-        self::assertSame(409, $begin->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_CONFLICT, $begin->getStatusCode());
         self::assertStringContainsString('as many as it may', (string) $begin->getBody());
         self::assertCount(1, $this->passkeysOf($user));
     }
@@ -320,15 +325,15 @@ final class PasskeyRegistrationTest extends AcceptanceTestCase
         $unknown = $this->post('/auth/passkeys/00000000-0000-4000-8000-000000000009/remove', ['csrf_token' => $csrf]);
         $malformed = $this->post('/auth/passkeys/not-an-id/remove', ['csrf_token' => $csrf]);
 
-        self::assertSame(303, $renamed->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $renamed->getStatusCode());
         self::assertSame('New name', $this->passkeysOf($user)[0]->name->value);
-        self::assertSame(400, $badName->getStatusCode());
-        self::assertSame(404, $unknown->getStatusCode());
-        self::assertSame(404, $malformed->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $badName->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $unknown->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $malformed->getStatusCode());
 
         $removed = $this->post('/auth/passkeys/' . $passkey->id->value . '/remove', ['csrf_token' => $csrf]);
 
-        self::assertSame(303, $removed->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $removed->getStatusCode());
         self::assertSame([], $this->passkeysOf($user));
         self::assertCount(1, $this->audited(AuditEventType::PasskeyRenamed));
         self::assertCount(1, $this->audited(AuditEventType::PasskeyRemoved));
@@ -340,7 +345,7 @@ final class PasskeyRegistrationTest extends AcceptanceTestCase
         $this->user();
         $this->submitLogin();
 
-        self::assertSame(404, $this->get('/auth/passkeys')->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $this->get('/auth/passkeys')->getStatusCode());
     }
 
     // ── What the tests above are made of ──────────────────────────────────────────────────────
@@ -360,7 +365,7 @@ final class PasskeyRegistrationTest extends AcceptanceTestCase
     private function beginRegistration(): ResponseInterface
     {
         $page = $this->post('/auth/passkeys/new', ['csrf_token' => self::csrfTokenFrom($this->get('/auth/passkeys'))]);
-        self::assertSame(200, $page->getStatusCode(), (string) $page->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $page->getStatusCode(), (string) $page->getBody());
 
         return $page;
     }

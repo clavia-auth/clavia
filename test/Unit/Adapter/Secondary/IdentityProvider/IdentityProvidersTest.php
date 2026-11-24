@@ -35,6 +35,7 @@ use ClaviaTest\Support\Fake\InMemoryJwksCache;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use ClaviaTest\Support\RecordingLogger;
 use DateTimeImmutable;
+use Fig\Http\Message\StatusCodeInterface;
 use GuzzleHttp\Exception\ConnectException;
 use Laminas\Diactoros\RequestFactory;
 use Laminas\Diactoros\Response\HtmlResponse;
@@ -93,7 +94,7 @@ final class IdentityProvidersTest extends TestCase
             GoogleIdentityProvider::USERINFO_ENDPOINT => static fn (RequestInterface $request): ResponseInterface
                 => $request->getHeaderLine('Authorization') === 'Bearer at-1'
                     ? new JsonResponse(['sub' => 'g-123', 'email' => 'ada@example.com', 'email_verified' => true])
-                    : new JsonResponse([], 401),
+                    : new JsonResponse([], StatusCodeInterface::STATUS_UNAUTHORIZED),
         ]));
 
         $identity = $this->google()->identify('the-code', self::REDIRECT_URI, $this->verifier, $this->nonce);
@@ -192,7 +193,10 @@ final class IdentityProvidersTest extends TestCase
             'could not be reached',
         ];
         yield 'the token endpoint refuses' => [
-            static fn (): ResponseInterface => new JsonResponse(['error' => 'secret-token'], 400),
+            static fn (): ResponseInterface => new JsonResponse(
+                ['error' => 'secret-token'],
+                StatusCodeInterface::STATUS_BAD_REQUEST,
+            ),
             'answered 400',
         ];
         yield 'a refused code reported with 200' => [
@@ -219,7 +223,11 @@ final class IdentityProvidersTest extends TestCase
     public function testTheRedirectOfAMisconfiguredEndpointIsNotFollowed(): void
     {
         $this->http->answerWith(
-            static fn (): ResponseInterface => new JsonResponse([], 302, ['Location' => 'https://evil.example/']),
+            static fn (): ResponseInterface => new JsonResponse(
+                [],
+                StatusCodeInterface::STATUS_FOUND,
+                ['Location' => 'https://evil.example/'],
+            ),
         );
 
         $this->expectException(IdentityProviderFailed::class);

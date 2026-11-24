@@ -16,6 +16,7 @@ use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\Authentication\Account\CheckYourInbox;
 use Clavia\Application\Authentication\Account\RequestPasswordReset;
 use Clavia\Application\Authentication\Account\ResetUnavailable;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
@@ -51,7 +52,12 @@ final readonly class PasswordForgotHandler implements RequestHandlerInterface
         if (! CsrfToken::isValid($request, $form->get('csrf_token'))) {
             return $this->responder->page(
                 $request,
-                AccountPages::forgot($loginState, $email, LoginPages::EXPIRED_FORM, 400),
+                AccountPages::forgot(
+                    $loginState,
+                    $email,
+                    LoginPages::EXPIRED_FORM,
+                    StatusCodeInterface::STATUS_BAD_REQUEST,
+                ),
             );
         }
 
@@ -63,8 +69,18 @@ final readonly class PasswordForgotHandler implements RequestHandlerInterface
         return $this->responder->page(
             $request,
             $outcome instanceof ResetUnavailable
-                ? AccountPages::forgot($loginState, $email, AccountPages::RESET_UNAVAILABLE, 404)
-                : AccountPages::forgot($loginState, $email, LoginPages::INVALID_EMAIL, 400),
+                ? AccountPages::forgot(
+                    $loginState,
+                    $email,
+                    AccountPages::RESET_UNAVAILABLE,
+                    StatusCodeInterface::STATUS_NOT_FOUND,
+                )
+                : AccountPages::forgot(
+                    $loginState,
+                    $email,
+                    LoginPages::INVALID_EMAIL,
+                    StatusCodeInterface::STATUS_BAD_REQUEST,
+                ),
         );
     }
 }

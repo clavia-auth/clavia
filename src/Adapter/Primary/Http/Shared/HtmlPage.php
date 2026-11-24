@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Shared;
 
+use Fig\Http\Message\StatusCodeInterface;
+
 /**
  * A server-rendered page, ready to render: the view model a template prints from.
  *
@@ -42,7 +44,7 @@ final readonly class HtmlPage
         public ?string $returnTo = null,
         public array $variables = [],
         public ?string $error = null,
-        public int $status = 200,
+        public int $status = StatusCodeInterface::STATUS_OK,
         public array $formOrigins = [],
         public bool $wide = false,
         public ?string $script = null,

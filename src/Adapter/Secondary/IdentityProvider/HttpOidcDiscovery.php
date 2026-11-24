@@ -16,6 +16,7 @@ use Clavia\Adapter\Secondary\Http\OutboundUrlRefused;
 use Clavia\Application\Port\DiscoveredProvider;
 use Clavia\Application\Port\DiscoveryFailed;
 use Clavia\Application\Port\OidcDiscovery;
+use Fig\Http\Message\StatusCodeInterface;
 use JsonException;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
@@ -56,7 +57,7 @@ final readonly class HttpOidcDiscovery implements OidcDiscovery
         } catch (ClientExceptionInterface) {
             throw new DiscoveryFailed(sprintf('Could not fetch %s: it could not be reached.', $url));
         }
-        if ($response->getStatusCode() !== 200) {
+        if ($response->getStatusCode() !== StatusCodeInterface::STATUS_OK) {
             throw new DiscoveryFailed(sprintf('Could not fetch %s: it answered %d.', $url, $response->getStatusCode()));
         }
 

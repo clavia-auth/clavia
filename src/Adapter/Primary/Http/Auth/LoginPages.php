@@ -15,6 +15,7 @@ use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
 use Clavia\Application\Authentication\External\ExternalProviderOption;
 use Clavia\Application\Authentication\LoginPage\SignInMethods;
 use Clavia\Application\Authentication\Passkey\AssertionOptions;
+use Fig\Http\Message\StatusCodeInterface;
 
 /**
  * The view models of the login page, shared by the handler that shows it and the one
@@ -56,7 +57,7 @@ final class LoginPages
         SignInMethods $methods,
         ?string $email = null,
         ?string $error = null,
-        int $status = 200,
+        int $status = StatusCodeInterface::STATUS_OK,
         ?AssertionOptions $passkey = null,
     ): HtmlPage {
         return new HtmlPage(

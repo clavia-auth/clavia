@@ -17,6 +17,7 @@ use Clavia\Application\Authentication\Mfa\MfaStatus;
 use Clavia\Application\Authentication\Mfa\SecondFactorPage;
 use Clavia\Application\Authentication\Mfa\TotpEnrollment;
 use Clavia\Application\Authentication\Passkey\AssertionOptions;
+use Fig\Http\Message\StatusCodeInterface;
 
 /**
  * The view models of the two-factor pages: the second step of a sign-in, and the
@@ -57,7 +58,7 @@ final class MfaPages
         SecondFactorPage $page,
         ?AssertionOptions $passkey = null,
         ?string $error = null,
-        int $status = 200,
+        int $status = StatusCodeInterface::STATUS_OK,
     ): HtmlPage {
         return new HtmlPage(
             template: 'auth::mfa-challenge',
@@ -89,7 +90,7 @@ final class MfaPages
     public static function settings(
         MfaStatus $status,
         ?string $error = null,
-        int $httpStatus = 200,
+        int $httpStatus = StatusCodeInterface::STATUS_OK,
         ?EnrolmentOnTheWay $onTheWay = null,
     ): HtmlPage {
         return new HtmlPage(
@@ -115,7 +116,7 @@ final class MfaPages
     public static function setUp(
         TotpEnrollment $enrollment,
         ?string $error = null,
-        int $status = 200,
+        int $status = StatusCodeInterface::STATUS_OK,
         ?EnrolmentOnTheWay $onTheWay = null,
     ): HtmlPage {
         return new HtmlPage(

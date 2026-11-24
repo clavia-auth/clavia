@@ -30,6 +30,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use DateTimeImmutable;
+use Fig\Http\Message\StatusCodeInterface;
 
 /**
  * The Management API asking for step-up (RFC 9470; docs/design/mfa-policies.md, slice 4): when
@@ -51,7 +52,7 @@ final class ManagementStepUpTest extends AcceptanceTestCase
 
         $response = $this->api('GET', '/api/v1/users', token: $this->personToken([M::Password]));
 
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertSame(
             'Bearer realm="https://management.clavia.test/api/v1/", error="insufficient_user_authentication", '
             . 'error_description="The Management API requires a stronger sign-in.", acr_values="' . self::MFA . '"',
@@ -66,7 +67,10 @@ final class ManagementStepUpTest extends AcceptanceTestCase
 
         $token = $this->personToken([M::Password, M::OneTimePassword, M::MultipleFactors]);
 
-        self::assertSame(200, $this->api('GET', '/api/v1/users', token: $token)->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_OK,
+            $this->api('GET', '/api/v1/users', token: $token)->getStatusCode(),
+        );
     }
 
     public function testTheSignInIsCheckedBeforeTheScope(): void
@@ -84,7 +88,7 @@ final class ManagementStepUpTest extends AcceptanceTestCase
         $this->requireMfa();
         $this->adminToken();
 
-        self::assertSame(200, $this->api('GET', '/api/v1/users')->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $this->api('GET', '/api/v1/users')->getStatusCode());
     }
 
     public function testWithThePolicyOptionalOneFactorIsEnough(): void
@@ -93,7 +97,7 @@ final class ManagementStepUpTest extends AcceptanceTestCase
 
         $response = $this->api('GET', '/api/v1/users', token: $this->personToken([M::Password]));
 
-        self::assertSame(200, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode());
     }
 
     private function requireMfa(): void

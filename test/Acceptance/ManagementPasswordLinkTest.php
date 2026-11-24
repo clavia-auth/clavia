@@ -31,6 +31,7 @@ use ClaviaTest\Support\LoginFixtures;
 use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -58,7 +59,11 @@ final class ManagementPasswordLinkTest extends AcceptanceTestCase
 
         $response = $this->sendLink($user);
 
-        self::assertSame(202, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_ACCEPTED,
+            $response->getStatusCode(),
+            (string) $response->getBody(),
+        );
         self::assertSame(['kind' => 'reset'], self::document($response));
         $mail = $this->lastMail();
         self::assertSame(self::EMAIL, $mail->to);
@@ -73,11 +78,19 @@ final class ManagementPasswordLinkTest extends AcceptanceTestCase
 
         $response = $this->sendLink($user);
 
-        self::assertSame(202, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(
+            StatusCodeInterface::STATUS_ACCEPTED,
+            $response->getStatusCode(),
+            (string) $response->getBody(),
+        );
         self::assertSame(['kind' => 'invitation'], self::document($response));
         $mail = $this->lastMail();
         self::assertStringContainsString('invited', $mail->subject);
-        self::assertSame(401, $this->signIn(self::PASSWORD)->getStatusCode(), 'There is no password yet.');
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
+            $this->signIn(self::PASSWORD)->getStatusCode(),
+            'There is no password yet.',
+        );
 
         $link = self::linkIn($mail);
         $form = $this->get($link);
@@ -88,24 +101,28 @@ final class ManagementPasswordLinkTest extends AcceptanceTestCase
             'csrf_token' => self::csrfTokenFrom($form),
         ]);
 
-        self::assertSame(200, $changed->getStatusCode(), (string) $changed->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $changed->getStatusCode(), (string) $changed->getBody());
         self::assertTrue($this->reload($user)->isEmailVerified(), 'Following the link proves the address.');
         $this->clearCookies();
-        self::assertSame(303, $this->signIn(self::PASSWORD)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $this->signIn(self::PASSWORD)->getStatusCode());
     }
 
     public function testAnAccountCreatedThroughTheApiWithoutAPasswordIsInvitedAndSignsIn(): void
     {
         $this->adminToken();
         $created = $this->api('POST', '/api/v1/users', ['email' => self::EMAIL]);
-        self::assertSame(201, $created->getStatusCode(), (string) $created->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_CREATED, $created->getStatusCode(), (string) $created->getBody());
         $id = self::document($created)['id'];
         self::assertIsString($id);
-        self::assertSame(401, $this->signIn(self::PASSWORD)->getStatusCode(), 'There is no password yet.');
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
+            $this->signIn(self::PASSWORD)->getStatusCode(),
+            'There is no password yet.',
+        );
 
         $invited = $this->api('POST', '/api/v1/users/' . $id . '/password-reset');
 
-        self::assertSame(202, $invited->getStatusCode(), (string) $invited->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_ACCEPTED, $invited->getStatusCode(), (string) $invited->getBody());
         self::assertSame(['kind' => 'invitation'], self::document($invited));
         $link = self::linkIn($this->lastMail());
         $form = $this->get($link);
@@ -114,10 +131,10 @@ final class ManagementPasswordLinkTest extends AcceptanceTestCase
             'password' => self::PASSWORD,
             'csrf_token' => self::csrfTokenFrom($form),
         ]);
-        self::assertSame(200, $changed->getStatusCode(), (string) $changed->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $changed->getStatusCode(), (string) $changed->getBody());
         self::assertTrue(self::document($this->api('GET', '/api/v1/users/' . $id))['has_password']);
         $this->clearCookies();
-        self::assertSame(303, $this->signIn(self::PASSWORD)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $this->signIn(self::PASSWORD)->getStatusCode());
     }
 
     public function testTheLinkDiesOnceThePasswordIsChosen(): void
@@ -161,7 +178,7 @@ final class ManagementPasswordLinkTest extends AcceptanceTestCase
 
         $response = $this->sendLink($user);
 
-        self::assertSame(403, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_FORBIDDEN, $response->getStatusCode());
         self::assertCount(0, $this->outbox()->recent(10));
     }
 
@@ -171,7 +188,7 @@ final class ManagementPasswordLinkTest extends AcceptanceTestCase
 
         $response = $this->api('POST', '/api/v1/users/6f1c8a52-1b1e-4c8e-9d38-0f2b3d7c9e10/password-reset');
 
-        self::assertSame(404, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $response->getStatusCode());
         self::assertCount(0, $this->outbox()->recent(10));
     }
 
@@ -182,7 +199,7 @@ final class ManagementPasswordLinkTest extends AcceptanceTestCase
 
         $response = $this->sendLink($user);
 
-        self::assertSame(409, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_CONFLICT, $response->getStatusCode());
         self::assertCount(0, $this->outbox()->recent(10));
         self::assertCount(0, $this->audited(AuditEventType::UserPasswordLinkSent));
     }
@@ -200,7 +217,7 @@ final class ManagementPasswordLinkTest extends AcceptanceTestCase
 
         $response = $this->sendLink($user);
 
-        self::assertSame(422, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
         self::assertCount(0, $this->outbox()->recent(10));
     }
 
@@ -210,11 +227,11 @@ final class ManagementPasswordLinkTest extends AcceptanceTestCase
         $user = $this->account(self::PASSWORD);
         $this->adminToken();
 
-        self::assertSame(202, $this->sendLink($user)->getStatusCode());
-        self::assertSame(202, $this->sendLink($user)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_ACCEPTED, $this->sendLink($user)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_ACCEPTED, $this->sendLink($user)->getStatusCode());
         $response = $this->sendLink($user);
 
-        self::assertSame(429, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_TOO_MANY_REQUESTS, $response->getStatusCode());
         self::assertCount(2, $this->outbox()->recent(10));
         self::assertCount(2, $this->audited(AuditEventType::UserPasswordLinkSent));
     }
@@ -227,7 +244,7 @@ final class ManagementPasswordLinkTest extends AcceptanceTestCase
 
         $response = $this->sendLink($user);
 
-        self::assertSame(503, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SERVICE_UNAVAILABLE, $response->getStatusCode());
         self::assertCount(0, $this->audited(AuditEventType::UserPasswordLinkSent));
     }
 

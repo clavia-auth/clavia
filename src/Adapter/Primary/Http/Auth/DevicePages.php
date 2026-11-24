@@ -13,6 +13,7 @@ namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
 use Clavia\Application\OAuth2\Device\DeviceReview;
+use Fig\Http\Message\StatusCodeInterface;
 
 /**
  * The device page's three stages: the code typed, the question put, the answer recorded.
@@ -34,8 +35,11 @@ final class DevicePages
     {
     }
 
-    public static function entry(string $userCode = '', ?string $error = null, int $status = 200): HtmlPage
-    {
+    public static function entry(
+        string $userCode = '',
+        ?string $error = null,
+        int $status = StatusCodeInterface::STATUS_OK,
+    ): HtmlPage {
         return new HtmlPage(
             template: 'auth::device',
             title: 'Connect a device',

@@ -16,6 +16,7 @@ use ClaviaTest\Support\LoginFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\OidcFixtures;
 use ClaviaTest\Support\TestEnvironment;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -104,9 +105,9 @@ final class AuthorizePromptTest extends AcceptanceTestCase
 
         $response = $this->authorize(['prompt' => 'login']);
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         $back = $this->submitLogin(state: self::loginStateOf($response));
-        self::assertSame(303, $back->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $back->getStatusCode());
         $next = $back->getHeaderLine('Location');
         self::assertStringStartsWith('/oauth2/authorize?', $next);
         self::assertStringNotContainsString('prompt=', $next);
@@ -130,7 +131,7 @@ final class AuthorizePromptTest extends AcceptanceTestCase
 
         $response = $this->authorize(['prompt' => 'select_account']);
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         $next = $this->submitLogin(state: self::loginStateOf($response))->getHeaderLine('Location');
         self::assertStringNotContainsString('select_account', $next);
         self::assertNotSame('', $this->extractCode($this->follow($next)));
@@ -149,7 +150,7 @@ final class AuthorizePromptTest extends AcceptanceTestCase
 
         $response = $this->authorize(['max_age' => '0']);
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         // max_age=0 is prompt=login by another name (§3.1.2.1), and goes like it.
         $next = $this->submitLogin(state: self::loginStateOf($response))->getHeaderLine('Location');
         self::assertArrayNotHasKey('max_age', self::queryOf($next));
@@ -164,7 +165,11 @@ final class AuthorizePromptTest extends AcceptanceTestCase
 
         $response = $this->authorize(['max_age' => '60']);
 
-        self::assertSame(303, $response->getStatusCode(), 'An hour-old sign-in is too old for a minute.');
+        self::assertSame(
+            StatusCodeInterface::STATUS_SEE_OTHER,
+            $response->getStatusCode(),
+            'An hour-old sign-in is too old for a minute.',
+        );
         $next = $this->submitLogin(state: self::loginStateOf($response))->getHeaderLine('Location');
         self::assertSame('60', self::queryOf($next)['max_age'] ?? null, 'A fresh sign-in satisfies it.');
         self::assertNotSame('', $this->extractCode($this->follow($next)));
@@ -191,7 +196,10 @@ final class AuthorizePromptTest extends AcceptanceTestCase
         $this->loggedIn();
         $this->publicClient();
 
-        self::assertSame(303, $this->authorize(['max_age' => '3600'])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_SEE_OTHER,
+            $this->authorize(['max_age' => '3600'])->getStatusCode(),
+        );
     }
 
     public function testANegativeOrMalformedMaxAgeIsInvalid(): void
@@ -253,7 +261,7 @@ final class AuthorizePromptTest extends AcceptanceTestCase
     {
         $this->publicClient();
         $this->user();
-        self::assertSame(303, $this->submitLogin()->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $this->submitLogin()->getStatusCode());
     }
 
     /**
@@ -277,7 +285,7 @@ final class AuthorizePromptTest extends AcceptanceTestCase
      */
     private static function redirectParams(ResponseInterface $response): array
     {
-        self::assertSame(302, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_FOUND, $response->getStatusCode(), (string) $response->getBody());
         self::assertStringStartsWith(self::TEST_REDIRECT_URI, $response->getHeaderLine('Location'));
 
         return self::locationQuery($response);

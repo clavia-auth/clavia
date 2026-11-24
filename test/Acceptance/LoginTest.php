@@ -20,6 +20,7 @@ use ClaviaTest\Support\LoginFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
 use DateTimeImmutable;
+use Fig\Http\Message\StatusCodeInterface;
 
 /**
  * The interactive login flow and the sessions it establishes.
@@ -42,7 +43,7 @@ final class LoginTest extends AcceptanceTestCase
     {
         $response = $this->get('/auth/login');
 
-        self::assertSame(200, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode());
         self::assertStringStartsWith('text/html', $response->getHeaderLine('Content-Type'));
         self::assertNotSame('', self::csrfTokenFrom($response));
         // Never cached: the page carries a CSRF token and may prefill an email.
@@ -85,7 +86,7 @@ final class LoginTest extends AcceptanceTestCase
     {
         $response = $this->post('/auth/theme', ['theme' => 'dark', 'next' => '/auth/login?state=abc']);
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertSame('/auth/login?state=abc', $response->getHeaderLine('Location'));
         self::assertSame('dark', $this->cookie('clavia_theme'));
 
@@ -101,7 +102,7 @@ final class LoginTest extends AcceptanceTestCase
 
         $response = $this->post('/auth/theme', ['theme' => 'auto', 'next' => '/auth/login']);
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertNull($this->cookie('clavia_theme'));
         $page = (string) $this->get('/auth/login')->getBody();
         self::assertStringNotContainsString('data-theme', $page);
@@ -112,7 +113,7 @@ final class LoginTest extends AcceptanceTestCase
     {
         $response = $this->post('/auth/theme', ['theme' => '<x>', 'next' => 'https://evil.test/']);
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertSame('/auth/login', $response->getHeaderLine('Location'));
         self::assertNull($this->cookie('clavia_theme'));
         self::assertStringNotContainsString('data-theme', (string) $this->get('/auth/login')->getBody());
@@ -138,7 +139,7 @@ final class LoginTest extends AcceptanceTestCase
 
         $response = $this->submitLogin();
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         $session = $this->session($this->cookie(self::SESSION_COOKIE));
         self::assertNotNull($session);
         self::assertTrue($session->userId->equals($user->id));
@@ -187,7 +188,7 @@ final class LoginTest extends AcceptanceTestCase
 
         $response = $this->post('/auth/logout');
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertSame('/auth/login', $response->getHeaderLine('Location'));
         self::assertNull($this->session($sessionId));
         self::assertNull($this->cookie(self::SESSION_COOKIE));
@@ -201,7 +202,7 @@ final class LoginTest extends AcceptanceTestCase
 
         $response = $this->get('/auth/logout');
 
-        self::assertSame(405, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_METHOD_NOT_ALLOWED, $response->getStatusCode());
         self::assertSame('POST', $response->getHeaderLine('Allow'));
         self::assertNotNull($this->session($sessionId));
     }
@@ -217,7 +218,7 @@ final class LoginTest extends AcceptanceTestCase
             '/auth/logout?' . http_build_query(['next' => 'https://client.test/signed-out']),
         );
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertSame('https://client.test/signed-out', $response->getHeaderLine('Location'));
     }
 
@@ -231,7 +232,7 @@ final class LoginTest extends AcceptanceTestCase
         foreach ($untrusted as $next) {
             $response = $this->request('POST', '/auth/logout?' . http_build_query(['next' => $next]));
 
-            self::assertSame(303, $response->getStatusCode());
+            self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
             self::assertSame('/auth/login', $response->getHeaderLine('Location'), $next);
         }
     }
@@ -246,7 +247,7 @@ final class LoginTest extends AcceptanceTestCase
 
         $response = $this->submitLogin(password: 'not-the-password');
 
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertNull($this->cookie(self::SESSION_COOKIE));
     }
 
@@ -257,8 +258,8 @@ final class LoginTest extends AcceptanceTestCase
         $wrongPassword = $this->submitLogin(password: 'not-the-password');
         $unknownAccount = $this->submitLogin(email: 'nobody@clavia.dev');
 
-        self::assertSame(401, $wrongPassword->getStatusCode());
-        self::assertSame(401, $unknownAccount->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $wrongPassword->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $unknownAccount->getStatusCode());
         self::assertStringContainsString('Incorrect email or password.', (string) $wrongPassword->getBody());
         self::assertStringContainsString('Incorrect email or password.', (string) $unknownAccount->getBody());
     }
@@ -269,7 +270,7 @@ final class LoginTest extends AcceptanceTestCase
 
         $response = $this->submitLogin();
 
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertStringContainsString('Incorrect email or password.', (string) $response->getBody());
         self::assertNull($this->cookie(self::SESSION_COOKIE));
     }
@@ -288,7 +289,7 @@ final class LoginTest extends AcceptanceTestCase
 
         $response = $this->submitLogin(email: 'sso@clavia.dev', password: '');
 
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertNull($this->cookie(self::SESSION_COOKIE));
     }
 
@@ -305,7 +306,7 @@ final class LoginTest extends AcceptanceTestCase
         $response = $this->get('/oauth2/authorize', $this->authorizeParams($challenge));
 
         // Treated as "not signed in" rather than authorizing on a dead account.
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertStringStartsWith('/auth/login?', $response->getHeaderLine('Location'));
     }
 
@@ -316,7 +317,7 @@ final class LoginTest extends AcceptanceTestCase
         $response = $this->submitLogin(email: '"><script>alert(1)</script>', password: 'x');
 
         $body = (string) $response->getBody();
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertStringNotContainsString('<script>', $body);
         self::assertStringContainsString(
             'value="&quot;&gt;&lt;script&gt;alert&#x28;1&#x29;&lt;&#x2F;script&gt;"',
@@ -337,7 +338,7 @@ final class LoginTest extends AcceptanceTestCase
             ['email' => self::TEST_USER_EMAIL, 'password' => self::TEST_USER_PASSWORD],
         );
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertStringContainsString('Your session expired. Please try again.', (string) $response->getBody());
         self::assertNull($this->cookie(self::SESSION_COOKIE));
     }
@@ -348,7 +349,7 @@ final class LoginTest extends AcceptanceTestCase
 
         $response = $this->submitLogin(csrfToken: 'not-the-token-in-the-cookie');
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertNull($this->cookie(self::SESSION_COOKIE));
     }
 
@@ -368,7 +369,7 @@ final class LoginTest extends AcceptanceTestCase
             ]),
         );
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertNull($this->cookie(self::SESSION_COOKIE));
     }
 
@@ -466,7 +467,7 @@ final class LoginTest extends AcceptanceTestCase
         ) {
             $response = $this->submitLogin(nextUrl: $hostile);
 
-            self::assertSame(303, $response->getStatusCode());
+            self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
             $location = $response->getHeaderLine('Location');
             self::assertStringNotContainsString('evil.test', $location);
             self::assertStringStartsNotWith('javascript:', $location);
@@ -480,7 +481,7 @@ final class LoginTest extends AcceptanceTestCase
 
         $response = $this->submitLogin(nextUrl: '/oauth2/authorize?response_type=code');
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertSame('/oauth2/authorize?response_type=code', $response->getHeaderLine('Location'));
     }
 
@@ -490,7 +491,7 @@ final class LoginTest extends AcceptanceTestCase
         $this->user();
         $state = $this->storeLoginState('/oauth2/authorize?response_type=code');
 
-        self::assertSame(303, $this->submitLogin(state: $state)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $this->submitLogin(state: $state)->getStatusCode());
         self::assertNull($this->loginState($state));
     }
 
@@ -505,7 +506,7 @@ final class LoginTest extends AcceptanceTestCase
 
         $response = $this->submitLogin(password: 'wrong', state: $state);
 
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertStringContainsString(sprintf('name="state" value="%s"', $state), (string) $response->getBody());
         self::assertNotNull($this->loginState($state));
     }
@@ -520,13 +521,16 @@ final class LoginTest extends AcceptanceTestCase
         $this->user();
 
         for ($attempt = 0; $attempt < 3; $attempt++) {
-            self::assertSame(401, $this->submitLogin(password: 'wrong')->getStatusCode());
+            self::assertSame(
+                StatusCodeInterface::STATUS_UNAUTHORIZED,
+                $this->submitLogin(password: 'wrong')->getStatusCode(),
+            );
         }
 
         // The correct password is refused too: the endpoint has stopped answering rather
         // than remaining an unlimited password oracle.
         $response = $this->submitLogin();
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertStringContainsString('Incorrect email or password.', (string) $response->getBody());
         self::assertNull($this->cookie(self::SESSION_COOKIE));
     }
@@ -536,14 +540,23 @@ final class LoginTest extends AcceptanceTestCase
         $this->boot(['CLAVIA_LOGIN_MAX_ATTEMPTS' => '3']);
         $this->user();
 
-        self::assertSame(401, $this->submitLogin(password: 'wrong')->getStatusCode());
-        self::assertSame(303, $this->submitLogin()->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
+            $this->submitLogin(password: 'wrong')->getStatusCode(),
+        );
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $this->submitLogin()->getStatusCode());
         $this->post('/auth/logout');
 
         // Two more failures would have tripped the limit had the counter survived.
-        self::assertSame(401, $this->submitLogin(password: 'wrong')->getStatusCode());
-        self::assertSame(401, $this->submitLogin(password: 'wrong')->getStatusCode());
-        self::assertSame(303, $this->submitLogin()->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
+            $this->submitLogin(password: 'wrong')->getStatusCode(),
+        );
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
+            $this->submitLogin(password: 'wrong')->getStatusCode(),
+        );
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $this->submitLogin()->getStatusCode());
     }
 
     public function testTheFailureCountersHoldNeitherAnEmailNorAnAddress(): void
@@ -571,7 +584,7 @@ final class LoginTest extends AcceptanceTestCase
 
         $response = $this->get('/oauth2/authorize', $this->authorizeParams($challenge));
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         $location = $response->getHeaderLine('Location');
         self::assertStringStartsWith('/auth/login?', $location);
         // The authorization request itself is kept server-side: only an opaque handle
@@ -615,7 +628,7 @@ final class LoginTest extends AcceptanceTestCase
 
         // 2. Sign in with the handle the page's hidden field carries: back to the request.
         $login = $this->submitLogin(state: $state);
-        self::assertSame(303, $login->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $login->getStatusCode());
         self::assertSame($nextUrl, $login->getHeaderLine('Location'));
 
         // 3. Follow it, now carrying the session cookie: a code is issued.
@@ -624,7 +637,7 @@ final class LoginTest extends AcceptanceTestCase
         // 4. Exchange it.
         $token = $this->post('/oauth2/token', $this->tokenRequest($code, $verifier));
 
-        self::assertSame(200, $token->getStatusCode(), (string) $token->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $token->getStatusCode(), (string) $token->getBody());
         self::assertIsString(self::json($token)['access_token']);
     }
 
@@ -645,7 +658,7 @@ final class LoginTest extends AcceptanceTestCase
             'password' => self::TEST_USER_PASSWORD,
         ]);
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
     }
 
     /**
@@ -663,7 +676,7 @@ final class LoginTest extends AcceptanceTestCase
             ['csrf_token' => $current, 'email' => self::TEST_USER_EMAIL, 'password' => self::TEST_USER_PASSWORD],
             headers: ['Cookie' => $both],
         );
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
 
         // A render that sees both keeps the current one and clears the other.
         $rendered = $this->request('GET', '/auth/login', ['Cookie' => $both]);
@@ -684,12 +697,12 @@ final class LoginTest extends AcceptanceTestCase
         $this->user();
 
         $response = $this->submitLogin(state: 'expired-or-forged');
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertSame('/auth/login', $response->getHeaderLine('Location'));
 
         $landing = $this->get('/auth/login');
         $body = (string) $landing->getBody();
-        self::assertSame(200, $landing->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $landing->getStatusCode());
         self::assertStringContainsString('You are signed in', $body);
         self::assertStringContainsString(self::TEST_USER_EMAIL, $body);
         self::assertStringNotContainsString('name="password"', $body);

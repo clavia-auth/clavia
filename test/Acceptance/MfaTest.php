@@ -28,6 +28,7 @@ use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
 use DateTimeImmutable;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -67,7 +68,7 @@ final class MfaTest extends AcceptanceTestCase
 
         $response = $this->get('/auth/mfa/enroll');
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertStringStartsWith('/auth/login?state=', $response->getHeaderLine('Location'));
         $state = self::locationQuery($response)['state'] ?? null;
         self::assertIsString($state);
@@ -89,7 +90,7 @@ final class MfaTest extends AcceptanceTestCase
             'csrf_token' => self::csrfTokenFrom($setUp),
         ]);
 
-        self::assertSame(401, $wrong->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $wrong->getStatusCode());
         self::assertStringContainsString('That code is not valid.', (string) $wrong->getBody());
         // The same seed again, so the account already added to the app stays valid.
         self::assertSame($secret, self::secretFrom($wrong));
@@ -145,7 +146,7 @@ final class MfaTest extends AcceptanceTestCase
 
         $response = $this->post('/auth/mfa/enroll', ['csrf_token' => self::csrfTokenFrom($settings)]);
 
-        self::assertSame(503, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SERVICE_UNAVAILABLE, $response->getStatusCode());
         self::assertStringContainsString(
             'CLAVIA_SECRET_ENCRYPTION_KEY is not configured',
             (string) $response->getBody(),
@@ -161,7 +162,7 @@ final class MfaTest extends AcceptanceTestCase
 
         $response = $this->post('/auth/mfa/enroll', ['csrf_token' => self::csrfTokenFrom($settings)]);
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertSame('/auth/mfa/enroll', $response->getHeaderLine('Location'));
         self::assertSame(
             $secret->base32(),
@@ -179,7 +180,7 @@ final class MfaTest extends AcceptanceTestCase
 
         $response = $this->post('/auth/mfa/disable', ['csrf_token' => 'forged']);
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertTrue($this->factors()->find($user->id)?->isConfirmed() ?? false);
     }
 
@@ -195,7 +196,7 @@ final class MfaTest extends AcceptanceTestCase
 
         $response = $this->submitLogin();
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertSame('/auth/mfa', $response->getHeaderLine('Location'));
         self::assertNotNull($this->cookie(self::MFA_COOKIE));
         self::assertNull($this->cookie(self::SESSION_COOKIE));
@@ -216,7 +217,7 @@ final class MfaTest extends AcceptanceTestCase
 
         $response = $this->answer(Totp::codeAt($secret, $this->clock->now()));
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertSame('/oauth2/authorize?x=1', $response->getHeaderLine('Location'));
         $session = $this->session($this->cookie(self::SESSION_COOKIE));
         self::assertNotNull($session);
@@ -233,15 +234,18 @@ final class MfaTest extends AcceptanceTestCase
 
         // The step the confirmation spent is refused, though the code is genuine.
         $this->submitLogin();
-        self::assertSame(401, $this->answer(Totp::codeAt($secret, $this->clock->now()))->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
+            $this->answer(Totp::codeAt($secret, $this->clock->now()))->getStatusCode(),
+        );
 
         $this->clock->advance(Totp::PERIOD);
         $code = Totp::codeAt($secret, $this->clock->now());
-        self::assertSame(303, $this->answer($code)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $this->answer($code)->getStatusCode());
         $this->post('/auth/logout');
 
         $this->submitLogin();
-        self::assertSame(401, $this->answer($code)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $this->answer($code)->getStatusCode());
     }
 
     public function testACodeFromTheAdjacentStepIsAcceptedAndOneFurtherIsNot(): void
@@ -253,10 +257,10 @@ final class MfaTest extends AcceptanceTestCase
 
         $this->submitLogin();
         $tooOld = Totp::codeAt($secret, $this->clock->now()->modify('-' . (2 * Totp::PERIOD) . ' seconds'));
-        self::assertSame(401, $this->answer($tooOld)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $this->answer($tooOld)->getStatusCode());
 
         $previous = Totp::codeAt($secret, $this->clock->now()->modify('-' . Totp::PERIOD . ' seconds'));
-        self::assertSame(303, $this->answer($previous)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $this->answer($previous)->getStatusCode());
     }
 
     public function testWrongCodesExhaustTheChallenge(): void
@@ -269,17 +273,17 @@ final class MfaTest extends AcceptanceTestCase
         $this->submitLogin();
         $wrong = self::wrongCodeFor($secret, $this->clock->now());
 
-        self::assertSame(401, $this->answer($wrong)->getStatusCode());
-        self::assertSame(401, $this->answer($wrong)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $this->answer($wrong)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $this->answer($wrong)->getStatusCode());
         $last = $this->answer($wrong);
 
         // Third strike: back to the password, the challenge gone.
-        self::assertSame(303, $last->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $last->getStatusCode());
         self::assertSame('/auth/login', $last->getHeaderLine('Location'));
         self::assertNull($this->cookie(self::MFA_COOKIE));
         $this->clock->advance(Totp::PERIOD);
         $this->setCookie(self::MFA_COOKIE, 'replayed', '/auth');
-        self::assertSame(303, $this->get('/auth/mfa')->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $this->get('/auth/mfa')->getStatusCode());
     }
 
     public function testARecoveryCodeSignsInOnceInAnyCase(): void
@@ -299,15 +303,18 @@ final class MfaTest extends AcceptanceTestCase
 
         $this->submitLogin();
         $first = $this->answer(strtoupper($codes[0]));
-        self::assertSame(303, $first->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $first->getStatusCode());
         $session = $this->session($this->cookie(self::SESSION_COOKIE));
         self::assertSame(['pwd', 'mfa'], self::methods($session?->methods ?? []));
         $this->post('/auth/logout');
 
         $this->submitLogin();
-        self::assertSame(401, $this->answer($codes[0])->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $this->answer($codes[0])->getStatusCode());
         self::assertSame(9, $this->recoveryCodes()->unusedCount($user->id));
-        self::assertSame(303, $this->answer(str_replace('-', '', $codes[1]))->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_SEE_OTHER,
+            $this->answer(str_replace('-', '', $codes[1]))->getStatusCode(),
+        );
         self::assertStringContainsString('8 unused recovery codes', (string) $this->get('/auth/mfa/enroll')->getBody());
     }
 
@@ -315,7 +322,7 @@ final class MfaTest extends AcceptanceTestCase
     {
         $response = $this->get('/auth/mfa');
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertSame('/auth/login', $response->getHeaderLine('Location'));
     }
 
@@ -335,7 +342,7 @@ final class MfaTest extends AcceptanceTestCase
             'csrf_token' => self::csrfTokenFrom($page),
         ]);
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertSame('/auth/login', $response->getHeaderLine('Location'));
         self::assertNull($this->cookie(self::SESSION_COOKIE));
         self::assertNull($this->cookie(self::MFA_COOKIE));
@@ -351,7 +358,7 @@ final class MfaTest extends AcceptanceTestCase
 
         $response = $this->post('/auth/mfa', ['code' => Totp::codeAt($secret, $this->clock->now())]);
 
-        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertNull($this->cookie(self::SESSION_COOKIE));
     }
 
@@ -367,7 +374,7 @@ final class MfaTest extends AcceptanceTestCase
 
         $response = $this->answer(Totp::codeAt($secret, $this->clock->now()));
 
-        self::assertSame(401, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertNull($this->cookie(self::SESSION_COOKIE));
     }
 
@@ -380,12 +387,12 @@ final class MfaTest extends AcceptanceTestCase
 
         $response = $this->post('/auth/mfa/disable', ['csrf_token' => self::csrfTokenFrom($settings)]);
 
-        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertNull($this->factors()->find($user->id));
         self::assertSame(0, $this->recoveryCodes()->unusedCount($user->id));
         self::assertStringContainsString('>Off<', (string) $this->get('/auth/mfa/enroll')->getBody());
         $this->post('/auth/logout');
-        self::assertSame(303, $this->submitLogin()->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $this->submitLogin()->getStatusCode());
         self::assertNotNull($this->cookie(self::SESSION_COOKIE));
     }
 
@@ -402,11 +409,11 @@ final class MfaTest extends AcceptanceTestCase
         $path = '/api/v1/users/' . $user->id->value;
 
         self::assertTrue(self::document($this->api('GET', $path))['mfa_enrolled']);
-        self::assertSame(204, $this->api('DELETE', $path . '/mfa')->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_NO_CONTENT, $this->api('DELETE', $path . '/mfa')->getStatusCode());
         self::assertFalse(self::document($this->api('GET', $path))['mfa_enrolled']);
         // Idempotent: the caller asked for it to be off, and it is off.
-        self::assertSame(204, $this->api('DELETE', $path . '/mfa')->getStatusCode());
-        self::assertSame(303, $this->submitLogin()->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_NO_CONTENT, $this->api('DELETE', $path . '/mfa')->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $this->submitLogin()->getStatusCode());
         self::assertNotNull($this->cookie(self::SESSION_COOKIE));
     }
 
@@ -415,11 +422,14 @@ final class MfaTest extends AcceptanceTestCase
         $user = $this->user();
         $this->adminToken(['read:users']);
 
-        self::assertSame(403, $this->api('DELETE', '/api/v1/users/' . $user->id->value . '/mfa')->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_FORBIDDEN,
+            $this->api('DELETE', '/api/v1/users/' . $user->id->value . '/mfa')->getStatusCode(),
+        );
 
         $this->adminToken();
         self::assertSame(
-            404,
+            StatusCodeInterface::STATUS_NOT_FOUND,
             $this->api('DELETE', '/api/v1/users/00000000-0000-4000-8000-000000000000/mfa')->getStatusCode(),
         );
     }
@@ -431,7 +441,7 @@ final class MfaTest extends AcceptanceTestCase
     {
         $this->submitLogin();
         $settings = $this->get('/auth/mfa/enroll');
-        self::assertSame(200, $settings->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $settings->getStatusCode());
         self::assertStringContainsString('>Off<', (string) $settings->getBody());
 
         $setUp = $this->beginEnrollment($settings);
@@ -441,7 +451,7 @@ final class MfaTest extends AcceptanceTestCase
             'code' => Totp::codeAt($secret, $this->clock->now()),
             'csrf_token' => self::csrfTokenFrom($setUp),
         ]);
-        self::assertSame(200, $confirmed->getStatusCode(), (string) $confirmed->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $confirmed->getStatusCode(), (string) $confirmed->getBody());
         self::assertStringContainsString('Recovery codes', (string) $confirmed->getBody());
 
         return $secret;
@@ -451,7 +461,7 @@ final class MfaTest extends AcceptanceTestCase
     {
         $settings ??= $this->get('/auth/mfa/enroll');
         $setUp = $this->post('/auth/mfa/enroll', ['csrf_token' => self::csrfTokenFrom($settings)]);
-        self::assertSame(200, $setUp->getStatusCode(), (string) $setUp->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $setUp->getStatusCode(), (string) $setUp->getBody());
 
         return $setUp;
     }
@@ -460,7 +470,7 @@ final class MfaTest extends AcceptanceTestCase
     private function answer(string $code): ResponseInterface
     {
         $page = $this->get('/auth/mfa');
-        self::assertSame(200, $page->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $page->getStatusCode());
 
         return $this->post('/auth/mfa', ['code' => $code, 'csrf_token' => self::csrfTokenFrom($page)]);
     }

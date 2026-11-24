@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Secondary\IdentityProvider;
 
 use Clavia\Application\Port\IdentityProviderFailed;
+use Fig\Http\Message\StatusCodeInterface;
 use JsonException;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
@@ -131,7 +132,7 @@ final readonly class ProviderHttp
         }
 
         $status = $response->getStatusCode();
-        if ($status < 200 || $status > 299) {
+        if ($status < StatusCodeInterface::STATUS_OK || $status >= StatusCodeInterface::STATUS_MULTIPLE_CHOICES) {
             $this->fail($provider, sprintf('%s answered %d.', $endpoint, $status));
         }
 

@@ -34,6 +34,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use DateTimeImmutable;
+use Fig\Http\Message\StatusCodeInterface;
 
 /**
  * A user's passkeys in the Management API (docs/design/passkeys.md §9): listed without their
@@ -55,7 +56,7 @@ final class ManagementPasskeysTest extends AcceptanceTestCase
 
         $response = $this->api('GET', '/api/v1/users/' . $user->id->value . '/passkeys');
 
-        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         self::assertSame([[
             'id' => $passkey->id->value,
             'name' => 'Work laptop',
@@ -94,7 +95,7 @@ final class ManagementPasskeysTest extends AcceptanceTestCase
 
         $removed = $this->api('DELETE', '/api/v1/users/' . $user->id->value . '/passkeys/' . $passkey->id->value);
 
-        self::assertSame(204, $removed->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_NO_CONTENT, $removed->getStatusCode());
         self::assertSame([], $this->container()->get(PasskeyRepository::class)->ofUser($user->id));
         $events = $this->container()->get(AuditLog::class)->page(
             new AuditQuery(types: [AuditEventType::PasskeyRemoved]),
@@ -120,9 +121,9 @@ final class ManagementPasskeysTest extends AcceptanceTestCase
         );
         $noUser = $this->api('GET', '/api/v1/users/00000000-0000-4000-8000-000000000009/passkeys');
 
-        self::assertSame(404, $wrongAccount->getStatusCode());
-        self::assertSame(404, $none->getStatusCode());
-        self::assertSame(404, $noUser->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $wrongAccount->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $none->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $noUser->getStatusCode());
         self::assertCount(1, $this->container()->get(PasskeyRepository::class)->ofUser($other->id));
     }
 
@@ -135,8 +136,8 @@ final class ManagementPasskeysTest extends AcceptanceTestCase
         $list = $this->api('GET', '/api/v1/users/' . $user->id->value . '/passkeys');
         $remove = $this->api('DELETE', '/api/v1/users/' . $user->id->value . '/passkeys/' . $passkey->id->value);
 
-        self::assertSame(200, $list->getStatusCode());
-        self::assertSame(403, $remove->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $list->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_FORBIDDEN, $remove->getStatusCode());
         self::assertCount(1, $this->container()->get(PasskeyRepository::class)->ofUser($user->id));
     }
 

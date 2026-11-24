@@ -1005,6 +1005,8 @@ someone else's or names something deleted gives the same "expired" page.
 
 ### HTTP adapters
 
+- **Status codes are named**: `Fig\Http\Message\StatusCodeInterface::STATUS_NOT_FOUND`, never `404`,
+  in the adapters and the tests alike (the domain and the application hold none).
 - **Parameters** are read with `RequestParameterReader`, never `getQueryParams()` or
   `getParsedBody()`, which keep the last of repeated values and rewrite names.
 - **Cookies** are read from the `Cookie` header (`RequestCookies`, every value kept) and written

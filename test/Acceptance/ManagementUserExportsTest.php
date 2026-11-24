@@ -23,6 +23,7 @@ use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
 use DateTimeImmutable;
+use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Symfony\Component\Console\Tester\CommandTester;
 
@@ -50,12 +51,16 @@ final class ManagementUserExportsTest extends AcceptanceTestCase
         ));
 
         $queued = $this->api('POST', self::EXPORTS);
-        self::assertSame(202, $queued->getStatusCode(), (string) $queued->getBody());
+        self::assertSame(StatusCodeInterface::STATUS_ACCEPTED, $queued->getStatusCode(), (string) $queued->getBody());
         $job = self::document($queued);
         self::assertIsString($job['id']);
         self::assertSame('users_export', $job['type']);
         self::assertSame('/api/v1/jobs/' . $job['id'], $queued->getHeaderLine('Location'));
-        self::assertSame(409, $this->download($job['id'])->getStatusCode(), 'Not before it is written.');
+        self::assertSame(
+            StatusCodeInterface::STATUS_CONFLICT,
+            $this->download($job['id'])->getStatusCode(),
+            'Not before it is written.',
+        );
 
         self::assertSame("Ran 1 job; 0 stalled jobs failed; 0 finished jobs purged.\n", $this->runJobs());
 
@@ -64,7 +69,7 @@ final class ManagementUserExportsTest extends AcceptanceTestCase
         self::assertSame(['total' => 1, 'created' => 0, 'failed' => 0], $done['summary']);
 
         $output = $this->download($job['id']);
-        self::assertSame(200, $output->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_OK, $output->getStatusCode());
         self::assertSame('application/x-ndjson', $output->getHeaderLine('Content-Type'));
         self::assertStringStartsWith('attachment;', $output->getHeaderLine('Content-Disposition'));
         self::assertSame('no-store', $output->getHeaderLine('Cache-Control'));
@@ -104,8 +109,14 @@ final class ManagementUserExportsTest extends AcceptanceTestCase
     {
         $this->adminToken(['read:users']);
 
-        self::assertSame(202, $this->api('POST', self::EXPORTS, query: ['connection' => 'google'])->getStatusCode());
-        self::assertSame(404, $this->api('POST', self::EXPORTS, query: ['connection' => 'nowhere'])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_ACCEPTED,
+            $this->api('POST', self::EXPORTS, query: ['connection' => 'google'])->getStatusCode(),
+        );
+        self::assertSame(
+            StatusCodeInterface::STATUS_NOT_FOUND,
+            $this->api('POST', self::EXPORTS, query: ['connection' => 'nowhere'])->getStatusCode(),
+        );
     }
 
     public function testAnImportHasNoOutput(): void
@@ -119,14 +130,17 @@ final class ManagementUserExportsTest extends AcceptanceTestCase
         ));
         $this->runJobs();
 
-        self::assertSame(404, $this->download((string) $import['id'])->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_NOT_FOUND,
+            $this->download((string) $import['id'])->getStatusCode(),
+        );
     }
 
     public function testExportingNeedsReadUsers(): void
     {
         $this->adminToken(['create:users']);
 
-        self::assertSame(403, $this->api('POST', self::EXPORTS)->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_FORBIDDEN, $this->api('POST', self::EXPORTS)->getStatusCode());
         self::assertSame(0, (int) TestStorage::database()->fetchValue('SELECT count(*) FROM user_jobs'));
     }
 
