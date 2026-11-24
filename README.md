@@ -160,6 +160,15 @@ the server sees. The essentials:
   `PATCH /api/v1/connections/password` with `{"allow_sign_up": true, "require_verified_email": true}`.
 - **Purge old audit events daily**: `0 3 * * * bin/clavia audit:purge`.
 - **Run bulk jobs every minute** (user imports): `* * * * * bin/clavia jobs:run`.
+- **Import accounts from an AWS SQS queue**, one account per message (the JSON object of an import
+  line; the pool in a `connection` message attribute, the default pool without one):
+  `bin/clavia users:import-sqs https://sqs.<region>.amazonaws.com/<account>/<queue>`, run as a
+  long-lived service. It needs `aws/aws-sdk-php` (`composer require aws/aws-sdk-php`), credentials from
+  the SDK's usual chain (an IAM role), and on that queue `sqs:ReceiveMessage` and `sqs:DeleteMessage`.
+  Give the queue a redrive policy to a dead-letter queue: a message that fails unexpectedly (the
+  database down) is left for a retry, while one refused for good (an address already in the pool, an
+  invalid field) is deleted and logged by message id. Delivery is at least once, and a second copy is
+  refused as `already_exists`. With the `pcntl` extension, SIGTERM stops it after the message in hand.
 - **With client registration on, purge unused clients daily**: `15 3 * * * bin/clavia clients:purge-unused`
   deletes self-registered clients never issued a token after `CLAVIA_CLIENT_REGISTRATION_UNUSED_LIFETIME` days.
 - **Serve `auth.{domain}` and `management.{domain}` as separate origins.** Their separation is a

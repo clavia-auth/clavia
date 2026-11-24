@@ -16,6 +16,10 @@ All notable changes to Clavia are written here, for the people who run it. The f
   let go when the job ends.
 - **`bin/clavia jobs:run`**, to run every minute: it runs the queued jobs, fails a job whose worker
   stopped, and purges finished jobs after seven days. **Migration `0036`**.
+- **`bin/clavia users:import-sqs <queue-url>`** (#108): imports accounts from an AWS SQS queue, one per
+  message, under the same rules as an import line, the pool in the `connection` message attribute.
+  Needs `aws/aws-sdk-php`, and `sqs:ReceiveMessage` and `sqs:DeleteMessage` on the queue; give the
+  queue a dead-letter queue for the messages that keep failing.
 
 ### Changed
 

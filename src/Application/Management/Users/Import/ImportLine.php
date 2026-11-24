@@ -9,10 +9,9 @@
 
 declare(strict_types=1);
 
-namespace Clavia\Application\Management\Users\Jobs;
+namespace Clavia\Application\Management\Users\Import;
 
 use Clavia\Application\Port\PasswordHasher;
-use Clavia\Domain\Identity\Jobs\LineError;
 use JsonException;
 use stdClass;
 
@@ -39,34 +38,31 @@ final readonly class ImportLine
     {
     }
 
-    /**
-     * @param positive-int $number The line's number in the file, from 1.
-     */
-    public function read(#[\SensitiveParameter] string $line, int $number): ImportedAccount|LineError
+    public function read(#[\SensitiveParameter] string $line): ImportedAccount|ImportRefusal
     {
         try {
             /** @var mixed $decoded */
             $decoded = json_decode($line, false, 8, JSON_THROW_ON_ERROR);
         } catch (JsonException) {
-            return new LineError($number, 'invalid_json', 'The line is not valid JSON.');
+            return new ImportRefusal('invalid_json', 'The line is not valid JSON.');
         }
         if (! $decoded instanceof stdClass) {
-            return new LineError($number, 'invalid_json', 'The line is not a JSON object.');
+            return new ImportRefusal('invalid_json', 'The line is not a JSON object.');
         }
         $members = get_object_vars($decoded);
         foreach (array_keys($members) as $name) {
             if (! in_array($name, self::KNOWN, true)) {
-                return new LineError($number, 'invalid_field', sprintf("'%s' is not a field an import takes.", $name));
+                return new ImportRefusal('invalid_field', sprintf("'%s' is not a field an import takes.", $name));
             }
         }
 
         $email = $members['email'] ?? null;
         if (! is_string($email)) {
-            return new LineError($number, 'invalid_field', "'email' is required, a string.");
+            return new ImportRefusal('invalid_field', "'email' is required, a string.");
         }
         foreach (['email_verified', 'is_active'] as $flag) {
             if (array_key_exists($flag, $members) && ! is_bool($members[$flag])) {
-                return new LineError($number, 'invalid_field', sprintf("'%s' must be true or false.", $flag));
+                return new ImportRefusal('invalid_field', sprintf("'%s' must be true or false.", $flag));
             }
         }
         $profile = [];
@@ -75,14 +71,13 @@ final readonly class ImportLine
                 continue;
             }
             if (! is_string($members[$field])) {
-                return new LineError($number, 'invalid_field', sprintf("'%s' must be a string.", $field));
+                return new ImportRefusal('invalid_field', sprintf("'%s' must be a string.", $field));
             }
             $profile[$field] = $members[$field];
         }
         $hash = $members['password_hash'] ?? null;
         if ($hash !== null && (! is_string($hash) || $hash === '' || ! $this->hasher->canVerify($hash))) {
-            return new LineError(
-                $number,
+            return new ImportRefusal(
                 'unsupported_hash',
                 "'password_hash' is not in a format this server verifies: PBKDF2-HMAC-SHA-256 "
                 . '($pbkdf2-sha256$i=…$salt$key).',

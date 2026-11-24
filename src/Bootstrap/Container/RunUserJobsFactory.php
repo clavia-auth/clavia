@@ -12,14 +12,10 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Audit\AuditContext;
-use Clavia\Application\Management\Users\Jobs\ImportLine;
+use Clavia\Application\Management\Users\Import\UserImport;
 use Clavia\Application\Management\Users\Jobs\RunUserJobs;
-use Clavia\Application\Port\DomainEvents;
-use Clavia\Application\Port\TransactionManager;
 use Clavia\Domain\Identity\Jobs\UserJobRepository;
-use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\Shared\Clock;
-use Clavia\Domain\Shared\RandomSource;
 use Psr\Container\ContainerInterface;
 
 final class RunUserJobsFactory
@@ -28,21 +24,13 @@ final class RunUserJobsFactory
     {
         /** @var UserJobRepository $jobs */
         $jobs = $container->get(UserJobRepository::class);
-        /** @var UserRepository $users */
-        $users = $container->get(UserRepository::class);
-        /** @var ImportLine $lines */
-        $lines = $container->get(ImportLine::class);
-        /** @var TransactionManager $transactions */
-        $transactions = $container->get(TransactionManager::class);
+        /** @var UserImport $imports */
+        $imports = $container->get(UserImport::class);
         /** @var AuditContext $audit */
         $audit = $container->get(AuditContext::class);
-        /** @var RandomSource $random */
-        $random = $container->get(RandomSource::class);
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
-        /** @var DomainEvents $events */
-        $events = $container->get(DomainEvents::class);
 
-        return new RunUserJobs($jobs, $users, $lines, $transactions, $audit, $random, $clock, $events);
+        return new RunUserJobs($jobs, $imports, $audit, $clock);
     }
 }

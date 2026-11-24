@@ -80,6 +80,7 @@ The console is `bin/clavia`:
 | `clients:create-m2m [--third-party]`, `clients:grant` | Machine clients and their grants on an API |
 | `clients:registration-token` | An initial access token for client registration, printed once |
 | `jobs:run` | Run the queued bulk jobs on the users (imports), then exit; run every minute |
+| `users:import-sqs <queue-url>` | Import accounts from an AWS SQS queue, one per message, until stopped |
 | `clients:purge-unused` | Delete self-registered clients never issued a token after `CLAVIA_CLIENT_REGISTRATION_UNUSED_LIFETIME` days; run daily |
 | `roles:create`, `roles:assign`, `roles:list` | Roles, including the first administrator |
 | `audit:purge` | Delete audit events older than `CLAVIA_AUDIT_RETENTION_DAYS`; run daily |
@@ -762,6 +763,16 @@ Refused lines are reported by number and reason (`invalid_json`, `invalid_field`
 no input (a database check), only its report, `GET /api/v1/jobs/{job_id}` (`read:users`), for seven
 days. A job running for an hour has lost its worker and is failed. Password sign-in replaces a hash
 `needsRehash()` at today's count, which is how an imported one reaches 600,000 iterations.
+
+**One door for an imported account**: `Import\UserImport` (`ImportUser`) reads a line, checks
+the pool, and creates the account in its own transaction, or answers an `ImportRefusal` (the codes
+above, and `invalid_connection`). `RunUserJobs` calls it for each line of a job; so does
+`bin/clavia users:import-sqs` (`ImportUsersFromSqsCommand`, #108), a primary adapter reading one
+account per SQS message (the `connection` attribute names the pool), through `Cli\Sqs\QueueMessages`,
+a small interface of the adapter's own (`SqsQueueMessages` over `aws/aws-sdk-php`, a Composer
+suggestion; `FakeQueueMessages` in tests). A refusal is final: the message is deleted and logged by
+id and code, never body. An unexpected failure leaves it for the queue's redrive policy. The shell
+acts, so the trail records the system.
 
 ### Domain events and the audit trail
 
