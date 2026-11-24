@@ -9,7 +9,7 @@
 
 declare(strict_types=1);
 
-namespace Clavia\Application\Management\Users\Jobs;
+namespace Clavia\Application\Management\Users\Import;
 
 /**
  * One account an import line describes, read and checked ({@see ImportLine}).

@@ -3312,7 +3312,7 @@ components:
                 minimum: 1
               error:
                 type: string
-                enum: [invalid_json, invalid_field, unsupported_hash, already_exists]
+                enum: [invalid_connection, invalid_json, invalid_field, unsupported_hash, already_exists]
               detail:
                 type: string
         failure:

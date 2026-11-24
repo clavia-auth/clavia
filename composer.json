@@ -65,7 +65,7 @@
         "vimeo/psalm": "^7.11"
     },
     "suggest": {
-        "aws/aws-sdk-php": "^3.407 — for CLAVIA_SIGNING_BACKEND=aws-kms",
+        "aws/aws-sdk-php": "^3.407 — for CLAVIA_SIGNING_BACKEND=aws-kms and bin/clavia users:import-sqs",
         "google/auth": "^1.55 — for CLAVIA_SIGNING_BACKEND=gcp-kms"
     },
     "autoload": {

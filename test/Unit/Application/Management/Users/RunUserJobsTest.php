@@ -12,7 +12,8 @@ declare(strict_types=1);
 namespace ClaviaTest\Unit\Application\Management\Users;
 
 use Clavia\Application\Audit\AuditContext;
-use Clavia\Application\Management\Users\Jobs\ImportLine;
+use Clavia\Application\Management\Users\Import\ImportLine;
+use Clavia\Application\Management\Users\Import\ImportUser;
 use Clavia\Application\Management\Users\Jobs\RunUserJobs;
 use Clavia\Domain\Audit\Actor;
 use Clavia\Domain\Connection\ConnectionName;
@@ -21,6 +22,7 @@ use Clavia\Domain\Identity\Jobs\UserJobId;
 use Clavia\Domain\Identity\Jobs\UserJobStatus;
 use ClaviaTest\Support\Fake\FakePasswordHasher;
 use ClaviaTest\Support\Fake\FrozenClock;
+use ClaviaTest\Support\Fake\InMemoryConnectionRepository;
 use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use ClaviaTest\Support\Fake\InMemoryUserJobRepository;
@@ -86,13 +88,17 @@ final class RunUserJobsTest extends TestCase
     {
         return new RunUserJobs(
             $this->jobs,
-            new InMemoryUserRepository(),
-            new ImportLine(new FakePasswordHasher()),
-            new InMemoryTransactionManager(),
+            new ImportUser(
+                new ImportLine(new FakePasswordHasher()),
+                new InMemoryUserRepository(),
+                new InMemoryConnectionRepository(),
+                new InMemoryTransactionManager(),
+                new SeededRandomSource(5),
+                $this->clock,
+                new InMemoryDomainEvents(),
+            ),
             new AuditContext(),
-            new SeededRandomSource(5),
             $this->clock,
-            new InMemoryDomainEvents(),
         );
     }
 }

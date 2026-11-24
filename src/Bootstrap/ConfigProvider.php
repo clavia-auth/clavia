@@ -19,6 +19,7 @@ use Clavia\Adapter\Primary\Cli\DatabaseStatusCommand;
 use Clavia\Adapter\Primary\Cli\GenerateEncryptionKeyCommand;
 use Clavia\Adapter\Primary\Cli\GenerateSigningKeyCommand;
 use Clavia\Adapter\Primary\Cli\GrantClientAccessCommand;
+use Clavia\Adapter\Primary\Cli\ImportUsersFromSqsCommand;
 use Clavia\Adapter\Primary\Cli\IssueRegistrationTokenCommand;
 use Clavia\Adapter\Primary\Cli\ListManagementScopesCommand;
 use Clavia\Adapter\Primary\Cli\ListRolesCommand;
@@ -32,6 +33,7 @@ use Clavia\Adapter\Primary\Cli\RotateSigningKeyCommand;
 use Clavia\Adapter\Primary\Cli\RunJobsCommand;
 use Clavia\Adapter\Primary\Cli\SeedDevelopmentDataCommand;
 use Clavia\Adapter\Primary\Cli\ShowConfigCommand;
+use Clavia\Adapter\Primary\Cli\Sqs\QueueMessagesFactory;
 use Clavia\Adapter\Primary\Http\Auth\AuthCookies;
 use Clavia\Adapter\Primary\Http\Auth\AuthPageResponder;
 use Clavia\Adapter\Primary\Http\Auth\ConsentHandler;
@@ -225,7 +227,8 @@ use Clavia\Application\Management\Roles\RolePermissions;
 use Clavia\Application\Management\Roles\UpdateRole;
 use Clavia\Application\Management\Users\CreateUser;
 use Clavia\Application\Management\Users\DeleteUser;
-use Clavia\Application\Management\Users\Jobs\ImportLine;
+use Clavia\Application\Management\Users\Import\ImportLine;
+use Clavia\Application\Management\Users\Import\UserImport;
 use Clavia\Application\Management\Users\Jobs\QueueUserImport;
 use Clavia\Application\Management\Users\Jobs\ReadUserJobs;
 use Clavia\Application\Management\Users\Jobs\RunUserJobs;
@@ -379,6 +382,7 @@ final class ConfigProvider
         'audit:purge' => PurgeAuditEventsCommand::class,
         'clients:purge-unused' => PurgeUnusedClientsCommand::class,
         'jobs:run' => RunJobsCommand::class,
+        'users:import-sqs' => ImportUsersFromSqsCommand::class,
     ];
 
     /**
@@ -615,6 +619,7 @@ final class ConfigProvider
                     RegistrationMetadata::class => Container\RegistrationMetadataFactory::class,
                     RegisterClientDynamically::class => Container\RegisterClientDynamicallyFactory::class,
                     ImportLine::class => Container\ImportLineFactory::class,
+                    UserImport::class => Container\ImportUserFactory::class,
                     QueueUserImport::class => Container\QueueUserImportFactory::class,
                     RunUserJobs::class => Container\RunUserJobsFactory::class,
                     ReadUserJobs::class => Container\ReadUserJobsFactory::class,
@@ -742,6 +747,8 @@ final class ConfigProvider
                     IssueRegistrationTokenCommand::class => Container\IssueRegistrationTokenCommandFactory::class,
                     PurgeUnusedClientsCommand::class => Container\PurgeUnusedClientsCommandFactory::class,
                     RunJobsCommand::class => Container\RunJobsCommandFactory::class,
+                    ImportUsersFromSqsCommand::class => Container\ImportUsersFromSqsCommandFactory::class,
+                    QueueMessagesFactory::class => Container\SqsQueueMessagesFactoryFactory::class,
                     GrantClientAccessCommand::class => Container\GrantClientAccessCommandFactory::class,
                     RegisterManagementApiCommand::class => Container\RegisterManagementApiCommandFactory::class,
                     CreateRoleCommand::class => Container\CreateRoleCommandFactory::class,

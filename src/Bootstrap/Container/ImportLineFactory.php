@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
-use Clavia\Application\Management\Users\Jobs\ImportLine;
+use Clavia\Application\Management\Users\Import\ImportLine;
 use Clavia\Application\Port\PasswordHasher;
 use Psr\Container\ContainerInterface;
 
