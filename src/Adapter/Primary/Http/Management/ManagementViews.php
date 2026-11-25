@@ -155,6 +155,10 @@ final class ManagementViews
             'require_pushed_authorization_requests' => $client->requiresPushedAuthorizationRequests,
             'dpop_bound_access_tokens' => $client->requiresDpop,
             // RFC 7591: which initial access token let it in, and when; null for the operator's own.
+            'claims' => array_map(
+                static fn (ClaimMapping $mapping): array => $mapping->toArray(),
+                $client->claims->mappings,
+            ),
             'registration' => $registration === null ? null : [
                 'initial_access_token_id' => $registration->initialAccessTokenId?->value,
                 'registered_at' => self::instant($registration->registeredAt),

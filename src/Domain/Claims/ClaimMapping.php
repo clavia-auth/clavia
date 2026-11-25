@@ -40,9 +40,41 @@ final readonly class ClaimMapping
     }
 
     /**
-     * As storage and the Management API write it: `{name, source}`, and `value` for a constant.
+     * A mapping of an application: for its ID tokens, its userinfo answers, or both. Never `roles`
+     * as a name, which RFC 9068 defines for access tokens only ({@see ClaimName::fromString()}).
      *
-     * @return array{name: string, source: string, value?: mixed}
+     * @param list<ClaimDestination> $destinations
+     *
+     * @throws InvalidValue When it goes nowhere, twice somewhere, or to an access token.
+     */
+    public static function forApplication(ClaimName $name, ClaimSource $source, array $destinations): self
+    {
+        if ($destinations === []) {
+            throw new InvalidValue("An application's custom claim goes to the ID token, userinfo, or both.");
+        }
+        if (in_array(ClaimDestination::AccessToken, $destinations, true)) {
+            throw new InvalidValue(
+                "An application's custom claims go to its ID tokens and userinfo; an API's to its access tokens.",
+            );
+        }
+        $names = array_map(static fn (ClaimDestination $d): string => $d->value, $destinations);
+        if (count(array_unique($names)) !== count($destinations)) {
+            throw new InvalidValue('A custom claim names each destination once.');
+        }
+        if ($name->value === ClaimName::ROLES) {
+            throw new InvalidValue("The 'roles' claim is an access token's (RFC 9068 §2.2.3.1).");
+        }
+        // In a fixed order, so the same mapping reads back the same.
+        usort($destinations, static fn (ClaimDestination $a, ClaimDestination $b): int => strcmp($a->value, $b->value));
+
+        return new self($name, $source, $destinations);
+    }
+
+    /**
+     * As storage and the Management API write it: `{name, source}`, `value` for a constant, and
+     * `in` for an application's (where it goes).
+     *
+     * @return array{name: string, source: string, value?: mixed, in?: list<string>}
      */
     public function toArray(): array
     {
@@ -50,6 +82,9 @@ final readonly class ClaimMapping
         if ($this->source->constant !== null) {
             /** @psalm-suppress MixedAssignment Any JSON. */
             $mapping['value'] = json_decode($this->source->constant, false, 16, JSON_THROW_ON_ERROR);
+        }
+        if ($this->destinations !== [ClaimDestination::AccessToken]) {
+            $mapping['in'] = array_map(static fn (ClaimDestination $d): string => $d->value, $this->destinations);
         }
 
         return $mapping;

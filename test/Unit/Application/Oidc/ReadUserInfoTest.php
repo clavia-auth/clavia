@@ -12,11 +12,14 @@ declare(strict_types=1);
 namespace ClaviaTest\Unit\Application\Oidc;
 
 use ClaviaTest\Support\Fake\FakeDpopProofVerifier;
+use ClaviaTest\Support\Fake\InMemoryClientRepository;
 use ClaviaTest\Support\Fake\InMemoryDpopNonces;
 use ClaviaTest\Support\Fake\InMemoryDpopReplayCache;
+use ClaviaTest\Support\Fake\InMemoryRoleRepository;
 use Clavia\Application\OAuth2\Dpop\ReadDpopProof;
 use Clavia\Application\OAuth2\ProtectedResource\CheckSenderConstraint;
 use Clavia\Application\OAuth2\ProtectedResource\PresentedCredentials;
+use Clavia\Application\Oidc\ApplicationClaims;
 use Clavia\Application\Oidc\UserInfo\ReadUserInfo;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\Profile;
@@ -55,6 +58,7 @@ final class ReadUserInfoTest extends TestCase
             $this->clock,
             self::senderConstraint(),
             'https://auth.clavia.test/oidc/userinfo',
+            new ApplicationClaims(new InMemoryClientRepository(), new InMemoryRoleRepository()),
         );
 
         $this->user = User::register(

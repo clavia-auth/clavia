@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\OAuth2\ProtectedResource\CheckSenderConstraint;
+use Clavia\Application\Oidc\ApplicationClaims;
 use Clavia\Application\Oidc\Discovery\ProviderMetadata;
 use Clavia\Application\Oidc\UserInfo\ReadUserInfo;
 use Clavia\Configuration\Settings;
@@ -35,6 +36,8 @@ final class ReadUserInfoFactory
         $senderConstraint = $container->get(CheckSenderConstraint::class);
         /** @var Settings $settings */
         $settings = $container->get(Settings::class);
+        /** @var ApplicationClaims $claims */
+        $claims = $container->get(ApplicationClaims::class);
 
         return new ReadUserInfo(
             $tokens,
@@ -42,6 +45,7 @@ final class ReadUserInfoFactory
             $clock,
             $senderConstraint,
             $settings->issuer() . ProviderMetadata::USERINFO_ENDPOINT,
+            $claims,
         );
     }
 }

@@ -15,6 +15,7 @@ use Clavia\Application\Port\NoActiveSigningKey;
 use Clavia\Application\Port\SigningFailed;
 use Clavia\Application\Port\TokenSigner;
 use Clavia\Domain\Authentication\AuthenticationContext;
+use Clavia\Domain\Claims\ClaimDestination;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\OAuth2\AuthorizationCode;
@@ -40,6 +41,7 @@ final readonly class IdTokenIssuer
         private CompactJws $jws,
         private string $issuer,
         private int $lifetimeSeconds,
+        private ApplicationClaims $claims,
     ) {
     }
 
@@ -96,6 +98,8 @@ final readonly class IdTokenIssuer
             $key->algorithm->halfHash($accessToken),
             $now,
             $this->lifetimeSeconds,
+            // The application's custom claims for its ID tokens, after the protocol's.
+            $this->claims->for($clientId, $user, ClaimDestination::IdToken),
         );
 
         return $this->jws->sign($key, $claims->toArray(), IdTokenClaims::TYPE);

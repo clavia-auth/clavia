@@ -8,6 +8,10 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ### Added
 
+- **Custom claims on applications** (#116): `claims` on a client, set with
+  `PATCH /api/v1/clients/{client_id}`, each going to the application's ID tokens, its userinfo
+  answers, or both (`in`). First-party applications only; dynamic registration never sets them.
+  **Migration `0040`**.
 - **Custom claims on APIs** (#115, `docs/design/custom-claims.md`): `claims` on an API, set with
   `PATCH /api/v1/resource-servers/{id}`, up to twenty `{name, source}` mappings read from the
   account (`email`, `email_verified`, `connection`, `profile.<field>`, `app_metadata.<path>`,

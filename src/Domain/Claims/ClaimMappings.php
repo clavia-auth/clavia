@@ -64,6 +64,22 @@ final readonly class ClaimMappings
      */
     public static function forApiFromJson(string $json): self
     {
+        return self::fromJson($json, forApplication: false);
+    }
+
+    /**
+     * An application's mappings as storage holds them, each with the places it goes (`in`).
+     *
+     * @throws InvalidValue When the stored JSON is not mappings.
+     */
+    public static function forApplicationFromJson(string $json): self
+    {
+        return self::fromJson($json, forApplication: true);
+    }
+
+    /** @throws InvalidValue */
+    private static function fromJson(string $json, bool $forApplication): self
+    {
         /** @var mixed $decoded */
         $decoded = json_decode($json, false, 32, JSON_THROW_ON_ERROR);
         if (! is_array($decoded)) {
@@ -82,13 +98,38 @@ final readonly class ClaimMappings
             $value = property_exists($item, 'value')
                 ? json_encode($item->value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)
                 : null;
-            $mappings[] = ClaimMapping::forApi(
-                ClaimName::fromStorage($name),
-                ClaimSource::fromString($source, $value),
-            );
+            $claimName = ClaimName::fromStorage($name);
+            $claimSource = ClaimSource::fromString($source, $value);
+            if (! $forApplication) {
+                $mappings[] = ClaimMapping::forApi($claimName, $claimSource);
+                continue;
+            }
+            /** @var mixed $in */
+            $in = $item->in ?? null;
+            $mappings[] = ClaimMapping::forApplication($claimName, $claimSource, self::destinations($in));
         }
 
         return self::of($mappings);
+    }
+
+    /**
+     * @return list<ClaimDestination>
+     *
+     * @throws InvalidValue
+     */
+    public static function destinations(mixed $in): array
+    {
+        if (! is_array($in)) {
+            throw new InvalidValue("'in' is a list of 'id_token' and 'userinfo'.");
+        }
+        $destinations = [];
+        /** @var mixed $value */
+        foreach ($in as $value) {
+            $destination = is_string($value) ? ClaimDestination::tryFrom($value) : null;
+            $destinations[] = $destination ?? throw new InvalidValue("'in' is a list of 'id_token' and 'userinfo'.");
+        }
+
+        return $destinations;
     }
 
     /** As storage holds it: a JSON list. */

@@ -13,6 +13,8 @@ namespace Clavia\Application\Oidc\UserInfo;
 
 use Clavia\Application\OAuth2\ProtectedResource\CheckSenderConstraint;
 use Clavia\Application\OAuth2\ProtectedResource\PresentedCredentials;
+use Clavia\Application\Oidc\ApplicationClaims;
+use Clavia\Domain\Claims\ClaimDestination;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\BearerTokenError;
@@ -42,11 +44,12 @@ final readonly class ReadUserInfo
         private Clock $clock,
         private CheckSenderConstraint $senderConstraint,
         private string $url,
+        private ApplicationClaims $claims,
     ) {
     }
 
     /**
-     * @return array<non-empty-string, string|bool|int>
+     * @return array<non-empty-string, mixed>
      *
      * @param non-empty-string $method
      *
@@ -84,6 +87,9 @@ final readonly class ReadUserInfo
             );
         }
 
-        return IdentityClaims::of($user, $token->scope);
+        // What the scope releases, then the application's custom claims for userinfo, which never
+        // replace a standard claim: their names are never reserved, and `+` keeps the left side.
+        return IdentityClaims::of($user, $token->scope)
+            + $this->claims->for($token->clientId, $user, ClaimDestination::UserInfo);
     }
 }

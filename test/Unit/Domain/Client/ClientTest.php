@@ -11,6 +11,12 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Domain\Client;
 
+use Clavia\Domain\Authentication\MfaPolicy;
+use Clavia\Domain\Claims\ClaimDestination;
+use Clavia\Domain\Claims\ClaimMapping;
+use Clavia\Domain\Claims\ClaimMappings;
+use Clavia\Domain\Claims\ClaimName;
+use Clavia\Domain\Claims\ClaimSource;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\ClientId;
@@ -311,6 +317,61 @@ final class ClientTest extends TestCase
 
         self::assertSame([GrantType::AuthorizationCode], $client->grantTypes);
         self::assertSame([ResponseType::Code], $client->responseTypes);
+    }
+
+    public function testItsCustomClaimsSurviveEveryOtherChange(): void
+    {
+        $claims = ClaimMappings::of([ClaimMapping::forApplication(
+            ClaimName::fromString('tenant', onAnApi: false),
+            ClaimSource::fromString('app_metadata.tenant'),
+            [ClaimDestination::IdToken],
+        )]);
+        $client = $this->register()->withClaims($claims);
+
+        foreach (
+            [
+            $client->withConnections([]),
+            $client->reconfigure(
+                'Renamed',
+                $client->redirectUris,
+                $client->grantTypes,
+                $client->responseTypes,
+                $client->authMethod,
+                null,
+            ),
+            $client->withBackChannelLogout(null),
+            $client->withPkceRequired(true),
+            $client->requiringMfa(MfaPolicy::Required),
+            $client->withPushedAuthorizationRequestsRequired(true),
+            $client->withDpopRequired(true),
+            ] as $changed
+        ) {
+            self::assertSame($claims->toJson(), $changed->claims->toJson());
+        }
+        self::assertTrue($this->register()->claims->isEmpty());
+    }
+
+    public function testAThirdPartyApplicationTakesNoCustomClaims(): void
+    {
+        $partner = Client::register(
+            ClientId::fromString('tpc_partner'),
+            'Partner',
+            ClientType::Public,
+            ClientAuthMethod::None,
+            null,
+            [Url::fromString('https://partner.example/cb')],
+            [GrantType::AuthorizationCode],
+            [ResponseType::Code],
+            new DateTimeImmutable('2026-01-15T10:00:00Z'),
+        );
+        self::assertTrue($partner->withClaims(ClaimMappings::none())->claims->isEmpty(), 'None is always allowed.');
+
+        $this->expectException(InvalidValue::class);
+        $partner->withClaims(ClaimMappings::of([ClaimMapping::forApplication(
+            ClaimName::fromString('tenant', onAnApi: false),
+            ClaimSource::fromString('app_metadata.tenant'),
+            [ClaimDestination::IdToken],
+        )]));
     }
 
     /**
