@@ -310,7 +310,8 @@ The application mirrors these contexts (`Application\OAuth2`, `Authentication`, 
 `ExternalSignInStore`, `WebAuthnChallengeStore`, `NonceRegistry`, `AttemptCounter`), passkeys
 (`PasskeyVerifier`), breached passwords (`BreachedPasswords`), mail (`Mailer`, `MailOutbox`),
 identity providers (`IdentityProvider[s]`, `OidcDiscovery`), outbound URLs (`OutboundUrls`), deferred work
-(`DeferredTasks`, `BackChannelLogoutDelivery`) and events (`DomainEvents`).
+(`DeferredTasks`, `BackChannelLogoutDelivery`), events (`DomainEvents`) and SAML
+(`Saml\SamlServiceProvider`: requests, responses, metadata in and out; nothing wired yet).
 
 ## Flows
 
@@ -1196,12 +1197,17 @@ Tests state behaviour from the specifications, and name the RFC section where it
 - **Libraries**: Mezzio (PSR-7/11/15, laminas-servicemanager, FastRoute) as the HTTP adapter;
   laminas-view for pages; symfony/console; Guzzle as the PSR-18 client; `web-token/jwt-library`
   for verification only; `web-auth/webauthn-lib` behind `PasskeyVerifier` (one adapter,
-  `WebAuthn\WebAuthnLibPasskeyVerifier`); `bacon/bacon-qr-code`; monolog. No Twig, no front-end
-  framework.
+  `WebAuthn\WebAuthnLibPasskeyVerifier`); `simplesamlphp/saml2` and `xml-security` behind
+  `Saml\SamlServiceProvider` (`Saml\SimpleSamlServiceProvider`; RSA signatures only, its plugin
+  denied, `bcmath` in the image; `docs/design/saml-connections.md` §11); `bacon/bacon-qr-code`;
+  monolog. No Twig, no front-end framework.
 - **The passkey verifier has no double that runs its contract.** `PasskeyVerifierContract` feeds
   it genuine responses from `test/Support/SoftwareAuthenticator` (real EdDSA, ES256 and RS256 keys,
   real CBOR), which a double could only pass by being the adapter again. Use cases are tested with
-  `FakePasskeyVerifier`, which answers what it is told; the exception to rule 9 is this one port.
+  `FakePasskeyVerifier`, which answers what it is told; the exception to rule 9 is this port and
+  the SAML service provider's: `SamlServiceProviderContract` signs genuine responses with
+  `test/Support/Saml/TestIdentityProvider` (real RSA keys, attacks included), and use cases take
+  `FakeSamlServiceProvider`.
 - **The dashboard** is the Next.js application of the
   [clavia-dashboard](https://github.com/clavia-auth/clavia-dashboard) repository: a confidential
   client (a backend for frontend) that knows this server only by the OpenAPI document and
