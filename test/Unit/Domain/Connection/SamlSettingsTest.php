@@ -26,7 +26,7 @@ use PHPUnit\Framework\TestCase;
 /** A SAML connection's settings (docs/design/saml-connections.md §4). */
 final class SamlSettingsTest extends TestCase
 {
-    public function testTheDefaultsAskForAPersistentNameIdAndSignRequests(): void
+    public function testTheDefaultsAskForAPersistentNameIdSignRequestsAndRequireGcm(): void
     {
         $options = SamlOptions::of();
 
@@ -35,6 +35,7 @@ final class SamlSettingsTest extends TestCase
         self::assertFalse($options->emailTrusted, 'An address is trusted only on the operator\'s word.');
         self::assertTrue($options->signRequests);
         self::assertFalse($options->requireEncryption);
+        self::assertTrue($options->requireGcm, 'AES-CBC refused unless turned off.');
         self::assertEquals($options, SamlOptions::fromArray($options->toArray()));
     }
 

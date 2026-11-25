@@ -24,6 +24,10 @@ final readonly class ExpectedResponse
      * @param non-empty-string           $assertionConsumerServiceUrl The `Destination` and `Recipient`.
      * @param non-empty-string|null      $subjectAttribute The attribute that names the person; the
      *     persistent `NameID` when null.
+     * @param ContentKeyDecrypter|null   $decrypter This server's encryption keys; null when it has none, and
+     *     an encrypted assertion cannot be read.
+     * @param bool                       $requireEncryption A plain assertion is refused.
+     * @param bool                       $requireGcm An assertion encrypted with AES-CBC is refused.
      */
     public function __construct(
         public string $identityProviderEntityId,
@@ -33,6 +37,9 @@ final readonly class ExpectedResponse
         public SamlRequestId $inResponseTo,
         public DateTimeImmutable $now,
         public ?string $subjectAttribute = null,
+        public ?ContentKeyDecrypter $decrypter = null,
+        public bool $requireEncryption = false,
+        public bool $requireGcm = false,
     ) {
     }
 }

@@ -16,6 +16,7 @@ use Clavia\Adapter\Primary\Http\Auth\AuthPageResponder;
 use Clavia\Adapter\Primary\Http\Auth\ExternalSignInMessages;
 use Clavia\Adapter\Primary\Http\Auth\LoginPages;
 use Clavia\Adapter\Primary\Http\Auth\MfaPages;
+use Clavia\Adapter\Primary\Http\Shared\ClientAddress;
 use Clavia\Adapter\Primary\Http\Shared\ErrorResponder;
 use Clavia\Adapter\Primary\Http\Shared\RequestCookies;
 use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
@@ -57,6 +58,7 @@ final readonly class SamlCompleteHandler implements RequestHandlerInterface
             $query->isRepeated('h') ? null : $query->get('h'),
             RequestCookies::first($request, AuthCookies::EXTERNAL_SIGN_IN),
             RequestCookies::first($request, $this->cookies->sessionCookieName),
+            ClientAddress::of($request),
         ));
 
         if ($outcome === null) {

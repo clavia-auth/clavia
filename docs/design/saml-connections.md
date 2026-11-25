@@ -103,7 +103,7 @@ backend without both references (exit 78). `CLAVIA_SOCIAL_AUTO_LINK` and
   read once to refuse anything that is not RSA ≥ 2048), metadata URL or none,
   subject source (`name_id` or an attribute name), `NameIDFormat` requested, address source and
   whether it is trusted, profile attribute names, `sign_requests` (on), `require_encryption` and
-  `require_gcm` (off).
+  `require_gcm` (on: changed from off in slice 6, §11).
 - `SamlRequestId` (value object): `_` and 32 random bytes in hex, as the schema's `ID` type needs.
 - `ServiceProviderKey` (value object): `kid` (the RFC 7638 thumbprint of its public key), usage
   (`signing` or `encryption`), status (`next`, `current`, `retired`), the certificate (DER), created.
@@ -320,8 +320,8 @@ reads the URL again.
 2. **One key pair for the deployment, or one per connection** (§2)? *Recommendation:* one for the
    deployment. A pair per connection gives no isolation an operator can use (every connection runs
    in the same server), and multiplies the certificates IdP administrators must track.
-3. **Accept AES-CBC** (§2, §7)? *Recommendation:* yes, by default, with uniform failures and the
-   per-connection `require_gcm`. ADFS encrypts with AES-256-CBC by default, and older deployments of
+3. **Accept AES-CBC** (§2, §7)? *Settled in slice 6: not by default* (§11). The recommendation was
+   yes, by default, with uniform failures and the per-connection `require_gcm`. ADFS encrypts with AES-256-CBC by default, and older deployments of
    other IdPs do too; refusing it would make encryption unusable with them, which is worse than the oracle the rules of §7 close.
 4. **Refreshing metadata automatically** (a daily command)? *Recommendation:* on demand first; a
    `connections:refresh-saml-metadata` command can follow when an operator has missed a
@@ -421,4 +421,24 @@ What slice 5 (#126) settled:
   plus the skew. Its method is `claimAssertion()`, apart from the parked responses' `claim()`.
 - **The profile attributes** (`name_attribute` and the others) are stored but not yet copied onto the
   account: `ResolveExternalAccount` sets no profile for any external sign-in today.
+
+What slice 6 (#127) settled:
+
+- **The port signs and decrypts through closures the application hands it**: `authnRequestUrl()`
+  takes a signer over `ServiceProviderKeys::sign()`, `consume()` a `ContentKeyDecrypter` over
+  `decryptKey()`. The two ports never call each other.
+- **RSA-OAEP takes one digest for the OAEP hash and MGF1** (PHP's OpenSSL): `rsa-oaep-mgf1p`, 1.1's
+  `rsa-oaep` with SHA-1 and its default MGF, or with SHA-256 and `mgf1sha256`. SHA-256 with MGF1-SHA-1
+  is refused rather than tried.
+- **The content key is decrypted, then AES runs on the library's own backend** (`Alg\Encryption\AES`),
+  as question 1 found it could; the decrypted assertion is then verified exactly as a plain one.
+- **The throttle is the sign-in throttle's, per client address**: every SAML refusal counts, and once
+  it is reached the parked response is spent and nothing is read.
+- **Without keys a request goes unsigned** and an encrypted assertion is refused (`decryption`): the
+  connection's registration already warned.
+- **GCM is required by default** (`require_gcm` on), reversing question 3's recommendation. Accepting
+  AES-CBC exposes more than CBC: XML Encryption does not authenticate the algorithm an assertion names,
+  so a GCM ciphertext relabelled as CBC falls to the same padding oracle (Jager, Schwenk and
+  Somorovsky, 2013). An operator turns it off, knowingly, for an identity provider that encrypts with
+  CBC (ADFS by default); the uniform failures and the throttle still stand there.
 

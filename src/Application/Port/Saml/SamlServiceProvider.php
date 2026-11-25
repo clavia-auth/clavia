@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Application\Port\Saml;
 
 use Clavia\Domain\Shared\InvalidValue;
+use Closure;
 
 /**
  * This server as a SAML 2.0 service provider (docs/design/saml-connections.md §4): the requests it
@@ -24,9 +25,13 @@ interface SamlServiceProvider
 {
     /**
      * Where to send the browser: the identity provider's single sign-on URL with a deflated
-     * `AuthnRequest` and the `RelayState` (Bindings §3.4, HTTP-Redirect).
+     * `AuthnRequest` and the `RelayState` (Bindings §3.4, HTTP-Redirect), signed when `$sign` is given
+     * (§3.4.4.1: `SigAlg` RSA-SHA256 over the query as sent, then `Signature`).
+     *
+     * @param (Closure(string): string)|null $sign RSASSA-PKCS1-v1_5 over SHA-256 with this server's current
+     *                                             signing key ({@see ServiceProviderKeys::sign()}).
      */
-    public function authnRequestUrl(AuthnRequestDetails $request): string;
+    public function authnRequestUrl(AuthnRequestDetails $request, ?Closure $sign = null): string;
 
     /**
      * Read a `SAMLResponse` as POSTed (base64) and hold it to every rule: one assertion, signed by a

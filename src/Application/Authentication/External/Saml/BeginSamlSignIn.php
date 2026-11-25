@@ -19,11 +19,13 @@ use Clavia\Application\Port\ExternalSignInStore;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Application\Port\Saml\AuthnRequestDetails;
 use Clavia\Application\Port\Saml\SamlServiceProvider;
+use Clavia\Application\Port\Saml\ServiceProviderKeys;
 use Clavia\Domain\Authentication\LocalPath;
 use Clavia\Domain\Authentication\PendingExternalSignIn;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Connection\Saml\SamlRequestId;
+use Clavia\Domain\Connection\Saml\ServiceProviderKeyUsage;
 use Clavia\Domain\OAuth2\CodeVerifier;
 use Clavia\Domain\Oidc\Nonce;
 use Clavia\Domain\Shared\Clock;
@@ -31,6 +33,7 @@ use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\RandomSource;
 use Clavia\Domain\Shared\SecretGenerator;
 use Clavia\Domain\Shared\Url;
+use Closure;
 
 /**
  * `GET /auth/saml/{connection}` (docs/design/saml-connections.md §5.3, step 2): open the pending sign-in
@@ -47,6 +50,7 @@ final readonly class BeginSamlSignIn
         private LoginStateStore $loginStates,
         private SamlServiceProvider $saml,
         private SamlServiceProviderEndpoints $endpoints,
+        private ServiceProviderKeys $keys,
         private SecretGenerator $secrets,
         private RandomSource $random,
         private Clock $clock,
@@ -77,6 +81,8 @@ final readonly class BeginSamlSignIn
         }
 
         $requestId = SamlRequestId::generate($this->random);
+        // Signed whenever the connection signs and a signing key exists (Bindings §3.4.4.1); without a
+        // key the request goes unsigned, as the connection's registration warned.
         $handle = $this->secrets->token();
         $this->pending->open($handle, new PendingExternalSignIn(
             $found->name,
@@ -97,8 +103,19 @@ final readonly class BeginSamlSignIn
                 $handle,
                 $this->clock->now(),
                 $saml->options->nameIdFormat,
-            )),
+            ), $this->signer($saml->options->signRequests)),
             $handle,
         );
+    }
+
+    /** @return (Closure(string): string)|null */
+    private function signer(bool $signRequests): ?Closure
+    {
+        if (! $signRequests) {
+            return null;
+        }
+        $current = $this->keys->certificates()->current(ServiceProviderKeyUsage::Signing);
+
+        return $current === null ? null : fn (string $data): string => $this->keys->sign($current->kid, $data);
     }
 }

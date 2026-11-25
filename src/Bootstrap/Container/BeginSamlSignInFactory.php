@@ -17,6 +17,7 @@ use Clavia\Application\Connection\Saml\SamlServiceProviderEndpoints;
 use Clavia\Application\Port\ExternalSignInStore;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Application\Port\Saml\SamlServiceProvider;
+use Clavia\Application\Port\Saml\ServiceProviderKeys;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\RandomSource;
@@ -45,6 +46,8 @@ final class BeginSamlSignInFactory
         $random = $container->get(RandomSource::class);
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
+        /** @var ServiceProviderKeys $keys */
+        $keys = $container->get(ServiceProviderKeys::class);
 
         return new BeginSamlSignIn(
             $access,
@@ -53,6 +56,7 @@ final class BeginSamlSignInFactory
             $loginStates,
             $saml,
             $endpoints,
+            $keys,
             $secrets,
             $random,
             $clock,

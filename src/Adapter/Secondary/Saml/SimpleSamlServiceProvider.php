@@ -14,6 +14,7 @@ namespace Clavia\Adapter\Secondary\Saml;
 use Clavia\Application\Port\Saml\AuthnRequestDetails;
 use Clavia\Application\Port\Saml\ExpectedResponse;
 use Clavia\Application\Port\Saml\IdentityProviderMetadata;
+use Clavia\Application\Port\Saml\OaepDigest;
 use Clavia\Application\Port\Saml\SamlIdentity;
 use Clavia\Application\Port\Saml\SamlRefusal;
 use Clavia\Application\Port\Saml\SamlRefused;
@@ -22,6 +23,7 @@ use Clavia\Application\Port\Saml\ServiceProviderDescription;
 use Clavia\Domain\Connection\Saml\SamlCertificate;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\Url;
+use Closure;
 use DateTimeImmutable;
 use DOMDocument;
 use DOMElement;
@@ -30,6 +32,8 @@ use DOMXPath;
 use Exception;
 use SimpleSAML\SAML2\XML\saml\Assertion;
 use SimpleSAML\SAML2\XML\samlp\Response;
+use SimpleSAML\XMLSecurity\Alg\Encryption\AES;
+use SimpleSAML\XMLSecurity\Key\SymmetricKey;
 use SimpleSAML\XML\DOMDocumentFactory;
 use SimpleSAML\XMLSecurity\Alg\Signature\RSA;
 use SimpleSAML\XMLSecurity\Alg\Signature\SignatureAlgorithmInterface;
@@ -105,6 +109,34 @@ final readonly class SimpleSamlServiceProvider implements SamlServiceProvider
         'http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p',
     ];
 
+    private const string NS_XENC = 'http://www.w3.org/2001/04/xmlenc#';
+    private const string NS_XENC11 = 'http://www.w3.org/2009/xmlenc11#';
+    private const string RSA_OAEP_MGF1P = 'http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p';
+    private const string RSA_OAEP = 'http://www.w3.org/2009/xmlenc11#rsa-oaep';
+    private const string SHA1 = 'http://www.w3.org/2000/09/xmldsig#sha1';
+    private const string MGF1_SHA1 = 'http://www.w3.org/2009/xmlenc11#mgf1sha1';
+    private const string MGF1_SHA256 = 'http://www.w3.org/2009/xmlenc11#mgf1sha256';
+
+    /** @var list<non-empty-string> */
+    private const array GCM = [
+        'http://www.w3.org/2009/xmlenc11#aes128-gcm',
+        'http://www.w3.org/2009/xmlenc11#aes256-gcm',
+    ];
+
+    /** @var list<non-empty-string> ADFS's default and older deployments': taken unless GCM is required. */
+    private const array CBC = [
+        'http://www.w3.org/2001/04/xmlenc#aes128-cbc',
+        'http://www.w3.org/2001/04/xmlenc#aes256-cbc',
+    ];
+
+    /** @var array<non-empty-string, positive-int> */
+    private const array KEY_BYTES = [
+        'http://www.w3.org/2009/xmlenc11#aes128-gcm' => 16,
+        'http://www.w3.org/2009/xmlenc11#aes256-gcm' => 32,
+        'http://www.w3.org/2001/04/xmlenc#aes128-cbc' => 16,
+        'http://www.w3.org/2001/04/xmlenc#aes256-cbc' => 32,
+    ];
+
     /** @var list<non-empty-string> */
     private const array DIGESTS = [
         'http://www.w3.org/2001/04/xmlenc#sha256',
@@ -113,7 +145,7 @@ final readonly class SimpleSamlServiceProvider implements SamlServiceProvider
     ];
 
     #[\Override]
-    public function authnRequestUrl(AuthnRequestDetails $request): string
+    public function authnRequestUrl(AuthnRequestDetails $request, ?Closure $sign = null): string
     {
         $document = new DOMDocument('1.0', 'UTF-8');
         $root = $document->createElementNS(self::NS_SAMLP, 'samlp:AuthnRequest');
@@ -139,12 +171,17 @@ final readonly class SimpleSamlServiceProvider implements SamlServiceProvider
             throw new \LogicException('An AuthnRequest did not deflate.');
         }
 
-        // Bindings §3.4.4.1: the query is appended to the endpoint as registered, never rebuilt.
+        // Bindings §3.4.4.1: the query is appended to the endpoint as registered, never rebuilt, and the
+        // signature covers the three parameters exactly as they are sent, in that order.
         $url = $request->singleSignOnUrl->value;
-
-        return $url . (str_contains($url, '?') ? '&' : '?')
-            . 'SAMLRequest=' . rawurlencode(base64_encode($deflated))
+        $query = 'SAMLRequest=' . rawurlencode(base64_encode($deflated))
             . '&RelayState=' . rawurlencode($request->relayState);
+        if ($sign !== null) {
+            $query .= '&SigAlg=' . rawurlencode(self::RSA_ALGORITHMS[0]);
+            $query .= '&Signature=' . rawurlencode(base64_encode($sign($query)));
+        }
+
+        return $url . (str_contains($url, '?') ? '&' : '?') . $query;
     }
 
     #[\Override]
@@ -169,16 +206,13 @@ final readonly class SimpleSamlServiceProvider implements SamlServiceProvider
             || $root->namespaceURI !== self::NS_SAMLP
             || $root->localName !== 'Response'
             || self::count($xpath, '//comment() | //processing-instruction()') > 0
-            || self::count($xpath, '//saml:Assertion') !== 1
-            || self::count($xpath, '/samlp:Response/saml:Assertion') !== 1
+            || self::count($xpath, '//saml:Assertion') + self::count($xpath, '//saml:EncryptedAssertion') !== 1
+            || self::count($xpath, '/samlp:Response/saml:Assertion | /samlp:Response/saml:EncryptedAssertion') !== 1
         ) {
-            return self::refused(
-                $root instanceof DOMElement && self::count($xpath, '//saml:EncryptedAssertion') > 0
-                    ? SamlRefusal::Decryption
-                    : SamlRefusal::Xml,
-            );
+            return self::refused(SamlRefusal::Xml);
         }
-        if (self::count($xpath, '//saml:EncryptedAssertion') > 0) {
+        $encrypted = self::count($xpath, '/samlp:Response/saml:EncryptedAssertion') === 1;
+        if (! $encrypted && $expected->requireEncryption) {
             return self::refused(SamlRefusal::Decryption);
         }
 
@@ -192,7 +226,15 @@ final readonly class SimpleSamlServiceProvider implements SamlServiceProvider
             return self::refused($refusal);
         }
 
-        $assertion = self::verifiedAssertion(self::element($xpath, '/samlp:Response/saml:Assertion'), $expected);
+        if ($encrypted) {
+            $plain = self::decrypted(self::element($xpath, '/samlp:Response/saml:EncryptedAssertion'), $expected);
+            if ($plain === null) {
+                return self::refused(SamlRefusal::Decryption);
+            }
+        } else {
+            $plain = self::element($xpath, '/samlp:Response/saml:Assertion');
+        }
+        $assertion = self::verifiedAssertion($plain, $expected);
         if ($assertion === null) {
             return self::refused(SamlRefusal::Signature);
         }
@@ -340,6 +382,126 @@ final readonly class SimpleSamlServiceProvider implements SamlServiceProvider
         $sp->appendChild($acs);
 
         return (string) $document->saveXML();
+    }
+
+    /**
+     * The assertion inside an `EncryptedAssertion` (SAML Core §2.3.4, XML Encryption 1.1), or null for
+     * any failure at all, every one the same (§7, "No padding oracle"): the data encrypted with AES-GCM
+     * or, unless the connection requires GCM, AES-CBC; its content key wrapped with RSA-OAEP, never
+     * `rsa-1_5`, and unwrapped by this server's encryption key the `EncryptedKey` names by certificate,
+     * or by each in turn. The plaintext is held to what a plain response is: one `saml:Assertion`, no
+     * comment, no processing instruction. Its signature is checked afterwards, as for a plain one.
+     */
+    private static function decrypted(DOMElement $encrypted, ExpectedResponse $expected): ?DOMElement
+    {
+        $decrypter = $expected->decrypter;
+        if ($decrypter === null || $decrypter->keys === []) {
+            return null;
+        }
+        $document = $encrypted->ownerDocument;
+        $xpath = self::xpath($document);
+        $data = self::elements($xpath, 'xenc:EncryptedData', $encrypted);
+        if (count($data) !== 1) {
+            return null;
+        }
+        $methods = self::elements($xpath, 'xenc:EncryptionMethod', $data[0]);
+        $cipher = count($methods) === 1 ? $methods[0]->getAttribute('Algorithm') : '';
+        $allowed = $expected->requireGcm ? self::GCM : [...self::GCM, ...self::CBC];
+        if (! in_array($cipher, $allowed, true)) {
+            return null;
+        }
+        $keys = [
+            ...self::elements($xpath, 'ds:KeyInfo/xenc:EncryptedKey', $data[0]),
+            ...self::elements($xpath, 'xenc:EncryptedKey', $encrypted),
+        ];
+        if (count($keys) !== 1) {
+            return null;
+        }
+        $digest = self::keyTransportDigest($xpath, $keys[0]);
+        $wrapped = self::base64($xpath, 'xenc:CipherData/xenc:CipherValue', $keys[0]);
+        $ciphertext = self::base64($xpath, 'xenc:CipherData/xenc:CipherValue', $data[0]);
+        if ($digest === null || $wrapped === null || $ciphertext === null) {
+            return null;
+        }
+
+        $named = array_map(
+            static fn (DOMElement $c): string => (string) preg_replace('/\s+/', '', $c->textContent),
+            self::elements($xpath, 'ds:KeyInfo/ds:X509Data/ds:X509Certificate', $keys[0]),
+        );
+        $candidates = array_values(array_filter(
+            $decrypter->keys,
+            static fn (array $key): bool => $named === [] || in_array($key['certificate'], $named, true),
+        ));
+        $contentKey = null;
+        foreach ($candidates as $key) {
+            $contentKey = $decrypter->contentKey($key['kid'], $wrapped, $digest);
+            if ($contentKey !== null) {
+                break;
+            }
+        }
+        if ($contentKey === null || strlen($contentKey) !== self::KEY_BYTES[$cipher]) {
+            return null;
+        }
+        try {
+            $plaintext = (new AES(new SymmetricKey($contentKey), $cipher))->decrypt($ciphertext);
+            $decrypted = DOMDocumentFactory::fromString($plaintext);
+        } catch (Throwable) {
+            return null;
+        }
+        $plainXpath = self::xpath($decrypted);
+        $assertion = $decrypted->documentElement;
+        if (
+            ! $assertion instanceof DOMElement
+            || $assertion->namespaceURI !== self::NS_SAML
+            || $assertion->localName !== 'Assertion'
+            || self::count($plainXpath, '//comment() | //processing-instruction()') > 0
+            || self::count($plainXpath, '//saml:Assertion | //saml:EncryptedAssertion') !== 1
+        ) {
+            return null;
+        }
+
+        return $assertion;
+    }
+
+    /**
+     * The OAEP digest of an `EncryptedKey`, when its key transport is one this server takes: XML
+     * Encryption's `rsa-oaep-mgf1p` (SHA-1 throughout), or 1.1's `rsa-oaep` with SHA-1 and its default
+     * MGF, or SHA-256 with MGF1 over SHA-256 (PHP's OpenSSL takes one digest for both). Never `rsa-1_5`.
+     */
+    private static function keyTransportDigest(DOMXPath $xpath, DOMElement $key): ?OaepDigest
+    {
+        $methods = self::elements($xpath, 'xenc:EncryptionMethod', $key);
+        if (count($methods) !== 1) {
+            return null;
+        }
+        $algorithm = $methods[0]->getAttribute('Algorithm');
+        $digests = self::elements($xpath, 'ds:DigestMethod', $methods[0]);
+        $digest = $digests === [] ? self::SHA1 : $digests[0]->getAttribute('Algorithm');
+        $mgfs = self::elements($xpath, 'xenc11:MGF', $methods[0]);
+        $mgf = $mgfs === [] ? null : $mgfs[0]->getAttribute('Algorithm');
+        if (count($digests) > 1 || count($mgfs) > 1) {
+            return null;
+        }
+
+        return match (true) {
+            $algorithm === self::RSA_OAEP_MGF1P && $digest === self::SHA1 && $mgf === null => OaepDigest::Sha1,
+            $algorithm === self::RSA_OAEP && $digest === self::SHA1
+                && ($mgf === null || $mgf === self::MGF1_SHA1) => OaepDigest::Sha1,
+            $algorithm === self::RSA_OAEP && $digest === self::DIGESTS[0] && $mgf === self::MGF1_SHA256
+                => OaepDigest::Sha256,
+            default => null,
+        };
+    }
+
+    private static function base64(DOMXPath $xpath, string $query, DOMElement $context): ?string
+    {
+        $values = self::elements($xpath, $query, $context);
+        if (count($values) !== 1) {
+            return null;
+        }
+        $bytes = base64_decode((string) preg_replace('/\s+/', '', $values[0]->textContent), true);
+
+        return $bytes === false || $bytes === '' ? null : $bytes;
     }
 
     /** The unsigned envelope's own fields (Profiles §4.1.4.2, §4.1.4.5). */
@@ -686,6 +848,8 @@ final readonly class SimpleSamlServiceProvider implements SamlServiceProvider
         $xpath->registerNamespace('saml', self::NS_SAML);
         $xpath->registerNamespace('md', self::NS_MD);
         $xpath->registerNamespace('ds', self::NS_DS);
+        $xpath->registerNamespace('xenc', self::NS_XENC);
+        $xpath->registerNamespace('xenc11', self::NS_XENC11);
 
         return $xpath;
     }

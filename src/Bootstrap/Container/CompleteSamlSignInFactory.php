@@ -13,6 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Authentication\External\ResolveExternalAccount;
 use Clavia\Application\Authentication\External\Saml\CompleteSamlSignIn;
+use Clavia\Application\Authentication\LoginThrottle;
 use Clavia\Application\Authentication\SignIn\CompleteFirstFactor;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\Connection\Saml\SamlServiceProviderEndpoints;
@@ -22,6 +23,7 @@ use Clavia\Application\Port\LoginStateStore;
 use Clavia\Application\Port\Saml\SamlAssertionReplayCache;
 use Clavia\Application\Port\Saml\SamlResponseStore;
 use Clavia\Application\Port\Saml\SamlServiceProvider;
+use Clavia\Application\Port\Saml\ServiceProviderKeys;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Shared\Clock;
 use Psr\Container\ContainerInterface;
@@ -54,6 +56,10 @@ final class CompleteSamlSignInFactory
         $clock = $container->get(Clock::class);
         /** @var DomainEvents $events */
         $events = $container->get(DomainEvents::class);
+        /** @var ServiceProviderKeys $keys */
+        $keys = $container->get(ServiceProviderKeys::class);
+        /** @var LoginThrottle $throttle */
+        $throttle = $container->get(LoginThrottle::class);
 
         return new CompleteSamlSignIn(
             $access,
@@ -63,6 +69,8 @@ final class CompleteSamlSignInFactory
             $saml,
             $endpoints,
             $assertions,
+            $keys,
+            $throttle,
             $resolveAccount,
             $loginStates,
             $completeFirstFactor,

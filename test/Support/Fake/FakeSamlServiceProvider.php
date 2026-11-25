@@ -44,7 +44,7 @@ final class FakeSamlServiceProvider implements SamlServiceProvider
     }
 
     #[\Override]
-    public function authnRequestUrl(AuthnRequestDetails $request): string
+    public function authnRequestUrl(AuthnRequestDetails $request, ?\Closure $sign = null): string
     {
         $this->requests[] = $request;
 

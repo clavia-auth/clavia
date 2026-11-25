@@ -37,6 +37,16 @@ final class TestIdentityProvider
     public const string SHA256 = 'http://www.w3.org/2001/04/xmlenc#sha256';
     public const string SHA1 = 'http://www.w3.org/2000/09/xmldsig#sha1';
 
+    public const string AES256_GCM = 'http://www.w3.org/2009/xmlenc11#aes256-gcm';
+    public const string AES128_GCM = 'http://www.w3.org/2009/xmlenc11#aes128-gcm';
+    public const string AES256_CBC = 'http://www.w3.org/2001/04/xmlenc#aes256-cbc';
+    public const string RSA_OAEP_MGF1P = 'http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p';
+    public const string RSA_OAEP = 'http://www.w3.org/2009/xmlenc11#rsa-oaep';
+    public const string RSA_1_5 = 'http://www.w3.org/2001/04/xmlenc#rsa-1_5';
+
+    private const string NS_XENC = 'http://www.w3.org/2001/04/xmlenc#';
+    private const string NS_XENC11 = 'http://www.w3.org/2009/xmlenc11#';
+
     private const string NS_SAMLP = 'urn:oasis:names:tc:SAML:2.0:protocol';
     private const string NS_SAML = 'urn:oasis:names:tc:SAML:2.0:assertion';
     private const string NS_DS = 'http://www.w3.org/2000/09/xmldsig#';
@@ -107,6 +117,12 @@ final class TestIdentityProvider
             'commentInNameId' => false,
             'transforms' => null,
             'assertionId' => '_a1',
+            'encryptTo' => null,
+            'cipher' => self::AES256_GCM,
+            'transport' => self::RSA_OAEP_MGF1P,
+            'oaepDigest' => 'sha1',
+            'tamper' => null,
+            'nameRecipient' => true,
         ];
         $e = static fn (mixed $v): string => htmlspecialchars((string) $v, ENT_XML1 | ENT_QUOTES, 'UTF-8');
         $attributes = '';
@@ -165,6 +181,9 @@ final class TestIdentityProvider
         $key = $o['key'];
         if ($o['signAssertion'] === true) {
             self::sign(self::first($xpath, '//saml:Assertion'), $key, $o);
+        }
+        if (is_string($o['encryptTo'])) {
+            self::encrypt(self::first($xpath, '//saml:Assertion'), $o['encryptTo'], $o);
         }
         if ($o['signResponse'] === true) {
             self::sign(self::first($xpath, '/samlp:Response'), $key, $o);
@@ -242,6 +261,104 @@ final class TestIdentityProvider
             $info->appendChild($data);
             $signature->appendChild($info);
         }
+    }
+
+    /** @return array{private: non-empty-string, certificate: non-empty-string} The service provider's encryption key. */
+    public static function serviceProvider(): array
+    {
+        return self::key('sp', ['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]);
+    }
+
+    /**
+     * Replace the (signed) assertion with an `EncryptedAssertion` to `$certificate` (XML Encryption 1.1):
+     * the assertion encrypted with a fresh AES key, the key wrapped with RSA, as an identity provider
+     * does when it signs, then encrypts.
+     *
+     * @param array<string, mixed> $o
+     */
+    public static function encrypt(DOMElement $assertion, string $certificate, array $o): void
+    {
+        $document = $assertion->ownerDocument;
+        // On its own, so the plaintext declares the namespaces it uses.
+        $own = new DOMDocument();
+        $own->appendChild($own->importNode($assertion, true));
+        $plaintext = (string) $own->saveXML($own->documentElement);
+
+        $cipher = (string) $o['cipher'];
+        $gcm = str_ends_with($cipher, '-gcm');
+        $bytes = str_contains($cipher, 'aes128') ? 16 : 32;
+        $contentKey = random_bytes($bytes);
+        $name = sprintf('aes-%d-%s', $bytes * 8, $gcm ? 'gcm' : 'cbc');
+        if ($gcm) {
+            $iv = random_bytes(12);
+            $encrypted = openssl_encrypt($plaintext, $name, $contentKey, OPENSSL_RAW_DATA, $iv, $tag);
+            if ($encrypted === false) {
+                throw new LogicException('Could not encrypt.');
+            }
+            if ($o['tamper'] === 'tag') {
+                $tag = strrev($tag);
+            }
+            $data = $iv . $encrypted . $tag;
+        } else {
+            // XML Encryption §5.2: padded to the block, the last byte saying how much.
+            $pad = 16 - strlen($plaintext) % 16;
+            $padded = $plaintext . ($pad > 1 ? random_bytes($pad - 1) : '') . chr($pad);
+            $iv = random_bytes(16);
+            $raw = OPENSSL_RAW_DATA | OPENSSL_ZERO_PADDING;
+            $data = $iv . (string) openssl_encrypt($padded, $name, $contentKey, $raw, $iv);
+        }
+        if ($o['tamper'] === 'ciphertext') {
+            $data[strlen($data) - 1] = chr(ord($data[strlen($data) - 1]) ^ 0x01);
+        }
+        $public = openssl_pkey_get_public($certificate) ?: throw new LogicException('No key.');
+        $transport = (string) $o['transport'];
+        $padding = $transport === self::RSA_1_5 ? OPENSSL_PKCS1_PADDING : OPENSSL_PKCS1_OAEP_PADDING;
+        $digest = (string) $o['oaepDigest'];
+        $oaepDigest = $padding === OPENSSL_PKCS1_PADDING ? null : $digest;
+        if (! openssl_public_encrypt($contentKey, $wrapped, $public, $padding, $oaepDigest)) {
+            throw new LogicException('Could not wrap the content key.');
+        }
+
+        $element = static fn (string $ns, string $name, ?string $text = null): DOMElement
+            => $text === null ? $document->createElementNS($ns, $name) : $document->createElementNS($ns, $name, $text);
+        $encryptedAssertion = $element(self::NS_SAML, 'saml:EncryptedAssertion');
+        $encryptedData = $element(self::NS_XENC, 'xenc:EncryptedData');
+        $encryptedData->setAttribute('Type', 'http://www.w3.org/2001/04/xmlenc#Element');
+        $method = $element(self::NS_XENC, 'xenc:EncryptionMethod');
+        $method->setAttribute('Algorithm', $cipher);
+        $encryptedData->appendChild($method);
+        $keyInfo = $element(self::NS_DS, 'ds:KeyInfo');
+        $encryptedKey = $element(self::NS_XENC, 'xenc:EncryptedKey');
+        $keyMethod = $element(self::NS_XENC, 'xenc:EncryptionMethod');
+        $keyMethod->setAttribute('Algorithm', $transport);
+        if ($transport !== self::RSA_1_5) {
+            $digestMethod = $element(self::NS_DS, 'ds:DigestMethod');
+            $digestMethod->setAttribute('Algorithm', $digest === 'sha256' ? self::SHA256 : self::SHA1);
+            $keyMethod->appendChild($digestMethod);
+        }
+        if ($transport === self::RSA_OAEP && $digest === 'sha256') {
+            $mgf = $element(self::NS_XENC11, 'xenc11:MGF');
+            $mgf->setAttribute('Algorithm', 'http://www.w3.org/2009/xmlenc11#mgf1sha256');
+            $keyMethod->appendChild($mgf);
+        }
+        $encryptedKey->appendChild($keyMethod);
+        if ($o['nameRecipient'] === true) {
+            $recipient = $element(self::NS_DS, 'ds:KeyInfo');
+            $x509 = $element(self::NS_DS, 'ds:X509Data');
+            $x509->appendChild($element(self::NS_DS, 'ds:X509Certificate', self::der($certificate)));
+            $recipient->appendChild($x509);
+            $encryptedKey->appendChild($recipient);
+        }
+        $keyCipher = $element(self::NS_XENC, 'xenc:CipherData');
+        $keyCipher->appendChild($element(self::NS_XENC, 'xenc:CipherValue', base64_encode($wrapped)));
+        $encryptedKey->appendChild($keyCipher);
+        $keyInfo->appendChild($encryptedKey);
+        $encryptedData->appendChild($keyInfo);
+        $dataCipher = $element(self::NS_XENC, 'xenc:CipherData');
+        $dataCipher->appendChild($element(self::NS_XENC, 'xenc:CipherValue', base64_encode($data)));
+        $encryptedData->appendChild($dataCipher);
+        $encryptedAssertion->appendChild($encryptedData);
+        $assertion->parentNode?->replaceChild($encryptedAssertion, $assertion);
     }
 
     /** The certificate's DER, base64, as metadata and `KeyInfo` carry it. */

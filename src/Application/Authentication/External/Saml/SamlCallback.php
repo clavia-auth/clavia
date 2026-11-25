@@ -19,6 +19,7 @@ final readonly class SamlCallback
         #[\SensitiveParameter] public ?string $handle,
         #[\SensitiveParameter] public ?string $browserState,
         #[\SensitiveParameter] public ?string $currentSessionId,
+        public string $clientAddress = '',
     ) {
     }
 }

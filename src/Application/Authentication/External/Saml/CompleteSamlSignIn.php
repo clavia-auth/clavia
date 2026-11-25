@@ -14,6 +14,7 @@ namespace Clavia\Application\Authentication\External\Saml;
 use Clavia\Application\Authentication\External\ExternalSignInFailure;
 use Clavia\Application\Authentication\External\ExternalSignInRefused;
 use Clavia\Application\Authentication\External\ResolveExternalAccount;
+use Clavia\Application\Authentication\LoginThrottle;
 use Clavia\Application\Authentication\SignIn\CompleteFirstFactor;
 use Clavia\Application\Authentication\SignIn\SecondFactorRequired;
 use Clavia\Application\Authentication\SignIn\SignedIn;
@@ -22,11 +23,14 @@ use Clavia\Application\Connection\Saml\SamlServiceProviderEndpoints;
 use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\ExternalSignInStore;
 use Clavia\Application\Port\LoginStateStore;
+use Clavia\Application\Port\Saml\ContentKeyDecrypter;
 use Clavia\Application\Port\Saml\ExpectedResponse;
+use Clavia\Application\Port\Saml\OaepDigest;
 use Clavia\Application\Port\Saml\SamlAssertionReplayCache;
 use Clavia\Application\Port\Saml\SamlIdentity;
 use Clavia\Application\Port\Saml\SamlResponseStore;
 use Clavia\Application\Port\Saml\SamlServiceProvider;
+use Clavia\Application\Port\Saml\ServiceProviderKeys;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\Event\SignInRefused;
 use Clavia\Domain\Client\ClientRepository;
@@ -54,7 +58,9 @@ use Clavia\Domain\Shared\InvalidValue;
  *    factor applies as after any sign-in.
  *
  * Every refusal is one `SignInRefused` and one page. The parked response and the pending sign-in are
- * spent before the response is read, so a failure cannot be tried again with the same handles.
+ * spent before the response is read, so a failure cannot be tried again with the same handles; the
+ * refusals of the response itself (5 and 6) count toward the sign-in throttle, and a throttled address
+ * has its parked response spent and nothing read.
  */
 final readonly class CompleteSamlSignIn
 {
@@ -69,6 +75,8 @@ final readonly class CompleteSamlSignIn
         private SamlServiceProvider $saml,
         private SamlServiceProviderEndpoints $endpoints,
         private SamlAssertionReplayCache $assertions,
+        private ServiceProviderKeys $keys,
+        private LoginThrottle $throttle,
         private ResolveExternalAccount $resolveAccount,
         private LoginStateStore $loginStates,
         private CompleteFirstFactor $completeFirstFactor,
@@ -92,7 +100,18 @@ final readonly class CompleteSamlSignIn
         $refuse = function (
             ExternalSignInFailure $reason,
             ?string $category = null,
-        ) use ($connection): ExternalSignInRefused {
+            bool $counted = false,
+        ) use (
+            $connection,
+            $callback,
+        ): ExternalSignInRefused {
+            // A failure counts against the address (§7) only once the response is read: that needs a
+            // pending sign-in paired with this browser's own cookie, which a forged cross-site POST
+            // cannot bring, so nobody locks another person out. It bounds the tries a padding oracle
+            // would need, each of which also spends a pending sign-in.
+            if ($counted) {
+                $this->throttle->recordAddressFailure($callback->clientAddress);
+            }
             $this->events->dispatch(new SignInRefused(
                 AuthenticationMethod::External,
                 $reason->refusal(),
@@ -102,6 +121,13 @@ final readonly class CompleteSamlSignIn
             return new ExternalSignInRefused($reason, $connection->displayName, $category);
         };
 
+        if ($this->throttle->isAddressThrottled($callback->clientAddress)) {
+            if ($callback->handle !== null && $callback->handle !== '') {
+                $this->responses->claim($callback->handle);
+            }
+
+            return $refuse(ExternalSignInFailure::ProviderFailed, 'throttled');
+        }
         $parked = $callback->handle === null || $callback->handle === ''
             ? null
             : $this->responses->claim($callback->handle);
@@ -130,13 +156,16 @@ final readonly class CompleteSamlSignIn
             $requestId,
             $now,
             $saml->options->subjectAttribute,
+            $this->decrypter(),
+            $saml->options->requireEncryption,
+            $saml->options->requireGcm,
         ));
         if (! $identity instanceof SamlIdentity) {
-            return $refuse(ExternalSignInFailure::ProviderFailed, $identity->reason->value);
+            return $refuse(ExternalSignInFailure::ProviderFailed, $identity->reason->value, counted: true);
         }
         $ttl = max(1, $identity->validUntil->getTimestamp() - $now->getTimestamp() + self::SKEW_SECONDS);
         if (! $this->assertions->claimAssertion($connection->name, $identity->assertionId, $ttl)) {
-            return $refuse(ExternalSignInFailure::Expired, 'replayed');
+            return $refuse(ExternalSignInFailure::Expired, 'replayed', counted: true);
         }
 
         try {
@@ -180,5 +209,25 @@ final readonly class CompleteSamlSignIn
             : ($identity->attributes[$attribute][0] ?? null);
 
         return AssertedIdentity::of($connection->name, $identity->subject, $email, $saml->options->emailTrusted);
+    }
+
+    /**
+     * This server's encryption keys, next, current and retired, for the port to unwrap a content key with
+     * through {@see ServiceProviderKeys::decryptKey()}; null when there are none.
+     */
+    private function decrypter(): ?ContentKeyDecrypter
+    {
+        $keys = [];
+        foreach ($this->keys->certificates()->keys as $key) {
+            if ($key->decrypts()) {
+                $keys[] = ['kid' => $key->kid, 'certificate' => $key->certificate];
+            }
+        }
+
+        return $keys === [] ? null : new ContentKeyDecrypter(
+            $keys,
+            fn (string $kid, string $wrapped, OaepDigest $digest): string
+                => $this->keys->decryptKey($kid, $wrapped, $digest),
+        );
     }
 }
