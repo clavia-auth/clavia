@@ -47,6 +47,18 @@ final readonly class PhpDbAuditLog implements AuditLog
     }
 
     #[\Override]
+    public function find(AuditEventId $id): ?AuditEvent
+    {
+        /** @var AuditEventRow|null $row */
+        $row = $this->database->fetchOne(
+            'SELECT ' . self::COLUMNS . ' FROM audit_events WHERE id = :id',
+            ['id' => $id->value],
+        );
+
+        return $row === null ? null : self::hydrate($row);
+    }
+
+    #[\Override]
     public function append(AuditEvent $event): void
     {
         $this->database->execute(

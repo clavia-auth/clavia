@@ -21,6 +21,7 @@ use Clavia\Domain\Audit\Outcome;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\RandomSource;
+use Clavia\Domain\Webhook\WebhookDeliveryRepository;
 use LogicException;
 
 /**
@@ -42,6 +43,7 @@ final readonly class Audit
         private AuditContext $context,
         private Clock $clock,
         private RandomSource $random,
+        private WebhookDeliveryRepository $webhooks,
     ) {
     }
 
@@ -73,6 +75,9 @@ final readonly class Audit
         }
 
         $this->log->append($event);
+        // The webhook outbox, in the same transaction as the event: a rolled-back change sends
+        // nothing, a committed one is never lost (docs/design/webhooks.md §5.2).
+        $this->webhooks->enqueueFor($event, $event->occurredAt);
     }
 
     /**

@@ -160,6 +160,8 @@ the server sees. The essentials:
   `PATCH /api/v1/connections/password` with `{"allow_sign_up": true, "require_verified_email": true}`.
 - **Purge old audit events daily**: `0 3 * * * bin/clavia audit:purge`.
 - **Run bulk jobs every minute** (user imports and exports): `* * * * * bin/clavia jobs:run`.
+- **Deliver webhooks every minute**: `* * * * * bin/clavia webhooks:deliver` sends the audit events
+  your webhook endpoints subscribe to, signed, retrying a failure for about a day and a half.
 - **Import accounts from an AWS SQS queue**, one account per message (the JSON object of an import
   line; the pool in a `connection` message attribute, the default pool without one):
   `bin/clavia users:import-sqs https://sqs.<region>.amazonaws.com/<account>/<queue>`, run as a

@@ -16,6 +16,7 @@ use Clavia\Adapter\Primary\Cli\AuthorizeUrlCommand;
 use Clavia\Adapter\Primary\Cli\CreateMachineClientCommand;
 use Clavia\Adapter\Primary\Cli\CreateRoleCommand;
 use Clavia\Adapter\Primary\Cli\DatabaseStatusCommand;
+use Clavia\Adapter\Primary\Cli\DeliverWebhooksCommand;
 use Clavia\Adapter\Primary\Cli\GenerateEncryptionKeyCommand;
 use Clavia\Adapter\Primary\Cli\GenerateSigningKeyCommand;
 use Clavia\Adapter\Primary\Cli\GrantClientAccessCommand;
@@ -323,7 +324,9 @@ use Clavia\Application\Port\SigningKeyStore;
 use Clavia\Application\Port\TokenSigner;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Application\Port\WebAuthnChallengeStore;
+use Clavia\Application\Port\WebhookSender;
 use Clavia\Application\Secrets\GenerateEncryptionKey;
+use Clavia\Application\Webhooks\DeliverWebhooks;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Audit\AuditLog;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
@@ -348,6 +351,7 @@ use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\RandomSource;
 use Clavia\Domain\Shared\SecretGenerator;
+use Clavia\Domain\Webhook\WebhookDeliveryRepository;
 use Clavia\Domain\Webhook\WebhookEndpointRepository;
 use Laminas\Diactoros\RequestFactory;
 use Laminas\Diactoros\ResponseFactory;
@@ -398,6 +402,7 @@ final class ConfigProvider
         'audit:purge' => PurgeAuditEventsCommand::class,
         'clients:purge-unused' => PurgeUnusedClientsCommand::class,
         'jobs:run' => RunJobsCommand::class,
+        'webhooks:deliver' => DeliverWebhooksCommand::class,
         'users:import-sqs' => ImportUsersFromSqsCommand::class,
     ];
 
@@ -689,6 +694,7 @@ final class ConfigProvider
                     RoleRepository::class => Container\RoleRepositoryFactory::class,
                     InitialAccessTokenRepository::class => Container\InitialAccessTokenRepositoryFactory::class,
                     WebhookEndpointRepository::class => Container\WebhookEndpointRepositoryFactory::class,
+                    WebhookDeliveryRepository::class => Container\WebhookDeliveryRepositoryFactory::class,
                     ClientRegistrationRepository::class => Container\ClientRegistrationRepositoryFactory::class,
                     UserJobRepository::class => Container\UserJobRepositoryFactory::class,
                     ConsentRepository::class => Container\ConsentRepositoryFactory::class,
@@ -779,6 +785,9 @@ final class ConfigProvider
                     IssueRegistrationTokenCommand::class => Container\IssueRegistrationTokenCommandFactory::class,
                     PurgeUnusedClientsCommand::class => Container\PurgeUnusedClientsCommandFactory::class,
                     RunJobsCommand::class => Container\RunJobsCommandFactory::class,
+                    DeliverWebhooksCommand::class => Container\DeliverWebhooksCommandFactory::class,
+                    DeliverWebhooks::class => Container\DeliverWebhooksFactory::class,
+                    WebhookSender::class => Container\WebhookSenderFactory::class,
                     ImportUsersFromSqsCommand::class => Container\ImportUsersFromSqsCommandFactory::class,
                     QueueMessagesFactory::class => Container\SqsQueueMessagesFactoryFactory::class,
                     GrantClientAccessCommand::class => Container\GrantClientAccessCommandFactory::class,

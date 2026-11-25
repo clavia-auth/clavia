@@ -26,6 +26,9 @@ interface AuditLog
      */
     public function append(AuditEvent $event): void;
 
+    /** One event, as recorded; null once purged. */
+    public function find(AuditEventId $id): ?AuditEvent;
+
     /**
      * The events matching `$query`, newest first.
      *
