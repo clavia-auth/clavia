@@ -79,6 +79,12 @@ final readonly class AuditTarget
         return self::of(TargetType::SigningKey, $kid);
     }
 
+    /** A SAML service provider key, by its kid: the signing key of a pair names the pair. */
+    public static function samlKey(string $kid): self
+    {
+        return self::of(TargetType::SamlKey, $kid);
+    }
+
     public static function initialAccessToken(InitialAccessTokenId $id): self
     {
         return self::of(TargetType::InitialAccessToken, $id->value);

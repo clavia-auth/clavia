@@ -27,6 +27,8 @@ use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Connection\Event\ConnectionChanged;
 use Clavia\Domain\Connection\Event\ConnectionCreated;
 use Clavia\Domain\Connection\Event\ConnectionDeleted;
+use Clavia\Domain\Connection\Saml\Event\ServiceProviderKeysGenerated;
+use Clavia\Domain\Connection\Saml\Event\ServiceProviderKeysRotated;
 use Clavia\Domain\Oidc\Event\SigningKeyCreated;
 use Clavia\Domain\Oidc\Event\SigningKeyRotated;
 use Clavia\Domain\ResourceServer\Event\ClientAccessGranted;
@@ -74,6 +76,8 @@ final readonly class ConfigurationTrail implements EventSubscriber
             ConnectionDeleted::class => $this->connectionDeleted(...),
             SigningKeyCreated::class => $this->signingKeyCreated(...),
             SigningKeyRotated::class => $this->signingKeyRotated(...),
+            ServiceProviderKeysGenerated::class => $this->serviceProviderKeysGenerated(...),
+            ServiceProviderKeysRotated::class => $this->serviceProviderKeysRotated(...),
             InitialAccessTokenIssued::class => $this->initialAccessTokenIssued(...),
             InitialAccessTokenRevoked::class => $this->initialAccessTokenRevoked(...),
             WebhookCreated::class => $this->webhookCreated(...),
@@ -193,6 +197,21 @@ final readonly class ConfigurationTrail implements EventSubscriber
         $this->audit->record(AuditEventType::SigningKeyRotated, AuditTarget::signingKey($event->active->kid()), [
             'algorithm' => $event->active->algorithm()->value,
             'retired_kid' => $event->retired?->kid(),
+        ]);
+    }
+
+    private function serviceProviderKeysGenerated(ServiceProviderKeysGenerated $event): void
+    {
+        $this->audit->record(AuditEventType::SamlKeyGenerated, AuditTarget::samlKey($event->signing->kid), [
+            'encryption_kid' => $event->encryption->kid,
+        ]);
+    }
+
+    private function serviceProviderKeysRotated(ServiceProviderKeysRotated $event): void
+    {
+        $this->audit->record(AuditEventType::SamlKeyRotated, AuditTarget::samlKey($event->signing->kid), [
+            'step' => $event->promoted ? 'promoted' : 'introduced',
+            'encryption_kid' => $event->encryption->kid,
         ]);
     }
 

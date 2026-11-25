@@ -71,6 +71,10 @@ enum AuditEventType: string
     case ConnectionDeleted = 'connection.deleted';
     case SigningKeyCreated = 'signing_key.created';
     case SigningKeyRotated = 'signing_key.rotated';
+    /** The first pair of SAML service provider keys was made. */
+    case SamlKeyGenerated = 'saml_key.generated';
+    /** A SAML service provider key pair was introduced as next, or promoted to current. */
+    case SamlKeyRotated = 'saml_key.rotated';
     case InitialAccessTokenIssued = 'initial_access_token.issued';
     case InitialAccessTokenRevoked = 'initial_access_token.revoked';
     case WebhookCreated = 'webhook.created';

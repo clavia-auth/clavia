@@ -8,6 +8,13 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ### Added
 
+- **SAML service provider keys** (#123), ahead of SAML connections: a signing key and an encryption key
+  (RSA 3072), sealed in PostgreSQL, each with a self-signed certificate. `bin/clavia saml-keys:generate`,
+  `saml-keys:rotate` (a next pair published, promoted after `CLAVIA_SAML_KEY_OVERLAP_DAYS`, 14 by
+  default) and `saml-keys:list`; `GET /api/v1/saml-keys` and `POST /api/v1/saml-keys/rotate`.
+  New settings `CLAVIA_SAML_KEY_BACKEND` (`postgres` only for now) and `CLAVIA_SAML_KEY_OVERLAP_DAYS`.
+  **Migration `0044`**.
+
 - **Operating webhooks** (#120): each endpoint's delivery log (`GET /api/v1/webhooks/{id}/deliveries`),
   a test event on demand (`POST /api/v1/webhooks/{id}/test`, recorded as `webhook.tested` and sent to
   that endpoint alone), and endpoints failing every delivery for five days switched off by

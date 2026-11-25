@@ -364,6 +364,19 @@ final readonly class Settings
          * development.
          */
         public ?string $devAutologinEmail = null,
+        /**
+         * Where the SAML service provider's signing and encryption keys live
+         * (docs/design/saml-connections.md §3). `postgres` keeps them sealed with
+         * `secretEncryptionKey`; the KMS backends come with their key references later.
+         */
+        public SamlKeyBackend $samlKeyBackend = SamlKeyBackend::Postgres,
+        /**
+         * How long a next pair of SAML service provider keys is published beside the current one
+         * before `saml-keys:rotate` promotes it, and how long a retired one still decrypts: the time
+         * identity providers are given to read the new certificates from the metadata. Days.
+         */
+        #[Range(min: 1, max: 90)]
+        public int $samlKeyOverlapDays = 14,
     ) {
     }
 

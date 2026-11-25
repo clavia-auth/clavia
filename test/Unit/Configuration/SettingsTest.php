@@ -15,6 +15,7 @@ use Clavia\Configuration\ClientRegistration;
 use Clavia\Configuration\EmailBackend;
 use Clavia\Configuration\Environment;
 use Clavia\Configuration\InvalidSettings;
+use Clavia\Configuration\SamlKeyBackend;
 use Clavia\Configuration\Settings;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -277,6 +278,39 @@ final class SettingsTest extends TestCase
 
         self::assertSame(['10.0.0.0/8', '192.168.1.4', 'fd00::/8'], $listed->trustedProxies);
         self::assertSame(['*'], $any->trustedProxies);
+    }
+
+    public function testTheSamlKeysAreKeptInPostgresAndRotatedAfterAFortnightByDefault(): void
+    {
+        $settings = Settings::fromEnvironment(self::MINIMAL);
+
+        self::assertSame(SamlKeyBackend::Postgres, $settings->samlKeyBackend);
+        self::assertSame(14, $settings->samlKeyOverlapDays);
+        self::assertSame(
+            30,
+            Settings::fromEnvironment(self::MINIMAL + ['CLAVIA_SAML_KEY_OVERLAP_DAYS' => '30'])->samlKeyOverlapDays,
+        );
+    }
+
+    public function testASamlKeyBackendNotBuiltYetRefusesToBoot(): void
+    {
+        // The KMS backends come with their key references; until then, no silent fallback to none.
+        $this->expectException(InvalidSettings::class);
+        $this->expectExceptionMessageIsOrContains('CLAVIA_SAML_KEY_BACKEND');
+
+        Settings::fromEnvironment(self::MINIMAL + ['CLAVIA_SAML_KEY_BACKEND' => 'aws-kms']);
+    }
+
+    public function testTheSamlKeyOverlapIsADayToNinetyDays(): void
+    {
+        foreach (['0', '91'] as $days) {
+            try {
+                Settings::fromEnvironment(self::MINIMAL + ['CLAVIA_SAML_KEY_OVERLAP_DAYS' => $days]);
+                self::fail($days . ' days was accepted.');
+            } catch (InvalidSettings $refused) {
+                self::assertStringContainsString('CLAVIA_SAML_KEY_OVERLAP_DAYS', $refused->getMessage());
+            }
+        }
     }
 
     public function testARemoteSigningBackendNeedsItsKeyReference(): void

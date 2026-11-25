@@ -43,6 +43,7 @@ use Clavia\Adapter\Primary\Http\Management\RoleHandler;
 use Clavia\Adapter\Primary\Http\Management\RolesHandler;
 use Clavia\Adapter\Primary\Http\Management\RoleUsersHandler;
 use Clavia\Adapter\Primary\Http\Management\RotateClientSecretHandler;
+use Clavia\Adapter\Primary\Http\Management\SamlKeysHandler;
 use Clavia\Adapter\Primary\Http\Management\SigningKeysHandler;
 use Clavia\Adapter\Primary\Http\Management\UserConsentsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserExportsHandler;
@@ -280,6 +281,8 @@ return static function (Application $app, ContainerInterface $container): void {
     $app->route('/api/v1/roles', $management(RolesHandler::class), ['GET', 'POST'], 'api.roles');
     $app->get('/api/v1/signing-keys', $management(SigningKeysHandler::class), 'api.signing-keys');
     $app->post('/api/v1/signing-keys/rotate', $management(SigningKeysHandler::class), 'api.signing-keys.rotate');
+    $app->get('/api/v1/saml-keys', $management(SamlKeysHandler::class), 'api.saml-keys');
+    $app->post('/api/v1/saml-keys/rotate', $management(SamlKeysHandler::class), 'api.saml-keys.rotate');
     $app->route(
         '/api/v1/initial-access-tokens',
         $management(InitialAccessTokensHandler::class),

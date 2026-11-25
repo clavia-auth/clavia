@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Management;
 
 use Clavia\Application\Audit\AuditEventDocument;
+use Clavia\Application\Connection\Saml\ServiceProviderKeyRotation;
 use Clavia\Application\Management\Clients\ClientWithSecret;
 use Clavia\Application\Management\Clients\DescribedClient;
 use Clavia\Application\Management\Connections\DescribedConnection;
@@ -35,6 +36,7 @@ use Clavia\Domain\Client\Registration\ClientRegistration;
 use Clavia\Domain\Client\Registration\InitialAccessToken;
 use Clavia\Domain\Client\ResponseType;
 use Clavia\Domain\Connection\ConnectionName;
+use Clavia\Domain\Connection\Saml\ServiceProviderKey;
 use Clavia\Domain\Identity\ExternalIdentity;
 use Clavia\Domain\Identity\Jobs\LineError;
 use Clavia\Domain\Identity\Jobs\UserJob;
@@ -505,6 +507,37 @@ final class ManagementViews
     public static function webhookWithSecret(WebhookWithSecret $created): array
     {
         return self::webhook($created->endpoint) + ['secret' => $created->secret->reveal()];
+    }
+
+    /**
+     * A SAML service provider key: its certificate (public, what an identity provider pins) and its
+     * place in the rotation; never its private half.
+     *
+     * @return array<string, mixed>
+     */
+    public static function samlKey(ServiceProviderKey $key): array
+    {
+        return [
+            'kid' => $key->kid,
+            'usage' => $key->usage->value,
+            'status' => $key->status->value,
+            'certificate' => $key->certificate,
+            'certificate_sha256' => $key->fingerprint(),
+            'valid_until' => self::instant($key->validUntil),
+            'created_at' => self::instant($key->createdAt),
+            'promoted_at' => $key->promotedAt === null ? null : self::instant($key->promotedAt),
+            'retired_at' => $key->retiredAt === null ? null : self::instant($key->retiredAt),
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public static function samlKeyRotation(ServiceProviderKeyRotation $rotation): array
+    {
+        return [
+            'step' => $rotation->step->value,
+            'promotes_at' => $rotation->promotesAt === null ? null : self::instant($rotation->promotesAt),
+            'keys' => array_map(self::samlKey(...), $rotation->keys->keys),
+        ];
     }
 
     private static function instant(DateTimeImmutable $instant): string
