@@ -9,14 +9,19 @@
 #   4. the smallest size, then the lowest number.
 # Never moved: a closed issue, a pull request, an issue labelled needs-design, an issue that
 # says "Depends on #N" (or another repository's issue) while N is open, and a "Release …"
-# issue while its milestone has other open issues in either repository.
+# issue while its milestone has other open issues in any repository on the board.
 #
 # It only fills Ready; it never takes anything out of In progress. The WIP limit of In progress
 # is the ticket-* skills' to keep, and the board's column limit shows it.
 #
 # Needs GH_TOKEN with Projects read and write on the organisation (the PROJECT_TOKEN secret).
 # DRY_RUN=1 prints what it would move and moves nothing; ITEMS_FILE reads the board's items
-# from a file (the JSON of `gh project item-list`) instead of the board, with DRY_RUN, for testing.
+# from a file instead of the board, with DRY_RUN, for testing: `{items: [{id, status, priority,
+# size, content: {type, repository, number}}]}`, the shape of `gh project item-list`.
+#
+# GitHub's GraphQL API allows the token's user 5,000 points an hour, shared with everything else
+# acting as them. `gh project item-list` asks for every field of every item, hundreds of points a
+# run; the board is read here with the four fields this script uses, a page of 100 at a time.
 set -euo pipefail
 
 OWNER=clavia-auth
@@ -29,7 +34,31 @@ summary() { echo "$*"; [ -n "${GITHUB_STEP_SUMMARY:-}" ] && echo "$*" >>"$GITHUB
 if [ -n "${ITEMS_FILE:-}" ]; then
   items=$(cat "$ITEMS_FILE")
 else
-  items=$(gh project item-list "$PROJECT" --owner "$OWNER" --format json --limit 1000)
+  # shellcheck disable=SC2016 # $owner, $number and $endCursor are GraphQL variables.
+  items=$(gh api graphql --paginate -F number="$PROJECT" -f owner="$OWNER" -f query='
+    query($owner: String!, $number: Int!, $endCursor: String) {
+      organization(login: $owner) {
+        projectV2(number: $number) {
+          items(first: 100, after: $endCursor) {
+            pageInfo { hasNextPage endCursor }
+            nodes {
+              id
+              status: fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { name } }
+              priority: fieldValueByName(name: "Priority") { ... on ProjectV2ItemFieldSingleSelectValue { name } }
+              size: fieldValueByName(name: "Size") { ... on ProjectV2ItemFieldSingleSelectValue { name } }
+              content {
+                __typename
+                ... on Issue { number repository { nameWithOwner } }
+                ... on PullRequest { number repository { nameWithOwner } }
+              }
+            }
+          }
+        }
+      }
+    }' --jq '.data.organization.projectV2.items.nodes[]
+      | {id, status: .status.name, priority: .priority.name, size: .size.name,
+         content: {type: .content.__typename, repository: .content.repository.nameWithOwner,
+                   number: .content.number}}' | jq -s '{items: .}')
 fi
 count() { jq --arg s "$1" '[.items[] | select(.status == $s)] | length' <<<"$items"; }
 ready=$(count Ready)
@@ -43,9 +72,9 @@ if [ "$wanted" -le 0 ]; then
   exit 0
 fi
 
-# Open issues still to do in a milestone, across both repositories, by milestone title.
+# Open issues still to do in a milestone, across the repositories on the board, by milestone title.
 declare -A open_in_milestone=()
-for repo in clavia clavia-dashboard; do
+for repo in clavia clavia-dashboard authzen-php; do
   while IFS=$'\t' read -r title open; do
     [ -n "$title" ] || continue
     open_in_milestone["$title"]=$(( ${open_in_milestone["$title"]:-0} + open ))
@@ -99,10 +128,18 @@ if [ -z "$chosen" ]; then
 fi
 
 if [ "$DRY_RUN" != 1 ]; then
-  project_id=$(gh project view "$PROJECT" --owner "$OWNER" --format json --jq .id)
-  fields=$(gh project field-list "$PROJECT" --owner "$OWNER" --format json --limit 50)
-  status_field=$(jq -r '.fields[] | select(.name == "Status") | .id' <<<"$fields")
-  ready_option=$(jq -r '.fields[] | select(.name == "Status") | .options[] | select(.name == "Ready") | .id' <<<"$fields")
+  # The project's id and its Status field with the Ready option, in one query.
+  # shellcheck disable=SC2016 # GraphQL variables.
+  read -r project_id status_field ready_option < <(gh api graphql -F number="$PROJECT" -f owner="$OWNER" -f query='
+    query($owner: String!, $number: Int!) {
+      organization(login: $owner) {
+        projectV2(number: $number) {
+          id
+          field(name: "Status") { ... on ProjectV2SingleSelectField { id options { id name } } }
+        }
+      }
+    }' --jq '.data.organization.projectV2
+      | "\(.id) \(.field.id) \(.field.options[] | select(.name == "Ready") | .id)"')
 fi
 
 while IFS=$'\t' read -r _ item_id label; do
