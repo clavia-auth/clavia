@@ -358,3 +358,20 @@ What slice 1 (#122) settled, so later slices start from it.
   decrypts the content key through `ServiceProviderKeys::decryptKey()`, and hands the library an AES
   decryptor (`EncryptionAlgorithmFactory`, `SymmetricKey`) with it. AES-CBC and AES-GCM are both
   there; only the first `EncryptedKey` of an assertion is kept.
+
+What slice 2 (#123) settled:
+
+- **`CLAVIA_SAML_KEY_BACKEND` takes `postgres` alone** until slice 3 brings the KMS backends with
+  their references: naming one now refuses to boot (exit 78), rather than running with no keys.
+- **No production warning yet** for `postgres` SAML keys: every deployment would see it, SAML or
+  not. It belongs with slice 4, when a SAML connection exists to make the keys matter.
+- **A rotation with no keys makes the first pair** (`generated`), as `keys:rotate` does for token
+  keys, so the Management API needs no generate operation; `saml-keys:generate` remains for the
+  shell, and refuses when a pair exists.
+- **Retired keys are deleted by the next rotation** once retired for the overlap, not by a job of
+  their own.
+- **OAEP's MGF1 follows its digest** (`OaepDigest`): PHP's OpenSSL sets both at once. XML Encryption
+  1.1 lets them differ (SHA-256 with MGF1-SHA-1); slice 6 decides what to do with that combination.
+- **The certificate builder lives in `Signing\X509`**, beside the token signers, and takes a signing
+  closure: the `postgres` store hands it the key it just made; a KMS backend will hand it its API.
+

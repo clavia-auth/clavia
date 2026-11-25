@@ -76,6 +76,7 @@ The console is `bin/clavia`:
 | `db:migrate`, `db:status` | Schema migrations |
 | `secrets:generate-key` | A value for `CLAVIA_SECRET_ENCRYPTION_KEY` |
 | `keys:generate`, `keys:rotate`, `keys:list` | Signing keys (the `postgres` backend only) |
+| `saml-keys:generate`, `saml-keys:rotate`, `saml-keys:list` | The SAML service provider's signing and encryption keys (`postgres`): rotation is next → current → retired |
 | `management-api:register`, `management-api:scopes` | Register the Management API; list its scopes |
 | `clients:create-m2m [--third-party]`, `clients:grant` | Machine clients and their grants on an API |
 | `clients:registration-token` | An initial access token for client registration, printed once |
@@ -918,6 +919,18 @@ those are the ones worth having in production.
   reference and the old one listed as retired until its tokens expire. The JWKS and discovery
   cache lifetimes (`PublishSigningKeys::CACHE_MAX_AGE`, `DiscoveryHandler::CACHE_MAX_AGE`) are
   part of that reasoning.
+- **SAML service provider keys** (`docs/design/saml-connections.md` §2, §5.1) follow the same rule
+  behind their own port, `Saml\ServiceProviderKeys`: it signs (the current signing key, RSASSA-PKCS1-v1_5
+  over SHA-256) and decrypts a content key (an encryption key, next, current or retired, RSA-OAEP
+  only), and never returns a private key. One pair, RSA 3072, for the deployment: a signing key and
+  an encryption key (one key, one usage), each published as a self-signed certificate built by hand
+  (`Signing\X509\SelfSignedCertificate`, the encryption key's signed by the signing key, a known
+  answer pinned). With `CLAVIA_SAML_KEY_BACKEND=postgres` (the only backend yet) they are sealed
+  under `saml-sp:<kid>` and opened only in `PostgresServiceProviderKeys::sign()` and `decryptKey()`;
+  `PostgresServiceProviderKeyStore` makes and seals them. Rotation is a rollover in steps
+  (`RotateServiceProviderKeys`, `saml-keys:rotate`, `POST /api/v1/saml-keys/rotate`): a next pair
+  published, promoted after `CLAVIA_SAML_KEY_OVERLAP_DAYS` (14), the old pair retired, deleted after
+  as long again. `GET /api/v1/saml-keys` (`read:signing_keys`) shows certificates, never keys.
 
 ## Security invariants
 

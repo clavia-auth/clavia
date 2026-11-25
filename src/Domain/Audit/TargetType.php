@@ -20,6 +20,7 @@ enum TargetType: string
     case Role = 'role';
     case Connection = 'connection';
     case SigningKey = 'signing_key';
+    case SamlKey = 'saml_key';
     case InitialAccessToken = 'initial_access_token';
     case Webhook = 'webhook';
 }

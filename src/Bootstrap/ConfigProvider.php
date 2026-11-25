@@ -18,18 +18,21 @@ use Clavia\Adapter\Primary\Cli\CreateRoleCommand;
 use Clavia\Adapter\Primary\Cli\DatabaseStatusCommand;
 use Clavia\Adapter\Primary\Cli\DeliverWebhooksCommand;
 use Clavia\Adapter\Primary\Cli\GenerateEncryptionKeyCommand;
+use Clavia\Adapter\Primary\Cli\GenerateServiceProviderKeysCommand;
 use Clavia\Adapter\Primary\Cli\GenerateSigningKeyCommand;
 use Clavia\Adapter\Primary\Cli\GrantClientAccessCommand;
 use Clavia\Adapter\Primary\Cli\ImportUsersFromSqsCommand;
 use Clavia\Adapter\Primary\Cli\IssueRegistrationTokenCommand;
 use Clavia\Adapter\Primary\Cli\ListManagementScopesCommand;
 use Clavia\Adapter\Primary\Cli\ListRolesCommand;
+use Clavia\Adapter\Primary\Cli\ListServiceProviderKeysCommand;
 use Clavia\Adapter\Primary\Cli\ListSigningKeysCommand;
 use Clavia\Adapter\Primary\Cli\MailOutboxCommand;
 use Clavia\Adapter\Primary\Cli\MigrateDatabaseCommand;
 use Clavia\Adapter\Primary\Cli\PurgeAuditEventsCommand;
 use Clavia\Adapter\Primary\Cli\PurgeUnusedClientsCommand;
 use Clavia\Adapter\Primary\Cli\RegisterManagementApiCommand;
+use Clavia\Adapter\Primary\Cli\RotateServiceProviderKeysCommand;
 use Clavia\Adapter\Primary\Cli\RotateSigningKeyCommand;
 use Clavia\Adapter\Primary\Cli\RunJobsCommand;
 use Clavia\Adapter\Primary\Cli\SeedDevelopmentDataCommand;
@@ -74,6 +77,7 @@ use Clavia\Adapter\Primary\Http\Management\RoleHandler;
 use Clavia\Adapter\Primary\Http\Management\RolesHandler;
 use Clavia\Adapter\Primary\Http\Management\RoleUsersHandler;
 use Clavia\Adapter\Primary\Http\Management\RotateClientSecretHandler;
+use Clavia\Adapter\Primary\Http\Management\SamlKeysHandler;
 use Clavia\Adapter\Primary\Http\Management\SigningKeysHandler;
 use Clavia\Adapter\Primary\Http\Management\UserConsentsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserExportsHandler;
@@ -196,6 +200,9 @@ use Clavia\Application\Clients\Registration\RegisteredClients;
 use Clavia\Application\Clients\Registration\RegistrationMetadata;
 use Clavia\Application\Clients\Registration\UpdateClientConfiguration;
 use Clavia\Application\Connection\ConnectionAccess;
+use Clavia\Application\Connection\Saml\GenerateServiceProviderKeys;
+use Clavia\Application\Connection\Saml\ListServiceProviderKeys;
+use Clavia\Application\Connection\Saml\RotateServiceProviderKeys;
 use Clavia\Application\Development\BuildAuthorizationUrl;
 use Clavia\Application\Development\SeedDashboardClient;
 use Clavia\Application\Development\SeedDevelopmentData;
@@ -320,6 +327,8 @@ use Clavia\Application\Port\PasskeyVerifier;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Application\Port\PasswordlessChallengeStore;
 use Clavia\Application\Port\PushedAuthorizationRequestStore;
+use Clavia\Application\Port\Saml\ServiceProviderKeyStore;
+use Clavia\Application\Port\Saml\ServiceProviderKeys;
 use Clavia\Application\Port\SchemaMigrator;
 use Clavia\Application\Port\SecretCipher;
 use Clavia\Application\Port\SessionStore;
@@ -393,6 +402,9 @@ final class ConfigProvider
         'authorize-url' => AuthorizeUrlCommand::class,
         'keys:generate' => GenerateSigningKeyCommand::class,
         'keys:rotate' => RotateSigningKeyCommand::class,
+        'saml-keys:generate' => GenerateServiceProviderKeysCommand::class,
+        'saml-keys:rotate' => RotateServiceProviderKeysCommand::class,
+        'saml-keys:list' => ListServiceProviderKeysCommand::class,
         'keys:list' => ListSigningKeysCommand::class,
         'clients:create-m2m' => CreateMachineClientCommand::class,
         'clients:grant' => GrantClientAccessCommand::class,
@@ -474,6 +486,7 @@ final class ConfigProvider
                     CheckSenderConstraint::class => Container\CheckSenderConstraintFactory::class,
                     PushAuthorizationRequest::class => Container\PushAuthorizationRequestFactory::class,
                     SigningKeysHandler::class => Container\SigningKeysHandlerFactory::class,
+                    SamlKeysHandler::class => Container\SamlKeysHandlerFactory::class,
                     InitialAccessTokensHandler::class => Container\InitialAccessTokensHandlerFactory::class,
                     WebhooksHandler::class => Container\WebhooksHandlerFactory::class,
                     WebhookHandler::class => Container\WebhookHandlerFactory::class,
@@ -535,6 +548,13 @@ final class ConfigProvider
                     GenerateSigningKey::class => Container\GenerateSigningKeyFactory::class,
                     RotateSigningKey::class => Container\RotateSigningKeyFactory::class,
                     ListSigningKeys::class => Container\ListSigningKeysFactory::class,
+                    GenerateServiceProviderKeys::class => Container\GenerateServiceProviderKeysFactory::class,
+                    RotateServiceProviderKeys::class => Container\RotateServiceProviderKeysFactory::class,
+                    ListServiceProviderKeys::class => Container\ListServiceProviderKeysFactory::class,
+                    GenerateServiceProviderKeysCommand::class
+                        => Container\GenerateServiceProviderKeysCommandFactory::class,
+                    RotateServiceProviderKeysCommand::class => Container\RotateServiceProviderKeysCommandFactory::class,
+                    ListServiceProviderKeysCommand::class => Container\ListServiceProviderKeysCommandFactory::class,
                     ReadUserInfo::class => Container\ReadUserInfoFactory::class,
                     EndSession::class => Container\EndSessionFactory::class,
                     EndSessionHandler::class => Container\EndSessionHandlerFactory::class,
@@ -731,6 +751,8 @@ final class ConfigProvider
                     PublicKeyCache::class => Container\PublicKeyCacheFactory::class,
                     Container\SigningHttpClientFactory::SERVICE => Container\SigningHttpClientFactory::class,
                     SigningKeyStore::class => Container\SigningKeyStoreFactory::class,
+                    ServiceProviderKeyStore::class => Container\ServiceProviderKeyStoreFactory::class,
+                    ServiceProviderKeys::class => Container\ServiceProviderKeysFactory::class,
 
                     // Primary adapter: HTTP
                     HealthHandler::class => Container\HealthHandlerFactory::class,
