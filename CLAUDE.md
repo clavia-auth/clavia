@@ -497,13 +497,23 @@ applies however the person signed in.
 - **SAML sign-in** (`External\Saml\*`, design §5.3): the login page's button goes to `GET
   /auth/saml/{connection}` (`BeginSamlSignIn`): a pending sign-in carrying the `AuthnRequest`'s id,
   its handle the `RelayState` and the `clavia_external_state` cookie, the browser sent out by
-  HTTP-Redirect (unsigned for now). The identity provider POSTs to `…/acs` (`ReceiveSamlResponse`),
+  HTTP-Redirect, the request signed (Bindings §3.4.4.1: `SigAlg` RSA-SHA256 over the query as sent,
+  through `ServiceProviderKeys::sign()`) whenever the connection's `sign_requests` is on and a
+  current signing key exists. The identity provider POSTs to `…/acs` (`ReceiveSamlResponse`),
   a cross-site POST that carries no `Lax` cookie, so the response is only parked under a one-time
   handle (`SamlResponseStore`, 60 s) and the browser sent on with a `303` to `…/complete?h=…`
   (`CompleteSamlSignIn`), where the cookies come back: the parked response claimed; its `RelayState`
   equal to the cookie (constant time); the pending sign-in claimed for this connection; the
   application still allowing it; `SamlServiceProvider::consume()` with the connection's certificates
-  and this request's id; the assertion id claimed until it expires (`SamlAssertionReplayCache`). The
+  and this request's id; the assertion id claimed until it expires (`SamlAssertionReplayCache`). An
+  `EncryptedAssertion` is decrypted first: the content key unwrapped through `decryptKey()` (a
+  `ContentKeyDecrypter` the use case hands the port: the key the `EncryptedKey`'s certificate names,
+  or each encryption key, next, current and retired), RSA-OAEP only (`rsa-oaep-mgf1p`, or 1.1's
+  `rsa-oaep` with SHA-1 or SHA-256 and MGF1 to match), never `rsa-1_5`; then AES-GCM, or AES-CBC
+  unless the connection's `require_gcm`; `require_encryption` refuses a plain assertion. The
+  plaintext is held to a plain response's rules, and its signature checked after. Every failure is
+  the same page after the same steps, the handles spent first, and counts against the client address
+  in the sign-in throttle (`LoginThrottle`, which refuses before anything is read once it is reached). The
   person is `(connection, subject)` (`ResolveExternalAccount`); the address comes from the attribute
   the operator named or an address `NameID`, verified only when the connection trusts the identity
   provider. An untrusted address still makes an account for a new subject, unverified and linked to

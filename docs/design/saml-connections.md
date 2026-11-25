@@ -422,3 +422,18 @@ What slice 5 (#126) settled:
 - **The profile attributes** (`name_attribute` and the others) are stored but not yet copied onto the
   account: `ResolveExternalAccount` sets no profile for any external sign-in today.
 
+What slice 6 (#127) settled:
+
+- **The port signs and decrypts through closures the application hands it**: `authnRequestUrl()`
+  takes a signer over `ServiceProviderKeys::sign()`, `consume()` a `ContentKeyDecrypter` over
+  `decryptKey()`. The two ports never call each other.
+- **RSA-OAEP takes one digest for the OAEP hash and MGF1** (PHP's OpenSSL): `rsa-oaep-mgf1p`, 1.1's
+  `rsa-oaep` with SHA-1 and its default MGF, or with SHA-256 and `mgf1sha256`. SHA-256 with MGF1-SHA-1
+  is refused rather than tried.
+- **The content key is decrypted, then AES runs on the library's own backend** (`Alg\Encryption\AES`),
+  as question 1 found it could; the decrypted assertion is then verified exactly as a plain one.
+- **The throttle is the sign-in throttle's, per client address**: every SAML refusal counts, and once
+  it is reached the parked response is spent and nothing is read.
+- **Without keys a request goes unsigned** and an encrypted assertion is refused (`decryption`): the
+  connection's registration already warned.
+

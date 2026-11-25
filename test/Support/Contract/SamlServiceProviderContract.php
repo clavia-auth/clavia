@@ -11,8 +11,11 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Support\Contract;
 
+use Clavia\Application\Port\DecryptionFailed;
 use Clavia\Application\Port\Saml\AuthnRequestDetails;
+use Clavia\Application\Port\Saml\ContentKeyDecrypter;
 use Clavia\Application\Port\Saml\ExpectedResponse;
+use Clavia\Application\Port\Saml\OaepDigest;
 use Clavia\Application\Port\Saml\SamlIdentity;
 use Clavia\Application\Port\Saml\SamlRefusal;
 use Clavia\Application\Port\Saml\SamlRefused;
@@ -377,15 +380,125 @@ trait SamlServiceProviderContract
         );
     }
 
+    /** @return iterable<string, array{0: array<string, mixed>}> */
+    public static function encryptions(): iterable
+    {
+        yield 'AES-256-GCM, RSA-OAEP with SHA-1 (mgf1p)' => [[]];
+        yield 'AES-128-GCM, RSA-OAEP 1.1 with SHA-256' => [[
+            'cipher' => Idp::AES128_GCM,
+            'transport' => Idp::RSA_OAEP,
+            'oaepDigest' => 'sha256',
+        ]];
+        yield 'AES-256-CBC, ADFS\'s default' => [['cipher' => Idp::AES256_CBC]];
+        yield 'no certificate named: each key tried' => [['nameRecipient' => false]];
+    }
+
+    /** @param array<string, mixed> $options */
+    #[Test]
+    #[DataProvider('encryptions')]
+    public function anEncryptedAssertionIsDecryptedThenVerified(array $options): void
+    {
+        $identity = $this->consumed(Idp::response($options + ['encryptTo' => Idp::serviceProvider()['certificate']]));
+
+        self::assertInstanceOf(SamlIdentity::class, $identity);
+        self::assertSame('a8f3c2d1-0b9e-4f7a-8c6d-5e4f3a2b1c0d', $identity->subject);
+    }
+
+    /** @return iterable<string, array{0: array<string, mixed>, 1?: array{requireEncryption?: bool, requireGcm?: bool, decrypter?: bool}}> */
+    public static function encryptionRefusals(): iterable
+    {
+        $to = ['encryptTo' => Idp::serviceProvider()['certificate']];
+        yield 'RSA PKCS#1 v1.5 key transport' => [$to + ['transport' => Idp::RSA_1_5]];
+        yield 'a tampered CBC ciphertext' => [$to + ['cipher' => Idp::AES256_CBC, 'tamper' => 'ciphertext']];
+        yield 'a tampered GCM ciphertext' => [$to + ['tamper' => 'ciphertext']];
+        yield 'a tampered GCM tag' => [$to + ['tamper' => 'tag']];
+        yield 'a content key for another certificate' => [['encryptTo' => Idp::attacker()['certificate']]];
+        yield 'AES-CBC when GCM is required' => [$to + ['cipher' => Idp::AES256_CBC], ['requireGcm' => true]];
+        yield 'a plain assertion when encryption is required' => [[], ['requireEncryption' => true]];
+        yield 'an encrypted assertion with no key to read it' => [$to, ['decrypter' => false]];
+    }
+
     /**
-     * @param non-empty-list<non-empty-string>|null $certificates
-     * @param non-empty-string|null                 $subjectAttribute
+     * @param array<string, mixed>                                                  $options
+     * @param array{requireEncryption?: bool, requireGcm?: bool, decrypter?: bool} $requirements
+     */
+    #[Test]
+    #[DataProvider('encryptionRefusals')]
+    public function anEncryptedAssertionIsRefused(array $options, array $requirements = []): void
+    {
+        self::assertEquals(
+            new SamlRefused(SamlRefusal::Decryption),
+            $this->consumed(Idp::response($options), requirements: $requirements),
+        );
+    }
+
+    #[Test]
+    public function anEncryptedAssertionSignedByAnotherKeyIsStillRefusedForItsSignature(): void
+    {
+        $response = Idp::response(['key' => Idp::attacker(), 'encryptTo' => Idp::serviceProvider()['certificate']]);
+
+        self::assertEquals(new SamlRefused(SamlRefusal::Signature), $this->consumed($response));
+    }
+
+    #[Test]
+    public function aSignedRequestCarriesSigAlgAndASignatureOverTheQueryAsSent(): void
+    {
+        $key = Idp::serviceProvider();
+        $url = $this->samlServiceProvider()->authnRequestUrl(
+            new AuthnRequestDetails(
+                Url::fromString('https://idp.acme.example/saml/sso'),
+                Idp::SP_ENTITY_ID,
+                Url::fromString(Idp::ACS),
+                SamlRequestId::fromString(Idp::REQUEST_ID),
+                'handle-123',
+                new DateTimeImmutable(Idp::NOW),
+            ),
+            static function (string $data) use ($key): string {
+                openssl_sign($data, $signature, $key['private'], OPENSSL_ALGO_SHA256);
+
+                return $signature;
+            },
+        );
+
+        // As an identity provider verifies it (Bindings §3.4.4.1): the query's octets up to the signature.
+        $query = (string) parse_url($url, PHP_URL_QUERY);
+        $signed = '/^(SAMLRequest=[^&]+&RelayState=[^&]+&SigAlg=[^&]+)&Signature=([^&]+)$/D';
+        self::assertSame(1, preg_match($signed, $query, $parts));
+        parse_str($query, $parameters);
+        self::assertSame('http://www.w3.org/2001/04/xmldsig-more#rsa-sha256', $parameters['SigAlg'] ?? null);
+        $signature = base64_decode(rawurldecode($parts[2]), true);
+        self::assertIsString($signature);
+        self::assertSame(1, openssl_verify($parts[1], $signature, $key['certificate'], OPENSSL_ALGO_SHA256));
+    }
+
+    /**
+     * @param non-empty-list<non-empty-string>|null                                 $certificates
+     * @param non-empty-string|null                                                 $subjectAttribute
+     * @param array{requireEncryption?: bool, requireGcm?: bool, decrypter?: bool} $requirements
      */
     private function consumed(
         string $response,
         ?array $certificates = null,
         ?string $subjectAttribute = null,
+        array $requirements = [],
     ): SamlIdentity|SamlRefused {
+        $sp = Idp::serviceProvider();
+        $decrypter = new ContentKeyDecrypter(
+            [
+                ['kid' => 'other', 'certificate' => Idp::der(Idp::rsa()['certificate']) ?: 'x'],
+                ['kid' => 'sp-encryption', 'certificate' => Idp::der($sp['certificate']) ?: 'x'],
+            ],
+            static function (string $kid, string $wrapped, OaepDigest $digest) use ($sp): string {
+                if ($kid !== 'sp-encryption') {
+                    throw new DecryptionFailed('Not this key.');
+                }
+                $oaep = OPENSSL_PKCS1_OAEP_PADDING;
+                $ok = @openssl_private_decrypt($wrapped, $key, $sp['private'], $oaep, $digest->value);
+
+                return $ok ? $key : throw new DecryptionFailed('No.');
+            },
+        );
+
         return $this->samlServiceProvider()->consume($response, new ExpectedResponse(
             Idp::ENTITY_ID,
             $certificates ?? [Idp::rsa()['certificate']],
@@ -394,6 +507,9 @@ trait SamlServiceProviderContract
             SamlRequestId::fromString(Idp::REQUEST_ID),
             new DateTimeImmutable(Idp::NOW),
             $subjectAttribute,
+            ($requirements['decrypter'] ?? true) ? $decrypter : null,
+            $requirements['requireEncryption'] ?? false,
+            $requirements['requireGcm'] ?? false,
         ));
     }
 

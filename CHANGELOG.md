@@ -8,6 +8,12 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ### Added
 
+- **Signed SAML requests and encrypted assertions** (#127): with service provider keys, a SAML
+  connection signs its requests (`sign_requests`, on by default) and reads assertions encrypted to this
+  server (AES-GCM or AES-CBC, the key wrapped with RSA-OAEP; never RSA PKCS#1 v1.5), with keys in
+  PostgreSQL or a KMS. `require_encryption` and `require_gcm` hold a connection to them. SAML sign-in
+  failures count toward the sign-in throttle.
+
 - **Signing in through a SAML identity provider** (#126): the login page offers each enabled SAML
   connection; the person is sent to the identity provider and comes back through
   `/auth/saml/{connection}/acs`. They are known by the connection and their subject, a second factor
