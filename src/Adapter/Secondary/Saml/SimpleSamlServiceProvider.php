@@ -19,6 +19,7 @@ use Clavia\Application\Port\Saml\SamlRefusal;
 use Clavia\Application\Port\Saml\SamlRefused;
 use Clavia\Application\Port\Saml\SamlServiceProvider;
 use Clavia\Application\Port\Saml\ServiceProviderDescription;
+use Clavia\Domain\Connection\Saml\SamlCertificate;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\Url;
 use DateTimeImmutable;
@@ -92,6 +93,16 @@ final readonly class SimpleSamlServiceProvider implements SamlServiceProvider
         'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
         'http://www.w3.org/2001/04/xmldsig-more#rsa-sha384',
         'http://www.w3.org/2001/04/xmldsig-more#rsa-sha512',
+    ];
+
+    /** @var list<non-empty-string> What this server decrypts, best first (§2): never `rsa-1_5`. */
+    private const array ENCRYPTION_METHODS = [
+        'http://www.w3.org/2009/xmlenc11#aes256-gcm',
+        'http://www.w3.org/2009/xmlenc11#aes128-gcm',
+        'http://www.w3.org/2001/04/xmlenc#aes256-cbc',
+        'http://www.w3.org/2001/04/xmlenc#aes128-cbc',
+        'http://www.w3.org/2009/xmlenc11#rsa-oaep',
+        'http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p',
     ];
 
     /** @var list<non-empty-string> */
@@ -201,6 +212,14 @@ final readonly class SimpleSamlServiceProvider implements SamlServiceProvider
             throw new InvalidValue('The metadata is not an XML document this server reads (no DOCTYPE, no DTD).');
         }
         $root = $parsed->documentElement;
+        $xpath = self::xpath($parsed);
+        $aggregate = $root instanceof DOMElement && $root->namespaceURI === self::NS_MD
+            && $root->localName === 'EntitiesDescriptor';
+        if ($aggregate) {
+            // Keycloak wraps its one entity in an aggregate; a federation's many are not one provider.
+            $entities = self::elements($xpath, '//md:EntityDescriptor');
+            $root = count($entities) === 1 ? $entities[0] : null;
+        }
         if (
             ! $root instanceof DOMElement
             || $root->namespaceURI !== self::NS_MD
@@ -212,9 +231,8 @@ final readonly class SimpleSamlServiceProvider implements SamlServiceProvider
         if ($entityId === '' || strlen($entityId) > 1024) {
             throw new InvalidValue('The metadata names no entityID.');
         }
-        $xpath = self::xpath($parsed);
         $descriptors = array_values(array_filter(
-            self::elements($xpath, '/md:EntityDescriptor/md:IDPSSODescriptor'),
+            self::elements($xpath, 'md:IDPSSODescriptor', $root),
             static fn (DOMElement $d): bool => in_array(
                 self::NS_SAMLP,
                 preg_split('/\s+/', trim($d->getAttribute('protocolSupportEnumeration'))) ?: [],
@@ -252,7 +270,11 @@ final readonly class SimpleSamlServiceProvider implements SamlServiceProvider
             }
             foreach (self::elements($xpath, 'ds:KeyInfo/ds:X509Data/ds:X509Certificate', $key) as $certificate) {
                 $pem = self::pem($certificate->textContent);
-                $certificates[self::keyFingerprint($pem)] = $pem;
+                $x509 = openssl_x509_parse($pem);
+                /** @var mixed $seconds */
+                $seconds = is_array($x509) ? ($x509['validTo_time_t'] ?? null) : null;
+                $until = is_int($seconds) ? new \DateTimeImmutable('@' . $seconds) : null;
+                $certificates[self::keyFingerprint($pem)] = SamlCertificate::fromPem($pem, $until);
             }
         }
         $certificates = array_values($certificates);
@@ -276,7 +298,10 @@ final readonly class SimpleSamlServiceProvider implements SamlServiceProvider
         $document->appendChild($entity);
         $sp = $document->createElementNS(self::NS_MD, 'md:SPSSODescriptor');
         $sp->setAttribute('protocolSupportEnumeration', self::NS_SAMLP);
-        $sp->setAttribute('AuthnRequestsSigned', $description->signingCertificates === [] ? 'false' : 'true');
+        $sp->setAttribute(
+            'AuthnRequestsSigned',
+            $description->signsRequests && $description->signingCertificates !== [] ? 'true' : 'false',
+        );
         $sp->setAttribute('WantAssertionsSigned', 'true');
         $entity->appendChild($sp);
         $keys = ['signing' => $description->signingCertificates, 'encryption' => $description->encryptionCertificates];
@@ -291,6 +316,14 @@ final readonly class SimpleSamlServiceProvider implements SamlServiceProvider
                 $data->appendChild($cert);
                 $info->appendChild($data);
                 $key->appendChild($info);
+                if ($use === 'encryption') {
+                    // In order of preference (Metadata §2.4.1.1): GCM first, CBC for ADFS and its kind.
+                    foreach (self::ENCRYPTION_METHODS as $algorithm) {
+                        $method = $document->createElementNS(self::NS_MD, 'md:EncryptionMethod');
+                        $method->setAttribute('Algorithm', $algorithm);
+                        $key->appendChild($method);
+                    }
+                }
                 $sp->appendChild($key);
             }
         }

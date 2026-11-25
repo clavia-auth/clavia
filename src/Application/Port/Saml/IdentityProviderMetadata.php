@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Port\Saml;
 
+use Clavia\Domain\Connection\Saml\SamlCertificate;
 use Clavia\Domain\Shared\Url;
 
 /** What a connection needs from an identity provider's metadata (SAML Metadata §2.4.3). */
@@ -18,7 +19,7 @@ final readonly class IdentityProviderMetadata
 {
     /**
      * @param non-empty-string                 $entityId
-     * @param non-empty-list<non-empty-string> $certificates PEM, one to three, each an RSA key of 2048 bits or more.
+     * @param non-empty-list<SamlCertificate> $certificates One to three, each an RSA key of 2048 bits or more.
      */
     public function __construct(
         public string $entityId,

@@ -13,6 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Management\Connections\CreateConnection;
 use Clavia\Application\Management\Connections\OidcConfiguration;
+use Clavia\Application\Management\Connections\SamlConfiguration;
 use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Shared\Clock;
@@ -31,6 +32,9 @@ final class CreateConnectionFactory
         /** @var DomainEvents $events */
         $events = $container->get(DomainEvents::class);
 
-        return new CreateConnection($connections, $oidc, $clock, $events);
+        /** @var SamlConfiguration $saml */
+        $saml = $container->get(SamlConfiguration::class);
+
+        return new CreateConnection($connections, $oidc, $saml, $clock, $events);
     }
 }

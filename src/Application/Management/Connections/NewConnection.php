@@ -12,7 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Application\Management\Connections;
 
 /**
- * A connection to create: a pool, or an OpenID Connect provider.
+ * A connection to create: a pool, an OpenID Connect provider, or a SAML identity provider.
  */
 final readonly class NewConnection
 {
@@ -33,6 +33,7 @@ final readonly class NewConnection
         public ?string $oidcScope = null,
         public bool $allowSignUp = false,
         public bool $requireVerifiedEmail = false,
+        public ?NewSamlConnection $saml = null,
     ) {
     }
 

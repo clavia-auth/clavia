@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Support\Contract;
 
+use ClaviaTest\Support\Saml\TestIdentityProvider as Idp;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\ClientId;
@@ -23,6 +24,9 @@ use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Connection\ConnectionStrategy;
 use Clavia\Domain\Connection\OidcSettings;
+use Clavia\Domain\Connection\Saml\SamlCertificate;
+use Clavia\Domain\Connection\Saml\SamlOptions;
+use Clavia\Domain\Connection\Saml\SamlSettings;
 use Clavia\Domain\Shared\AlreadyExists;
 use Clavia\Domain\Shared\ScopeSet;
 use Clavia\Domain\Shared\Url;
@@ -88,6 +92,60 @@ trait ConnectionRepositoryContract
         self::assertSame('https://idp.example/authorize', $oidc->authorizationEndpoint->value);
         self::assertSame('https://idp.example/token', $oidc->tokenEndpoint->value);
         self::assertSame('https://idp.example/jwks', $oidc->jwksUri->value);
+    }
+
+    #[Test]
+    public function aSamlConnectionIsReadBackWholeAndItsMetadataReplaced(): void
+    {
+        $certificate = SamlCertificate::fromPem(
+            Idp::rsa()['certificate'],
+            new DateTimeImmutable('2036-01-01T00:00:00.000000Z'),
+        );
+        $options = SamlOptions::of(
+            subjectAttribute: 'objectidentifier',
+            emailAttribute: 'emailaddress',
+            emailTrusted: true,
+            requireGcm: true,
+        );
+        $this->connections()->add(Connection::samlProvider(
+            self::named('acme-entra'),
+            'Acme staff',
+            SamlSettings::of(
+                Idp::ENTITY_ID,
+                Url::fromString('https://idp.acme.example/saml/sso'),
+                [$certificate],
+                Url::fromString('https://idp.acme.example/metadata'),
+                $options,
+            ),
+            true,
+            false,
+            new DateTimeImmutable('2026-01-15T10:00:00Z'),
+        ));
+
+        $read = $this->connections()->find(self::named('acme-entra'));
+
+        self::assertNotNull($read);
+        self::assertSame(ConnectionStrategy::Saml, $read->strategy);
+        self::assertNull($read->oidc);
+        $saml = $read->saml;
+        self::assertNotNull($saml);
+        self::assertSame(Idp::ENTITY_ID, $saml->entityId);
+        self::assertSame('https://idp.acme.example/saml/sso', $saml->singleSignOnUrl->value);
+        self::assertSame('https://idp.acme.example/metadata', $saml->metadataUrl?->value);
+        self::assertEquals([$certificate], $saml->certificates);
+        self::assertEquals($options, $saml->options);
+
+        $other = SamlCertificate::fromPem(Idp::attacker()['certificate'], null);
+        $this->connections()->save($read->withSaml($saml->withMetadata(
+            'https://idp.acme.example/new',
+            Url::fromString('https://idp.acme.example/saml/sso2'),
+            [$other, $certificate],
+        )));
+        $refreshed = $this->connections()->find(self::named('acme-entra'))?->saml;
+        self::assertNotNull($refreshed);
+        self::assertSame('https://idp.acme.example/new', $refreshed->entityId);
+        self::assertEquals([$other, $certificate], $refreshed->certificates);
+        self::assertEquals($options, $refreshed->options, 'A refresh keeps the options.');
     }
 
     #[Test]

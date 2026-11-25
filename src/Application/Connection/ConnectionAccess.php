@@ -74,6 +74,9 @@ final readonly class ConnectionAccess
             ConnectionStrategy::Database => true,
             ConnectionStrategy::Passwordless => $this->mailer->canSend(),
             ConnectionStrategy::Social, ConnectionStrategy::Oidc => $this->providers->for($connection) !== null,
+            // Registered and described, but nobody signs in through one before its flow exists (#126):
+            // the login page offers no button that cannot work.
+            ConnectionStrategy::Saml => false,
         };
     }
 

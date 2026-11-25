@@ -12,7 +12,9 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Connection\ConnectionAccess;
+use Clavia\Application\Connection\Saml\SamlServiceProviderEndpoints;
 use Clavia\Application\Management\Connections\ReadConnections;
+use Clavia\Application\Port\Saml\ServiceProviderKeys;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Psr\Container\ContainerInterface;
 
@@ -25,6 +27,11 @@ final class ReadConnectionsFactory
         /** @var ConnectionAccess $access */
         $access = $container->get(ConnectionAccess::class);
 
-        return new ReadConnections($connections, $access);
+        /** @var SamlServiceProviderEndpoints $endpoints */
+        $endpoints = $container->get(SamlServiceProviderEndpoints::class);
+        /** @var ServiceProviderKeys $keys */
+        $keys = $container->get(ServiceProviderKeys::class);
+
+        return new ReadConnections($connections, $access, $endpoints, $keys);
     }
 }

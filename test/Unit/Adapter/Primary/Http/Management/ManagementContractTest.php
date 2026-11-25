@@ -86,7 +86,7 @@ final class ManagementContractTest extends TestCase
     {
         // A DELETE never does: OpenAPI 3.0 gives a body on it no meaning, so taking a role
         // from somebody names them in the path. Neither does an action with nothing to say
-        // (a rotation, a mail sent, an export or a test queued).
+        // (a rotation, a mail sent, an export or a test queued, metadata read again).
         foreach (self::contract()->operations() as $operation) {
             self::assertSame(
                 in_array($operation->method, ['POST', 'PATCH', 'PUT'], true)
@@ -94,7 +94,8 @@ final class ManagementContractTest extends TestCase
                     && ! str_ends_with($operation->path->template, '/rotate')
                     && ! str_ends_with($operation->path->template, 'password-reset')
                     && ! str_ends_with($operation->path->template, 'users-exports')
-                    && ! str_ends_with($operation->path->template, '/test'),
+                    && ! str_ends_with($operation->path->template, '/test')
+                    && ! str_ends_with($operation->path->template, 'refresh-metadata'),
                 $operation->requestBody !== null,
                 (string) $operation,
             );

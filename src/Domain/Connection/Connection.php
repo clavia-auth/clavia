@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Domain\Connection;
 
+use Clavia\Domain\Connection\Saml\SamlSettings;
 use Clavia\Domain\Shared\InvalidValue;
 use DateTimeImmutable;
 
@@ -53,6 +54,7 @@ final readonly class Connection
         public DateTimeImmutable $createdAt,
         public bool $allowsSignUp,
         public bool $requiresVerifiedEmail,
+        public ?SamlSettings $saml = null,
     ) {
     }
 
@@ -108,6 +110,31 @@ final readonly class Connection
     }
 
     /**
+     * A new SAML 2.0 identity provider, read from its metadata.
+     *
+     * @throws InvalidValue
+     */
+    public static function samlProvider(
+        ConnectionName $name,
+        string $displayName,
+        SamlSettings $saml,
+        bool $isEnabled,
+        bool $isDomainConnection,
+        DateTimeImmutable $now,
+    ): self {
+        return self::reconstitute(
+            $name,
+            $displayName,
+            ConnectionStrategy::Saml,
+            $isEnabled,
+            $isDomainConnection,
+            null,
+            $now,
+            saml: $saml,
+        );
+    }
+
+    /**
      * A connection read back from storage — or seeded, for the built-in ones. The same
      * rules apply.
      *
@@ -125,10 +152,14 @@ final readonly class Connection
         DateTimeImmutable $createdAt,
         bool $allowsSignUp = false,
         bool $requiresVerifiedEmail = false,
+        ?SamlSettings $saml = null,
     ): self {
         self::checkDisplayName($displayName);
         if (($strategy === ConnectionStrategy::Oidc) !== ($oidc !== null)) {
             throw new InvalidValue('An OIDC connection, and only one, has OIDC settings.');
+        }
+        if (($strategy === ConnectionStrategy::Saml) !== ($saml !== null)) {
+            throw new InvalidValue('A SAML connection, and only one, has SAML settings.');
         }
         if (($allowsSignUp || $requiresVerifiedEmail) && $strategy !== ConnectionStrategy::Database) {
             throw new InvalidValue('Only a database connection takes sign-ups or requires a verified address.');
@@ -144,6 +175,7 @@ final readonly class Connection
             $createdAt,
             $allowsSignUp,
             $requiresVerifiedEmail,
+            $saml,
         );
     }
 
@@ -173,6 +205,7 @@ final readonly class Connection
             $this->createdAt,
             $allowsSignUp ?? $this->allowsSignUp,
             $requiresVerifiedEmail ?? $this->requiresVerifiedEmail,
+            $this->saml,
         );
     }
 
@@ -196,6 +229,20 @@ final readonly class Connection
             $oidc,
             $this->createdAt,
         );
+    }
+
+    /**
+     * The same SAML connection with its identity provider's settings replaced (a metadata refresh).
+     *
+     * @throws InvalidValue When this is not a SAML connection.
+     */
+    public function withSaml(SamlSettings $saml): self
+    {
+        if ($this->strategy !== ConnectionStrategy::Saml) {
+            throw new InvalidValue('Only a SAML connection has SAML settings.');
+        }
+
+        return clone($this, ['saml' => $saml]);
     }
 
     /**
@@ -231,7 +278,7 @@ final readonly class Connection
         return $this->strategy === ConnectionStrategy::Passwordless;
     }
 
-    /** Signs people in at another party — social or OIDC — rather than here. */
+    /** Signs people in at another party — social, OIDC or SAML — rather than here. */
     public function isExternal(): bool
     {
         return $this->strategy->isExternal();

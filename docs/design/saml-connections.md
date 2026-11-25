@@ -392,3 +392,19 @@ What slice 3 (#124) settled:
 - **References are checked when the settings load** (`Bootstrap\SamlKeyReferences`), in each
   provider's form, so a bad one stops `bin/clavia` (78) without a provider called.
 
+What slice 4 (#125) settled:
+
+- **A registered SAML connection is not `configured` yet**: nobody can sign in through one before
+  slice 5, so the login page offers no button for it.
+- **Keycloak's metadata is an `EntitiesDescriptor` holding one entity**, and is read as that entity;
+  an aggregate of several (a federation) is still refused.
+- **A refusal names its field** with a pointer (`/saml/metadata`, `/saml/metadata_url`, `/saml` for an
+  option), never the document's content.
+- **The certificates keep their stated expiry** (read when the metadata is) beside their SHA-256, for
+  the operator; neither is enforced, since the key is what is pinned.
+- **Refreshing a connection registered from a document is `409`**: it has no URL to read again.
+  Changing a connection's SAML options or re-registering its metadata by `PATCH` is not built yet.
+- **This server's metadata advertises its encryption methods** in order (AES-GCM, then AES-CBC, then
+  RSA-OAEP key transport), and `AuthnRequestsSigned` only when the connection signs and a signing key
+  exists.
+

@@ -12,10 +12,15 @@ declare(strict_types=1);
 namespace Clavia\Application\Management\Connections;
 
 use Clavia\Application\Connection\ConnectionAccess;
+use Clavia\Application\Connection\Saml\SamlServiceProviderEndpoints;
 use Clavia\Application\Management\NotFound;
+use Clavia\Application\Port\DecryptionFailed;
+use Clavia\Application\Port\Saml\ServiceProviderKeys;
+use Clavia\Application\Port\SigningFailed;
 use Clavia\Domain\Connection\Connection;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Connection\ConnectionRepository;
+use Clavia\Domain\Connection\Saml\ServiceProviderKeyUsage;
 use Clavia\Domain\Shared\InvalidValue;
 
 /**
@@ -26,6 +31,8 @@ final readonly class ReadConnections
     public function __construct(
         private ConnectionRepository $connections,
         private ConnectionAccess $access,
+        private SamlServiceProviderEndpoints $endpoints,
+        private ServiceProviderKeys $keys,
     ) {
     }
 
@@ -51,7 +58,31 @@ final readonly class ReadConnections
             $connection,
             $this->access->isConfigured($connection),
             $this->access->isUsable($connection),
+            $connection->saml === null ? null : new DescribedServiceProvider(
+                $this->endpoints->entityId($connection->name),
+                $this->endpoints->assertionConsumerService($connection->name),
+                $this->endpoints->metadata($connection->name),
+                $this->keysWarning(),
+            ),
         );
+    }
+
+    /**
+     * Without keys a SAML connection still works, unsigned and unencrypted: the operator is told.
+     *
+     * @return non-empty-string|null
+     */
+    private function keysWarning(): ?string
+    {
+        try {
+            $current = $this->keys->certificates()->current(ServiceProviderKeyUsage::Signing);
+        } catch (SigningFailed | DecryptionFailed) {
+            return 'The SAML service provider keys cannot be read from their KMS now: the metadata lacks '
+                . 'their certificates until they can.';
+        }
+
+        return $current !== null ? null : 'This server has no SAML service provider keys yet: requests are not '
+            . 'signed and assertions cannot be encrypted to it. Run `clavia saml-keys:generate`.';
     }
 
     /**

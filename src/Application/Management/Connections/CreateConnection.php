@@ -35,6 +35,7 @@ final readonly class CreateConnection
     public function __construct(
         private ConnectionRepository $connections,
         private OidcConfiguration $oidc,
+        private SamlConfiguration $saml,
         private Clock $clock,
         private DomainEvents $events,
     ) {
@@ -43,6 +44,7 @@ final readonly class CreateConnection
     /**
      * @throws InvalidValue
      * @throws AlreadyExists
+     * @throws SamlMetadataRefused
      */
     public function __invoke(NewConnection $new): Connection
     {
@@ -53,6 +55,12 @@ final readonly class CreateConnection
             throw new AlreadyExists(sprintf("A connection named '%s' already exists.", $name->value));
         }
 
+        if (($new->saml !== null) !== ($strategy === ConnectionStrategy::Saml)) {
+            throw new InvalidValue('A SAML connection, and only one, has saml settings.');
+        }
+        if ($strategy === ConnectionStrategy::Saml && $new->hasOidcSettings()) {
+            throw new InvalidValue('A SAML connection has no OIDC settings.');
+        }
         if (($new->allowSignUp || $new->requireVerifiedEmail) && $strategy !== ConnectionStrategy::Database) {
             throw new InvalidValue('Only a database connection takes sign-ups or requires a verified address.');
         }
@@ -86,6 +94,14 @@ final readonly class CreateConnection
                     null,
                     $new->oidcScope,
                 ),
+                $new->isEnabled,
+                $new->isDomainConnection,
+                $this->clock->now(),
+            ),
+            ConnectionStrategy::Saml => Connection::samlProvider(
+                $name,
+                $new->displayName,
+                $this->saml->settings($new->saml ?? throw new \LogicException('Checked above.')),
                 $new->isEnabled,
                 $new->isDomainConnection,
                 $this->clock->now(),
