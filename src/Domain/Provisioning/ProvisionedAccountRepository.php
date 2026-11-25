@@ -31,6 +31,13 @@ interface ProvisionedAccountRepository
      */
     public function add(ProvisionedAccount $account): void;
 
+    /**
+     * Record new keys for an account already provisioned.
+     *
+     * @throws AlreadyExists As {@see add()}.
+     */
+    public function save(ProvisionedAccount $account): void;
+
     /** The account's record, if a directory provisioned it into this connection. */
     public function find(ConnectionName $connection, UserId $userId): ?ProvisionedAccount;
 

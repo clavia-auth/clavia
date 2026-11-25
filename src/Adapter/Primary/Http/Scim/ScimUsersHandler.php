@@ -76,7 +76,10 @@ final readonly class ScimUsersHandler implements RequestHandlerInterface
         return $this->responder->json(
             ScimUserDocument::of($created, $this->baseUrl),
             StatusCodeInterface::STATUS_CREATED,
-            ['Location' => ScimUserDocument::location($created->user->id->value, $this->baseUrl)],
+            [
+                'Location' => ScimUserDocument::location($created->user->id->value, $this->baseUrl),
+                'ETag' => ScimUserDocument::etag($created),
+            ],
         );
     }
 

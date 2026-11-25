@@ -108,6 +108,34 @@ trait ProvisionedAccountRepositoryContract
     }
 
     #[Test]
+    public function savingARecordChangesItsKeysUnderTheSameRules(): void
+    {
+        $ada = $this->provisioned('staff', 1, 'Ada', 'ext-1', 'ada@example.com');
+        $this->provisioned('staff', 2, 'Grace', 'ext-2', 'grace@example.com');
+        $later = new DateTimeImmutable('2026-02-01T10:00:00Z');
+
+        $this->provisionedAccounts()->save($ada->changedTo(
+            ScimUser::fromJson((object) ['userName' => 'ADA.L', 'externalId' => 'ext-1b']),
+            $later,
+        ));
+        $stored = $this->provisionedAccounts()->find(ConnectionName::fromString('staff'), $ada->userId);
+        self::assertSame('ADA.L', $stored?->userName);
+        self::assertSame('ext-1b', $stored?->externalId);
+        self::assertEquals($later, $stored?->updatedAt);
+        self::assertNotNull($stored);
+        $this->provisionedAccounts()->save($stored->changedTo(
+            ScimUser::fromJson((object) ['userName' => 'ada.l', 'externalId' => 'ext-1b']),
+            $later,
+        ));
+
+        $this->expectException(AlreadyExists::class);
+        $this->provisionedAccounts()->save($ada->changedTo(
+            ScimUser::fromJson((object) ['userName' => 'grace', 'externalId' => 'ext-1']),
+            $later,
+        ));
+    }
+
+    #[Test]
     public function deletingTheAccountDeletesItsRecord(): void
     {
         $ada = $this->provisioned('staff', 1, 'Ada', null, 'ada@example.com');

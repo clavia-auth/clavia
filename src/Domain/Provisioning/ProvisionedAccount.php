@@ -68,6 +68,24 @@ final readonly class ProvisionedAccount
         return new self($userId, $connection, $userName, $externalId, $provisionedBy, $createdAt, $updatedAt);
     }
 
+    /** The record with the keys the resource now carries; unchanged keys keep it as it was. */
+    public function changedTo(ScimUser $resource, DateTimeImmutable $now): self
+    {
+        if ($resource->userName === $this->userName && $resource->externalId === $this->externalId) {
+            return $this;
+        }
+
+        return new self(
+            $this->userId,
+            $this->connection,
+            $resource->userName,
+            $resource->externalId,
+            $this->provisionedBy,
+            $this->createdAt,
+            $now,
+        );
+    }
+
     /** What `userName` is unique and compared by: ignoring case. */
     public static function keyOf(string $userName): string
     {

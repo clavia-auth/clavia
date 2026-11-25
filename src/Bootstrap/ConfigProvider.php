@@ -370,7 +370,10 @@ use Clavia\Application\Port\WebAuthnChallengeStore;
 use Clavia\Application\Port\WebhookSender;
 use Clavia\Application\Provisioning\AuthenticateProvisioningToken;
 use Clavia\Application\Provisioning\Users\CreateScimUser;
+use Clavia\Application\Provisioning\Users\DeleteScimUser;
+use Clavia\Application\Provisioning\Users\PatchScimUser;
 use Clavia\Application\Provisioning\Users\ReadScimUsers;
+use Clavia\Application\Provisioning\Users\ReplaceScimUser;
 use Clavia\Application\Secrets\GenerateEncryptionKey;
 use Clavia\Application\Webhooks\DeliverWebhooks;
 use Clavia\Configuration\Settings;
@@ -739,6 +742,9 @@ final class ConfigProvider
                     AuthenticateProvisioningToken::class => Container\AuthenticateProvisioningTokenFactory::class,
                     CreateScimUser::class => Container\CreateScimUserFactory::class,
                     ReadScimUsers::class => Container\ReadScimUsersFactory::class,
+                    ReplaceScimUser::class => Container\ReplaceScimUserFactory::class,
+                    PatchScimUser::class => Container\PatchScimUserFactory::class,
+                    DeleteScimUser::class => Container\DeleteScimUserFactory::class,
                     RegistrationMetadata::class => Container\RegistrationMetadataFactory::class,
                     RegisterClientDynamically::class => Container\RegisterClientDynamicallyFactory::class,
                     ImportLine::class => Container\ImportLineFactory::class,

@@ -36,8 +36,24 @@ final class InMemoryProvisionedAccountRepository implements ProvisionedAccountRe
     #[\Override]
     public function add(ProvisionedAccount $account): void
     {
+        $this->refuseConflicts($account);
+        $this->accounts[$account->userId->value] = $account;
+    }
+
+    #[\Override]
+    public function save(ProvisionedAccount $account): void
+    {
+        if (isset($this->live()[$account->userId->value])) {
+            $this->refuseConflicts($account);
+            $this->accounts[$account->userId->value] = $account;
+        }
+    }
+
+    /** The storage's two unique constraints, the account's own record left out. */
+    private function refuseConflicts(ProvisionedAccount $account): void
+    {
         foreach ($this->live() as $other) {
-            if (! $other->connection->equals($account->connection)) {
+            if (! $other->connection->equals($account->connection) || $other->userId->equals($account->userId)) {
                 continue;
             }
             if ($other->userNameKey() === $account->userNameKey()) {
@@ -47,7 +63,6 @@ final class InMemoryProvisionedAccountRepository implements ProvisionedAccountRe
                 throw new AlreadyExists(self::EXTERNAL_ID_TAKEN);
             }
         }
-        $this->accounts[$account->userId->value] = $account;
     }
 
     #[\Override]

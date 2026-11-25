@@ -13,7 +13,10 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Adapter\Primary\Http\Scim\ScimResponder;
 use Clavia\Adapter\Primary\Http\Scim\ScimUserHandler;
+use Clavia\Application\Provisioning\Users\DeleteScimUser;
+use Clavia\Application\Provisioning\Users\PatchScimUser;
 use Clavia\Application\Provisioning\Users\ReadScimUsers;
+use Clavia\Application\Provisioning\Users\ReplaceScimUser;
 use Clavia\Configuration\Settings;
 use Psr\Container\ContainerInterface;
 
@@ -23,11 +26,17 @@ final class ScimUserHandlerFactory
     {
         /** @var ReadScimUsers $read */
         $read = $container->get(ReadScimUsers::class);
+        /** @var ReplaceScimUser $replace */
+        $replace = $container->get(ReplaceScimUser::class);
+        /** @var PatchScimUser $patch */
+        $patch = $container->get(PatchScimUser::class);
+        /** @var DeleteScimUser $delete */
+        $delete = $container->get(DeleteScimUser::class);
         /** @var ScimResponder $responder */
         $responder = $container->get(ScimResponder::class);
         /** @var Settings $settings */
         $settings = $container->get(Settings::class);
 
-        return new ScimUserHandler($read, $responder, $settings->scimBaseUrl());
+        return new ScimUserHandler($read, $replace, $patch, $delete, $responder, $settings->scimBaseUrl());
     }
 }

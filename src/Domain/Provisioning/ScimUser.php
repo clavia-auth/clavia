@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Domain\Provisioning;
 
 use Clavia\Domain\Identity\Profile;
+use Clavia\Domain\Identity\User;
 use Clavia\Domain\Shared\InvalidValue;
 use stdClass;
 
@@ -103,6 +104,59 @@ final readonly class ScimUser
     }
 
     /**
+     * The resource as an account and its provisioned record hold it: what a `PATCH` is applied to.
+     *
+     * @throws InvalidValue Never for an account that exists: its values were held to these rules.
+     */
+    public static function of(User $user, ProvisionedAccount $account): self
+    {
+        $profile = $user->profile();
+
+        return new self(
+            $account->userName,
+            $account->externalId,
+            $user->isActive(),
+            $profile->name,
+            null,
+            $profile->givenName,
+            $profile->familyName,
+            $profile->nickname,
+            $profile->locale,
+            [$user->email],
+        );
+    }
+
+    /**
+     * The resource as JSON, with what this server keeps: the account's address is its primary email,
+     * and its `work` one, the type Entra ID's `PATCH` names it by.
+     */
+    public function toJson(): stdClass
+    {
+        $name = array_filter(
+            ['formatted' => $this->formattedName, 'givenName' => $this->givenName, 'familyName' => $this->familyName],
+            static fn (?string $value): bool => $value !== null,
+        );
+        $emails = [];
+        foreach ($this->emails as $index => $email) {
+            $emails[] = (object) ($index === 0
+                ? ['value' => $email, 'type' => 'work', 'primary' => true]
+                : ['value' => $email]);
+        }
+
+        return (object) array_filter([
+            'schemas' => [self::SCHEMA],
+            'userName' => $this->userName,
+            'externalId' => $this->externalId,
+            'active' => $this->active,
+            'displayName' => $this->displayName,
+            'name' => $name === [] ? null : (object) $name,
+            'nickName' => $this->nickName,
+            'locale' => $this->locale,
+            'emails' => $emails === [] ? null : $emails,
+        ], static fn (mixed $value): bool => $value !== null);
+    }
+
+    /**
      * The account's address: the primary email, or `userName` when it is an address and no email is
      * given.
      *
@@ -122,14 +176,19 @@ final readonly class ScimUser
         throw new InvalidValue("'emails' is required when 'userName' is not an email address.");
     }
 
-    /** What the account's profile holds: the display name first, then the formatted name. */
-    public function profile(): Profile
+    /**
+     * What the account's profile holds: the display name first, then the formatted name.
+     *
+     * @param string|null $picture The account's picture, which SCIM does not manage: kept as it is.
+     */
+    public function profile(?string $picture = null): Profile
     {
         return Profile::of(
             name: $this->displayName ?? $this->formattedName,
             givenName: $this->givenName,
             familyName: $this->familyName,
             nickname: $this->nickName,
+            picture: $picture,
             locale: $this->locale,
         );
     }

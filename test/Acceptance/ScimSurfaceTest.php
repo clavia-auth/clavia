@@ -42,7 +42,8 @@ final class ScimSurfaceTest extends AcceptanceTestCase
         self::assertSame('no-store', $config->getHeaderLine('Cache-Control'));
         $document = self::document($config);
         self::assertSame(['urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig'], $document['schemas']);
-        self::assertSame(['supported' => false], $document['patch'], 'Not until it is built.');
+        self::assertSame(['supported' => true], $document['patch']);
+        self::assertSame(['supported' => true], $document['etag']);
         self::assertSame(['supported' => true, 'maxResults' => 200], $document['filter']);
         self::assertSame(['supported' => false], $document['sort']);
         self::assertIsArray($document['bulk']);

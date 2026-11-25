@@ -924,8 +924,8 @@ connection is gone is one `401` document (`WWW-Authenticate: Bearer realm="scim"
 a genuine one whose connection went away. The caller (`ProvisioningCaller`: the token and its
 connection) is attached for the handlers (`ScimRequest`), and the trail names the token. Every answer
 is `application/scim+json`, `no-store` (`ScimResponder`), errors RFC 7644 §3.12 documents (`status`
-a string, never a value sent). `/ServiceProviderConfig` states only what is built (filtering; no
-PATCH, ETag, bulk, sort or password change yet); `/ResourceTypes` and `/Schemas` (`ScimCatalogue`)
+a string, never a value sent). `/ServiceProviderConfig` states only what is built (filtering, PATCH,
+ETags; no bulk, sort or password change); `/ResourceTypes` and `/Schemas` (`ScimCatalogue`)
 list `User` and the attributes kept; `/Bulk` and `/Me` are `501`; any other path is a SCIM `404`,
 behind the token like the rest.
 
@@ -946,6 +946,23 @@ invalidFilter` otherwise), `startIndex` and `count` (100 by default, 200 at most
 **`require_provisioning`** on an OIDC or SAML connection (Management API) makes `ResolveExternalAccount`
 refuse any identity without a provisioned account there (`ExternalSignInFailure::NotProvisioned`,
 `not_provisioned` in the trail, worded as unavailable), linking and creating nothing.
+
+**Changes** (`/Users/{id}`): `PUT` (`ReplaceScimUser`) makes the account the resource sent (an
+optional attribute left out is cleared; the picture, which SCIM does not manage, is kept; the
+address follows the primary email, verified as at creation; `userName`, `externalId` and, in an
+enterprise connection, the identity's subject move with it, the storage deciding uniqueness), in one
+transaction with `UserChanged` naming what changed. `PATCH` (`PatchScimUser`) applies `ScimPatch`
+(`add`, `replace`, `remove`; no path, `attr`, `attr.sub`, `emails[type eq "work"].value`,
+`emails[primary eq true].value`; an extension's path changes nothing; `"True"`/`"False"` for `active`
+only; `400 invalidSyntax`, `invalidPath` or `noTarget`) to the resource as it stands
+(`ScimUser::of()->toJson()`, the address as the primary `work` email), then replaces with the result,
+so it can do nothing a `PUT` could not. **`active: false` is an operator's deactivation**:
+`SignOutEverywhere` ends every session (`ended_everywhere`, back-channel logout) once committed, and
+tokens stop where the account is re-checked. `DELETE` (`DeleteScimUser`) deletes the account like the
+Management API, or deactivates it with the token's `delete_deactivates`. Every resource carries
+`meta.version` and `ETag`, a weak tag of its last change to the microsecond
+(`ProvisionedUser::version()`); `If-Match` (`*`, weak or strong tags) on `PUT`, `PATCH` and `DELETE`
+is `412` when stale.
 
 ### Domain events and the audit trail
 

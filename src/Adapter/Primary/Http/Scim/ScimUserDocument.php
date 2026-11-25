@@ -58,8 +58,15 @@ final class ScimUserDocument
                 'created' => self::instant($account->createdAt),
                 'lastModified' => self::instant(max($account->updatedAt, $user->updatedAt())),
                 'location' => self::location($user->id->value, $baseUrl),
+                'version' => self::etag($provisioned),
             ],
         ], static fn (mixed $value): bool => $value !== null);
+    }
+
+    /** The resource's version as a weak entity tag (RFC 7644 §3.14), in `meta.version` and `ETag`. */
+    public static function etag(ProvisionedUser $provisioned): string
+    {
+        return 'W/"' . $provisioned->version() . '"';
     }
 
     /** @param non-empty-string $baseUrl */
