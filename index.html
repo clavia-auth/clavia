@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Clavia Management API · 0.3.0</title>
-  <meta name="description" content="Reference of the Clavia Management API, for Clavia 0.3.0.">
+  <title>Clavia Management API · 0.4.0</title>
+  <meta name="description" content="Reference of the Clavia Management API, for Clavia 0.4.0.">
   <link rel="icon" href="clavia-icon.svg" type="image/svg+xml">
   <!--
     The Management API reference, rendered by Scalar from management-api.yaml beside this file.
@@ -98,7 +98,7 @@
     <span class="spacer"></span>
     <label class="muted hide-narrow" for="clavia-release">Release</label>
     <select id="clavia-release" aria-label="Clavia release">
-      <option value="">0.3.0</option>
+      <option value="">0.4.0</option>
     </select>
     <a class="muted hide-narrow" href="https://github.com/clavia-auth/clavia">GitHub</a>
   </header>
@@ -128,7 +128,7 @@
         variables: { domain: { default: 'example.com', description: 'Your CLAVIA_ROOT_DOMAIN' } },
       }],
       authentication: { preferredSecurityScheme: 'managementToken' },
-      metaData: { title: 'Clavia Management API · 0.3.0' },
+      metaData: { title: 'Clavia Management API · 0.4.0' },
     });
 
     // The release picker: every published release, newest first (versions.json, written by the
@@ -143,7 +143,7 @@
           const option = document.createElement('option');
           option.value = version === latest ? '' : 'v' + version + '/';
           option.textContent = version === latest ? version + ' (latest)' : version;
-          option.selected = version === '0.3.0';
+          option.selected = version === '0.4.0';
           return option;
         }));
       } catch {
