@@ -220,7 +220,22 @@ adds anything for a third-party application.
 4. **Dashboard** (clavia-dashboard): the `app_metadata` editor and the mapping lists, with the
    preview. *Done when* an operator can do all of the above without the API.
 
-## 10. Open questions
+## 10. As built
+
+What the slices settled differently from the sections above, so the code and this document agree.
+
+- **Past the cap, a 500, not `server_error`** (§2, §5.3): RFC 6749 §5.2 defines no `server_error`
+  at the token endpoint (only the authorization endpoint's redirect has one). The grant fails as a
+  signing failure does: `CustomClaimsTooLarge`, logged under its error reference, the transaction
+  rolled back, so nothing is spent and no token recorded.
+- **Canonical JSON** (`Domain\Shared\CanonicalJson`): `app_metadata` and a constant's value are
+  kept with their objects' keys sorted, because PostgreSQL's `jsonb` reorders them; the same value
+  must read back as the same value.
+- **A reserved name stored earlier still loads** (`ClaimName::fromStorage()`), and is refused at
+  issuance (`LogicException`), so a name added to the list later never takes an API down at read.
+- **Introspection** adds the claims to access tokens only, never to a refresh token.
+
+## 11. Open questions
 
 1. **Plain names beside URIs** (§2)? *Recommendation:* allow them, reserved names excepted. A URI is
    safer against future registrations, but operators read and type these, and the reserved list

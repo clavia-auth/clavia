@@ -45,6 +45,8 @@ final readonly class TokenIntrospection
         public ?DateTimeImmutable $authenticatedAt = null,
         public ?string $acr = null,
         public ?string $dpopJkt = null,
+        /** @var array<non-empty-string, mixed> The API's custom claims, worked out when asked. */
+        public array $claims = [],
     ) {
     }
 }

@@ -45,18 +45,21 @@ final readonly class AccessTokenClaims
     public const string TYPE = 'at+jwt';
 
     /**
-     * @param array<non-empty-string, string|int|array<string, string>> $claims
+     * @param array<non-empty-string, mixed> $claims
      */
     private function __construct(private array $claims)
     {
     }
 
     /**
-     * @param non-empty-string $issuer The issuer identifier, exactly as discovery states it.
+     * @param non-empty-string               $issuer The issuer identifier, exactly as discovery states it.
+     * @param array<non-empty-string, mixed> $custom The API's custom claims (docs/design/custom-claims.md),
+     *                                               added after the protocol's, which they never replace.
      *
      * @throws LogicException When the token names no API: such a token is never a JWT.
+     * @throws LogicException When a custom claim would replace a protocol claim.
      */
-    public static function of(string $issuer, AccessToken $token): self
+    public static function of(string $issuer, AccessToken $token, array $custom = []): self
     {
         if ($token->audience === null) {
             throw new LogicException('A JWT access token names its API (RFC 9068 §2.2): this one names none.');
@@ -87,12 +90,20 @@ final readonly class AccessTokenClaims
             // RFC 9449 §6.1: the key a proof must come from for the token to be accepted.
             $claims['cnf'] = ['jkt' => $token->dpopJkt->value];
         }
+        /** @var mixed $value */
+        foreach ($custom as $name => $value) {
+            if (array_key_exists($name, $claims)) {
+                throw new LogicException('A custom claim would replace a protocol claim of the access token.');
+            }
+            /** @psalm-suppress MixedAssignment */
+            $claims[$name] = $value;
+        }
 
         return new self($claims);
     }
 
     /**
-     * @return array<non-empty-string, string|int|array<string, string>>
+     * @return array<non-empty-string, mixed>
      */
     public function toArray(): array
     {

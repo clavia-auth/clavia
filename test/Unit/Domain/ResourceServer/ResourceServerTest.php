@@ -11,7 +11,13 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Domain\ResourceServer;
 
+use Clavia\Domain\Authentication\MfaPolicy;
+use Clavia\Domain\Claims\ClaimMapping;
+use Clavia\Domain\Claims\ClaimMappings;
+use Clavia\Domain\Claims\ClaimName;
+use Clavia\Domain\Claims\ClaimSource;
 use Clavia\Domain\Client\ClientId;
+use Clavia\Domain\ResourceServer\AccessTokenFormat;
 use Clavia\Domain\ResourceServer\ClientGrant;
 use Clavia\Domain\ResourceServer\Permission;
 use Clavia\Domain\ResourceServer\ResourceServer;
@@ -295,6 +301,45 @@ final class ResourceServerTest extends TestCase
             enforcePolicies: true,
             allowSkippingConsent: false,
         );
+    }
+
+    public function testItsCustomClaimsSurviveEveryOtherChange(): void
+    {
+        $claims = ClaimMappings::of([
+            ClaimMapping::forApi(
+                ClaimName::fromString('plan', onAnApi: true),
+                ClaimSource::fromString('app_metadata.plan'),
+            ),
+        ]);
+        $api = $this->api(['read:invoices'])->withClaims($claims);
+
+        foreach (
+            [
+            $api->renamed('Billing'),
+            $api->withPermissions([Permission::of('read:invoices'), Permission::of('pay:invoices')]),
+            $api->enforcingPolicies(true),
+            $api->allowingConsentSkip(false),
+            $api->issuingAccessTokensAs(AccessTokenFormat::Jwt),
+            $api->requiringMfa(MfaPolicy::Required),
+            ] as $changed
+        ) {
+            self::assertSame($claims->toJson(), $changed->claims->toJson());
+        }
+        self::assertTrue($this->api([])->claims->isEmpty());
+    }
+
+    public function testASystemApiTakesNoCustomClaims(): void
+    {
+        $system = $this->api(['read:users'])->asSystem('Management API', [Permission::of('read:users')]);
+        self::assertTrue($system->withClaims(ClaimMappings::none())->claims->isEmpty(), 'None is always allowed.');
+
+        $this->expectException(SystemApiProtected::class);
+        $system->withClaims(ClaimMappings::of([
+            ClaimMapping::forApi(
+                ClaimName::fromString('plan', onAnApi: true),
+                ClaimSource::fromString('constant', '"x"'),
+            ),
+        ]));
     }
 
     /**

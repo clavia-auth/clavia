@@ -11,8 +11,11 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Application\OAuth2;
 
+use ClaviaTest\Support\Fake\InMemoryRoleRepository;
+use ClaviaTest\Support\Fake\InMemoryUserRepository;
 use Clavia\Application\OAuth2\RequestParameters;
 use Clavia\Application\OAuth2\Token\AccessTokenMinter;
+use Clavia\Application\OAuth2\Token\ApiClaims;
 use Clavia\Application\OAuth2\Token\ClientCredentialsGrant;
 use Clavia\Application\Oidc\CompactJws;
 use ClaviaTest\Support\Fake\InMemorySigningKeys;
@@ -73,6 +76,7 @@ final class ClientCredentialsGrantTest extends TestCase
                 new SecretGenerator($random),
                 $random,
                 'https://auth.clavia.test',
+                new ApiClaims(new InMemoryUserRepository(), new InMemoryRoleRepository()),
             ),
             $this->clock,
             900,

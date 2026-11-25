@@ -264,6 +264,7 @@ use Clavia\Application\OAuth2\Par\PushAuthorizationRequest;
 use Clavia\Application\OAuth2\ProtectedResource\CheckSenderConstraint;
 use Clavia\Application\OAuth2\ReadRequestedAccess;
 use Clavia\Application\OAuth2\Token\AccessTokenMinter;
+use Clavia\Application\OAuth2\Token\ApiClaims;
 use Clavia\Application\OAuth2\Token\AuthorizationCodeGrant;
 use Clavia\Application\OAuth2\Token\ClientCredentialsGrant;
 use Clavia\Application\OAuth2\Token\DeviceCodeGrant;
@@ -467,6 +468,7 @@ final class ConfigProvider
                     DescribeConsent::class => Container\DescribeConsentFactory::class,
                     DecideConsent::class => Container\DecideConsentFactory::class,
                     AccessTokenMinter::class => Container\AccessTokenMinterFactory::class,
+                    ApiClaims::class => Container\ApiClaimsFactory::class,
                     AuthorizationCodeGrant::class => Container\AuthorizationCodeGrantFactory::class,
                     RefreshTokenGrant::class => Container\RefreshTokenGrantFactory::class,
                     UserScope::class => Container\UserScopeFactory::class,

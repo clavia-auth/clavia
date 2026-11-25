@@ -129,6 +129,18 @@ final readonly class JsonObject
             : throw self::mistyped($name, 'an object');
     }
 
+    /**
+     * A member of any JSON type, as its JSON (a constant's value); null when absent. A member
+     * present as `null` comes back as `'null'`, so the domain can refuse it.
+     */
+    public function encoded(string $name): ?string
+    {
+        return $this->has($name)
+            ? json_encode($this->members->{$name}, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+                | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR)
+            : null;
+    }
+
     private function value(string $name): mixed
     {
         return $this->has($name) ? $this->members->{$name} : null;

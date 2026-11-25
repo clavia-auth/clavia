@@ -14,7 +14,13 @@ namespace Clavia\Adapter\Primary\Http\Management;
 use Clavia\Application\Management\ResourceServers\DeleteResourceServer;
 use Clavia\Application\Management\ResourceServers\ReadResourceServers;
 use Clavia\Application\Management\ResourceServers\UpdateResourceServer;
+use Clavia\Domain\Claims\ClaimMapping;
+use Clavia\Domain\Claims\ClaimMappings;
+use Clavia\Domain\Claims\ClaimName;
+use Clavia\Domain\Claims\ClaimSource;
 use Clavia\Domain\ResourceServer\ResourceServerId;
+use Clavia\Domain\Shared\InvalidValue;
+use Fig\Http\Message\StatusCodeInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -44,6 +50,10 @@ final readonly class ResourceServerHandler implements RequestHandlerInterface
             case 'GET':
                 return $this->responder->json(ManagementViews::resourceServer($this->read->one($id)));
             case 'PATCH':
+                $claims = self::claims($management->body);
+                if ($claims instanceof Problem) {
+                    return $this->responder->problem($claims);
+                }
                 $api = ($this->update)(
                     $id,
                     $management->body->string('name'),
@@ -52,6 +62,7 @@ final readonly class ResourceServerHandler implements RequestHandlerInterface
                     $management->body->bool('allow_skipping_consent'),
                     $management->body->string('access_token_format'),
                     $management->body->string('mfa_policy'),
+                    $claims,
                 );
 
                 return $this->responder->json(ManagementViews::resourceServer($api));
@@ -61,6 +72,41 @@ final readonly class ResourceServerHandler implements RequestHandlerInterface
                 return $this->responder->noContent();
             default:
                 throw new LogicException('Routed with a method the handler does not serve.');
+        }
+    }
+
+    /**
+     * The `claims` of the body as mappings; null when absent; a problem pointing at each entry
+     * the domain refuses (`/claims/2`), or at `/claims` for the list as a whole.
+     */
+    private static function claims(JsonObject $body): ClaimMappings|Problem|null
+    {
+        $entries = $body->objects('claims');
+        if ($entries === null) {
+            return null;
+        }
+        $mappings = [];
+        $errors = [];
+        foreach ($entries as $index => $entry) {
+            try {
+                $mappings[] = ClaimMapping::forApi(
+                    ClaimName::fromString((string) $entry->string('name'), onAnApi: true),
+                    ClaimSource::fromString((string) $entry->string('source'), $entry->encoded('value')),
+                );
+            } catch (InvalidValue $refusal) {
+                $errors[] = ['pointer' => '/claims/' . $index, 'detail' => $refusal->getMessage()];
+            }
+        }
+        try {
+            return $errors === []
+                ? ClaimMappings::of($mappings)
+                : new Problem(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, ContractViolation::DETAIL, $errors);
+        } catch (InvalidValue $refusal) {
+            return new Problem(
+                StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
+                ContractViolation::DETAIL,
+                [['pointer' => '/claims', 'detail' => $refusal->getMessage()]],
+            );
         }
     }
 }

@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Domain\Identity;
 
+use Clavia\Domain\Shared\CanonicalJson;
 use Clavia\Domain\Shared\InvalidValue;
 use JsonException;
 use stdClass;
@@ -39,8 +40,6 @@ final readonly class AppMetadata
 
     public const string KEY_PATTERN = '/^[A-Za-z0-9_-]{1,64}$/D';
 
-    private const int JSON = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION
-        | JSON_THROW_ON_ERROR;
 
     /** @param non-empty-string $json The canonical encoding of a JSON object. */
     private function __construct(private string $json)
@@ -73,7 +72,7 @@ final readonly class AppMetadata
             throw new InvalidValue(sprintf('The application metadata nests at most %d levels.', self::MAX_DEPTH));
         }
         self::checkKeys($decoded);
-        $canonical = json_encode(self::sorted($decoded), self::JSON);
+        $canonical = CanonicalJson::encode($decoded);
         if (strlen($canonical) > self::MAX_BYTES) {
             throw new InvalidValue(sprintf('The application metadata is at most %d bytes.', self::MAX_BYTES));
         }
@@ -92,32 +91,33 @@ final readonly class AppMetadata
         return $this->json === '{}';
     }
 
+    /**
+     * What is at `$path` (keys into objects), boxed; null when nothing is there or it is `null`.
+     *
+     * @param list<string> $path
+     *
+     * @return list{mixed}|null
+     */
+    public function at(array $path): ?array
+    {
+        /** @var mixed $value */
+        $value = json_decode($this->json, false, 64, JSON_THROW_ON_ERROR);
+        foreach ($path as $key) {
+            if (! $value instanceof stdClass || ! property_exists($value, $key)) {
+                return null;
+            }
+            /** @var mixed $value */
+            $value = $value->{$key};
+        }
+
+        return $value === null ? null : [$value];
+    }
+
     public function equals(self $other): bool
     {
         return $this->json === $other->json;
     }
 
-    /** The value with the keys of every object in byte order; lists keep theirs. */
-    private static function sorted(mixed $value): mixed
-    {
-        if ($value instanceof stdClass) {
-            $members = get_object_vars($value);
-            ksort($members, SORT_STRING);
-            $sorted = new stdClass();
-            /** @var mixed $item */
-            foreach ($members as $key => $item) {
-                /** @psalm-suppress MixedAssignment */
-                $sorted->{(string) $key} = self::sorted($item);
-            }
-
-            return $sorted;
-        }
-        if (is_array($value)) {
-            return array_map(self::sorted(...), $value);
-        }
-
-        return $value;
-    }
 
     private static function depthOf(mixed $value): int
     {

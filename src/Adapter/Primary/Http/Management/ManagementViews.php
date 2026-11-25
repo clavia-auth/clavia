@@ -26,6 +26,7 @@ use Clavia\Application\Oidc\Keys\Rotation;
 use Clavia\Domain\Audit\AuditEvent;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\Passkey\Passkey;
+use Clavia\Domain\Claims\ClaimMapping;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\Registration\ClientRegistration;
@@ -184,6 +185,10 @@ final class ManagementViews
             'access_token_format' => $api->accessTokenFormat->value,
             'mfa_policy' => $api->mfaPolicy->value,
             'created_at' => self::instant($api->createdAt),
+            'claims' => array_map(
+                static fn (ClaimMapping $mapping): array => $mapping->toArray(),
+                $api->claims->mappings,
+            ),
         ];
     }
 

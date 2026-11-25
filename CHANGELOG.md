@@ -8,6 +8,13 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ### Added
 
+- **Custom claims on APIs** (#115, `docs/design/custom-claims.md`): `claims` on an API, set with
+  `PATCH /api/v1/resource-servers/{id}`, up to twenty `{name, source}` mappings read from the
+  account (`email`, `email_verified`, `connection`, `profile.<field>`, `app_metadata.<path>`,
+  `roles`) or a constant. They go into the API's JWT access tokens, recomputed at every refresh,
+  and into introspection for opaque tokens too; never to a third-party application; constants
+  only for a machine. Names that are registered or standard JWT claims are refused, `roles`
+  (RFC 9068) excepted. **Migration `0039`**.
 - **Application metadata on accounts** (#114, the first step of custom claims, `docs/design/custom-claims.md`):
   `app_metadata`, a JSON object (16 KiB, five levels, keys sorted) read with every user and replaced
   whole by `PATCH /api/v1/users/{user_id}`. Writing it needs a new scope,

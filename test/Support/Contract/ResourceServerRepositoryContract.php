@@ -11,6 +11,10 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Support\Contract;
 
+use Clavia\Domain\Claims\ClaimMapping;
+use Clavia\Domain\Claims\ClaimMappings;
+use Clavia\Domain\Claims\ClaimName;
+use Clavia\Domain\Claims\ClaimSource;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\ResourceServer\ClientGrant;
 use Clavia\Domain\ResourceServer\ClientGrantRepository;
@@ -56,6 +60,35 @@ trait ResourceServerRepositoryContract
         self::assertSame('invoices:read invoices:write', $byId->permissionScopes()->toString());
         self::assertSame('Read invoices:read', $byId->permissions[0]->description);
         self::assertEquals(new DateTimeImmutable('2026-01-15T10:00:00Z'), $byId->createdAt);
+    }
+
+    #[Test]
+    public function itsCustomClaimsAreSavedAndReadBackWhole(): void
+    {
+        $api = $this->anApi('https://reports.example/api/', ['read:reports']);
+        $this->resourceServers()->save($api);
+        self::assertTrue($this->resourceServers()->find($api->id)?->claims->isEmpty());
+
+        $claims = ClaimMappings::of([
+            ClaimMapping::forApi(
+                ClaimName::fromString('https://example.com/plan', onAnApi: true),
+                ClaimSource::fromString('app_metadata.plan'),
+            ),
+            ClaimMapping::forApi(ClaimName::fromString('roles', onAnApi: true), ClaimSource::fromString('roles')),
+            ClaimMapping::forApi(
+                ClaimName::fromString('deployment', onAnApi: true),
+                ClaimSource::fromString('constant', '{"region":"eu","n":2.5}'),
+            ),
+        ]);
+        $this->resourceServers()->save($api->withClaims($claims));
+
+        self::assertSame($claims->toJson(), $this->resourceServers()->find($api->id)?->claims->toJson());
+        self::assertSame(
+            $claims->toJson(),
+            $this->resourceServers()->findByIdentifier(
+                Audience::fromString('https://reports.example/api/'),
+            )?->claims->toJson(),
+        );
     }
 
     #[Test]

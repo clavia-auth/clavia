@@ -101,6 +101,8 @@ final readonly class IntrospectionHandler implements RequestHandlerInterface
             $payload['cnf'] = ['jkt' => $introspection->dpopJkt];
         }
 
-        return $payload;
+        // The API's custom claims (RFC 7662 §2.2 allows any member), after the protocol's, which
+        // they never replace: their names are never reserved, and `+` keeps the left side.
+        return $payload + $introspection->claims;
     }
 }

@@ -21,6 +21,7 @@ use Clavia\Domain\OAuth2\AccessTokenId;
 use Clavia\Domain\OAuth2\AccessTokenRepository;
 use Clavia\Domain\OAuth2\Dpop\JwkThumbprint;
 use Clavia\Domain\ResourceServer\AccessTokenFormat;
+use Clavia\Domain\ResourceServer\ResourceServer;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\RandomSource;
@@ -56,6 +57,7 @@ final readonly class AccessTokenMinter
         private SecretGenerator $secrets,
         private RandomSource $random,
         private string $issuer,
+        private ApiClaims $claims,
     ) {
     }
 
@@ -76,10 +78,12 @@ final readonly class AccessTokenMinter
             $token = $token->boundTo($dpopKey);
         }
 
-        if ($this->formatFor($token) === AccessTokenFormat::Jwt) {
+        $api = $this->apiOf($token);
+        if ($api !== null && $api->accessTokenFormat === AccessTokenFormat::Jwt) {
+            // The API's custom claims, worked out now: a refresh shows what changed since.
             $value = $this->jws->sign(
                 $this->signer->activeKey(),
-                AccessTokenClaims::of($this->issuer, $token)->toArray(),
+                AccessTokenClaims::of($this->issuer, $token, $this->claims->for($api, $token))->toArray(),
                 AccessTokenClaims::TYPE,
             );
             $token = $token->presentedAs(Digest::of($value));
@@ -90,14 +94,12 @@ final readonly class AccessTokenMinter
         return new MintedAccessToken($token, $value);
     }
 
-    private function formatFor(AccessToken $token): AccessTokenFormat
+    /**
+     * The API the token is for; none for a token naming no API, which only userinfo accepts, and
+     * which is always opaque: RFC 9068 §2.2 requires an `aud`.
+     */
+    private function apiOf(AccessToken $token): ?ResourceServer
     {
-        if ($token->audience === null) {
-            // Only userinfo accepts a token for no API, and RFC 9068 §2.2 requires an `aud`.
-            return AccessTokenFormat::Opaque;
-        }
-
-        return $this->resourceServers->findByIdentifier($token->audience)?->accessTokenFormat
-            ?? AccessTokenFormat::Opaque;
+        return $token->audience === null ? null : $this->resourceServers->findByIdentifier($token->audience);
     }
 }

@@ -14,6 +14,7 @@ namespace Clavia\Bootstrap\Container;
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
 use Clavia\Application\OAuth2\TokenManagement\IntrospectToken;
 use Clavia\Application\OAuth2\TokenManagement\IssuedTokens;
+use Clavia\Application\OAuth2\Token\ApiClaims;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\ResourceServer\ClientGrantRepository;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
@@ -37,6 +38,9 @@ final class IntrospectTokenFactory
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
 
-        return new IntrospectToken($authenticator, $tokens, $clientGrants, $resourceServers, $users, $clock);
+        /** @var ApiClaims $claims */
+        $claims = $container->get(ApiClaims::class);
+
+        return new IntrospectToken($authenticator, $tokens, $clientGrants, $resourceServers, $users, $clock, $claims);
     }
 }
