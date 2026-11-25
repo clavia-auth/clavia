@@ -108,7 +108,7 @@ final readonly class ConnectionsHandler implements RequestHandlerInterface
                 $object->string('family_name_attribute'),
                 $object->bool('sign_requests') ?? true,
                 $object->bool('require_encryption') ?? false,
-                $object->bool('require_gcm') ?? false,
+                $object->bool('require_gcm') ?? true,
             ),
         );
     }

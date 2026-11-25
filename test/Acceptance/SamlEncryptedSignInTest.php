@@ -97,6 +97,34 @@ final class SamlEncryptedSignInTest extends AcceptanceTestCase
         self::assertContains('Decrypt', array_map(static fn ($c): string => $c->getName(), $encryption->commands));
     }
 
+    public function testAesCbcIsRefusedUnlessTheConnectionTurnsRequireGcmOff(): void
+    {
+        $this->container()->get(GenerateServiceProviderKeys::class)();
+        $this->registerSaml([]);
+        $encryption = $this->container()->get(ServiceProviderKeys::class)->certificates()
+            ->current(ServiceProviderKeyUsage::Encryption);
+        self::assertNotNull($encryption);
+        $to = SelfSignedCertificate::pem((string) base64_decode($encryption->certificate, true));
+        [$requestId, $relayState] = $this->start();
+
+        $cbc = ['encryptTo' => $to, 'cipher' => Idp::AES256_CBC];
+        $refused = $this->finish(self::answering($requestId, $cbc), $relayState);
+
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $refused->getStatusCode(), 'GCM by default.');
+        $this->api('DELETE', '/api/v1/connections/acme');
+        $this->clearCookies();
+        $this->registerSaml(['require_gcm' => false]);
+        [$requestId, $relayState] = $this->start();
+
+        $accepted = $this->finish(self::answering($requestId, $cbc + ['assertionId' => '_a2']), $relayState);
+
+        self::assertSame(
+            StatusCodeInterface::STATUS_SEE_OTHER,
+            $accepted->getStatusCode(),
+            (string) $accepted->getBody(),
+        );
+    }
+
     public function testAPlainAssertionIsRefusedWhenTheConnectionRequiresEncryption(): void
     {
         $this->container()->get(GenerateServiceProviderKeys::class)();
@@ -157,7 +185,7 @@ final class SamlEncryptedSignInTest extends AcceptanceTestCase
 
     private function signsInEncrypted(): void
     {
-        $this->registerSaml(['require_encryption' => true, 'require_gcm' => true]);
+        $this->registerSaml(['require_encryption' => true]);
         $keys = $this->container()->get(ServiceProviderKeys::class)->certificates();
         $signing = $keys->current(ServiceProviderKeyUsage::Signing);
         $encryption = $keys->current(ServiceProviderKeyUsage::Encryption);

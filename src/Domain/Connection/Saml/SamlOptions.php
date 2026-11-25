@@ -19,6 +19,12 @@ use Clavia\Domain\Shared\InvalidValue;
  * so the mapping is data. The subject is the persistent `NameID` unless an attribute is named
  * (Entra's `objectidentifier`, ADFS's `objectGUID`); never the address. The address is verified
  * only when the operator says the identity provider verifies it.
+ *
+ * GCM is required unless the operator turns `requireGcm` off for an identity provider that encrypts
+ * with AES-CBC (ADFS by default). Accepting CBC exposes more than CBC: the encryption algorithm an
+ * assertion names is not authenticated, so a GCM ciphertext relabelled as CBC falls to the same
+ * padding oracle (Jager, Schwenk and Somorovsky, "On the Security of the XML Encryption Standard
+ * and its Backwards Compatibility", 2013).
  */
 final readonly class SamlOptions
 {
@@ -56,7 +62,7 @@ final readonly class SamlOptions
         ?string $familyNameAttribute = null,
         bool $signRequests = true,
         bool $requireEncryption = false,
-        bool $requireGcm = false,
+        bool $requireGcm = true,
     ): self {
         $names = [$subjectAttribute, $emailAttribute, $nameAttribute, $givenNameAttribute, $familyNameAttribute];
         foreach ($names as $name) {
@@ -134,7 +140,7 @@ final readonly class SamlOptions
             $string('family_name_attribute'),
             $bool('sign_requests', true),
             $bool('require_encryption', false),
-            $bool('require_gcm', false),
+            $bool('require_gcm', true),
         );
     }
 }

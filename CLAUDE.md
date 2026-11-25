@@ -510,7 +510,9 @@ applies however the person signed in.
   `ContentKeyDecrypter` the use case hands the port: the key the `EncryptedKey`'s certificate names,
   or each encryption key, next, current and retired), RSA-OAEP only (`rsa-oaep-mgf1p`, or 1.1's
   `rsa-oaep` with SHA-1 or SHA-256 and MGF1 to match), never `rsa-1_5`; then AES-GCM, or AES-CBC
-  unless the connection's `require_gcm`; `require_encryption` refuses a plain assertion. The
+  only when the connection turns `require_gcm` off (it is on by default: accepting CBC would expose GCM
+  ciphertexts too, the algorithm an assertion names being unauthenticated); `require_encryption`
+  refuses a plain assertion. The
   plaintext is held to a plain response's rules, and its signature checked after. Every failure is
   the same page after the same steps, the handles spent first. A refusal of the response itself
   (`consume()`, a replay) counts against the client address in the sign-in throttle (`LoginThrottle`,
