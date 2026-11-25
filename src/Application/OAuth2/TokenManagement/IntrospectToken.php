@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Application\OAuth2\TokenManagement;
 
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
+use Clavia\Application\OAuth2\Token\ApiClaims;
 use Clavia\Application\OAuth2\Token\TokenRequest;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
@@ -54,6 +55,7 @@ final readonly class IntrospectToken
         private ResourceServerRepository $resourceServers,
         private UserRepository $users,
         private Clock $clock,
+        private ApiClaims $claims,
     ) {
     }
 
@@ -103,7 +105,25 @@ final readonly class IntrospectToken
             $token->userId === null ? null : $token->authentication->authenticatedAt,
             $token->userId === null ? null : $token->authentication->acr(),
             $token instanceof AccessToken ? $token->dpopJkt?->value : null,
+            $this->customClaims($token),
         );
+    }
+
+    /**
+     * An access token's custom claims, worked out from the account as it is now: introspection
+     * answers about now (`active`), so a JWT and its introspection can part ways after a change
+     * (docs/design/custom-claims.md §2, "Introspection").
+     *
+     * @return array<non-empty-string, mixed>
+     */
+    private function customClaims(AccessToken|RefreshToken $token): array
+    {
+        if (! $token instanceof AccessToken || $token->audience === null) {
+            return [];
+        }
+        $api = $this->resourceServers->findByIdentifier($token->audience);
+
+        return $api === null ? [] : $this->claims->for($api, $token);
     }
 
     private function mayLearnAbout(Client $caller, AccessToken|RefreshToken $token): bool

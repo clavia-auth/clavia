@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Domain\ResourceServer;
 
 use Clavia\Domain\Authentication\MfaPolicy;
+use Clavia\Domain\Claims\ClaimMappings;
 use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\Scope;
@@ -52,6 +53,7 @@ final readonly class ResourceServer
         public bool $allowSkippingConsent,
         public AccessTokenFormat $accessTokenFormat,
         public MfaPolicy $mfaPolicy,
+        public ClaimMappings $claims,
     ) {
     }
 
@@ -93,6 +95,7 @@ final readonly class ResourceServer
         bool $allowSkippingConsent = true,
         AccessTokenFormat $accessTokenFormat = AccessTokenFormat::Opaque,
         MfaPolicy $mfaPolicy = MfaPolicy::Optional,
+        ?ClaimMappings $claims = null,
     ): self {
         if (strlen($identifier->value) > self::MAX_IDENTIFIER_LENGTH) {
             throw new InvalidValue('An API identifier is at most 255 bytes.');
@@ -130,6 +133,7 @@ final readonly class ResourceServer
             $allowSkippingConsent,
             $accessTokenFormat,
             $mfaPolicy,
+            $claims ?? ClaimMappings::none(),
         );
     }
 
@@ -151,6 +155,7 @@ final readonly class ResourceServer
             $this->allowSkippingConsent,
             $this->accessTokenFormat,
             $this->mfaPolicy,
+            $this->claims,
         );
     }
 
@@ -179,6 +184,7 @@ final readonly class ResourceServer
             $this->allowSkippingConsent,
             $this->accessTokenFormat,
             $this->mfaPolicy,
+            $this->claims,
         );
     }
 
@@ -208,6 +214,7 @@ final readonly class ResourceServer
             $allow,
             $this->accessTokenFormat,
             $this->mfaPolicy,
+            $this->claims,
         );
     }
 
@@ -240,6 +247,7 @@ final readonly class ResourceServer
             $this->allowSkippingConsent,
             $this->accessTokenFormat,
             $this->mfaPolicy,
+            $this->claims,
         );
     }
 
@@ -265,6 +273,7 @@ final readonly class ResourceServer
             true,
             $this->accessTokenFormat,
             $this->mfaPolicy,
+            $this->claims,
         );
     }
 
@@ -286,6 +295,7 @@ final readonly class ResourceServer
             $this->allowSkippingConsent,
             $format,
             $this->mfaPolicy,
+            $this->claims,
         );
     }
 
@@ -306,7 +316,23 @@ final readonly class ResourceServer
             $this->allowSkippingConsent,
             $this->accessTokenFormat,
             $policy,
+            $this->claims,
         );
+    }
+
+    /**
+     * The same API, with these custom claims in its access tokens (docs/design/custom-claims.md).
+     *
+     * @throws SystemApiProtected For a system API: its tokens are read by this server alone, which
+     *                            ignores them.
+     */
+    public function withClaims(ClaimMappings $claims): self
+    {
+        if ($this->isSystem && ! $claims->isEmpty()) {
+            throw new SystemApiProtected('A system API takes no custom claims: this server alone reads its tokens.');
+        }
+
+        return clone($this, ['claims' => $claims]);
     }
 
     /**

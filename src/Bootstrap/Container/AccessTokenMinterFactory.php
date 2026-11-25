@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\OAuth2\Token\AccessTokenMinter;
+use Clavia\Application\OAuth2\Token\ApiClaims;
 use Clavia\Application\Oidc\CompactJws;
 use Clavia\Application\Port\TokenSigner;
 use Clavia\Configuration\Settings;
@@ -43,6 +44,9 @@ final class AccessTokenMinterFactory
         $issuer = $settings->issuer();
         assert($issuer !== '');
 
-        return new AccessTokenMinter($tokens, $resourceServers, $signer, $jws, $secrets, $random, $issuer);
+        /** @var ApiClaims $claims */
+        $claims = $container->get(ApiClaims::class);
+
+        return new AccessTokenMinter($tokens, $resourceServers, $signer, $jws, $secrets, $random, $issuer, $claims);
     }
 }

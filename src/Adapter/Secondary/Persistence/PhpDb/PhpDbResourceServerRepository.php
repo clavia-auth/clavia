@@ -13,6 +13,7 @@ namespace Clavia\Adapter\Secondary\Persistence\PhpDb;
 
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Domain\Authentication\MfaPolicy;
+use Clavia\Domain\Claims\ClaimMappings;
 use Clavia\Domain\ResourceServer\AccessTokenFormat;
 use Clavia\Domain\ResourceServer\Permission;
 use Clavia\Domain\ResourceServer\ResourceServer;
@@ -35,12 +36,12 @@ use Throwable;
  *
  * @psalm-type ResourceServerRow = array{id: string, identifier: string, name: string, is_system: bool,
  *     enforce_policies: bool, allow_skipping_consent: bool, access_token_format: string,
- *     mfa_policy: string, created_at: string}
+ *     mfa_policy: string, created_at: string, claims: string}
  */
 final readonly class PhpDbResourceServerRepository implements ResourceServerRepository
 {
     private const string COLUMNS = 'id, identifier, name, is_system, enforce_policies, allow_skipping_consent, '
-        . 'access_token_format, mfa_policy, created_at';
+        . 'access_token_format, mfa_policy, created_at, claims';
 
     public function __construct(
         private Database $database,
@@ -108,16 +109,17 @@ final readonly class PhpDbResourceServerRepository implements ResourceServerRepo
             <<<'SQL'
                 INSERT INTO resource_servers
                     (id, identifier, name, is_system, enforce_policies, allow_skipping_consent, access_token_format,
-                    mfa_policy, created_at)
+                    mfa_policy, created_at, claims)
                 VALUES (:id, :identifier, :name, :is_system, :enforce_policies, :allow_skipping_consent,
-                    :access_token_format, :mfa_policy, :created_at)
+                    :access_token_format, :mfa_policy, :created_at, CAST(:claims AS jsonb))
                 ON CONFLICT (id) DO UPDATE SET
                     name = EXCLUDED.name,
                     is_system = EXCLUDED.is_system,
                     enforce_policies = EXCLUDED.enforce_policies,
                     allow_skipping_consent = EXCLUDED.allow_skipping_consent,
                     access_token_format = EXCLUDED.access_token_format,
-                    mfa_policy = EXCLUDED.mfa_policy
+                    mfa_policy = EXCLUDED.mfa_policy,
+                    claims = EXCLUDED.claims
                 RETURNING identifier
                 SQL,
             [
@@ -130,6 +132,7 @@ final readonly class PhpDbResourceServerRepository implements ResourceServerRepo
                 'access_token_format' => $resourceServer->accessTokenFormat->value,
                 'mfa_policy' => $resourceServer->mfaPolicy->value,
                 'created_at' => Timestamp::toDatabase($resourceServer->createdAt),
+                'claims' => $resourceServer->claims->toJson(),
             ],
         );
         if ($stored !== $resourceServer->identifier->value) {
@@ -208,6 +211,7 @@ final readonly class PhpDbResourceServerRepository implements ResourceServerRepo
             $row['allow_skipping_consent'],
             AccessTokenFormat::from($row['access_token_format']),
             MfaPolicy::from($row['mfa_policy']),
+            ClaimMappings::forApiFromJson($row['claims']),
         );
     }
 }

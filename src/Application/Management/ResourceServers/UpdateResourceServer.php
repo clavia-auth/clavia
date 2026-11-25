@@ -14,6 +14,7 @@ namespace Clavia\Application\Management\ResourceServers;
 use Clavia\Application\Management\NotFound;
 use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Authentication\MfaPolicy;
+use Clavia\Domain\Claims\ClaimMappings;
 use Clavia\Domain\ResourceServer\Event\ResourceServerChanged;
 use Clavia\Domain\ResourceServer\ResourceServer;
 use Clavia\Domain\ResourceServer\ResourceServerId;
@@ -47,6 +48,8 @@ final readonly class UpdateResourceServer
      * @param bool|null                       $allowSkippingConsent Null leaves it alone.
      * @param string|null                     $accessTokenFormat    `opaque` or `jwt`; null leaves it alone.
      * @param string|null                     $mfaPolicy            `optional` or `required`; null leaves it alone.
+     * @param ClaimMappings|null              $claims               The API's custom claims, replacing its own; null
+     *                                                              leaves them alone.
      *
      * @throws NotFound
      * @throws InvalidValue
@@ -61,6 +64,7 @@ final readonly class UpdateResourceServer
         ?bool $allowSkippingConsent = null,
         ?string $accessTokenFormat = null,
         ?string $mfaPolicy = null,
+        ?ClaimMappings $claims = null,
     ): ResourceServer {
         $resourceServer = $this->resourceServers->find($id) ?? throw NotFound::of('API');
 
@@ -81,6 +85,9 @@ final readonly class UpdateResourceServer
         if ($mfaPolicy !== null) {
             $resourceServer = $resourceServer->requiringMfa(MfaPolicy::fromString($mfaPolicy));
         }
+        if ($claims !== null) {
+            $resourceServer = $resourceServer->withClaims($claims);
+        }
         if ($name !== null) {
             $resourceServer = $resourceServer->renamed($name);
         }
@@ -92,6 +99,7 @@ final readonly class UpdateResourceServer
             'allow_skipping_consent' => $allowSkippingConsent !== null,
             'access_token_format' => $accessTokenFormat !== null,
             'mfa_policy' => $mfaPolicy !== null,
+            'claims' => $claims !== null,
         ]))));
 
         return $resourceServer;

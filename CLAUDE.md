@@ -99,7 +99,7 @@ public/index.php            HTTP entry point (PHP-FPM); public/auth/static/ serv
 src/
   Domain/                   pure PHP: aggregates, value objects, policies, repository interfaces
     Shared/  Identity/  Client/  Connection/  ResourceServer/  Rbac/  Consent/
-    OAuth2/  Oidc/  Authentication/  Audit/
+    OAuth2/  Oidc/  Authentication/  Audit/  Claims/
   Application/              use cases, by context, and the technical ports
     OAuth2/  Oidc/  Authentication/  Management/  Connection/  Clients/  Audit/
     Event/  Secrets/  Development/  Port/
@@ -297,6 +297,7 @@ objects, repository interfaces, and an `Event` namespace for its domain events.
 | `Oidc` | `SigningKey`, `SigningAlgorithm`, `PublicJwk`, `Nonce`, `OidcScope`, `IdentityClaims`, `IdTokenClaims`, `LogoutTokenClaims` | One active key; retired keys stay published until their tokens expire |
 | `Authentication` | `Session`, `AuthenticationMethod` (RFC 8176 `amr`), `AuthenticationLevel` (`acr`), `AuthenticationContext`, `LocalPath`, `LoginState`, `MfaChallenge`, `Mfa\*` (`Totp`, `RecoveryCode`, `MfaFactor`), `Passkey\*` (`Passkey`, `CredentialId`, `PasskeyRepository`, `WebAuthnChallenge`, `RelyingParty`…), `PasswordlessChallenge`, `PendingExternalSignIn` | Sessions have idle and absolute lifetimes and a `sid`; a TOTP step is spent once; a passkey's signature counter must grow (a synced passkey's stays at zero), and its eligibility for backup never changes |
 | `Audit` | `AuditEvent`, `AuditEventType`, `Actor`, `AuditTarget`, `Outcome`, `AuditQuery`, `AuditLog` | Append-only; facts, never secrets |
+| `Claims` | `ClaimName`, `ClaimSource`, `ClaimMapping`, `ClaimMappings`, `ClaimSubject`, `CustomClaims` | A custom claim never has a reserved name (registered, standard, or this server's), checked when saved and again at issuance; its source is the account (address, connection, profile, `app_metadata`, roles) or a constant, never the request; a source with no value leaves its claim out; at most twenty per API, no two reading nested metadata; 32 KiB per token, refused rather than cut |
 
 The application mirrors these contexts (`Application\OAuth2`, `Authentication`, `Oidc`,
 `Management`, `Connection`, `Audit`…). `Application\Port` holds the technical ports: signing
@@ -662,7 +663,14 @@ chose (`access_token_format`, opaque by default; a token for no API is always op
   from `AccessTokenClaims` (`iss`, `exp`, `aud`, `sub`, `client_id`, `iat`, `jti`, `scope`).
   `sub` is the client's id for a client acting as itself; `jti` is the recorded token's id. For
   a person, `auth_time` and `acr` too (RFC 9470 §6.1), from the sign-in that started the token's
-  refresh family. No `amr` and no identity claims (userinfo releases those).
+  refresh family. No `amr` and no identity claims (userinfo releases those). Then the API's
+  **custom claims** (`ResourceServer::$claims`, `Token\ApiClaims`, docs/design/custom-claims.md):
+  worked out from the account at each issuance, a refresh included; constants only for a
+  machine; nothing for a third-party application; `roles` the names of the person's roles holding
+  a permission on this API. Introspection reports the same, worked out when asked, for opaque
+  tokens too, so a JWT and its introspection can part ways after a change. A system API takes
+  none. Past 32 KiB the grant fails as a signing failure does: a 500 under its reference, nothing
+  spent (RFC 6749 §5.2 has no `server_error`).
 
 Both are recorded by the digest of the value handed out, signed before the row is written, so
 introspection, revocation, userinfo and the Management API treat them alike, and a signing
