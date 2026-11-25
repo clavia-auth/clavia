@@ -19,6 +19,7 @@ final readonly class WebhooksDelivered
         public int $failed,
         public int $abandoned,
         public int $purged,
+        public int $disabled = 0,
     ) {
     }
 }

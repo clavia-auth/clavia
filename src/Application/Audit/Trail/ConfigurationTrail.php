@@ -36,7 +36,10 @@ use Clavia\Domain\ResourceServer\Event\ResourceServerRegistered;
 use Clavia\Domain\Webhook\Event\WebhookChanged;
 use Clavia\Domain\Webhook\Event\WebhookCreated;
 use Clavia\Domain\Webhook\Event\WebhookDeleted;
+use Clavia\Domain\Webhook\Event\WebhookDisabled;
 use Clavia\Domain\Webhook\Event\WebhookSecretRotated;
+use Clavia\Domain\Webhook\Event\WebhookTested;
+use Clavia\Domain\Webhook\WebhookEndpoint;
 
 /**
  * Applications, APIs, client grants, connections, signing keys and initial access tokens — in the
@@ -77,6 +80,8 @@ final readonly class ConfigurationTrail implements EventSubscriber
             WebhookChanged::class => $this->webhookChanged(...),
             WebhookDeleted::class => $this->webhookDeleted(...),
             WebhookSecretRotated::class => $this->webhookSecretRotated(...),
+            WebhookTested::class => $this->webhookTested(...),
+            WebhookDisabled::class => $this->webhookDisabled(...),
         ];
     }
 
@@ -236,5 +241,19 @@ final readonly class ConfigurationTrail implements EventSubscriber
     private function webhookSecretRotated(WebhookSecretRotated $event): void
     {
         $this->audit->record(AuditEventType::WebhookSecretRotated, AuditTarget::webhook($event->id));
+    }
+
+    /** The outbox sends this one to its target alone. */
+    private function webhookTested(WebhookTested $event): void
+    {
+        $this->audit->record(AuditEventType::WebhookTested, AuditTarget::webhook($event->id));
+    }
+
+    private function webhookDisabled(WebhookDisabled $event): void
+    {
+        $this->audit->record(AuditEventType::WebhookDisabled, AuditTarget::webhook($event->id), [
+            'reason' => 'failing',
+            'days' => WebhookEndpoint::DEAD_AFTER_DAYS,
+        ]);
     }
 }

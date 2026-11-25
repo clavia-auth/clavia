@@ -835,6 +835,18 @@ and end `abandoned` after the eighth attempt; a switched-off endpoint's deliveri
 event was purged are abandoned at once; ended deliveries go after seven days, and a purged audit
 event takes its pending ones along (a cascade).
 
+**Operating them.** `GET …/deliveries` (`read:webhooks` and `read:audit_events`: it names the events
+sent) is the log, newest first: status, attempts,
+the last status code, duration and failure category, never a body. `POST …/test` (`update:webhooks`
+and `read:audit_events`; `409` for an endpoint switched off) records `webhook.tested`, which the
+outbox queues for its target endpoint alone: `EventFilter` never matches it, even `*`, and refuses
+it by name. Each attempt moves the endpoint's `failing_since` (a conditional write, set by the first
+failure, cleared by a success; `save()` resets it only when the endpoint is switched on or off);
+one failing `WebhookEndpoint::DEAD_AFTER_DAYS` (5) is switched off by the worker
+(`disableIfFailingSince()`, `disabled_reason: failing`, `WebhookDisabled`, `webhook.disabled` by the
+system) until an operator switches it on. The payload is in the contract as `WebhookPayload`, with
+a signed example `WebhookPayloadDocumentationTest` verifies.
+
 ### Domain events and the audit trail
 
 A use case says what happened; it does not decide what follows. It dispatches a domain event

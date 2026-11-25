@@ -16,7 +16,9 @@ use Clavia\Domain\Audit\AuditEvent;
 use Clavia\Domain\Audit\AuditEventId;
 use Clavia\Domain\Audit\AuditEventType;
 use Clavia\Domain\Audit\AuditLog;
+use Clavia\Domain\Audit\AuditTarget;
 use Clavia\Domain\Audit\Outcome;
+use Clavia\Domain\Shared\PageRequest;
 use Clavia\Domain\Shared\Url;
 use Clavia\Domain\Webhook\DeliveryFailure;
 use Clavia\Domain\Webhook\EventFilter;
@@ -108,6 +110,42 @@ trait WebhookDeliveryRepositoryContract
 
         self::assertSame(0, $this->webhookDeliveries()->purgeEndedBefore(self::at('10:00')));
         self::assertSame(1, $this->webhookDeliveries()->purgeEndedBefore(self::at('10:05')), 'The success only.');
+    }
+
+    #[Test]
+    public function aTestEventGoesToTheEndpointTestedAndNoOther(): void
+    {
+        $tested = $this->anEndpoint(1, EventFilter::all());
+        $other = $this->anEndpoint(2, EventFilter::all());
+        $event = AuditEvent::record(
+            AuditEventId::generate(new SeededRandomSource(300)),
+            AuditEventType::WebhookTested,
+            self::at('10:00'),
+            Actor::system(),
+            AuditTarget::webhook($tested->id),
+            Outcome::Success,
+        );
+        $this->auditLog()->append($event);
+
+        self::assertSame(1, $this->webhookDeliveries()->enqueueFor($event, self::at('10:00')));
+        self::assertCount(1, $this->webhookDeliveries()->due($tested->id, self::at('10:00'), 10));
+        self::assertSame([], $this->webhookDeliveries()->due($other->id, self::at('10:00'), 10), 'Not even past "*".');
+    }
+
+    #[Test]
+    public function theDeliveryLogIsAnEndpointsNewestFirst(): void
+    {
+        $endpoint = $this->anEndpoint(1, EventFilter::all());
+        $other = $this->anEndpoint(2, EventFilter::fromStrings(['user.created']));
+        $this->webhookDeliveries()->enqueueFor($this->anEvent(1, AuditEventType::UserCreated), self::at('10:00'));
+        $this->webhookDeliveries()->enqueueFor($this->anEvent(2, AuditEventType::UserDeleted), self::at('10:01'));
+
+        $page = $this->webhookDeliveries()->page($endpoint->id, PageRequest::of(1, 1));
+
+        self::assertSame(2, $page->total);
+        self::assertCount(1, $page->items);
+        self::assertSame(AuditEventType::UserDeleted, $page->items[0]->eventType);
+        self::assertSame(1, $this->webhookDeliveries()->page($other->id, PageRequest::of())->total);
     }
 
     private function anEndpoint(int $seed, EventFilter $events): WebhookEndpoint

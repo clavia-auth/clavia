@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Cli;
 
 use Clavia\Application\Webhooks\DeliverWebhooks;
+use Clavia\Domain\Webhook\WebhookEndpoint;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -37,6 +38,13 @@ final class DeliverWebhooksCommand extends Command
             $run->abandoned,
             $run->purged,
         ));
+        if ($run->disabled > 0) {
+            $output->writeln(sprintf(
+                'Switched off %d endpoint(s) failing for %d days.',
+                $run->disabled,
+                WebhookEndpoint::DEAD_AFTER_DAYS,
+            ));
+        }
 
         return Command::SUCCESS;
     }

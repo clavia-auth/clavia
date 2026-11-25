@@ -89,8 +89,10 @@ use Clavia\Adapter\Primary\Http\Management\UserPermissionsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserRolesHandler;
 use Clavia\Adapter\Primary\Http\Management\UserSessionsHandler;
 use Clavia\Adapter\Primary\Http\Management\UsersHandler;
+use Clavia\Adapter\Primary\Http\Management\WebhookDeliveriesHandler;
 use Clavia\Adapter\Primary\Http\Management\WebhookHandler;
 use Clavia\Adapter\Primary\Http\Management\WebhookSecretHandler;
+use Clavia\Adapter\Primary\Http\Management\WebhookTestHandler;
 use Clavia\Adapter\Primary\Http\Management\WebhooksHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\ClientConfigurationHandler;
@@ -252,9 +254,11 @@ use Clavia\Application\Management\Users\UpdateUser;
 use Clavia\Application\Management\Users\UserSessions;
 use Clavia\Application\Management\Users\WithdrawConsent;
 use Clavia\Application\Management\Webhooks\DeleteWebhook;
+use Clavia\Application\Management\Webhooks\ReadWebhookDeliveries;
 use Clavia\Application\Management\Webhooks\ReadWebhooks;
 use Clavia\Application\Management\Webhooks\RegisterWebhook;
 use Clavia\Application\Management\Webhooks\RotateWebhookSecret;
+use Clavia\Application\Management\Webhooks\TestWebhook;
 use Clavia\Application\Management\Webhooks\UpdateWebhook;
 use Clavia\Application\Management\Webhooks\WebhookSecrets;
 use Clavia\Application\OAuth2\Authorize\AuthorizationRequestRules;
@@ -474,6 +478,10 @@ final class ConfigProvider
                     WebhooksHandler::class => Container\WebhooksHandlerFactory::class,
                     WebhookHandler::class => Container\WebhookHandlerFactory::class,
                     WebhookSecretHandler::class => Container\WebhookSecretHandlerFactory::class,
+                    WebhookTestHandler::class => Container\WebhookTestHandlerFactory::class,
+                    WebhookDeliveriesHandler::class => Container\WebhookDeliveriesHandlerFactory::class,
+                    TestWebhook::class => Container\TestWebhookFactory::class,
+                    ReadWebhookDeliveries::class => Container\ReadWebhookDeliveriesFactory::class,
                     InitialAccessTokenHandler::class => Container\InitialAccessTokenHandlerFactory::class,
                     ClientRegistrationHandler::class => Container\ClientRegistrationHandlerFactory::class,
                     UserImportsHandler::class => Container\UserImportsHandlerFactory::class,

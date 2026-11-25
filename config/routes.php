@@ -58,8 +58,10 @@ use Clavia\Adapter\Primary\Http\Management\UserPermissionsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserRolesHandler;
 use Clavia\Adapter\Primary\Http\Management\UserSessionsHandler;
 use Clavia\Adapter\Primary\Http\Management\UsersHandler;
+use Clavia\Adapter\Primary\Http\Management\WebhookDeliveriesHandler;
 use Clavia\Adapter\Primary\Http\Management\WebhookHandler;
 use Clavia\Adapter\Primary\Http\Management\WebhookSecretHandler;
+use Clavia\Adapter\Primary\Http\Management\WebhookTestHandler;
 use Clavia\Adapter\Primary\Http\Management\WebhooksHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\ClientConfigurationHandler;
@@ -301,6 +303,12 @@ return static function (Application $app, ContainerInterface $container): void {
         '/api/v1/webhooks/{webhook_id}/rotate-secret',
         $management(WebhookSecretHandler::class),
         'api.webhook.rotate-secret',
+    );
+    $app->post('/api/v1/webhooks/{webhook_id}/test', $management(WebhookTestHandler::class), 'api.webhook.test');
+    $app->get(
+        '/api/v1/webhooks/{webhook_id}/deliveries',
+        $management(WebhookDeliveriesHandler::class),
+        'api.webhook.deliveries',
     );
     $app->post('/api/v1/jobs/users-imports', $management(UserImportsHandler::class), 'api.jobs.users-imports');
     $app->post('/api/v1/jobs/users-exports', $management(UserExportsHandler::class), 'api.jobs.users-exports');

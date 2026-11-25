@@ -1,6 +1,6 @@
 # Design: Webhooks for the audit trail
 
-**Status:** agreed · **Date:** 2026-11-24 · **Issue:** clavia-auth/clavia#18 ·
+**Status:** built · **Date:** 2026-11-24 · **Issue:** clavia-auth/clavia#18 ·
 **Specifications:** the Standard Webhooks specification (headers, signature, secrets, retries), RFC 2104 (HMAC),
 RFC 9110 §15 (status codes), the audit trail as `GET /api/v1/audit-events` describes it
 
@@ -221,6 +221,14 @@ What the slices settled differently from the sections above, so the code and thi
   vendor's exception, and the category tells an operator the same thing either way.
 - **The answer is never downloaded** rather than read up to 1 KiB: the sender's client is built with
   `stream`, and the body is closed unread.
+- **The test event is the audit event `webhook.tested`**, past tense like every other type, not
+  `webhook.test`: asking for a test is itself recorded (who asked, of which endpoint), and the outbox
+  sends that event to its target alone. A delivery therefore always has an audit event; there is no
+  separate test marker.
+- **Dead is tracked on the endpoint** (`failing_since`, `disabled_reason`), not worked out from the
+  deliveries: the first failure after a success starts the clock, a success stops it, and switching
+  the endpoint on or off starts it over. A delivery keeps its event's type, so the log reads after
+  the audit row is purged.
 
 ## 11. Open questions
 

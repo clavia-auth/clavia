@@ -13,6 +13,10 @@ namespace Clavia\Adapter\Secondary\Persistence\PhpDb;
 
 use Clavia\Domain\Audit\AuditEvent;
 use Clavia\Domain\Audit\AuditEventId;
+use Clavia\Domain\Audit\AuditEventType;
+use Clavia\Domain\Audit\TargetType;
+use Clavia\Domain\Shared\Page;
+use Clavia\Domain\Shared\PageRequest;
 use Clavia\Domain\Webhook\DeliveryFailure;
 use Clavia\Domain\Webhook\WebhookDelivery;
 use Clavia\Domain\Webhook\WebhookDeliveryId;
@@ -26,13 +30,14 @@ use DateTimeImmutable;
  * endpoints whose filter holds the event's type (or `*`); claiming takes endpoints with
  * `FOR UPDATE SKIP LOCKED`, so two workers never share one.
  *
- * @psalm-type DeliveryRow = array{id: string, endpoint_id: string, audit_event_id: string, status: string,
+ * @psalm-type DeliveryRow = array{id: string, endpoint_id: string, audit_event_id: string, event_type: string,
+ *     status: string,
  *     attempts: int, next_attempt_at: string, last_status_code: int|null, last_duration_ms: int|null,
  *     last_failure: string|null, created_at: string, ended_at: string|null}
  */
 final readonly class PhpDbWebhookDeliveryRepository implements WebhookDeliveryRepository
 {
-    private const string COLUMNS = 'id, endpoint_id, audit_event_id, status, attempts, next_attempt_at, '
+    private const string COLUMNS = 'id, endpoint_id, audit_event_id, event_type, status, attempts, next_attempt_at, '
         . 'last_status_code, last_duration_ms, last_failure, created_at, ended_at';
 
     public function __construct(private Database $database)
@@ -44,16 +49,23 @@ final readonly class PhpDbWebhookDeliveryRepository implements WebhookDeliveryRe
     {
         return max(0, $this->database->execute(
             <<<'SQL'
-                INSERT INTO webhook_deliveries (id, endpoint_id, audit_event_id, status, attempts, next_attempt_at,
-                    created_at)
-                SELECT gen_random_uuid(), e.id, :event, 'pending', 0, :due, :created
+                INSERT INTO webhook_deliveries (id, endpoint_id, audit_event_id, event_type, status, attempts,
+                    next_attempt_at, created_at)
+                SELECT gen_random_uuid(), e.id, :event, :type, 'pending', 0, :due, :created
                 FROM webhook_endpoints e
                 WHERE e.is_enabled
-                    AND (e.events @> '["*"]'::jsonb OR e.events @> jsonb_build_array(CAST(:type AS text)))
+                    AND CASE WHEN CAST(:kind AS text) = CAST(:tested AS text)
+                        THEN CAST(e.id AS text) = CAST(:target AS text)
+                        ELSE e.events @> '["*"]'::jsonb OR e.events @> jsonb_build_array(CAST(:listened AS text))
+                    END
                 SQL,
             [
                 'event' => $event->id->value,
                 'type' => $event->type->value,
+                'kind' => $event->type->value,
+                'listened' => $event->type->value,
+                'tested' => AuditEventType::WebhookTested->value,
+                'target' => $event->target?->type === TargetType::Webhook ? $event->target->id : '',
                 'due' => Timestamp::toDatabase($now),
                 'created' => Timestamp::toDatabase($now),
             ],
@@ -128,6 +140,24 @@ final readonly class PhpDbWebhookDeliveryRepository implements WebhookDeliveryRe
     }
 
     #[\Override]
+    public function page(WebhookEndpointId $endpoint, PageRequest $request): Page
+    {
+        /** @var int|string $total */
+        $total = $this->database->fetchValue(
+            'SELECT count(*) FROM webhook_deliveries WHERE endpoint_id = :endpoint',
+            ['endpoint' => $endpoint->value],
+        );
+        /** @var list<DeliveryRow> $rows */
+        $rows = $this->database->fetchAll(
+            'SELECT ' . self::COLUMNS . ' FROM webhook_deliveries WHERE endpoint_id = :endpoint '
+            . 'ORDER BY created_at DESC, id DESC LIMIT :limit OFFSET :offset',
+            ['endpoint' => $endpoint->value, 'limit' => $request->perPage, 'offset' => $request->offset()],
+        );
+
+        return new Page(array_map(self::hydrate(...), $rows), max(0, (int) $total), $request);
+    }
+
+    #[\Override]
     public function release(WebhookEndpointId $endpoint): void
     {
         $this->database->execute(
@@ -152,6 +182,7 @@ final readonly class PhpDbWebhookDeliveryRepository implements WebhookDeliveryRe
             WebhookDeliveryId::fromString($row['id']),
             WebhookEndpointId::fromString($row['endpoint_id']),
             AuditEventId::fromString($row['audit_event_id']),
+            AuditEventType::from($row['event_type']),
             WebhookDeliveryStatus::from($row['status']),
             $row['attempts'],
             Timestamp::fromDatabase($row['next_attempt_at']),

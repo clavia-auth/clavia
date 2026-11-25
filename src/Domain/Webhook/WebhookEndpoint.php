@@ -27,6 +27,9 @@ final readonly class WebhookEndpoint
     public const int MAX_DESCRIPTION_LENGTH = 120;
     public const int ROTATION_OVERLAP_SECONDS = 86_400;
 
+    /** An endpoint every delivery to which has failed this long is switched off (§2, "A dead endpoint"). */
+    public const int DEAD_AFTER_DAYS = 5;
+
     /**
      * @param non-empty-string      $sealedSecret
      * @param non-empty-string|null $sealedPreviousSecret
@@ -42,6 +45,8 @@ final readonly class WebhookEndpoint
         public ?DateTimeImmutable $previousSecretUntil,
         public DateTimeImmutable $createdAt,
         public DateTimeImmutable $updatedAt,
+        public ?DateTimeImmutable $failingSince = null,
+        public ?WebhookDisabledReason $disabledReason = null,
     ) {
     }
 
@@ -89,6 +94,8 @@ final readonly class WebhookEndpoint
         ?DateTimeImmutable $previousSecretUntil,
         DateTimeImmutable $createdAt,
         DateTimeImmutable $updatedAt,
+        ?DateTimeImmutable $failingSince = null,
+        ?WebhookDisabledReason $disabledReason = null,
     ): self {
         return new self(
             $id,
@@ -101,6 +108,8 @@ final readonly class WebhookEndpoint
             $previousSecretUntil,
             $createdAt,
             $updatedAt,
+            $failingSince,
+            $isEnabled ? null : ($disabledReason ?? WebhookDisabledReason::Operator),
         );
     }
 
@@ -121,9 +130,28 @@ final readonly class WebhookEndpoint
         return clone($this, ['events' => $events, 'updatedAt' => $now]);
     }
 
+    /**
+     * Switched on or off by an operator. Switching it on forgets why it was off and how long it had
+     * been failing: it is given five days again.
+     */
     public function enabled(bool $enabled, DateTimeImmutable $now): self
     {
-        return clone($this, ['isEnabled' => $enabled, 'updatedAt' => $now]);
+        if ($enabled === $this->isEnabled) {
+            return clone($this, ['updatedAt' => $now]);
+        }
+
+        return clone($this, [
+            'isEnabled' => $enabled,
+            'failingSince' => null,
+            'disabledReason' => $enabled ? null : WebhookDisabledReason::Operator,
+            'updatedAt' => $now,
+        ]);
+    }
+
+    /** The instant before which a first failure, never followed by a success, makes it dead. */
+    public static function deadIfFailingBefore(DateTimeImmutable $now): DateTimeImmutable
+    {
+        return $now->modify(sprintf('-%d days', self::DEAD_AFTER_DAYS));
     }
 
     /**
