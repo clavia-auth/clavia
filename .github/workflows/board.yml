@@ -24,9 +24,13 @@ on:
       PROJECT_TOKEN:
         required: false
 
+# Debounced: a batch of issues labelled and milestoned starts this once per event. Each run waits a
+# minute before touching the API, and a newer event cancels the run still waiting, so a burst costs
+# one run. Refilling is idempotent, so a run cancelled midway leaves nothing half-done that the next
+# does not finish. The token's GraphQL budget is the maintainer's, shared with everything else.
 concurrency:
   group: board-refill
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -47,6 +51,9 @@ jobs:
           else
             echo "present=true" >> "$GITHUB_OUTPUT"
           fi
+      - name: Let a burst of events settle
+        if: steps.token.outputs.present == 'true' && github.event_name != 'workflow_dispatch'
+        run: sleep 60
       - uses: actions/checkout@v7
         if: steps.token.outputs.present == 'true'
         with:
