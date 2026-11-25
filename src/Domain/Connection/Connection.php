@@ -37,6 +37,12 @@ use DateTimeImmutable;
  *   proved control of its address. With sign-up open, this is what stops somebody from
  *   registering a stranger's address and using it.
  *
+ * One belongs to enterprise connections (OpenID Connect, SAML) alone:
+ *
+ * - `requiresProvisioning`: only the people a directory provisioned through SCIM sign in through
+ *   it; nobody else's account is created on the way (docs/design/scim-provisioning.md §2). The
+ *   directory then decides who gets in, and somebody it removed cannot come back by signing in.
+ *
  * Every account belongs to exactly one connection: the pool it was created in, or the
  * external connection that created it.
  */
@@ -55,6 +61,7 @@ final readonly class Connection
         public bool $allowsSignUp,
         public bool $requiresVerifiedEmail,
         public ?SamlSettings $saml = null,
+        public bool $requiresProvisioning = false,
     ) {
     }
 
@@ -140,7 +147,8 @@ final readonly class Connection
      *
      * @throws InvalidValue When the display name is unusable, the OIDC settings are present on
      *                      anything but an OIDC connection or missing from one, or sign-up or a
-     *                      verified address is asked of anything but a pool.
+     *                      verified address is asked of anything but a pool, or provisioning of
+     *                      anything but an enterprise connection.
      */
     public static function reconstitute(
         ConnectionName $name,
@@ -153,6 +161,7 @@ final readonly class Connection
         bool $allowsSignUp = false,
         bool $requiresVerifiedEmail = false,
         ?SamlSettings $saml = null,
+        bool $requiresProvisioning = false,
     ): self {
         self::checkDisplayName($displayName);
         if (($strategy === ConnectionStrategy::Oidc) !== ($oidc !== null)) {
@@ -163,6 +172,9 @@ final readonly class Connection
         }
         if (($allowsSignUp || $requiresVerifiedEmail) && $strategy !== ConnectionStrategy::Database) {
             throw new InvalidValue('Only a database connection takes sign-ups or requires a verified address.');
+        }
+        if ($requiresProvisioning && $strategy !== ConnectionStrategy::Oidc && $strategy !== ConnectionStrategy::Saml) {
+            throw new InvalidValue('Only an OIDC or SAML connection requires provisioning.');
         }
 
         return new self(
@@ -176,6 +188,7 @@ final readonly class Connection
             $allowsSignUp,
             $requiresVerifiedEmail,
             $saml,
+            $requiresProvisioning,
         );
     }
 
@@ -184,9 +197,10 @@ final readonly class Connection
      *
      * Turning one off takes effect at the next sign-in: sessions established through it
      * stand until they end. Requiring a verified address takes effect at the next password
-     * sign-in of each unverified account.
+     * sign-in of each unverified account; requiring provisioning, at the next sign-in through it.
      *
-     * @throws InvalidValue When sign-up or a verified address is asked of anything but a pool.
+     * @throws InvalidValue When sign-up or a verified address is asked of anything but a pool, or
+     *                      provisioning of anything but an enterprise connection.
      */
     public function switched(
         ?bool $isEnabled,
@@ -194,6 +208,7 @@ final readonly class Connection
         ?string $displayName,
         ?bool $allowsSignUp = null,
         ?bool $requiresVerifiedEmail = null,
+        ?bool $requiresProvisioning = null,
     ): self {
         return self::reconstitute(
             $this->name,
@@ -206,6 +221,7 @@ final readonly class Connection
             $allowsSignUp ?? $this->allowsSignUp,
             $requiresVerifiedEmail ?? $this->requiresVerifiedEmail,
             $this->saml,
+            $requiresProvisioning ?? $this->requiresProvisioning,
         );
     }
 
@@ -228,6 +244,7 @@ final readonly class Connection
             $this->isDomainConnection,
             $oidc,
             $this->createdAt,
+            requiresProvisioning: $this->requiresProvisioning,
         );
     }
 

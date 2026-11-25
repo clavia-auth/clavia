@@ -20,9 +20,9 @@ use Psr\Http\Server\RequestHandlerInterface;
  * `GET /scim/v2/ResourceTypes[/{id}]` and `GET /scim/v2/Schemas[/{id}]` (RFC 7644 §4, RFC 7643
  * §6, §7): the resource types and schemas this service provider supports, listed or one by its id.
  *
- * Built from what exists, and nothing ahead of it: `User` and its schema join with the slice that
- * serves `/Users` (docs/design/scim-provisioning.md §9), `Group` with the one that serves
- * `/Groups`. An id not listed is `404`.
+ * Built from what exists, and nothing ahead of it ({@see ScimCatalogue}): `Group` and its schema join
+ * with the slice that serves `/Groups` (docs/design/scim-provisioning.md §9). An id not listed is
+ * `404`.
  */
 final readonly class ScimCatalogueHandler implements RequestHandlerInterface
 {

@@ -173,7 +173,12 @@ final readonly class CompleteSamlSignIn
         } catch (InvalidValue) {
             return $refuse(ExternalSignInFailure::ProviderFailed, 'subject');
         }
-        $account = ($this->resolveAccount)($asserted, $this->access->pools($client), unverifiedAddress: true);
+        $account = ($this->resolveAccount)(
+            $asserted,
+            $this->access->pools($client),
+            unverifiedAddress: true,
+            requireProvisioning: $connection->requiresProvisioning,
+        );
         if (! $account instanceof User) {
             return $refuse($account);
         }

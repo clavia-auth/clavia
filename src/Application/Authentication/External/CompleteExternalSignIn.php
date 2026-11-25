@@ -112,7 +112,11 @@ final readonly class CompleteExternalSignIn
             return $refuse(ExternalSignInFailure::ProviderFailed);
         }
 
-        $account = ($this->resolveAccount)($asserted, $this->access->pools($client));
+        $account = ($this->resolveAccount)(
+            $asserted,
+            $this->access->pools($client),
+            requireProvisioning: $connection->requiresProvisioning,
+        );
         if (! $account instanceof User) {
             return $refuse($account);
         }

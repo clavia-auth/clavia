@@ -16,6 +16,7 @@ use Clavia\Application\Port\TransactionManager;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Identity\ExternalIdentityRepository;
 use Clavia\Domain\Identity\UserRepository;
+use Clavia\Domain\Provisioning\ProvisionedAccountRepository;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\RandomSource;
 use Psr\Container\ContainerInterface;
@@ -28,6 +29,8 @@ final class ResolveExternalAccountFactory
         $users = $container->get(UserRepository::class);
         /** @var ExternalIdentityRepository $identities */
         $identities = $container->get(ExternalIdentityRepository::class);
+        /** @var ProvisionedAccountRepository $provisioned */
+        $provisioned = $container->get(ProvisionedAccountRepository::class);
         /** @var TransactionManager $transactions */
         $transactions = $container->get(TransactionManager::class);
         /** @var RandomSource $random */
@@ -40,6 +43,7 @@ final class ResolveExternalAccountFactory
         return new ResolveExternalAccount(
             $users,
             $identities,
+            $provisioned,
             $transactions,
             $random,
             $clock,

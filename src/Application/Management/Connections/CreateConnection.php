@@ -107,6 +107,10 @@ final readonly class CreateConnection
                 $this->clock->now(),
             ),
         };
+        if ($new->requireProvisioning) {
+            // Refused by the connection itself for anything but an enterprise one.
+            $connection = $connection->switched(null, null, null, requiresProvisioning: true);
+        }
         $this->connections->add($connection);
         $this->events->dispatch(new ConnectionCreated($connection));
 

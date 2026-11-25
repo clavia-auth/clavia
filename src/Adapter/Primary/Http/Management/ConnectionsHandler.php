@@ -128,6 +128,7 @@ final readonly class ConnectionsHandler implements RequestHandlerInterface
             $body->bool('allow_sign_up') ?? false,
             $body->bool('require_verified_email') ?? false,
             $saml,
+            $body->bool('require_provisioning') ?? false,
         ));
     }
 }

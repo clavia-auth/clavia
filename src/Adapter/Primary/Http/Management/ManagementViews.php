@@ -294,6 +294,7 @@ final class ManagementViews
             'is_domain_connection' => $connection->isDomainConnection,
             'allow_sign_up' => $connection->allowsSignUp,
             'require_verified_email' => $connection->requiresVerifiedEmail,
+            'require_provisioning' => $connection->requiresProvisioning,
             'configured' => $described->configured,
             'usable' => $described->usable,
             // The secret is never part of it: stored encrypted, sent only to the provider.

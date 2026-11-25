@@ -11,7 +11,9 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Adapter\Primary\Http\Scim\ScimCatalogue;
 use Clavia\Adapter\Primary\Http\Scim\ScimCatalogueHandler;
+use Clavia\Configuration\Settings;
 use Clavia\Adapter\Primary\Http\Scim\ScimResponder;
 use Psr\Container\ContainerInterface;
 
@@ -22,7 +24,10 @@ final class ScimCatalogueHandlerFactory
         /** @var ScimResponder $responder */
         $responder = $container->get(ScimResponder::class);
 
-        // Nothing yet: `User` and its schema join with the slice that serves `/Users`.
-        return new ScimCatalogueHandler($responder, ['ResourceTypes' => [], 'Schemas' => []]);
+        /** @var Settings $settings */
+        $settings = $container->get(Settings::class);
+
+        // `Group` and its schema join with the slice that serves `/Groups`.
+        return new ScimCatalogueHandler($responder, ScimCatalogue::of($settings->scimBaseUrl()));
     }
 }

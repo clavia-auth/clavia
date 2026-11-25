@@ -17,8 +17,14 @@ use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\AssertedIdentity;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
+use Clavia\Domain\Identity\ExternalIdentity;
+use Clavia\Domain\Identity\Profile;
+use Clavia\Domain\Provisioning\ProvisionedAccount;
+use Clavia\Domain\Provisioning\ProvisioningTokenId;
+use Clavia\Domain\Provisioning\ScimUser;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryExternalIdentityRepository;
+use ClaviaTest\Support\Fake\InMemoryProvisionedAccountRepository;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
 use ClaviaTest\Support\Fake\SeededRandomSource;
@@ -34,12 +40,58 @@ final class ResolveExternalAccountTest extends TestCase
 {
     private InMemoryUserRepository $users;
     private InMemoryExternalIdentityRepository $identities;
+    private InMemoryProvisionedAccountRepository $provisioned;
 
     #[\Override]
     protected function setUp(): void
     {
         $this->users = new InMemoryUserRepository();
         $this->identities = new InMemoryExternalIdentityRepository();
+        $this->provisioned = new InMemoryProvisionedAccountRepository($this->users);
+    }
+
+    /** docs/design/scim-provisioning.md §5.4. */
+    public function testAConnectionRequiringProvisioningLetsInOnlyWhomADirectoryProvisioned(): void
+    {
+        $acme = ConnectionName::fromString('acme');
+        $stranger = AssertedIdentity::of($acme, 'stranger', 'eve@acme.example', true);
+        $now = new DateTimeImmutable('2026-01-15T10:00:00Z');
+        // Signed in before provisioning was required: linked, never provisioned.
+        $earlier = ($this->resolve())(AssertedIdentity::of($acme, 'early', 'early@acme.example', true), []);
+        self::assertInstanceOf(User::class, $earlier, var_export($earlier, true));
+        $adaId = UserId::generate(new SeededRandomSource(7));
+        $ada = User::provision($adaId, 'ada@acme.example', false, true, Profile::empty(), $acme, $now);
+        $this->users->save($ada);
+        $this->identities->add(ExternalIdentity::provision($acme, 'ada', $ada->id, $ada->email, $now));
+        $this->provisioned->add(ProvisionedAccount::provision(
+            $ada->id,
+            $acme,
+            ScimUser::fromJson((object) ['userName' => 'ada', 'externalId' => 'ada']),
+            ProvisioningTokenId::generate(new SeededRandomSource(8)),
+            $now,
+        ));
+
+        $refused = ($this->resolve())($stranger, [], requireProvisioning: true);
+        $early = AssertedIdentity::of($acme, 'early', 'early@acme.example', true);
+        $before = ($this->resolve())($early, [], requireProvisioning: true);
+        $signedIn = ($this->resolve())(
+            AssertedIdentity::of($acme, 'ada', 'whatever@acme.example', false),
+            [],
+            requireProvisioning: true,
+        );
+
+        self::assertSame(ExternalSignInFailure::NotProvisioned, $refused);
+        self::assertNull($this->identities->find($acme, 'stranger'), 'Nothing linked on the way.');
+        self::assertNull($this->users->findByEmail($acme, 'eve@acme.example'), 'Nothing created on the way.');
+        self::assertSame(ExternalSignInFailure::NotProvisioned, $before);
+        self::assertInstanceOf(User::class, $signedIn);
+        self::assertTrue($signedIn->id->equals($ada->id));
+        $ada->deactivate($now);
+        $this->users->save($ada);
+        self::assertSame(
+            ExternalSignInFailure::AccountDisabled,
+            ($this->resolve())(AssertedIdentity::of($acme, 'ada', null, false), [], requireProvisioning: true),
+        );
     }
 
     public function testAnUnverifiedAddressIsRefusedUnlessTheCallerAllowsIt(): void
@@ -85,6 +137,7 @@ final class ResolveExternalAccountTest extends TestCase
         return new ResolveExternalAccount(
             $this->users,
             $this->identities,
+            $this->provisioned,
             new InMemoryTransactionManager(),
             new SeededRandomSource(2),
             new FrozenClock(),

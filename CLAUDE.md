@@ -294,7 +294,7 @@ objects, repository interfaces, and an `Event` namespace for its domain events.
 | `Shared` | `Clock`, `RandomSource`, `SecretGenerator`, `Digest`, `Scope`/`ScopeSet`, `Audience`, `Url`, `UuidId`, `Base64Url`, `PageRequest`/`Page`, `InvalidValue`, `AlreadyExists`, `DomainEvent` | Secrets are 43-character tokens; codes and tokens are stored as their SHA-256 `Digest`; URLs are kept byte for byte and compared exactly |
 | `Identity` | `User`, `Profile`, `AppMetadata`, `PasswordPolicy`, `ExternalIdentity`, `AssertedIdentity`, `AccountLink` | Every account belongs to one connection; an address is unique within it; a changed address is unverified; an emailed link dies with the address or password it was issued against; application metadata is a JSON object only operators write (16 KiB, five levels, keys sorted), replaced whole |
 | `Client` | `Client`, `ClientId`, `ClientType`, `ClientAuthMethod`, `GrantType`, `ResponseType`, `Ownership`, `BackChannelLogout`, `Registration\InitialAccessToken` | Type, auth method and secret agree; the code flow needs a redirect URI; `client_credentials` needs a confidential client; `tpc_…` ids are third-party |
-| `Connection` | `Connection`, `ConnectionName`, `ConnectionStrategy` (database, social, OIDC, passwordless, SAML), `OidcSettings`, `BuiltInConnection`, `Saml\*` (`SamlSettings`, `SamlCertificate`, `SamlOptions`, `SamlRequestId`, `ServiceProviderKey[Set]`) | The default pool, social providers and `email` are switched, never created or deleted; only a pool takes sign-ups or requires a verified address; a SAML connection, and only one, has SAML settings: 1 to 3 pinned RSA certificates, https endpoints |
+| `Connection` | `Connection`, `ConnectionName`, `ConnectionStrategy` (database, social, OIDC, passwordless, SAML), `OidcSettings`, `BuiltInConnection`, `Saml\*` (`SamlSettings`, `SamlCertificate`, `SamlOptions`, `SamlRequestId`, `ServiceProviderKey[Set]`) | The default pool, social providers and `email` are switched, never created or deleted; only a pool takes sign-ups or requires a verified address; only an OIDC or SAML connection requires provisioning; a SAML connection, and only one, has SAML settings: 1 to 3 pinned RSA certificates, https endpoints |
 | `ResourceServer` | `ResourceServer` (an API: `rs_…` id, audience, permissions, `AccessTokenFormat`), `Permission`, `ClientGrant` | A system API (the Management API) can be renamed, never deleted, always enforces roles; tokens are opaque unless the API takes JWTs |
 | `Rbac` | `Role`, `GrantedPermission`, `RoleRepository` (also the assignments) | A person holds a permission only through a role; `permissionsHeld(user, API)` is the question issuance asks |
 | `Consent` | `UserConsent`, `ConsentPolicy`, `PendingConsent` | `ConsentPolicy` alone decides who is asked |
@@ -304,7 +304,7 @@ objects, repository interfaces, and an `Event` namespace for its domain events.
 | `Audit` | `AuditEvent`, `AuditEventType`, `Actor`, `AuditTarget`, `Outcome`, `AuditQuery`, `AuditLog` | Append-only; facts, never secrets |
 | `Claims` | `ClaimName`, `ClaimSource`, `ClaimMapping`, `ClaimMappings`, `ClaimSubject`, `CustomClaims` | A custom claim never has a reserved name (registered, standard, or this server's), checked when saved and again at issuance; its source is the account (address, connection, profile, `app_metadata`, roles) or a constant, never the request; a source with no value leaves its claim out; at most twenty per API, no two reading nested metadata; 32 KiB per token, refused rather than cut |
 | `Webhook` | `WebhookEndpoint`, `WebhookEndpointId`, `WebhookSecret`, `EventFilter`, `WebhookEndpointRepository` | An endpoint is https, at most twenty, listening to known audit event types or `*`; its secret (`whsec_`, 32 random bytes) is the server's, shown once, sealed (`webhook:<id>:secret`), never hashed; after a rotation the previous one signs beside it for a day |
-| `Provisioning` | `ProvisioningToken`, `ProvisioningTokenId`, `ProvisioningTokenState`, `SubjectAttribute`, `ProvisioningTokenRepository` | A token is for one pool or enterprise connection and goes with it; shown once, kept as its digest; a day to two years, a year by default, flagged within thirty days; revoked, never changed otherwise |
+| `Provisioning` | `ProvisioningToken`, `ProvisioningTokenId`, `ProvisioningTokenState`, `SubjectAttribute`, `ProvisioningTokenRepository`, `ScimUser`, `ScimFilter`, `ProvisionedAccount`, `ProvisionedAccountRepository` | A token is for one pool or enterprise connection and goes with it; shown once, kept as its digest; a day to two years, a year by default, flagged within thirty days; revoked, never changed otherwise |
 
 The application mirrors these contexts (`Application\OAuth2`, `Authentication`, `Oidc`,
 `Management`, `Connection`, `Audit`…). `Application\Port` holds the technical ports: signing
@@ -924,10 +924,28 @@ connection is gone is one `401` document (`WWW-Authenticate: Bearer realm="scim"
 a genuine one whose connection went away. The caller (`ProvisioningCaller`: the token and its
 connection) is attached for the handlers (`ScimRequest`), and the trail names the token. Every answer
 is `application/scim+json`, `no-store` (`ScimResponder`), errors RFC 7644 §3.12 documents (`status`
-a string, never a value sent). `/ServiceProviderConfig` states only what is built (no PATCH, filter,
-ETag, bulk, sort or password change yet); `/ResourceTypes` and `/Schemas` (`ScimCatalogueHandler`)
-list what exists, nothing until `/Users` is served; `/Bulk` and `/Me` are `501`; any other path is a
-SCIM `404`, behind the token like the rest.
+a string, never a value sent). `/ServiceProviderConfig` states only what is built (filtering; no
+PATCH, ETag, bulk, sort or password change yet); `/ResourceTypes` and `/Schemas` (`ScimCatalogue`)
+list `User` and the attributes kept; `/Bulk` and `/Me` are `501`; any other path is a SCIM `404`,
+behind the token like the rest.
+
+**Users** (`Application\Provisioning\Users`): `POST /scim/v2/Users` (`CreateScimUser`) reads the body
+(`ScimBody`: `application/scim+json` or `application/json`, 1 MiB, one object, `400 invalidSyntax` or
+`413`) as a `ScimUser` (RFC 7643 §4.1: `userName`, `externalId`, `active`, `displayName`, `name`,
+`nickName`, `locale`, `emails`; names case-insensitive; anything else ignored; `password` refused;
+`400 invalidValue` naming the attribute), then, in one transaction, the account (`User::provision()`:
+no password, the address the primary email or a `userName` that is one, verified only when the token
+says `addresses_trusted`), its `ProvisionedAccount` (`userName` unique per connection ignoring case,
+`externalId` exactly) and, in an OIDC or SAML connection, its `ExternalIdentity` `(connection,
+subject)` from the token's `subject_attribute` (missing is `400`), so the first sign-in finds it.
+`UserCreated` names the token. A taken address, `userName`, `externalId` or subject is `409
+uniqueness` naming the attribute, and leaves nothing. `GET /Users/{id}` and `GET /Users` (`ReadScimUsers`)
+read only the accounts provisioned into the token's connection (anything else is `404`), with
+`ScimFilter` (`eq` on `userName`, `externalId`, `id`, `emails.value`, joined by `and`; `400
+invalidFilter` otherwise), `startIndex` and `count` (100 by default, 200 at most), oldest first.
+**`require_provisioning`** on an OIDC or SAML connection (Management API) makes `ResolveExternalAccount`
+refuse any identity without a provisioned account there (`ExternalSignInFailure::NotProvisioned`,
+`not_provisioned` in the trail, worded as unavailable), linking and creating nothing.
 
 ### Domain events and the audit trail
 
