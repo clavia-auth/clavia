@@ -835,7 +835,8 @@ and end `abandoned` after the eighth attempt; a switched-off endpoint's deliveri
 event was purged are abandoned at once; ended deliveries go after seven days, and a purged audit
 event takes its pending ones along (a cascade).
 
-**Operating them.** `GET …/deliveries` (`read:webhooks`) is the log, newest first: status, attempts,
+**Operating them.** `GET …/deliveries` (`read:webhooks` and `read:audit_events`: it names the events
+sent) is the log, newest first: status, attempts,
 the last status code, duration and failure category, never a body. `POST …/test` (`update:webhooks`
 and `read:audit_events`; `409` for an endpoint switched off) records `webhook.tested`, which the
 outbox queues for its target endpoint alone: `EventFilter` never matches it, even `*`, and refuses

@@ -210,6 +210,12 @@ final class WebhookDeliveryTest extends AcceptanceTestCase
         self::assertSame(StatusCodeInterface::STATUS_FORBIDDEN, $refused->getStatusCode());
         self::assertStringContainsString('read:audit_events', $refused->getHeaderLine('WWW-Authenticate'));
         self::assertSame(
+            StatusCodeInterface::STATUS_FORBIDDEN,
+            $this->api('GET', '/api/v1/webhooks/' . $id . '/deliveries')->getStatusCode(),
+            'The log names audit events: a view of the trail.',
+        );
+        $this->adminToken();
+        self::assertSame(
             StatusCodeInterface::STATUS_NOT_FOUND,
             $this->api('GET', '/api/v1/webhooks/6b0e5c9a-2f4d-4a1e-9b3c-7d8e9f0a1b2c/deliveries')->getStatusCode(),
         );

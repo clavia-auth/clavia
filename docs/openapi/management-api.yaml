@@ -63,7 +63,8 @@ tags:
       Endpoints that receive the audit events they subscribe to, as `GET /api/v1/audit-events`
       renders them, signed per the Standard Webhooks specification with a secret this server
       generates, shows once and keeps sealed. Registering one, or changing where it points or what
-      it hears, or testing it, also needs `read:audit_events`: streaming the trail is reading it.
+      it hears, testing it, or reading its delivery log, also needs `read:audit_events`: streaming
+      the trail is reading it.
 
       **What a receiver gets.** A `POST` whose body is a `WebhookPayload` (`type`, `timestamp`,
       and `data`, the `AuditEvent`), with three headers from the
@@ -2074,7 +2075,8 @@ paths:
       description: |
         The endpoint's deliveries, newest first, kept seven days after they end: what was sent, how
         many attempts, and the last one's status code, duration and failure category. Never a body,
-        sent or received: neither is kept.
+        sent or received: neither is kept. It names the audit events sent, so it also needs
+        `read:audit_events` (403 without it).
       security:
         - managementToken: [read:webhooks]
       parameters:
