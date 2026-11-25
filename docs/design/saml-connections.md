@@ -1,6 +1,6 @@
 # Design: SAML 2.0 enterprise connections
 
-**Status:** agreed · **Date:** 2026-11-24 · **Issue:** clavia-auth/clavia#20 ·
+**Status:** built · **Date:** 2026-11-24 · **Issue:** clavia-auth/clavia#20 ·
 **Specifications:** SAML 2.0 Core (§2.3.3 assertions, §2.3.4 encrypted assertions, §2.5
 conditions, §3.2.2 responses, §3.4 `AuthnRequest`), Bindings (§3.4 HTTP-Redirect with DEFLATE and
 §3.4.4.1 its signature, §3.5 HTTP-POST), Profiles (§4.1 Web Browser SSO: §4.1.4.2 and §4.1.4.3 the

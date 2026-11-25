@@ -1,6 +1,6 @@
 # Design: SCIM 2.0 provisioning
 
-**Status:** agreed · **Date:** 2026-11-24 · **Issue:** clavia-auth/clavia#21 ·
+**Status:** built · **Date:** 2026-11-24 · **Issue:** clavia-auth/clavia#21 ·
 **Specifications:** RFC 7643 (SCIM core schema: §2 attributes, §3 common attributes and `meta`,
 §4.1 `User`, §4.2 `Group`, §4.3 the enterprise extension, §5 `ServiceProviderConfig`, §6
 `ResourceType`, §7 `Schema`), RFC 7644 (SCIM protocol: §3.3 create, §3.4.1 retrieve, §3.4.2 list
