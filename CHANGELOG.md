@@ -8,6 +8,12 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ### Added
 
+- **Signing in through a SAML identity provider** (#126): the login page offers each enabled SAML
+  connection; the person is sent to the identity provider and comes back through
+  `/auth/saml/{connection}/acs`. They are known by the connection and their subject, a second factor
+  applies as after any sign-in, and a replayed assertion signs nobody in. An address is verified only
+  when the connection trusts its identity provider for addresses (`email_trusted`).
+
 - **SAML connections, registered** (#125): `POST /api/v1/connections` takes `strategy: saml` with the
   identity provider's metadata, as a document or a URL (Entra ID, Okta, ADFS and Keycloak metadata
   read); `POST /api/v1/connections/{name}/refresh-metadata` reads the URL again. Each connection

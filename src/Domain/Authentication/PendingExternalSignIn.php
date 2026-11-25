@@ -13,6 +13,7 @@ namespace Clavia\Domain\Authentication;
 
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Connection\ConnectionName;
+use Clavia\Domain\Connection\Saml\SamlRequestId;
 use Clavia\Domain\OAuth2\CodeVerifier;
 use Clavia\Domain\Oidc\Nonce;
 
@@ -37,6 +38,8 @@ final readonly class PendingExternalSignIn
      * @param string        $nextUrl    Validated as a {@see LocalPath} when the sign-in started.
      * @param ClientId|null $clientId   The application the sign-in is for, if it came from one.
      * @param string|null   $loginState The login page's handle, forgotten once the sign-in completes.
+     * @param SamlRequestId|null $samlRequestId For a SAML connection, the `AuthnRequest` the response must
+     *                                          answer (`InResponseTo`); the verifier and the nonce then go unused.
      */
     public function __construct(
         public ConnectionName $provider,
@@ -45,6 +48,7 @@ final readonly class PendingExternalSignIn
         public ?ClientId $clientId,
         public ?string $loginState,
         public Nonce $nonce,
+        public ?SamlRequestId $samlRequestId = null,
     ) {
     }
 }

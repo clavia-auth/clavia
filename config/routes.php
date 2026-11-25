@@ -25,7 +25,10 @@ use Clavia\Adapter\Primary\Http\Auth\PasswordlessCodeHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessLinkHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessStartHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordResetHandler;
+use Clavia\Adapter\Primary\Http\Auth\Saml\SamlAcsHandler;
+use Clavia\Adapter\Primary\Http\Auth\Saml\SamlCompleteHandler;
 use Clavia\Adapter\Primary\Http\Auth\Saml\SamlMetadataHandler;
+use Clavia\Adapter\Primary\Http\Auth\Saml\SamlSignInHandler;
 use Clavia\Adapter\Primary\Http\Auth\SignUpHandler;
 use Clavia\Adapter\Primary\Http\Auth\ThemeHandler;
 use Clavia\Adapter\Primary\Http\Auth\VerifyEmailHandler;
@@ -128,6 +131,12 @@ return static function (Application $app, ContainerInterface $container): void {
     // ── /auth/* — the interactive sign-in. The browser authenticates with its session
     // cookie; every state change is a POST, and logout has no GET on purpose. ──
     $app->get('/auth/login', LoginPageHandler::class, 'auth.login');
+    // Signing in through a SAML identity provider: out (HTTP-Redirect), back by a cross-site POST that
+    // carries no Lax cookie, parked and turned into a GET where the cookies come back. The ACS is the one
+    // /auth/* POST without a CSRF token: it changes nothing but a short-lived handle.
+    $app->get('/auth/saml/{connection:[a-z][a-z0-9-]*}', SamlSignInHandler::class, 'auth.saml');
+    $app->post('/auth/saml/{connection:[a-z][a-z0-9-]*}/acs', SamlAcsHandler::class, 'auth.saml.acs');
+    $app->get('/auth/saml/{connection:[a-z][a-z0-9-]*}/complete', SamlCompleteHandler::class, 'auth.saml.complete');
     $app->get('/auth/saml/{connection}/metadata', SamlMetadataHandler::class, 'auth.saml.metadata');
     $app->post('/auth/login', LoginHandler::class, 'auth.login.submit');
     $app->post('/auth/logout', LogoutHandler::class, 'auth.logout');

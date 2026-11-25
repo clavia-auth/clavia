@@ -75,7 +75,7 @@ final class SamlConnectionsTest extends AcceptanceTestCase
         /** @var array{strategy: string, configured: bool, saml: array<string, mixed>} $connection */
         $connection = self::document($created);
         self::assertSame('saml', $connection['strategy']);
-        self::assertFalse($connection['configured'], 'Nobody signs in through one before its flow exists.');
+        self::assertTrue($connection['configured'], 'Its settings are its provider.');
         $saml = $connection['saml'];
         self::assertSame('https://sts.windows.net/72f988bf-86f1-41af-91ab-2d7cd011db47/', $saml['entity_id']);
         self::assertNull($saml['metadata_url']);

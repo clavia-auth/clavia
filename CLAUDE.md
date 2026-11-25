@@ -479,7 +479,7 @@ applies however the person signed in.
   associated data), never hashed. `amr` gains `otp`, or `hwk`/`swk` (and `user` when nobody was
   verified), then `mfa`. Turning the app off keeps the recovery codes while a passkey remains; an
   operator's reset takes them.
-- **SAML connections** (`docs/design/saml-connections.md`, built in slices; sign-in comes in #126).
+- **SAML connections** (`docs/design/saml-connections.md`, built in slices).
   `POST /api/v1/connections` with `strategy: saml` and a `saml` object reads the identity provider
   from `saml.metadata` (the document) or `saml.metadata_url` (fetched now, `SamlMetadataSource`
   through `OutboundUrlPolicy`, 1 MiB): `SamlConfiguration` holds it to `SamlServiceProvider::readMetadata()`
@@ -493,8 +493,24 @@ applies however the person signed in.
   `GET /auth/saml/{connection}/metadata` (`DescribeSamlServiceProvider`) is this server's
   `EntityDescriptor` with the current and next certificates of each usage and the encryption methods,
   valid against the SAML metadata schema, public for an hour (Caddy's `no-store` excepts it); `404`
-  for anything but an enabled SAML connection. Until sign-in exists a SAML connection is not
-  `configured`, so the login page offers no button for it.
+  for anything but an enabled SAML connection.
+- **SAML sign-in** (`External\Saml\*`, design §5.3): the login page's button goes to `GET
+  /auth/saml/{connection}` (`BeginSamlSignIn`): a pending sign-in carrying the `AuthnRequest`'s id,
+  its handle the `RelayState` and the `clavia_external_state` cookie, the browser sent out by
+  HTTP-Redirect (unsigned for now). The identity provider POSTs to `…/acs` (`ReceiveSamlResponse`),
+  a cross-site POST that carries no `Lax` cookie, so the response is only parked under a one-time
+  handle (`SamlResponseStore`, 60 s) and the browser sent on with a `303` to `…/complete?h=…`
+  (`CompleteSamlSignIn`), where the cookies come back: the parked response claimed; its `RelayState`
+  equal to the cookie (constant time); the pending sign-in claimed for this connection; the
+  application still allowing it; `SamlServiceProvider::consume()` with the connection's certificates
+  and this request's id; the assertion id claimed until it expires (`SamlAssertionReplayCache`). The
+  person is `(connection, subject)` (`ResolveExternalAccount`); the address comes from the attribute
+  the operator named or an address `NameID`, verified only when the connection trusts the identity
+  provider. An untrusted address still makes an account for a new subject, unverified and linked to
+  nothing (`User::registerFromAssertion()`); no address at all signs nobody in. Then
+  `CompleteFirstFactor` (`amr` `ext`), so a second factor applies. Every refusal is the external
+  sign-in's one page and one `SignInRefused`; the handler logs the category (`signature`,
+  `audience`, `replayed`…), never what the identity provider sent.
 - **External** (`BeginExternalSignIn`, `CompleteExternalSignIn`): Google, GitHub, or an
   operator-registered OpenID Connect provider. Clavia holds itself to its own rules: an opaque
   `state` in the redirect and in the `clavia_external_state` cookie, compared in constant time
@@ -1023,7 +1039,10 @@ These follow from the RFCs and from mistakes already made once. Breaking one is 
   verified address, and password reset answer alike. A link emailed to an address changes
   something only on the POST from the page it opens on, never on the GET a mail scanner makes.
 - Every `/auth/*` state change is a POST with a CSRF token (double-submit, per browser). Sign-out
-  and the theme toggle need none: a `SameSite=Lax` cookie never rides a cross-site POST.
+  and the theme toggle need none: a `SameSite=Lax` cookie never rides a cross-site POST. **The one
+  `/auth/*` POST without a token is the SAML assertion consumer service** (`POST
+  /auth/saml/{connection}/acs`): it comes from the identity provider's page, and it changes nothing
+  but a one-minute handle; every check runs on the GET it is turned into.
 - **The auth pages' CSP is built per page.** Chromium applies `form-action` to a form's whole
   redirect chain, and a successful sign-in ends at the client's `redirect_uri`. A page tied to an
   authorization request therefore lists that client's redirect origins next to `'self'`.

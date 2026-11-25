@@ -62,22 +62,31 @@ final readonly class ResolveExternalAccount
 
     /**
      * @param list<ConnectionName> $pools The pools the application may sign people in from.
+     * @param bool $unverifiedAddress Whether a new identity whose address nothing vouches for still gets an
+     *                                account, the address unverified and linked to nothing (a SAML connection
+     *                                not trusted for addresses: the assertion vouches for the subject).
      */
-    public function __invoke(AssertedIdentity $asserted, array $pools): User|ExternalSignInFailure
-    {
+    public function __invoke(
+        AssertedIdentity $asserted,
+        array $pools,
+        bool $unverifiedAddress = false,
+    ): User|ExternalSignInFailure {
         try {
-            return $this->resolve($asserted, $pools);
+            return $this->resolve($asserted, $pools, $unverifiedAddress);
         } catch (AlreadyExists) {
             // Another request linked this subject, or registered this address, first.
-            return $this->resolve($asserted, $pools);
+            return $this->resolve($asserted, $pools, $unverifiedAddress);
         }
     }
 
     /**
      * @param list<ConnectionName> $pools
      */
-    private function resolve(AssertedIdentity $asserted, array $pools): User|ExternalSignInFailure
-    {
+    private function resolve(
+        AssertedIdentity $asserted,
+        array $pools,
+        bool $unverifiedAddress,
+    ): User|ExternalSignInFailure {
         $linked = $this->identities->find($asserted->provider, $asserted->subject);
         if ($linked !== null) {
             $user = $this->users->find($linked->userId);
@@ -86,6 +95,9 @@ final readonly class ResolveExternalAccount
         }
 
         $email = $asserted->verifiedEmail();
+        if ($email === null && $unverifiedAddress && $asserted->email !== null) {
+            return $this->registerUnverified($asserted, $asserted->email);
+        }
         if ($email === null) {
             return ExternalSignInFailure::NoVerifiedEmail;
         }
@@ -105,6 +117,33 @@ final readonly class ResolveExternalAccount
             if (! $user->isEmailVerified()) {
                 $user->recordEmailVerification(true, $now);
             }
+            $this->users->save($user);
+            $this->identities->add(ExternalIdentity::link($asserted, $user->id, $now));
+
+            return $user;
+        });
+    }
+
+    /**
+     * A new account in the provider's connection, its address unverified: never matched against any
+     * other account, since nothing vouches that the address is this person's. A second account with
+     * the address in that connection is refused by the database, as for any address.
+     */
+    private function registerUnverified(AssertedIdentity $asserted, string $email): User|ExternalSignInFailure
+    {
+        if ($this->users->matchingEmail($email, [$asserted->provider]) !== []) {
+            return ExternalSignInFailure::AddressAlreadyUsed;
+        }
+
+        return $this->transactions->transactional(function () use ($asserted, $email): User {
+            $now = $this->clock->now();
+            $user = User::registerFromAssertion(
+                UserId::generate($this->random),
+                $email,
+                false,
+                $asserted->provider,
+                $now,
+            );
             $this->users->save($user);
             $this->identities->add(ExternalIdentity::link($asserted, $user->id, $now));
 
