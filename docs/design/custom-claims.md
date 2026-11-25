@@ -1,6 +1,6 @@
 # Design: Custom claims in tokens
 
-**Status:** agreed · **Date:** 2026-11-24 · **Issue:** clavia-auth/clavia#17 ·
+**Status:** built · **Date:** 2026-11-24 · **Issue:** clavia-auth/clavia#17 ·
 **Specifications:** RFC 7519 §4 (registered, public and private claim names), RFC 9068 §2.2
 (JWT access tokens; §2.2.3.1 `roles`, `groups`, `entitlements`), OpenID Connect Core 1.0 (§2 the
 ID token, §5.1 standard claims, §5.1.2 additional claims, §5.3 userinfo, §5.4 scopes), RFC 7662
