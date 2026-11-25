@@ -41,6 +41,8 @@ use Clavia\Adapter\Primary\Http\Management\ConnectionMetadataRefreshHandler;
 use Clavia\Adapter\Primary\Http\Management\ConnectionsHandler;
 use Clavia\Adapter\Primary\Http\Management\InitialAccessTokenHandler;
 use Clavia\Adapter\Primary\Http\Management\InitialAccessTokensHandler;
+use Clavia\Adapter\Primary\Http\Management\ProvisioningTokenHandler;
+use Clavia\Adapter\Primary\Http\Management\ProvisioningTokensHandler;
 use Clavia\Adapter\Primary\Http\Management\ManagementApiMiddleware;
 use Clavia\Adapter\Primary\Http\Management\ResourceServerHandler;
 use Clavia\Adapter\Primary\Http\Management\ResourceServersHandler;
@@ -81,6 +83,11 @@ use Clavia\Adapter\Primary\Http\Oidc\DiscoveryHandler;
 use Clavia\Adapter\Primary\Http\Oidc\EndSessionHandler;
 use Clavia\Adapter\Primary\Http\Oidc\JwksHandler;
 use Clavia\Adapter\Primary\Http\Oidc\UserInfoHandler;
+use Clavia\Adapter\Primary\Http\Scim\ProvisioningMiddleware;
+use Clavia\Adapter\Primary\Http\Scim\ScimCatalogueHandler;
+use Clavia\Adapter\Primary\Http\Scim\ScimNotFoundHandler;
+use Clavia\Adapter\Primary\Http\Scim\ScimNotImplementedHandler;
+use Clavia\Adapter\Primary\Http\Scim\ServiceProviderConfigHandler;
 use Clavia\Adapter\Primary\Http\Shared\HealthHandler;
 use Clavia\Configuration\ClientRegistration;
 use Clavia\Configuration\Settings;
@@ -312,6 +319,18 @@ return static function (Application $app, ContainerInterface $container): void {
         ['DELETE'],
         'api.initial-access-token',
     );
+    $app->route(
+        '/api/v1/provisioning-tokens',
+        $management(ProvisioningTokensHandler::class),
+        ['GET', 'POST'],
+        'api.provisioning-tokens',
+    );
+    $app->route(
+        '/api/v1/provisioning-tokens/{provisioning_token_id}',
+        $management(ProvisioningTokenHandler::class),
+        ['GET', 'DELETE'],
+        'api.provisioning-token',
+    );
     $app->route('/api/v1/webhooks', $management(WebhooksHandler::class), ['GET', 'POST'], 'api.webhooks');
     $app->route(
         '/api/v1/webhooks/{webhook_id}',
@@ -351,5 +370,32 @@ return static function (Application $app, ContainerInterface $container): void {
         '/api/v1/roles/{role_id}/users/{user_id}',
         $management(RoleUsersHandler::class),
         'api.role.user',
+    );
+
+    // ── /scim/v2/* — SCIM 2.0 (RFC 7644), the fifth surface: a directory, holding a provisioning
+    // token for one connection, through ProvisioningMiddleware on every route. Never a Management
+    // API token, never the session cookie (docs/design/scim-provisioning.md). ──
+    $scim = static fn (string $handler): array => [ProvisioningMiddleware::class, $handler];
+    $app->get('/scim/v2/ServiceProviderConfig', $scim(ServiceProviderConfigHandler::class), 'scim.config');
+    $app->get(
+        '/scim/v2/{catalogue:ResourceTypes|Schemas}[/{id}]',
+        $scim(ScimCatalogueHandler::class),
+        'scim.catalogue',
+    );
+    // Offered by no directory this is for (§1): 501, as RFC 7644 §3.12 answers a missing feature.
+    $app->post('/scim/v2/Bulk', $scim(ScimNotImplementedHandler::class), 'scim.bulk');
+    $app->route(
+        '/scim/v2/Me',
+        $scim(ScimNotImplementedHandler::class),
+        ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+        'scim.me',
+    );
+    // Anything else under the prefix is a SCIM 404, behind the token like the rest: a caller
+    // without one learns nothing of what exists.
+    $app->route(
+        '/scim/v2[/{path:.*}]',
+        $scim(ScimNotFoundHandler::class),
+        ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+        'scim.not-found',
     );
 };

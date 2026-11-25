@@ -31,6 +31,8 @@ use Clavia\Domain\Connection\Saml\Event\ServiceProviderKeysGenerated;
 use Clavia\Domain\Connection\Saml\Event\ServiceProviderKeysRotated;
 use Clavia\Domain\Oidc\Event\SigningKeyCreated;
 use Clavia\Domain\Oidc\Event\SigningKeyRotated;
+use Clavia\Domain\Provisioning\Event\ProvisioningTokenIssued;
+use Clavia\Domain\Provisioning\Event\ProvisioningTokenRevoked;
 use Clavia\Domain\ResourceServer\Event\ClientAccessGranted;
 use Clavia\Domain\ResourceServer\Event\ResourceServerChanged;
 use Clavia\Domain\ResourceServer\Event\ResourceServerDeleted;
@@ -80,6 +82,8 @@ final readonly class ConfigurationTrail implements EventSubscriber
             ServiceProviderKeysRotated::class => $this->serviceProviderKeysRotated(...),
             InitialAccessTokenIssued::class => $this->initialAccessTokenIssued(...),
             InitialAccessTokenRevoked::class => $this->initialAccessTokenRevoked(...),
+            ProvisioningTokenIssued::class => $this->provisioningTokenIssued(...),
+            ProvisioningTokenRevoked::class => $this->provisioningTokenRevoked(...),
             WebhookCreated::class => $this->webhookCreated(...),
             WebhookChanged::class => $this->webhookChanged(...),
             WebhookDeleted::class => $this->webhookDeleted(...),
@@ -230,6 +234,28 @@ final readonly class ConfigurationTrail implements EventSubscriber
             AuditEventType::InitialAccessTokenRevoked,
             AuditTarget::initialAccessToken($event->token->id),
             ['uses' => $event->token->uses],
+        );
+    }
+
+    /** The connection it reaches and the options, never the secret. */
+    private function provisioningTokenIssued(ProvisioningTokenIssued $event): void
+    {
+        $token = $event->token;
+        $this->audit->record(AuditEventType::ProvisioningTokenIssued, AuditTarget::provisioningToken($token->id), [
+            'connection' => $token->connection->value,
+            'description' => $token->description,
+            'subject_attribute' => $token->subjectAttribute->value,
+            'addresses_trusted' => $token->addressesTrusted,
+            'delete_deactivates' => $token->deleteDeactivates,
+        ]);
+    }
+
+    private function provisioningTokenRevoked(ProvisioningTokenRevoked $event): void
+    {
+        $this->audit->record(
+            AuditEventType::ProvisioningTokenRevoked,
+            AuditTarget::provisioningToken($event->token->id),
+            ['connection' => $event->token->connection->value],
         );
     }
 

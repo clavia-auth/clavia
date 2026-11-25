@@ -77,6 +77,9 @@ enum AuditEventType: string
     case SamlKeyRotated = 'saml_key.rotated';
     case InitialAccessTokenIssued = 'initial_access_token.issued';
     case InitialAccessTokenRevoked = 'initial_access_token.revoked';
+    /** A directory may now provision a connection's accounts through SCIM. */
+    case ProvisioningTokenIssued = 'provisioning_token.issued';
+    case ProvisioningTokenRevoked = 'provisioning_token.revoked';
     case WebhookCreated = 'webhook.created';
     case WebhookUpdated = 'webhook.updated';
     case WebhookDeleted = 'webhook.deleted';

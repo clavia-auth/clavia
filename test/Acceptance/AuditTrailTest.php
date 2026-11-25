@@ -65,7 +65,12 @@ final class AuditTrailTest extends AcceptanceTestCase
         $event = $this->onlyEvent('user.created');
         self::assertSame('success', $event['outcome']);
         self::assertSame(
-            ['kind' => 'application', 'user_id' => null, 'client_id' => self::TEST_M2M_CLIENT_ID],
+            [
+                'kind' => 'application',
+                'user_id' => null,
+                'client_id' => self::TEST_M2M_CLIENT_ID,
+                'provisioning_token_id' => null,
+            ],
             $event['actor'],
         );
         self::assertSame(['type' => 'user', 'id' => $userId], $event['target']);

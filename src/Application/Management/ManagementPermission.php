@@ -68,6 +68,9 @@ enum ManagementPermission: string
     case ReadInitialAccessTokens = 'read:initial_access_tokens';
     case CreateInitialAccessTokens = 'create:initial_access_tokens';
     case DeleteInitialAccessTokens = 'delete:initial_access_tokens';
+    case ReadProvisioningTokens = 'read:provisioning_tokens';
+    case CreateProvisioningTokens = 'create:provisioning_tokens';
+    case DeleteProvisioningTokens = 'delete:provisioning_tokens';
     case ReadWebhooks = 'read:webhooks';
     case CreateWebhooks = 'create:webhooks';
     case UpdateWebhooks = 'update:webhooks';
@@ -104,6 +107,7 @@ enum ManagementPermission: string
             'audit_events' => 'the audit trail',
             'signing_keys' => 'the keys tokens are signed with',
             'webhooks' => 'the endpoints audit events are sent to',
+            'provisioning_tokens' => 'the tokens directories provision accounts with',
             default => 'APIs',
         };
     }

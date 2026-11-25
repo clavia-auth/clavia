@@ -13,12 +13,14 @@ namespace Clavia\Domain\Audit;
 
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\UserId;
+use Clavia\Domain\Provisioning\ProvisioningTokenId;
 
 /**
  * Who did what an audit event records.
  *
  * A person acting through an application keeps both: the operator *and* the dashboard
- * they used, so an action can be traced to the person and to the credential that carried it.
+ * they used, so an action can be traced to the person and to the credential that carried it. A
+ * directory is named by its provisioning token, the credential it holds.
  */
 final readonly class Actor
 {
@@ -26,6 +28,7 @@ final readonly class Actor
         public ActorKind $kind,
         public ?UserId $userId,
         public ?ClientId $clientId,
+        public ?ProvisioningTokenId $provisioningTokenId = null,
     ) {
     }
 
@@ -39,6 +42,12 @@ final readonly class Actor
     public static function application(ClientId $clientId): self
     {
         return new self(ActorKind::Application, null, $clientId);
+    }
+
+    /** A directory, through the provisioning token it holds (SCIM). */
+    public static function provisioning(ProvisioningTokenId $token): self
+    {
+        return new self(ActorKind::Provisioning, null, null, $token);
     }
 
     public static function system(): self
@@ -55,8 +64,12 @@ final readonly class Actor
     /**
      * Read back from storage: the kind and the identifiers it was recorded with.
      */
-    public static function reconstitute(ActorKind $kind, ?UserId $userId, ?ClientId $clientId): self
-    {
-        return new self($kind, $userId, $clientId);
+    public static function reconstitute(
+        ActorKind $kind,
+        ?UserId $userId,
+        ?ClientId $clientId,
+        ?ProvisioningTokenId $provisioningTokenId = null,
+    ): self {
+        return new self($kind, $userId, $clientId, $provisioningTokenId);
     }
 }
