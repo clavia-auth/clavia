@@ -46,6 +46,7 @@ final readonly class Settings
      *
      * @param list<non-empty-string> $trustedProxies
      * @param list<string> $signingRetiredKeyRefs
+     * @param list<string> $samlRetiredEncryptionKeyRefs
      * @param list<string> $scopesSupported
      */
     public function __construct(
@@ -367,9 +368,27 @@ final readonly class Settings
         /**
          * Where the SAML service provider's signing and encryption keys live
          * (docs/design/saml-connections.md §3). `postgres` keeps them sealed with
-         * `secretEncryptionKey`; the KMS backends come with their key references later.
+         * `secretEncryptionKey`; `aws-kms`, `gcp-kms` and `azure-key-vault` keep them in a KMS, named
+         * by the references below.
          */
         public SamlKeyBackend $samlKeyBackend = SamlKeyBackend::Postgres,
+        /**
+         * With a remote SAML key backend: the key version that signs requests and the service
+         * provider's certificates (asymmetric sign, RSA 3072 or 4096). Named as a token key is,
+         * never by an alias.
+         */
+        public ?string $samlSigningKeyRef = null,
+        /** With a remote SAML key backend: the key version assertions are encrypted to (RSA-OAEP). */
+        public ?string $samlEncryptionKeyRef = null,
+        /** The signing key published ahead of a rotation, with its encryption key: both or neither. */
+        public ?string $samlNextSigningKeyRef = null,
+        /** The encryption key published ahead of a rotation. */
+        public ?string $samlNextEncryptionKeyRef = null,
+        /**
+         * Encryption keys no longer published that still decrypt, until identity providers have
+         * moved to the current one.
+         */
+        public array $samlRetiredEncryptionKeyRefs = [],
         /**
          * How long a next pair of SAML service provider keys is published beside the current one
          * before `saml-keys:rotate` promotes it, and how long a retired one still decrypts: the time

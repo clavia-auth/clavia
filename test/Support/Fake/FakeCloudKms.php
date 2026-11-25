@@ -53,6 +53,7 @@ final class FakeCloudKms
 
         return match ([$request->getMethod(), (string) $request->getUri()]) {
             ['POST', GcpKmsKey::API . $this->keyVersion . ':asymmetricSign'] => $this->sign($request),
+            ['POST', GcpKmsKey::API . $this->keyVersion . ':asymmetricDecrypt'] => $this->decrypt($request),
             ['GET', GcpKmsKey::API . $this->keyVersion . '/publicKey'] => new JsonResponse([
                 'pem' => $this->hsm->publicPem(),
                 'algorithm' => $this->algorithm,
@@ -64,6 +65,30 @@ final class FakeCloudKms
                 StatusCodeInterface::STATUS_NOT_FOUND,
             ),
         };
+    }
+
+    /** As Cloud KMS does: with the key version's own OAEP digest, a checksum each way. */
+    private function decrypt(RequestInterface $request): ResponseInterface
+    {
+        /** @var array{ciphertext?: string, ciphertextCrc32c?: string} $body */
+        $body = json_decode((string) $request->getBody(), true, flags: JSON_THROW_ON_ERROR);
+        $ciphertext = base64_decode($body['ciphertext'] ?? '', true);
+        $digest = str_ends_with($this->algorithm, '_SHA1') ? 'sha1' : 'sha256';
+        $plaintext = str_starts_with($this->algorithm, 'RSA_DECRYPT_OAEP_') && is_string($ciphertext)
+            ? $this->hsm->decrypt($ciphertext, $digest)
+            : null;
+        if ($plaintext === null) {
+            return new JsonResponse(
+                ['error' => ['code' => StatusCodeInterface::STATUS_BAD_REQUEST, 'message' => 'Decryption failed.']],
+                StatusCodeInterface::STATUS_BAD_REQUEST,
+            );
+        }
+
+        return new JsonResponse([
+            'plaintext' => base64_encode($plaintext),
+            'plaintextCrc32c' => self::crc32c($plaintext),
+            'verifiedCiphertextCrc32c' => ($body['ciphertextCrc32c'] ?? null) === self::crc32c((string) $ciphertext),
+        ]);
     }
 
     private function sign(RequestInterface $request): ResponseInterface

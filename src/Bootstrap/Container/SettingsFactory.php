@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Bootstrap\EnvironmentVariables;
+use Clavia\Bootstrap\SamlKeyReferences;
 use Clavia\Configuration\Settings;
 use Psr\Container\ContainerInterface;
 
@@ -25,6 +26,9 @@ final class SettingsFactory
         /** @var array{clavia: array{project_root: string}} $config */
         $config = $container->get('config');
 
-        return Settings::fromEnvironment(EnvironmentVariables::load($config['clavia']['project_root']));
+        $settings = Settings::fromEnvironment(EnvironmentVariables::load($config['clavia']['project_root']));
+        SamlKeyReferences::check($settings);
+
+        return $settings;
     }
 }

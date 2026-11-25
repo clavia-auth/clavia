@@ -51,16 +51,28 @@ final readonly class GcpKmsKey implements RemoteSigningKey
         private AccessTokens $tokens,
         string $reference,
     ) {
+        $this->reference = self::checked($reference);
+    }
+
+    /**
+     * `$reference`, if it names one key version for good.
+     *
+     * @return non-empty-string
+     *
+     * @throws InvalidKeyReference
+     */
+    public static function checked(string $reference): string
+    {
         if (preg_match(self::KEY_VERSION, $reference) !== 1) {
             throw new InvalidKeyReference(sprintf(
-                'A Google Cloud KMS signing key is named by its key version, '
+                'A Google Cloud KMS key is named by its key version, '
                 . "'projects/…/locations/…/keyRings/…/cryptoKeys/…/cryptoKeyVersions/N', not %s.",
                 var_export($reference, true),
             ));
         }
         assert($reference !== '');
 
-        $this->reference = $reference;
+        return $reference;
     }
 
     /** Whether Cloud KMS's algorithm `$name` is the primitive `$algorithm` names. */

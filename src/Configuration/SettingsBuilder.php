@@ -367,6 +367,8 @@ final class SettingsBuilder
     {
         $env = $this->quote($settings->env->value);
 
+        $this->refuseUnusableSamlKeys($settings);
+
         if ($settings->signingBackend !== 'postgres' && $settings->signingKeyRef === null) {
             throw new InvalidSettings(sprintf(
                 "CLAVIA_SIGNING_BACKEND=%s requires CLAVIA_SIGNING_KEY_REF naming the provider's key.",
@@ -450,6 +452,55 @@ final class SettingsBuilder
                 sprintf('CLAVIA_OUTBOUND_ALLOW_PRIVATE_ADDRESSES is true but CLAVIA_ENV is %s. ', $env)
                 . 'It disables the guard that keeps operator-supplied URLs from steering this server at its own '
                 . 'network, and is only permitted when CLAVIA_ENV=development.',
+            );
+        }
+    }
+
+    /**
+     * The SAML service provider's keys (docs/design/saml-connections.md §3): a remote backend names
+     * both keys, a next pair whole or not at all, every reference once; `postgres` names none.
+     * Whether each reference names one immutable key version is the composition root's to check,
+     * which knows each provider's form, and calls none of them.
+     *
+     * @throws InvalidSettings
+     */
+    private function refuseUnusableSamlKeys(Settings $settings): void
+    {
+        $backend = $this->quote($settings->samlKeyBackend->value);
+        $references = array_values(array_filter([
+            $settings->samlSigningKeyRef,
+            $settings->samlEncryptionKeyRef,
+            $settings->samlNextSigningKeyRef,
+            $settings->samlNextEncryptionKeyRef,
+            ...$settings->samlRetiredEncryptionKeyRefs,
+        ], static fn (?string $reference): bool => $reference !== null));
+
+        if (! $settings->samlKeyBackend->isRemote()) {
+            if ($references !== []) {
+                throw new InvalidSettings(
+                    'CLAVIA_SAML_*_KEY_REF name keys of a remote CLAVIA_SAML_KEY_BACKEND; the postgres backend '
+                    . 'makes and rotates its own (`clavia saml-keys:rotate`).',
+                );
+            }
+
+            return;
+        }
+        if ($settings->samlSigningKeyRef === null || $settings->samlEncryptionKeyRef === null) {
+            throw new InvalidSettings(sprintf(
+                'CLAVIA_SAML_KEY_BACKEND=%s requires CLAVIA_SAML_SIGNING_KEY_REF and CLAVIA_SAML_ENCRYPTION_KEY_REF '
+                . "naming the provider's keys.",
+                $backend,
+            ));
+        }
+        if (($settings->samlNextSigningKeyRef === null) !== ($settings->samlNextEncryptionKeyRef === null)) {
+            throw new InvalidSettings(
+                'CLAVIA_SAML_NEXT_SIGNING_KEY_REF and CLAVIA_SAML_NEXT_ENCRYPTION_KEY_REF are a pair: name both, '
+                . 'or neither.',
+            );
+        }
+        if (count(array_unique($references)) !== count($references)) {
+            throw new InvalidSettings(
+                'The CLAVIA_SAML_*_KEY_REF settings name each key once: one key, one usage, one place in the rotation.',
             );
         }
     }

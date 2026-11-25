@@ -925,9 +925,16 @@ those are the ones worth having in production.
   only), and never returns a private key. One pair, RSA 3072, for the deployment: a signing key and
   an encryption key (one key, one usage), each published as a self-signed certificate built by hand
   (`Signing\X509\SelfSignedCertificate`, the encryption key's signed by the signing key, a known
-  answer pinned). With `CLAVIA_SAML_KEY_BACKEND=postgres` (the only backend yet) they are sealed
-  under `saml-sp:<kid>` and opened only in `PostgresServiceProviderKeys::sign()` and `decryptKey()`;
-  `PostgresServiceProviderKeyStore` makes and seals them. Rotation is a rollover in steps
+  answer pinned). With `CLAVIA_SAML_KEY_BACKEND=postgres` they are sealed under `saml-sp:<kid>` and
+  opened only in `PostgresServiceProviderKeys::sign()` and `decryptKey()`; `PostgresServiceProviderKeyStore`
+  makes and seals them. With `aws-kms`, `gcp-kms` or `azure-key-vault` they never exist here
+  (`Saml\Remote\RemoteServiceProviderKeys`): `CLAVIA_SAML_SIGNING_KEY_REF` and
+  `CLAVIA_SAML_ENCRYPTION_KEY_REF` name them (a `NEXT_` pair, `RETIRED_ENCRYPTION_KEY_REFS`), each
+  checked for its provider's form when the settings load (`Bootstrap\SamlKeyReferences`, an alias
+  is exit 78, no provider called); signing reuses the token signers' keys (a digest, the signature
+  verified before use), decrypting is `RemoteDecryptionKey` beside them; certificates are built once
+  through the KMS and kept in `saml_remote_certificates`, so the metadata never calls it; there is no
+  store, and `POST /api/v1/saml-keys/rotate` is `409`. Rotation (postgres) is a rollover in steps
   (`RotateServiceProviderKeys`, `saml-keys:rotate`, `POST /api/v1/saml-keys/rotate`): a next pair
   published, promoted after `CLAVIA_SAML_KEY_OVERLAP_DAYS` (14), the old pair retired, deleted after
   as long again. `GET /api/v1/saml-keys` (`read:signing_keys`) shows certificates, never keys.

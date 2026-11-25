@@ -13,6 +13,7 @@ namespace Clavia\Adapter\Primary\Http\Management;
 
 use Clavia\Application\Connection\Saml\ListServiceProviderKeys;
 use Clavia\Application\Connection\Saml\RotateServiceProviderKeys;
+use Clavia\Application\Management\Conflict;
 use Clavia\Application\Port\EncryptionUnavailable;
 use Fig\Http\Message\StatusCodeInterface;
 use LogicException;
@@ -27,9 +28,10 @@ use Psr\Http\Server\RequestHandlerInterface;
  */
 final readonly class SamlKeysHandler implements RequestHandlerInterface
 {
+    /** @param RotateServiceProviderKeys|null $rotate Null when the keys are a KMS's: rotated there. */
     public function __construct(
         private ListServiceProviderKeys $list,
-        private RotateServiceProviderKeys $rotate,
+        private ?RotateServiceProviderKeys $rotate,
         private ManagementResponder $responder,
     ) {
     }
@@ -46,6 +48,12 @@ final readonly class SamlKeysHandler implements RequestHandlerInterface
             throw new LogicException('Routed with a method the handler does not serve.');
         }
 
+        if ($this->rotate === null) {
+            throw new Conflict(
+                'This deployment keeps its SAML keys in a KMS: rotate them there, and name the new ones in the '
+                . 'CLAVIA_SAML_*_KEY_REF settings.',
+            );
+        }
         try {
             $rotation = ($this->rotate)();
         } catch (EncryptionUnavailable $unavailable) {

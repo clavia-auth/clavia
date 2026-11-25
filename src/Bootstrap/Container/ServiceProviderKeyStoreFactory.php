@@ -15,6 +15,7 @@ use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use Clavia\Adapter\Secondary\Saml\Postgres\PostgresServiceProviderKeyStore;
 use Clavia\Application\Port\Saml\ServiceProviderKeyStore;
 use Clavia\Application\Port\SecretCipher;
+use Clavia\Configuration\InvalidSettings;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Shared\RandomSource;
 use Psr\Container\ContainerInterface;
@@ -25,6 +26,14 @@ final class ServiceProviderKeyStoreFactory
     {
         /** @var Settings $settings */
         $settings = $container->get(Settings::class);
+        if ($settings->samlKeyBackend->isRemote()) {
+            // An operator who put the keys in a KMS must never end up with keys in PostgreSQL unawares.
+            throw new InvalidSettings(sprintf(
+                "CLAVIA_SAML_KEY_BACKEND='%s' keeps the keys at the provider: create and rotate them there, and "
+                . 'name them with the CLAVIA_SAML_*_KEY_REF settings.',
+                $settings->samlKeyBackend->value,
+            ));
+        }
         /** @var Database $database */
         $database = $container->get(Database::class);
         /** @var SecretCipher $cipher */
@@ -32,12 +41,6 @@ final class ServiceProviderKeyStoreFactory
         /** @var RandomSource $random */
         $random = $container->get(RandomSource::class);
 
-        // `postgres` is the only backend yet; a KMS one has no store (docs/design/saml-connections.md §3).
-        $host = parse_url($settings->issuerUrl, PHP_URL_HOST);
-        if (! is_string($host) || $host === '') {
-            throw new \LogicException('The issuer has no host.');
-        }
-
-        return new PostgresServiceProviderKeyStore($database, $cipher, $random, $host);
+        return new PostgresServiceProviderKeyStore($database, $cipher, $random, SamlServiceProviderHost::of($settings));
     }
 }

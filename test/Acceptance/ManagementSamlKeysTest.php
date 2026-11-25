@@ -40,6 +40,7 @@ final class ManagementSamlKeysTest extends AcceptanceTestCase
     use ManagementFixtures;
 
     private const int DAY = 86_400;
+    private const string ARN = 'arn:aws:kms:eu-west-1:111122223333:key/1234abcd-12ab-34cd-56ef-12345678900';
 
     #[\Override]
     protected function setUp(): void
@@ -122,6 +123,26 @@ final class ManagementSamlKeysTest extends AcceptanceTestCase
                 'SELECT count(*) FROM audit_events WHERE type = :type',
                 ['type' => AuditEventType::SamlKeyRotated->value],
             ),
+        );
+    }
+
+    public function testKeysInAKmsAreRotatedThereNotHere(): void
+    {
+        $this->boot([
+            'CLAVIA_SAML_KEY_BACKEND' => 'aws-kms',
+            'CLAVIA_SAML_SIGNING_KEY_REF' => self::ARN . '1',
+            'CLAVIA_SAML_ENCRYPTION_KEY_REF' => self::ARN . '2',
+        ]);
+        $this->adminToken();
+
+        $refused = $this->api('POST', '/api/v1/saml-keys/rotate');
+
+        self::assertSame(StatusCodeInterface::STATUS_CONFLICT, $refused->getStatusCode());
+        self::assertStringContainsString('KMS', (string) $refused->getBody());
+        self::assertSame(
+            0,
+            (int) TestStorage::database()->fetchValue('SELECT count(*) FROM saml_service_provider_keys'),
+            'Nothing made here.',
         );
     }
 

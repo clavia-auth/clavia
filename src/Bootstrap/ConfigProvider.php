@@ -125,6 +125,7 @@ use Clavia\Adapter\Secondary\IdentityProvider\JwksCache;
 use Clavia\Adapter\Secondary\IdentityProvider\ProviderHttp;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use Clavia\Adapter\Secondary\Redis\RedisConnection;
+use Clavia\Adapter\Secondary\Saml\Remote\CertificateCache;
 use Clavia\Adapter\Secondary\Signing\Jose\JoseSignatureVerifier;
 use Clavia\Adapter\Secondary\Signing\Remote\PublicKeyCache;
 use Clavia\Adapter\Secondary\System\AfterResponseTasks;
@@ -753,6 +754,7 @@ final class ConfigProvider
                     SigningKeyStore::class => Container\SigningKeyStoreFactory::class,
                     ServiceProviderKeyStore::class => Container\ServiceProviderKeyStoreFactory::class,
                     ServiceProviderKeys::class => Container\ServiceProviderKeysFactory::class,
+                    CertificateCache::class => Container\SamlCertificateCacheFactory::class,
 
                     // Primary adapter: HTTP
                     HealthHandler::class => Container\HealthHandlerFactory::class,

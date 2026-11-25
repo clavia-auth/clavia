@@ -20,6 +20,7 @@ use Clavia\Application\Port\Saml\ServiceProviderKeyStore;
 use Clavia\Application\Port\SigningFailed;
 use Clavia\Domain\Connection\Saml\ServiceProviderKeyStatus;
 use ClaviaTest\Support\Contract\ServiceProviderKeysContract;
+use ClaviaTest\Support\Contract\ServiceProviderKeyStoreContract;
 use ClaviaTest\Support\IntegrationTestCase;
 use ClaviaTest\Support\TestEnvironment;
 use ClaviaTest\Support\TestStorage;
@@ -30,6 +31,7 @@ use Throwable;
 final class PostgresServiceProviderKeysTest extends IntegrationTestCase
 {
     use ServiceProviderKeysContract;
+    use ServiceProviderKeyStoreContract;
 
     private AesGcmSecretCipher $cipher;
 
@@ -50,6 +52,23 @@ final class PostgresServiceProviderKeysTest extends IntegrationTestCase
             'auth.clavia.test',
             2048,
         );
+    }
+
+    #[\Override]
+    protected function arrange(bool $next = false, bool $retired = false): void
+    {
+        $store = $this->serviceProviderKeyStore();
+        $moment = new \DateTimeImmutable('2026-03-04T09:00:00Z');
+        if ($retired) {
+            $old = $store->createPair(\Clavia\Domain\Connection\Saml\ServiceProviderKeyStatus::Current, $moment);
+            $store->save($old['signing']->retired($moment));
+            $store->save($old['encryption']->retired($moment));
+            $store->delete($old['signing']->kid);
+        }
+        $store->createPair(\Clavia\Domain\Connection\Saml\ServiceProviderKeyStatus::Current, $moment);
+        if ($next) {
+            $store->createPair(\Clavia\Domain\Connection\Saml\ServiceProviderKeyStatus::Next, $moment);
+        }
     }
 
     #[\Override]

@@ -105,7 +105,8 @@ tags:
       This server's own keys as a SAML service provider: one that signs its requests, one that
       identity providers encrypt assertions to, each published as a self-signed certificate in the
       service provider metadata. Never any key material: certificates are public, the private halves
-      stay in their backend (sealed in PostgreSQL with the `postgres` backend).
+      stay in their backend (sealed in PostgreSQL with the `postgres` backend, or in a KMS, which
+      never lets them out; their certificates are then built once through the KMS and kept).
 
       A rotation is a rollover in steps: a **next** pair is published beside the current one, and
       promoted once identity providers have had `CLAVIA_SAML_KEY_OVERLAP_DAYS` to read it; the pair
@@ -1778,6 +1779,10 @@ paths:
         when it can be promoted. Before then nothing changes (`waiting`). After, the next pair becomes
         current and the one it replaces is retired (`promoted`). Retired keys past their overlap are
         deleted at every step. Recorded as `saml_key.generated` or `saml_key.rotated`.
+
+        With the keys in a KMS (`CLAVIA_SAML_KEY_BACKEND` other than `postgres`) the rotation is the
+        operator's: a new key version made there and named as the next pair, then as the current
+        one, the old encryption key listed as retired. This answers 409.
       security:
         - managementToken: [create:signing_keys]
       responses:
@@ -1796,6 +1801,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
