@@ -60,6 +60,7 @@ final class FakeKeyVault
 
         return match ([$request->getMethod(), (string) $request->getUri()->withQuery('')]) {
             ['POST', $this->keyUrl . '/sign'] => $this->sign($request, $kid),
+            ['POST', $this->keyUrl . '/decrypt'] => $this->decrypt($request, $kid),
             ['GET', $this->keyUrl] => new JsonResponse([
                 'key' => [
                     'kid' => $kid,
@@ -75,6 +76,23 @@ final class FakeKeyVault
                 StatusCodeInterface::STATUS_NOT_FOUND,
             ),
         };
+    }
+
+    private function decrypt(RequestInterface $request, string $kid): ResponseInterface
+    {
+        /** @var array{alg?: string, value?: string} $body */
+        $body = json_decode((string) $request->getBody(), true, flags: JSON_THROW_ON_ERROR);
+        $digest = ['RSA-OAEP' => 'sha1', 'RSA-OAEP-256' => 'sha256'][$body['alg'] ?? ''] ?? null;
+        $plaintext = in_array('decrypt', $this->operations, true) && $digest !== null
+            ? $this->hsm->decrypt(Base64Url::decode($body['value'] ?? ''), $digest)
+            : null;
+
+        return $plaintext === null
+            ? new JsonResponse(
+                ['error' => ['code' => 'BadParameter', 'message' => 'Decryption failed.']],
+                StatusCodeInterface::STATUS_BAD_REQUEST,
+            )
+            : new JsonResponse(['kid' => $kid, 'value' => Base64Url::encode($plaintext)]);
     }
 
     private function sign(RequestInterface $request, string $kid): ResponseInterface

@@ -15,6 +15,7 @@ use Clavia\Adapter\Primary\Http\Management\ManagementResponder;
 use Clavia\Adapter\Primary\Http\Management\SamlKeysHandler;
 use Clavia\Application\Connection\Saml\ListServiceProviderKeys;
 use Clavia\Application\Connection\Saml\RotateServiceProviderKeys;
+use Clavia\Configuration\Settings;
 use Psr\Container\ContainerInterface;
 
 final class SamlKeysHandlerFactory
@@ -23,8 +24,10 @@ final class SamlKeysHandlerFactory
     {
         /** @var ListServiceProviderKeys $list */
         $list = $container->get(ListServiceProviderKeys::class);
-        /** @var RotateServiceProviderKeys $rotate */
-        $rotate = $container->get(RotateServiceProviderKeys::class);
+        /** @var Settings $settings */
+        $settings = $container->get(Settings::class);
+        /** @var RotateServiceProviderKeys|null $rotate */
+        $rotate = $settings->samlKeyBackend->isRemote() ? null : $container->get(RotateServiceProviderKeys::class);
         /** @var ManagementResponder $responder */
         $responder = $container->get(ManagementResponder::class);
 

@@ -375,3 +375,20 @@ What slice 2 (#123) settled:
 - **The certificate builder lives in `Signing\X509`**, beside the token signers, and takes a signing
   closure: the `postgres` store hands it the key it just made; a KMS backend will hand it its API.
 
+What slice 3 (#124) settled:
+
+- **Decryption is an interface of its own** (`RemoteDecryptionKey`, one class per provider), beside
+  the token signers' `RemoteSigningKey` rather than added to it: an operator's own signing backend
+  class implements that interface, and would break. Signing reuses the token signers' keys as they
+  are (RSASSA-PKCS1-v1_5 over a SHA-256 digest is what RS256 already asks of them).
+- **Only the three built-in providers** hold SAML keys; an operator's own class
+  (`CLAVIA_SIGNING_BACKEND` may name one) is not offered for SAML.
+- **Cloud KMS fixes the OAEP digest per key version** (`RSA_DECRYPT_OAEP_<bits>_SHA1` or `_SHA256`):
+  a content key wrapped with the other is refused before Cloud KMS is asked. AWS KMS and Key Vault take
+  either.
+- **Certificates are cached in `saml_remote_certificates`**, by reference, the first one written kept:
+  a reference names one immutable key version, so its certificate never goes stale. A retired
+  encryption key's certificate is signed by the current signing key.
+- **References are checked when the settings load** (`Bootstrap\SamlKeyReferences`), in each
+  provider's form, so a bad one stops `bin/clavia` (78) without a provider called.
+

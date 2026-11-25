@@ -292,13 +292,43 @@ final class SettingsTest extends TestCase
         );
     }
 
-    public function testASamlKeyBackendNotBuiltYetRefusesToBoot(): void
+    public function testARemoteSamlKeyBackendNamesBothKeysANextPairWholeAndEachKeyOnce(): void
     {
-        // The KMS backends come with their key references; until then, no silent fallback to none.
-        $this->expectException(InvalidSettings::class);
-        $this->expectExceptionMessageIsOrContains('CLAVIA_SAML_KEY_BACKEND');
+        $arn = static fn (int $n): string
+            => 'arn:aws:kms:eu-west-1:111122223333:key/1234abcd-12ab-34cd-56ef-12345678900' . $n;
+        $remote = ['CLAVIA_SAML_KEY_BACKEND' => 'aws-kms'];
+        $settings = Settings::fromEnvironment(self::MINIMAL + $remote + [
+            'CLAVIA_SAML_SIGNING_KEY_REF' => $arn(1),
+            'CLAVIA_SAML_ENCRYPTION_KEY_REF' => $arn(2),
+            'CLAVIA_SAML_NEXT_SIGNING_KEY_REF' => $arn(3),
+            'CLAVIA_SAML_NEXT_ENCRYPTION_KEY_REF' => $arn(4),
+            'CLAVIA_SAML_RETIRED_ENCRYPTION_KEY_REFS' => $arn(5),
+        ]);
+        self::assertSame(SamlKeyBackend::AwsKms, $settings->samlKeyBackend);
+        self::assertSame([$arn(5)], $settings->samlRetiredEncryptionKeyRefs);
 
-        Settings::fromEnvironment(self::MINIMAL + ['CLAVIA_SAML_KEY_BACKEND' => 'aws-kms']);
+        $refused = [
+            'no reference' => $remote,
+            'no encryption key' => $remote + ['CLAVIA_SAML_SIGNING_KEY_REF' => $arn(1)],
+            'half a next pair' => $remote + [
+                'CLAVIA_SAML_SIGNING_KEY_REF' => $arn(1),
+                'CLAVIA_SAML_ENCRYPTION_KEY_REF' => $arn(2),
+                'CLAVIA_SAML_NEXT_SIGNING_KEY_REF' => $arn(3),
+            ],
+            'one key twice' => $remote + [
+                'CLAVIA_SAML_SIGNING_KEY_REF' => $arn(1),
+                'CLAVIA_SAML_ENCRYPTION_KEY_REF' => $arn(1),
+            ],
+            'references with postgres' => ['CLAVIA_SAML_SIGNING_KEY_REF' => $arn(1)],
+        ];
+        foreach ($refused as $case => $variables) {
+            try {
+                Settings::fromEnvironment(self::MINIMAL + $variables);
+                self::fail($case . ' was accepted.');
+            } catch (InvalidSettings $refusal) {
+                self::assertStringContainsString('CLAVIA_SAML_', $refusal->getMessage(), $case);
+            }
+        }
     }
 
     public function testTheSamlKeyOverlapIsADayToNinetyDays(): void

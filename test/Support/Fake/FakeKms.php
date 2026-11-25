@@ -33,6 +33,9 @@ final class FakeKms
     /** @var list<string> */
     public array $signingAlgorithms = ['RSASSA_PKCS1_V1_5_SHA_256', 'RSASSA_PSS_SHA_256'];
 
+    /** @var list<string> For an ENCRYPT_DECRYPT key. */
+    public array $encryptionAlgorithms = ['RSAES_OAEP_SHA_1', 'RSAES_OAEP_SHA_256'];
+
     public ?string $refusal = null;
 
     public function __construct(private readonly LocalHsm $hsm = new LocalHsm())
@@ -52,11 +55,14 @@ final class FakeKms
 
             return match ($command->getName()) {
                 'Sign' => new Result(['Signature' => $this->sign($command)]),
+                'Decrypt' => $this->decrypt($command),
                 'GetPublicKey' => new Result([
                     'KeyId' => $command['KeyId'],
                     'KeyUsage' => $this->keyUsage,
                     'KeySpec' => 'RSA_2048',
-                    'SigningAlgorithms' => $this->signingAlgorithms,
+                    ...($this->keyUsage === 'ENCRYPT_DECRYPT'
+                        ? ['EncryptionAlgorithms' => $this->encryptionAlgorithms]
+                        : ['SigningAlgorithms' => $this->signingAlgorithms]),
                     'PublicKey' => $this->hsm->publicDer(),
                 ]),
                 default => new AwsException('unexpected', $command),
@@ -70,6 +76,23 @@ final class FakeKms
             'credentials' => ['key' => 'AKIDEXAMPLE', 'secret' => 'secret'],
             'handler' => $handler,
         ]);
+    }
+
+    private function decrypt(CommandInterface $command): Result|AwsException
+    {
+        $digests = ['RSAES_OAEP_SHA_1' => 'sha1', 'RSAES_OAEP_SHA_256' => 'sha256'];
+        /** @var mixed $algorithm */
+        $algorithm = $command['EncryptionAlgorithm'];
+        $digest = is_string($algorithm) ? ($digests[$algorithm] ?? null) : null;
+        /** @var mixed $blob */
+        $blob = $command['CiphertextBlob'];
+        $plaintext = $this->keyUsage === 'ENCRYPT_DECRYPT' && $digest !== null && is_string($blob)
+            ? $this->hsm->decrypt($blob, $digest)
+            : null;
+
+        return $plaintext === null
+            ? new AwsException('refused', $command, ['code' => 'InvalidCiphertextException', 'message' => 'No.'])
+            : new Result(['Plaintext' => $plaintext, 'KeyId' => $command['KeyId']]);
     }
 
     private function sign(CommandInterface $command): string

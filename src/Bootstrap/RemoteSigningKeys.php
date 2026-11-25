@@ -12,6 +12,10 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap;
 
 use Aws\Kms\KmsClient;
+use Clavia\Adapter\Secondary\Saml\Remote\AwsKmsDecryptionKey;
+use Clavia\Adapter\Secondary\Saml\Remote\AzureKeyVaultDecryptionKey;
+use Clavia\Adapter\Secondary\Saml\Remote\GcpKmsDecryptionKey;
+use Clavia\Adapter\Secondary\Saml\Remote\RemoteDecryptionKey;
 use Clavia\Adapter\Secondary\Signing\Remote\AccessTokens;
 use Clavia\Adapter\Secondary\Signing\Remote\Aws\AwsKmsKey;
 use Clavia\Adapter\Secondary\Signing\Remote\Azure\AzureKeyVaultKey;
@@ -60,21 +64,82 @@ final class RemoteSigningKeys
      */
     public function key(string $reference): RemoteSigningKey
     {
+        return $this->keyFor($this->settings->signingBackend, $reference);
+    }
+
+    /**
+     * A signing key of `$backend`, which need not be the token signers' (the SAML service provider's
+     * keys have a backend of their own).
+     *
+     * @throws InvalidSettings
+     */
+    public function keyFor(string $backend, string $reference): RemoteSigningKey
+    {
         try {
-            return match ($this->settings->signingBackend) {
-                SigningBackend::AWS_KMS => $this->aws($reference),
+            return match ($backend) {
+                SigningBackend::AWS_KMS => new AwsKmsKey($this->awsClient($backend, $reference), $reference),
                 SigningBackend::GCP_KMS => $this->gcp($reference),
                 SigningBackend::AZURE_KEY_VAULT => $this->azure($reference),
-                default => $this->custom($this->settings->signingBackend, $reference),
+                default => $this->custom($backend, $reference),
             };
         } catch (InvalidKeyReference $invalid) {
             throw new InvalidSettings($invalid->getMessage(), previous: $invalid);
         }
     }
 
-    private function aws(string $reference): AwsKmsKey
+    /**
+     * A key of `$backend` that decrypts with RSA-OAEP: the SAML service provider's encryption key.
+     *
+     * @throws InvalidSettings
+     */
+    public function decryptionKeyFor(string $backend, string $reference): RemoteDecryptionKey
     {
-        self::requirePackage(KmsClient::class, SigningBackend::AWS_KMS, 'aws/aws-sdk-php');
+        try {
+            return match ($backend) {
+                SigningBackend::AWS_KMS => new AwsKmsDecryptionKey($this->awsClient($backend, $reference), $reference),
+                SigningBackend::GCP_KMS => new GcpKmsDecryptionKey(
+                    $this->api('Google Cloud KMS'),
+                    $this->googleTokens(),
+                    $reference,
+                ),
+                SigningBackend::AZURE_KEY_VAULT => new AzureKeyVaultDecryptionKey(
+                    $this->api('Azure Key Vault'),
+                    $this->tokens[AzureKeyVaultKey::scopeFor($reference)] ??= $this->azureCredential(
+                        AzureKeyVaultKey::scopeFor($reference),
+                    ),
+                    $reference,
+                ),
+                default => throw new InvalidSettings(sprintf('%s keeps no decryption key.', $backend)),
+            };
+        } catch (InvalidKeyReference $invalid) {
+            throw new InvalidSettings($invalid->getMessage(), previous: $invalid);
+        }
+    }
+
+    /**
+     * Whether `$reference` names one key version for good, in `$backend`'s own form: no provider is
+     * called. An alias, which can be repointed at another key, is refused.
+     *
+     * @throws InvalidSettings
+     */
+    public static function check(string $backend, string $reference): void
+    {
+        try {
+            match ($backend) {
+                SigningBackend::AWS_KMS => AwsKmsKey::checked($reference),
+                SigningBackend::GCP_KMS => GcpKmsKey::checked($reference),
+                SigningBackend::AZURE_KEY_VAULT => AzureKeyVaultKey::scopeFor($reference),
+                default => null,
+            };
+        } catch (InvalidKeyReference $invalid) {
+            throw new InvalidSettings($invalid->getMessage(), previous: $invalid);
+        }
+    }
+
+    /** @throws InvalidKeyReference|InvalidSettings */
+    private function awsClient(string $backend, string $reference): KmsClient
+    {
+        self::requirePackage(KmsClient::class, $backend, 'aws/aws-sdk-php');
         // Before the client: a reference that cannot be used is the error to report.
         $reference = AwsKmsKey::checked($reference);
 
@@ -105,22 +170,25 @@ final class RemoteSigningKeys
             ), previous: $unusable);
         }
 
-        return new AwsKmsKey($client, $reference);
+        return $client;
     }
 
     private function gcp(string $reference): GcpKmsKey
     {
+        return new GcpKmsKey($this->api('Google Cloud KMS'), $this->googleTokens(), $reference);
+    }
+
+    private function googleTokens(): AccessTokens
+    {
         self::requirePackage(ApplicationDefaultCredentials::class, SigningBackend::GCP_KMS, 'google/auth');
 
-        $tokens = $this->tokens[GoogleCredentials::SCOPE] ??= new GoogleCredentials(
+        return $this->tokens[GoogleCredentials::SCOPE] ??= new GoogleCredentials(
             static function (): FetchAuthTokenInterface {
                 /** @var FetchAuthTokenInterface */
                 return ApplicationDefaultCredentials::getCredentials(GoogleCredentials::SCOPE);
             },
             $this->clock(),
         );
-
-        return new GcpKmsKey($this->api('Google Cloud KMS'), $tokens, $reference);
     }
 
     private function azure(string $reference): AzureKeyVaultKey

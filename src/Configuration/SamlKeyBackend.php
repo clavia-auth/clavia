@@ -13,12 +13,27 @@ namespace Clavia\Configuration;
 
 /**
  * Where this server's SAML service provider keys live (`CLAVIA_SAML_KEY_BACKEND`,
- * docs/design/saml-connections.md §3). `postgres` only for now: the KMS backends (`aws-kms`,
- * `gcp-kms`, `azure-key-vault`) come with their key references in a later slice, and until then
- * naming one refuses to boot rather than running without keys.
+ * docs/design/saml-connections.md §3): generated here and sealed, or kept in a KMS that never lets
+ * them out and named by the `CLAVIA_SAML_*_KEY_REF` settings. The same choice as
+ * `CLAVIA_SIGNING_BACKEND`, made apart, because the keys and their usages differ.
  */
 enum SamlKeyBackend: string
 {
     /** Generated here, sealed with `CLAVIA_SECRET_ENCRYPTION_KEY`: extractable, as token keys in `postgres` are. */
     case Postgres = 'postgres';
+
+    /** AWS KMS: a `SIGN_VERIFY` key and an `ENCRYPT_DECRYPT` key, named by ARN or id. */
+    case AwsKms = 'aws-kms';
+
+    /** Google Cloud KMS: an `ASYMMETRIC_SIGN` and an `ASYMMETRIC_DECRYPT` key version. */
+    case GcpKms = 'gcp-kms';
+
+    /** Azure Key Vault or Managed HSM: two RSA keys, by versioned URL. */
+    case AzureKeyVault = 'azure-key-vault';
+
+    /** Whether the keys are the provider's: rotation is the operator's there. */
+    public function isRemote(): bool
+    {
+        return $this !== self::Postgres;
+    }
 }

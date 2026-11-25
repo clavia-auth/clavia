@@ -80,4 +80,18 @@ final readonly class LocalHsm
     {
         return TestSigningKeys::publicJwk($this->index)->kid;
     }
+
+    /** RSA-OAEP decryption, MGF1 over the same digest, as the KMSs do; null when it does not decrypt. */
+    public function decrypt(string $ciphertext, string $digest): ?string
+    {
+        $ok = @openssl_private_decrypt(
+            $ciphertext,
+            $plaintext,
+            TestSigningKeys::privateKey($this->index),
+            OPENSSL_PKCS1_OAEP_PADDING,
+            $digest,
+        );
+
+        return $ok && $plaintext !== '' ? $plaintext : null;
+    }
 }

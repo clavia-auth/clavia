@@ -8,6 +8,14 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ### Added
 
+- **SAML service provider keys in a KMS** (#124): `CLAVIA_SAML_KEY_BACKEND` takes `aws-kms`,
+  `gcp-kms` and `azure-key-vault`, the keys named by `CLAVIA_SAML_SIGNING_KEY_REF` and
+  `CLAVIA_SAML_ENCRYPTION_KEY_REF` (a key version, never an alias), with
+  `CLAVIA_SAML_NEXT_SIGNING_KEY_REF` and `CLAVIA_SAML_NEXT_ENCRYPTION_KEY_REF` ahead of a rotation and
+  `CLAVIA_SAML_RETIRED_ENCRYPTION_KEY_REFS` after one. Requests are signed and content keys decrypted
+  by the KMS; the private halves never reach this server. Rotate at the provider: the rotate operation
+  answers `409`. **Migration `0045`**.
+
 - **SAML service provider keys** (#123), ahead of SAML connections: a signing key and an encryption key
   (RSA 3072), sealed in PostgreSQL, each with a self-signed certificate. `bin/clavia saml-keys:generate`,
   `saml-keys:rotate` (a next pair published, promoted after `CLAVIA_SAML_KEY_OVERLAP_DAYS`, 14 by
