@@ -77,6 +77,35 @@ final class User
     }
 
     /**
+     * Create an account for a person a SAML identity provider vouches for (docs/design/saml-connections.md
+     * §2, "The address"): the signed assertion names a stable subject, which is the identity, but SAML
+     * says nothing of whether the address was verified. It is verified only when the operator trusts the
+     * identity provider for it; otherwise the account keeps it unverified, and it links to nothing.
+     *
+     * @throws InvalidValue When the email address cannot be one.
+     */
+    public static function registerFromAssertion(
+        UserId $id,
+        string $email,
+        bool $emailVerified,
+        ConnectionName $connection,
+        DateTimeImmutable $now,
+    ): self {
+        return new self(
+            $id,
+            self::email($email),
+            null,
+            $emailVerified,
+            true,
+            Profile::empty(),
+            $now,
+            $now,
+            $connection,
+            AppMetadata::empty(),
+        );
+    }
+
+    /**
      * Create an account for a person whose address something vouched for — an external
      * provider reporting it as verified, or a code or link sent to it coming back: no
      * password, the address verified — an account is never created from an address nothing

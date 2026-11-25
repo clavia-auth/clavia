@@ -57,7 +57,10 @@ use Clavia\Adapter\Primary\Http\Auth\PasswordlessCodeHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessLinkHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessStartHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordResetHandler;
+use Clavia\Adapter\Primary\Http\Auth\Saml\SamlAcsHandler;
+use Clavia\Adapter\Primary\Http\Auth\Saml\SamlCompleteHandler;
 use Clavia\Adapter\Primary\Http\Auth\Saml\SamlMetadataHandler;
+use Clavia\Adapter\Primary\Http\Auth\Saml\SamlSignInHandler;
 use Clavia\Adapter\Primary\Http\Auth\SignUpHandler;
 use Clavia\Adapter\Primary\Http\Auth\ThemeHandler;
 use Clavia\Adapter\Primary\Http\Auth\VerifyEmailHandler;
@@ -154,6 +157,9 @@ use Clavia\Application\Authentication\DevelopmentAutoLogin;
 use Clavia\Application\Authentication\External\BeginExternalSignIn;
 use Clavia\Application\Authentication\External\CompleteExternalSignIn;
 use Clavia\Application\Authentication\External\ResolveExternalAccount;
+use Clavia\Application\Authentication\External\Saml\BeginSamlSignIn;
+use Clavia\Application\Authentication\External\Saml\CompleteSamlSignIn;
+use Clavia\Application\Authentication\External\Saml\ReceiveSamlResponse;
 use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
 use Clavia\Application\Authentication\LoginThrottle;
 use Clavia\Application\Authentication\Mfa\BeginEnrolmentOnTheWay;
@@ -334,7 +340,9 @@ use Clavia\Application\Port\PasskeyVerifier;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Application\Port\PasswordlessChallengeStore;
 use Clavia\Application\Port\PushedAuthorizationRequestStore;
+use Clavia\Application\Port\Saml\SamlAssertionReplayCache;
 use Clavia\Application\Port\Saml\SamlMetadataSource;
+use Clavia\Application\Port\Saml\SamlResponseStore;
 use Clavia\Application\Port\Saml\SamlServiceProvider;
 use Clavia\Application\Port\Saml\ServiceProviderKeyStore;
 use Clavia\Application\Port\Saml\ServiceProviderKeys;
@@ -497,6 +505,14 @@ final class ConfigProvider
                     SigningKeysHandler::class => Container\SigningKeysHandlerFactory::class,
                     SamlKeysHandler::class => Container\SamlKeysHandlerFactory::class,
                     SamlMetadataHandler::class => Container\SamlMetadataHandlerFactory::class,
+                    SamlSignInHandler::class => Container\SamlSignInHandlerFactory::class,
+                    SamlAcsHandler::class => Container\SamlAcsHandlerFactory::class,
+                    SamlCompleteHandler::class => Container\SamlCompleteHandlerFactory::class,
+                    BeginSamlSignIn::class => Container\BeginSamlSignInFactory::class,
+                    ReceiveSamlResponse::class => Container\ReceiveSamlResponseFactory::class,
+                    CompleteSamlSignIn::class => Container\CompleteSamlSignInFactory::class,
+                    SamlResponseStore::class => Container\SamlResponseStoreFactory::class,
+                    SamlAssertionReplayCache::class => Container\SamlAssertionReplayCacheFactory::class,
                     ConnectionMetadataRefreshHandler::class => Container\ConnectionMetadataRefreshHandlerFactory::class,
                     InitialAccessTokensHandler::class => Container\InitialAccessTokensHandlerFactory::class,
                     WebhooksHandler::class => Container\WebhooksHandlerFactory::class,

@@ -19,9 +19,14 @@ final readonly class ExternalSignInRefused
     /**
      * @param string $providerLabel The provider's own name, for the message ("… with Google").
      */
+    /**
+     * @param string|null $category What the log keeps of a provider's failure (a SAML refusal's category);
+     *                              never shown, never what the provider wrote.
+     */
     public function __construct(
         public ExternalSignInFailure $reason,
         public string $providerLabel,
+        public ?string $category = null,
     ) {
     }
 }

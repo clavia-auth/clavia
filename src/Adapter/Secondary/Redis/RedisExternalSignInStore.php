@@ -15,6 +15,7 @@ use Clavia\Application\Port\ExternalSignInStore;
 use Clavia\Domain\Authentication\PendingExternalSignIn;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Connection\ConnectionName;
+use Clavia\Domain\Connection\Saml\SamlRequestId;
 use Clavia\Domain\OAuth2\CodeVerifier;
 use Clavia\Domain\Oidc\Nonce;
 use Clavia\Domain\Shared\InvalidValue;
@@ -47,6 +48,7 @@ final readonly class RedisExternalSignInStore implements ExternalSignInStore
                     'client_id' => $pending->clientId?->value,
                     'login_state' => $pending->loginState,
                     'nonce' => $pending->nonce->value,
+                    'saml_request_id' => $pending->samlRequestId?->value,
                 ],
                 JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES,
             ),
@@ -84,6 +86,8 @@ final readonly class RedisExternalSignInStore implements ExternalSignInStore
             $loginState = $data['login_state'] ?? null;
             /** @var mixed $nonce */
             $nonce = $data['nonce'] ?? null;
+            /** @var mixed $samlRequestId */
+            $samlRequestId = $data['saml_request_id'] ?? null;
             if (! is_string($provider) || ! is_string($verifier) || ! is_string($nextUrl) || ! is_string($nonce)) {
                 return null;
             }
@@ -95,6 +99,7 @@ final readonly class RedisExternalSignInStore implements ExternalSignInStore
                 is_string($clientId) ? ClientId::fromString($clientId) : null,
                 is_string($loginState) && $loginState !== '' ? $loginState : null,
                 Nonce::fromString($nonce),
+                is_string($samlRequestId) ? SamlRequestId::fromString($samlRequestId) : null,
             );
         } catch (JsonException | InvalidValue) {
             // An entry this code cannot read is an entry that is not there.

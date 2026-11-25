@@ -26,7 +26,11 @@ final readonly class SamlOptions
 
     private const string ATTRIBUTE = '/^[\x21-\x7E]{1,255}$/D';
 
-    /** @param non-empty-string $nameIdFormat */
+    /**
+     * @param non-empty-string|null $subjectAttribute
+     * @param non-empty-string      $nameIdFormat
+     * @param non-empty-string|null $emailAttribute
+     */
     private function __construct(
         public ?string $subjectAttribute,
         public string $nameIdFormat,
@@ -59,6 +63,9 @@ final readonly class SamlOptions
             if ($name !== null && preg_match(self::ATTRIBUTE, $name) !== 1) {
                 throw new InvalidValue('A SAML attribute name is 1 to 255 visible characters.');
             }
+        }
+        if ($subjectAttribute === '' || $emailAttribute === '') {
+            throw new InvalidValue('A SAML attribute name is 1 to 255 visible characters.');
         }
         $format = $nameIdFormat ?? self::PERSISTENT;
         $urn = '/^urn:oasis:names:tc:SAML:(1\.1|2\.0):nameid-format:[A-Za-z]+$/D';

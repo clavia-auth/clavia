@@ -16,9 +16,11 @@ namespace Clavia\Application\Authentication\External;
  */
 final readonly class ExternalProviderOption
 {
+    /** @param bool $saml A SAML connection, signed in through its own routes (`/auth/saml/{name}`). */
     public function __construct(
         public string $name,
         public string $label,
+        public bool $saml = false,
     ) {
     }
 }

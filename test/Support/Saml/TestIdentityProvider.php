@@ -106,6 +106,7 @@ final class TestIdentityProvider
             'authnStatement' => true,
             'commentInNameId' => false,
             'transforms' => null,
+            'assertionId' => '_a1',
         ];
         $e = static fn (mixed $v): string => htmlspecialchars((string) $v, ENT_XML1 | ENT_QUOTES, 'UTF-8');
         $attributes = '';
@@ -141,7 +142,7 @@ final class TestIdentityProvider
             . ' Destination="' . $e($o['destination']) . '" InResponseTo="' . $e($o['inResponseTo']) . '">'
             . $responseIssuer
             . '<samlp:Status><samlp:StatusCode Value="' . $e($o['status']) . '"/></samlp:Status>'
-            . '<saml:Assertion ID="_a1" Version="2.0" IssueInstant="2026-03-04T09:00:00Z">'
+            . '<saml:Assertion ID="' . $e($o['assertionId']) . '" Version="2.0" IssueInstant="2026-03-04T09:00:00Z">'
             . '<saml:Issuer>' . $e($o['issuer']) . '</saml:Issuer>'
             . '<saml:Subject><saml:NameID Format="' . $e($o['nameIdFormat']) . '">' . $nameId . '</saml:NameID>'
             . '<saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">'

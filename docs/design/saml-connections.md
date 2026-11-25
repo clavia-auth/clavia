@@ -408,3 +408,17 @@ What slice 4 (#125) settled:
   RSA-OAEP key transport), and `AuthnRequestsSigned` only when the connection signs and a signing key
   exists.
 
+What slice 5 (#126) settled:
+
+- **An address the operator does not trust still makes an account** for a new subject: unverified,
+  in the SAML connection, matched against no other account (`User::registerFromAssertion()`,
+  `ResolveExternalAccount`'s `unverifiedAddress`). The assertion vouches for the subject, which is
+  the identity; requiring a verified address would make an untrusted connection sign nobody in. No
+  address at all is still refused.
+- **The pending sign-in keeps its OpenID Connect fields** (a verifier, a nonce, unused) beside the
+  SAML request id: one store, one shape, rather than two kinds of pending sign-in.
+- **The replay cache is keyed by connection and assertion id**, kept until the assertion's own end
+  plus the skew. Its method is `claimAssertion()`, apart from the parked responses' `claim()`.
+- **The profile attributes** (`name_attribute` and the others) are stored but not yet copied onto the
+  account: `ResolveExternalAccount` sets no profile for any external sign-in today.
+

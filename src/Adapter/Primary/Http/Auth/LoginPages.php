@@ -74,7 +74,8 @@ final class LoginPages
                 'providers' => array_map(
                     static fn (ExternalProviderOption $provider): array => [
                         'label' => $provider->label,
-                        'href' => '/auth/social/' . rawurlencode($provider->name) . (
+                        'href' => ($provider->saml ? '/auth/saml/' : '/auth/social/')
+                            . rawurlencode($provider->name) . (
                             $loginState === null || $loginState === ''
                                 ? ''
                                 : '?' . http_build_query(['state' => $loginState], '', '&', PHP_QUERY_RFC3986)

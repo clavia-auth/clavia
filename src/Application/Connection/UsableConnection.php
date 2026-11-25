@@ -22,7 +22,8 @@ final readonly class UsableConnection
 {
     /**
      * @param IdentityProvider|null $provider Null for a connection that signs people in here — a pool, the
-     *                                       passwordless one — and only for one.
+     *                                       passwordless one — and for a SAML one, whose settings are its
+     *                                       provider and whose flow is its own.
      */
     public function __construct(
         public Connection $connection,

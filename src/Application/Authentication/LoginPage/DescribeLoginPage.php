@@ -79,10 +79,11 @@ final readonly class DescribeLoginPage
                 $password = true;
             } elseif ($usable->connection->isPasswordless()) {
                 $email = true;
-            } elseif ($usable->provider !== null) {
+            } elseif ($usable->provider !== null || $usable->connection->saml !== null) {
                 $providers[] = new ExternalProviderOption(
                     $usable->connection->name->value,
                     $usable->connection->displayName,
+                    $usable->connection->saml !== null,
                 );
             }
         }

@@ -74,9 +74,8 @@ final readonly class ConnectionAccess
             ConnectionStrategy::Database => true,
             ConnectionStrategy::Passwordless => $this->mailer->canSend(),
             ConnectionStrategy::Social, ConnectionStrategy::Oidc => $this->providers->for($connection) !== null,
-            // Registered and described, but nobody signs in through one before its flow exists (#126):
-            // the login page offers no button that cannot work.
-            ConnectionStrategy::Saml => false,
+            // Its provider is its settings: a SAML connection signs people in through its own flow.
+            ConnectionStrategy::Saml => true,
         };
     }
 
@@ -174,12 +173,20 @@ final readonly class ConnectionAccess
         return $usable?->provider === null ? null : $usable;
     }
 
+    /** The SAML connection of that name, when it is switched on; null otherwise. */
+    public function saml(ConnectionName $name): ?Connection
+    {
+        $connection = $this->connections->find($name);
+
+        return $connection !== null && $connection->isEnabled && $connection->saml !== null ? $connection : null;
+    }
+
     private function usableAsIs(Connection $connection): ?UsableConnection
     {
         if (! $connection->isEnabled) {
             return null;
         }
-        if (! $connection->isExternal()) {
+        if (! $connection->isExternal() || $connection->saml !== null) {
             return $this->isConfigured($connection) ? new UsableConnection($connection, null) : null;
         }
         $provider = $this->providers->for($connection);
