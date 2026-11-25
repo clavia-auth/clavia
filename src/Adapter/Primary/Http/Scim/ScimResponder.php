@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Scim;
 
 use Fig\Http\Message\StatusCodeInterface;
+use Laminas\Diactoros\Response\EmptyResponse;
 use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\ResponseInterface;
 
@@ -106,6 +107,12 @@ final readonly class ScimResponder
             'Too many requests with a wrong token from this address; try again later.',
             headers: ['Retry-After' => (string) $retryAfter],
         );
+    }
+
+    /** `204`: done, with nothing to show (a `DELETE`, RFC 7644 §3.6). */
+    public function noContent(): ResponseInterface
+    {
+        return new EmptyResponse(StatusCodeInterface::STATUS_NO_CONTENT, ['Cache-Control' => 'no-store']);
     }
 
     public function notFound(): ResponseInterface

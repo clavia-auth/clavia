@@ -22,4 +22,26 @@ final readonly class ProvisionedUser
         public ProvisionedAccount $account,
     ) {
     }
+
+    /**
+     * The resource's version (RFC 7644 §3.14): when the account or its record last changed, to the
+     * microsecond. What `meta.version`'s weak ETag carries and `If-Match` is compared with.
+     *
+     * @return non-empty-string
+     */
+    public function version(): string
+    {
+        return max($this->user->updatedAt(), $this->account->updatedAt)->format('Uu');
+    }
+
+    /**
+     * Whether a change conditioned on `If-Match` may go ahead: no condition, `*`, or the current
+     * version among those listed.
+     *
+     * @param list<string>|null $expected The versions the client holds; null when it sent none.
+     */
+    public function isAt(?array $expected): bool
+    {
+        return $expected === null || in_array('*', $expected, true) || in_array($this->version(), $expected, true);
+    }
 }

@@ -19,9 +19,9 @@ use Psr\Http\Server\RequestHandlerInterface;
  * `GET /scim/v2/ServiceProviderConfig` (RFC 7643 §5, RFC 7644 §4): what this service provider
  * supports, as a directory reads it before it sends anything else.
  *
- * It states what exists now, and nothing ahead of it: PATCH and ETags arrive with the slice that
- * builds them; filtering is the subset of `eq` and `and` directories send
- * (docs/design/scim-provisioning.md §2, §9). Bulk, sorting and password changes are not offered (§1).
+ * It states what exists: PATCH, ETags (`If-Match`), and filtering in the subset of `eq` and `and`
+ * directories send (docs/design/scim-provisioning.md §2). Bulk, sorting and password changes are not
+ * offered (§1).
  */
 final readonly class ServiceProviderConfigHandler implements RequestHandlerInterface
 {
@@ -42,12 +42,12 @@ final readonly class ServiceProviderConfigHandler implements RequestHandlerInter
     {
         return $this->responder->json([
             'schemas' => [self::SCHEMA],
-            'patch' => ['supported' => false],
+            'patch' => ['supported' => true],
             'bulk' => ['supported' => false, 'maxOperations' => 0, 'maxPayloadSize' => 0],
             'filter' => ['supported' => true, 'maxResults' => self::MAX_RESULTS],
             'changePassword' => ['supported' => false],
             'sort' => ['supported' => false],
-            'etag' => ['supported' => false],
+            'etag' => ['supported' => true],
             'authenticationSchemes' => [[
                 'type' => 'oauthbearertoken',
                 'name' => 'Provisioning token',

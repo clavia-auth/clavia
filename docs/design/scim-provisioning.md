@@ -284,3 +284,23 @@ What slice 2 (#130) settled:
 - **A page is 100 resources unless `count` says otherwise**, 200 at most; `count=0` only counts. The
   users of a page are read one by one, at most two hundred lookups by key.
 
+What slice 3 (#131) settled:
+
+- **A `PATCH` is a `PUT` of its result.** The operations are applied to the resource as it stands, in
+  JSON, and the result read again as a whole `ScimUser`, then replaced: one set of rules, and a `PATCH`
+  can do nothing a `PUT` could not.
+- **The account's address is its primary `work` email** in the resource a `PATCH` is applied to, the
+  type Entra ID names it by; a filter matching nothing adds the element it describes, as Entra ID
+  replaces the work email of a user created with a primary one only.
+- **Deactivation ends sessions as `ended_everywhere`**, through `SignOutEverywhere`, as an operator's
+  deactivation does: there is no `SessionEndReason::Deactivated` (§2 named one). Sessions end after
+  the change commits; tokens stop where the account is re-checked (refresh, introspection, userinfo).
+- **The version is the last change, to the microsecond**, of the account or its record (`Uu`), as a
+  weak ETag; `If-Match` compares the opaque tags, weak or strong, as SCIM's own examples do (RFC 7644
+  §3.14), and `*` matches any. A `PATCH` passes the version it read to the replacement, so a change
+  between its two reads is a `412`, not a lost update.
+- **An enterprise connection's subject moves with its attribute**: the identity through the connection
+  is replaced in the same transaction; removing the attribute is a `400`, since the person could no
+  longer sign in.
+- **The picture is kept**: SCIM does not manage it, so a `PUT` leaves it as it is.
+

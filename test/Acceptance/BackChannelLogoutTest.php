@@ -16,6 +16,10 @@ use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Oidc\LogoutTokenClaims;
+use Clavia\Domain\Provisioning\ProvisionedAccount;
+use Clavia\Domain\Provisioning\ProvisionedAccountRepository;
+use Clavia\Domain\Provisioning\ProvisioningTokenId;
+use Clavia\Domain\Provisioning\ScimUser;
 use Clavia\Domain\Shared\Url;
 use ClaviaTest\Support\AcceptanceTestCase;
 use ClaviaTest\Support\Fake\FakeHttpClient;
@@ -449,6 +453,56 @@ final class BackChannelLogoutTest extends AcceptanceTestCase
         self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         self::assertNull($this->session($cookie));
         self::assertCount(1, $this->logoutTokens());
+    }
+
+    /** A leaver, deactivated by the directory (docs/design/scim-provisioning.md §2, §9 slice 3). */
+    public function testADirectoryDeactivatingALeaverSignsThemOutEverywhere(): void
+    {
+        $this->bootWithRelyingParty();
+        $this->registered();
+        $user = $this->user();
+        $tokens = $this->signInAndGetTokens();
+        $cookie = $this->cookie(self::SESSION_COOKIE);
+        $this->adminToken();
+        $issued = self::document($this->api('POST', '/api/v1/provisioning-tokens', [
+            'connection' => 'password',
+            'description' => 'Entra ID',
+        ]));
+        self::assertIsString($issued['token']);
+        self::assertIsString($issued['id']);
+        $this->container()->get(ProvisionedAccountRepository::class)->add(ProvisionedAccount::provision(
+            $user->id,
+            $user->connection,
+            ScimUser::fromJson((object) ['userName' => $user->email]),
+            ProvisioningTokenId::fromString($issued['id']),
+            $user->createdAt,
+        ));
+
+        self::assertIsString($tokens['access_token']);
+        $before = $this->request('GET', '/oidc/userinfo', ['Authorization' => 'Bearer ' . $tokens['access_token']]);
+        self::assertSame(StatusCodeInterface::STATUS_OK, $before->getStatusCode(), 'Working until then.');
+
+        $deactivated = $this->request('PATCH', '/scim/v2/Users/' . $user->id->value, [
+            'Authorization' => 'Bearer ' . $issued['token'],
+            'Content-Type' => 'application/scim+json',
+        ], self::MANAGEMENT_HOST, (string) json_encode([
+            'schemas' => ['urn:ietf:params:scim:api:messages:2.0:PatchOp'],
+            'Operations' => [['op' => 'Replace', 'path' => 'active', 'value' => 'False']],
+        ]));
+
+        self::assertSame(
+            StatusCodeInterface::STATUS_OK,
+            $deactivated->getStatusCode(),
+            (string) $deactivated->getBody(),
+        );
+        self::assertNull($this->session($cookie), 'Every session ended.');
+        self::assertCount(1, $this->logoutTokens(), 'Its application told.');
+        $userinfo = $this->request('GET', '/oidc/userinfo', ['Authorization' => 'Bearer ' . $tokens['access_token']]);
+        self::assertSame(
+            StatusCodeInterface::STATUS_UNAUTHORIZED,
+            $userinfo->getStatusCode(),
+            'Its access token stopped.',
+        );
     }
 
     public function testDeletingAUserSignsThemOutEverywhere(): void

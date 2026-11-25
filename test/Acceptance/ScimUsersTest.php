@@ -294,6 +294,185 @@ final class ScimUsersTest extends AcceptanceTestCase
         );
     }
 
+    public function testEntraIdsPatchSequenceChangesTheAccount(): void
+    {
+        $clock = $this->freezeClock('2026-01-15T10:00:00Z');
+        [$token, $tokenId] = $this->provisioningToken('password');
+        $created = $this->scim('POST', self::USERS, $token, self::ENTRA_USER);
+        $id = self::document($created)['id'];
+        self::assertIsString($id);
+        $clock->advance(60);
+
+        $patched = $this->scim('PATCH', self::USERS . '/' . $id, $token, self::patch(
+            ['op' => 'Replace', 'path' => 'emails[type eq "work"].value', 'value' => 'ada.l@contoso.com'],
+            ['op' => 'Replace', 'path' => 'name.familyName', 'value' => 'King'],
+            ['op' => 'Add', 'path' => 'nickName', 'value' => 'Ada'],
+        ));
+
+        self::assertSame(StatusCodeInterface::STATUS_OK, $patched->getStatusCode(), (string) $patched->getBody());
+        $user = self::document($patched);
+        self::assertSame([['value' => 'ada.l@contoso.com', 'primary' => true]], $user['emails']);
+        self::assertSame(['givenName' => 'Ada', 'familyName' => 'King'], $user['name']);
+        self::assertSame('Ada', $user['nickName']);
+        self::assertNotSame($created->getHeaderLine('ETag'), $patched->getHeaderLine('ETag'), 'A new version.');
+        self::assertIsArray($user['meta']);
+        self::assertSame($patched->getHeaderLine('ETag'), $user['meta']['version']);
+        self::assertStringStartsWith('W/"', $user['meta']['version']);
+        $event = TestStorage::database()->fetchOne(
+            'SELECT actor_kind, actor_provisioning_token_id, details::text AS details FROM audit_events '
+            . 'WHERE type = :type',
+            ['type' => AuditEventType::UserUpdated->value],
+        );
+        self::assertIsArray($event);
+        self::assertSame('provisioning', $event['actor_kind']);
+        self::assertSame($tokenId, $event['actor_provisioning_token_id']);
+        self::assertIsString($event['details']);
+        self::assertStringNotContainsString('ada.l@contoso.com', $event['details'], 'What changed, never to what.');
+    }
+
+    public function testAPutReplacesTheWholeResource(): void
+    {
+        [$token] = $this->provisioningToken('password');
+        $id = self::document($this->scim('POST', self::USERS, $token, (string) json_encode([
+            'userName' => 'grace@example.com',
+            'displayName' => 'Grace Hopper',
+            'nickName' => 'Amazing',
+        ])))['id'];
+        self::assertIsString($id);
+
+        $replaced = $this->scim('PUT', self::USERS . '/' . $id, $token, (string) json_encode([
+            'userName' => 'g.hopper@example.com',
+            'externalId' => 'g1',
+            'name' => ['givenName' => 'Grace'],
+        ]));
+
+        self::assertSame(StatusCodeInterface::STATUS_OK, $replaced->getStatusCode(), (string) $replaced->getBody());
+        $user = self::document($replaced);
+        self::assertSame('g.hopper@example.com', $user['userName']);
+        self::assertSame('g1', $user['externalId']);
+        self::assertArrayNotHasKey('displayName', $user, 'Left out, so cleared.');
+        self::assertArrayNotHasKey('nickName', $user);
+        self::assertSame([['value' => 'g.hopper@example.com', 'primary' => true]], $user['emails']);
+        self::assertSame(1, $this->filtered($token, 'userName eq "G.HOPPER@example.com"')['totalResults']);
+    }
+
+    public function testIfMatchKeepsADirectoryFromOverwritingAChangeItHasNotSeen(): void
+    {
+        $clock = $this->freezeClock('2026-01-15T10:00:00Z');
+        [$token] = $this->provisioningToken('password');
+        $created = $this->scim('POST', self::USERS, $token, '{"userName": "ada@x.test"}');
+        $id = self::document($created)['id'];
+        self::assertIsString($id);
+        $first = $created->getHeaderLine('ETag');
+        $clock->advance(1);
+        $this->scim('PATCH', self::USERS . '/' . $id, $token, self::patch(
+            ['op' => 'add', 'path' => 'nickName', 'value' => 'Ada'],
+        ));
+        $nickName = self::patch(['op' => 'replace', 'path' => 'nickName', 'value' => 'Countess']);
+
+        $stale = $this->scim('PATCH', self::USERS . '/' . $id, $token, $nickName, ['If-Match' => $first]);
+        $current = $this->scim('GET', self::USERS . '/' . $id, $token)->getHeaderLine('ETag');
+        $fresh = $this->scim('PATCH', self::USERS . '/' . $id, $token, $nickName, ['If-Match' => $current]);
+        $any = $this->scim('DELETE', self::USERS . '/' . $id, $token, null, ['If-Match' => '*']);
+
+        self::assertScimError(StatusCodeInterface::STATUS_PRECONDITION_FAILED, $stale);
+        self::assertSame(StatusCodeInterface::STATUS_OK, $fresh->getStatusCode(), (string) $fresh->getBody());
+        self::assertSame('Countess', self::document($fresh)['nickName']);
+        self::assertSame(StatusCodeInterface::STATUS_NO_CONTENT, $any->getStatusCode());
+    }
+
+    public function testADeleteDeletesTheAccountOrDeactivatesItWhenTheTokenSaysToKeepIt(): void
+    {
+        [$deleting, $tokenId] = $this->provisioningToken('password');
+        [$keeping] = $this->provisioningToken('password', ['delete_deactivates' => true]);
+        $gone = self::document($this->scim('POST', self::USERS, $deleting, '{"userName": "gone@x.test"}'))['id'];
+        $kept = self::document($this->scim('POST', self::USERS, $keeping, '{"userName": "kept@x.test"}'))['id'];
+        self::assertIsString($gone);
+        self::assertIsString($kept);
+
+        $deleted = $this->scim('DELETE', self::USERS . '/' . $gone, $deleting);
+        $deactivated = $this->scim('DELETE', self::USERS . '/' . $kept, $keeping);
+
+        self::assertSame(
+            StatusCodeInterface::STATUS_NO_CONTENT,
+            $deleted->getStatusCode(),
+            (string) $deleted->getBody(),
+        );
+        $notFound = StatusCodeInterface::STATUS_NOT_FOUND;
+        self::assertScimError($notFound, $this->scim('GET', self::USERS . '/' . $gone, $deleting));
+        self::assertSame(0, self::rows("SELECT count(*) FROM users WHERE email = 'gone@x.test'"));
+        self::assertSame($tokenId, TestStorage::database()->fetchValue(
+            'SELECT actor_provisioning_token_id FROM audit_events WHERE type = :type',
+            ['type' => AuditEventType::UserDeleted->value],
+        ));
+        self::assertSame(StatusCodeInterface::STATUS_NO_CONTENT, $deactivated->getStatusCode());
+        self::assertFalse(self::document($this->scim('GET', self::USERS . '/' . $kept, $keeping))['active']);
+        self::assertScimError($notFound, $this->scim('DELETE', self::USERS . '/' . $gone, $deleting));
+    }
+
+    public function testAChangeIsHeldToTheRulesOfACreation(): void
+    {
+        [$token] = $this->provisioningToken('password');
+        $this->scim('POST', self::USERS, $token, '{"userName": "grace@x.test"}');
+        $id = self::document($this->scim('POST', self::USERS, $token, '{"userName": "ada@x.test"}'))['id'];
+        self::assertIsString($id);
+        $path = self::USERS . '/' . $id;
+
+        $rename = self::patch(['op' => 'replace', 'path' => 'userName', 'value' => 'GRACE@x.test']);
+        $taken = $this->scim('PATCH', $path, $token, $rename);
+        $password = $this->scim('PUT', $path, $token, '{"userName": "ada@x.test", "password": "secret"}');
+        $unreadable = self::patch(['op' => 'replace', 'path' => 'emails[', 'value' => 'x']);
+        $badPath = $this->scim('PATCH', $path, $token, $unreadable);
+        $noTarget = $this->scim('PATCH', $path, $token, (string) json_encode(['Operations' => [['op' => 'remove']]]));
+
+        self::assertScimError(StatusCodeInterface::STATUS_CONFLICT, $taken, 'uniqueness');
+        self::assertScimError(self::BAD, $password, 'invalidValue');
+        self::assertScimError(self::BAD, $badPath, 'invalidPath');
+        self::assertScimError(self::BAD, $noTarget, 'noTarget');
+        self::assertSame('ada@x.test', self::document($this->scim('GET', $path, $token))['userName'], 'Unchanged.');
+    }
+
+    public function testAnEnterpriseConnectionsIdentityFollowsItsSubject(): void
+    {
+        $this->freezeClock(Idp::NOW);
+        $this->registerSaml();
+        [$token] = $this->provisioningToken('acme');
+        $created = $this->scim('POST', self::USERS, $token, self::resource('ada@acme.example', 'old-subject'));
+        $id = self::document($created)['id'];
+        self::assertIsString($id);
+
+        $moved = $this->scim('PATCH', self::USERS . '/' . $id, $token, self::patch(
+            ['op' => 'replace', 'path' => 'externalId', 'value' => self::SUBJECT],
+        ));
+        $removed = $this->scim('PATCH', self::USERS . '/' . $id, $token, self::patch(
+            ['op' => 'remove', 'path' => 'externalId'],
+        ));
+
+        self::assertSame(StatusCodeInterface::STATUS_OK, $moved->getStatusCode(), (string) $moved->getBody());
+        self::assertSame([self::SUBJECT], array_column(
+            TestStorage::database()->fetchAll(
+                'SELECT subject FROM external_identities WHERE user_id = :id',
+                ['id' => $id],
+            ),
+            'subject',
+        ));
+        self::assertScimError(self::BAD, $removed, 'invalidValue');
+        self::assertSame(
+            StatusCodeInterface::STATUS_SEE_OTHER,
+            $this->signInThroughSaml()->getStatusCode(),
+            'By the new subject.',
+        );
+    }
+
+    /** @param array<string, mixed> ...$operations */
+    private static function patch(array ...$operations): string
+    {
+        return json_encode([
+            'schemas' => ['urn:ietf:params:scim:api:messages:2.0:PatchOp'],
+            'Operations' => $operations,
+        ], JSON_THROW_ON_ERROR);
+    }
+
     /**
      * @param array<string, mixed> $options
      *
@@ -343,9 +522,15 @@ final class ScimUsersTest extends AcceptanceTestCase
         );
     }
 
-    private function scim(string $method, string $path, string $token, ?string $body = null): ResponseInterface
-    {
-        $headers = ['Authorization' => 'Bearer ' . $token];
+    /** @param array<non-empty-string, string> $extra */
+    private function scim(
+        string $method,
+        string $path,
+        string $token,
+        ?string $body = null,
+        array $extra = [],
+    ): ResponseInterface {
+        $headers = ['Authorization' => 'Bearer ' . $token] + $extra;
         if ($body !== null) {
             $headers['Content-Type'] = 'application/scim+json';
         }

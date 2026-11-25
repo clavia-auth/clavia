@@ -66,14 +66,47 @@ final readonly class PhpDbProvisionedAccountRepository implements ProvisionedAcc
                 ],
             );
         } catch (Throwable $failure) {
-            throw match (true) {
-                Constraint::isUniqueViolation($failure, 'provisioned_accounts_user_name_key')
-                    => new AlreadyExists(self::USER_NAME_TAKEN, 0, $failure),
-                Constraint::isUniqueViolation($failure, 'provisioned_accounts_external_id_key')
-                    => new AlreadyExists(self::EXTERNAL_ID_TAKEN, 0, $failure),
-                default => $failure,
-            };
+            throw self::conflict($failure);
         }
+    }
+
+    #[\Override]
+    public function save(ProvisionedAccount $account): void
+    {
+        try {
+            $this->database->execute(
+                <<<'SQL'
+                    UPDATE provisioned_accounts SET
+                        user_name = :user_name,
+                        user_name_key = :user_name_key,
+                        external_id = :external_id,
+                        updated_at = :updated_at
+                    WHERE user_id = :user_id AND connection = :connection
+                    SQL,
+                [
+                    'user_id' => $account->userId->value,
+                    'connection' => $account->connection->value,
+                    'user_name' => $account->userName,
+                    'user_name_key' => $account->userNameKey(),
+                    'external_id' => $account->externalId,
+                    'updated_at' => Timestamp::toDatabase($account->updatedAt),
+                ],
+            );
+        } catch (Throwable $failure) {
+            throw self::conflict($failure);
+        }
+    }
+
+    /** The unique constraint broken, as the conflict the interface names; anything else as it is. */
+    private static function conflict(Throwable $failure): Throwable
+    {
+        return match (true) {
+            Constraint::isUniqueViolation($failure, 'provisioned_accounts_user_name_key')
+                => new AlreadyExists(self::USER_NAME_TAKEN, 0, $failure),
+            Constraint::isUniqueViolation($failure, 'provisioned_accounts_external_id_key')
+                => new AlreadyExists(self::EXTERNAL_ID_TAKEN, 0, $failure),
+            default => $failure,
+        };
     }
 
     #[\Override]

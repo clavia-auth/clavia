@@ -8,6 +8,11 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ### Added
 
+- **SCIM: replace, modify and delete users** (#131): a directory replaces an account (`PUT`), changes
+  it with the `PATCH` forms Entra ID and Okta send, and deletes it, or deactivates it with the token's
+  `delete_deactivates`. Deactivating a leaver ends every session, with back-channel logout, and stops
+  their tokens, as an operator's deactivation does. Resources carry ETags, and `If-Match` is honoured.
+
 - **SCIM: create, read and list users** (#130): a directory creates accounts at `POST /scim/v2/Users`
   (no password; the address verified only when its token trusts the directory), and reads and lists
   them with the filters Entra ID and Okta send (`userName`, `externalId`, `id`, `emails.value`).
