@@ -8,6 +8,15 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ### Added
 
+- **Webhook endpoints** (#118, the first step of webhooks, `docs/design/webhooks.md`): `GET|POST
+  /api/v1/webhooks`, `GET|PATCH|DELETE /api/v1/webhooks/{id}` and `POST …/rotate-secret`, with
+  four new scopes, `read|create|update|delete:webhooks`; creating an endpoint, or changing where
+  it points or what it hears, also needs `read:audit_events`. Up to twenty https endpoints, each
+  listening to audit event types or `*`, held to the outbound URL policy. The secret is generated,
+  shown once and kept sealed; a rotation keeps the previous one signing for a day. Nothing is
+  delivered yet. Run `bin/clavia management-api:register` after upgrading, then give the new
+  permissions to the roles that should hold them. **Migration `0041`**.
+
 - **Custom claims on applications** (#116): `claims` on a client, set with
   `PATCH /api/v1/clients/{client_id}`, each going to the application's ID tokens, its userinfo
   answers, or both (`in`). First-party applications only; dynamic registration never sets them.

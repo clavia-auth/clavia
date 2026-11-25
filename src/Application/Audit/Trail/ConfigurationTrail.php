@@ -33,6 +33,10 @@ use Clavia\Domain\ResourceServer\Event\ClientAccessGranted;
 use Clavia\Domain\ResourceServer\Event\ResourceServerChanged;
 use Clavia\Domain\ResourceServer\Event\ResourceServerDeleted;
 use Clavia\Domain\ResourceServer\Event\ResourceServerRegistered;
+use Clavia\Domain\Webhook\Event\WebhookChanged;
+use Clavia\Domain\Webhook\Event\WebhookCreated;
+use Clavia\Domain\Webhook\Event\WebhookDeleted;
+use Clavia\Domain\Webhook\Event\WebhookSecretRotated;
 
 /**
  * Applications, APIs, client grants, connections, signing keys and initial access tokens — in the
@@ -69,6 +73,10 @@ final readonly class ConfigurationTrail implements EventSubscriber
             SigningKeyRotated::class => $this->signingKeyRotated(...),
             InitialAccessTokenIssued::class => $this->initialAccessTokenIssued(...),
             InitialAccessTokenRevoked::class => $this->initialAccessTokenRevoked(...),
+            WebhookCreated::class => $this->webhookCreated(...),
+            WebhookChanged::class => $this->webhookChanged(...),
+            WebhookDeleted::class => $this->webhookDeleted(...),
+            WebhookSecretRotated::class => $this->webhookSecretRotated(...),
         ];
     }
 
@@ -199,5 +207,34 @@ final readonly class ConfigurationTrail implements EventSubscriber
             AuditTarget::initialAccessToken($event->token->id),
             ['uses' => $event->token->uses],
         );
+    }
+
+    /** The host only, not the path, which can carry a receiver's own token; never the secret. */
+    private function webhookCreated(WebhookCreated $event): void
+    {
+        $endpoint = $event->endpoint;
+        $this->audit->record(AuditEventType::WebhookCreated, AuditTarget::webhook($endpoint->id), [
+            'host' => $endpoint->url->host(),
+            'events' => $endpoint->events->toStrings(),
+        ]);
+    }
+
+    private function webhookChanged(WebhookChanged $event): void
+    {
+        $this->audit->record(AuditEventType::WebhookUpdated, AuditTarget::webhook($event->id), [
+            'fields' => $event->changed,
+        ]);
+    }
+
+    private function webhookDeleted(WebhookDeleted $event): void
+    {
+        $this->audit->record(AuditEventType::WebhookDeleted, AuditTarget::webhook($event->endpoint->id), [
+            'host' => $event->endpoint->url->host(),
+        ]);
+    }
+
+    private function webhookSecretRotated(WebhookSecretRotated $event): void
+    {
+        $this->audit->record(AuditEventType::WebhookSecretRotated, AuditTarget::webhook($event->id));
     }
 }

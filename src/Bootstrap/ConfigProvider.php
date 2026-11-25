@@ -88,6 +88,9 @@ use Clavia\Adapter\Primary\Http\Management\UserPermissionsHandler;
 use Clavia\Adapter\Primary\Http\Management\UserRolesHandler;
 use Clavia\Adapter\Primary\Http\Management\UserSessionsHandler;
 use Clavia\Adapter\Primary\Http\Management\UsersHandler;
+use Clavia\Adapter\Primary\Http\Management\WebhookHandler;
+use Clavia\Adapter\Primary\Http\Management\WebhookSecretHandler;
+use Clavia\Adapter\Primary\Http\Management\WebhooksHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\AuthorizeHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\ClientConfigurationHandler;
 use Clavia\Adapter\Primary\Http\OAuth2\ClientRegistrationHandler;
@@ -247,6 +250,12 @@ use Clavia\Application\Management\Users\UnlinkIdentity;
 use Clavia\Application\Management\Users\UpdateUser;
 use Clavia\Application\Management\Users\UserSessions;
 use Clavia\Application\Management\Users\WithdrawConsent;
+use Clavia\Application\Management\Webhooks\DeleteWebhook;
+use Clavia\Application\Management\Webhooks\ReadWebhooks;
+use Clavia\Application\Management\Webhooks\RegisterWebhook;
+use Clavia\Application\Management\Webhooks\RotateWebhookSecret;
+use Clavia\Application\Management\Webhooks\UpdateWebhook;
+use Clavia\Application\Management\Webhooks\WebhookSecrets;
 use Clavia\Application\OAuth2\Authorize\AuthorizationRequestRules;
 use Clavia\Application\OAuth2\Authorize\Authorize;
 use Clavia\Application\OAuth2\ClientAuthentication\ClientAuthenticator;
@@ -339,6 +348,7 @@ use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\RandomSource;
 use Clavia\Domain\Shared\SecretGenerator;
+use Clavia\Domain\Webhook\WebhookEndpointRepository;
 use Laminas\Diactoros\RequestFactory;
 use Laminas\Diactoros\ResponseFactory;
 use Laminas\Diactoros\ServerRequestFilter\FilterServerRequestInterface;
@@ -456,6 +466,9 @@ final class ConfigProvider
                     PushAuthorizationRequest::class => Container\PushAuthorizationRequestFactory::class,
                     SigningKeysHandler::class => Container\SigningKeysHandlerFactory::class,
                     InitialAccessTokensHandler::class => Container\InitialAccessTokensHandlerFactory::class,
+                    WebhooksHandler::class => Container\WebhooksHandlerFactory::class,
+                    WebhookHandler::class => Container\WebhookHandlerFactory::class,
+                    WebhookSecretHandler::class => Container\WebhookSecretHandlerFactory::class,
                     InitialAccessTokenHandler::class => Container\InitialAccessTokenHandlerFactory::class,
                     ClientRegistrationHandler::class => Container\ClientRegistrationHandlerFactory::class,
                     UserImportsHandler::class => Container\UserImportsHandlerFactory::class,
@@ -624,6 +637,12 @@ final class ConfigProvider
                     ReadRoles::class => Container\ReadRolesFactory::class,
                     CreateRole::class => Container\CreateRoleFactory::class,
                     IssueInitialAccessToken::class => Container\IssueInitialAccessTokenFactory::class,
+                    WebhookSecrets::class => Container\WebhookSecretsFactory::class,
+                    RegisterWebhook::class => Container\RegisterWebhookFactory::class,
+                    UpdateWebhook::class => Container\UpdateWebhookFactory::class,
+                    DeleteWebhook::class => Container\DeleteWebhookFactory::class,
+                    RotateWebhookSecret::class => Container\RotateWebhookSecretFactory::class,
+                    ReadWebhooks::class => Container\ReadWebhooksFactory::class,
                     RevokeInitialAccessToken::class => Container\RevokeInitialAccessTokenFactory::class,
                     ReadInitialAccessTokens::class => Container\ReadInitialAccessTokensFactory::class,
                     RegistrationMetadata::class => Container\RegistrationMetadataFactory::class,
@@ -669,6 +688,7 @@ final class ConfigProvider
                     ClientGrantRepository::class => Container\ClientGrantRepositoryFactory::class,
                     RoleRepository::class => Container\RoleRepositoryFactory::class,
                     InitialAccessTokenRepository::class => Container\InitialAccessTokenRepositoryFactory::class,
+                    WebhookEndpointRepository::class => Container\WebhookEndpointRepositoryFactory::class,
                     ClientRegistrationRepository::class => Container\ClientRegistrationRepositoryFactory::class,
                     UserJobRepository::class => Container\UserJobRepositoryFactory::class,
                     ConsentRepository::class => Container\ConsentRepositoryFactory::class,

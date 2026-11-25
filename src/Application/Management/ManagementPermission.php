@@ -68,6 +68,10 @@ enum ManagementPermission: string
     case ReadInitialAccessTokens = 'read:initial_access_tokens';
     case CreateInitialAccessTokens = 'create:initial_access_tokens';
     case DeleteInitialAccessTokens = 'delete:initial_access_tokens';
+    case ReadWebhooks = 'read:webhooks';
+    case CreateWebhooks = 'create:webhooks';
+    case UpdateWebhooks = 'update:webhooks';
+    case DeleteWebhooks = 'delete:webhooks';
 
     /** A sentence for the permission, shown wherever one is assigned. */
     /**
@@ -99,6 +103,7 @@ enum ManagementPermission: string
             'user_tickets' => 'links for end users to choose a password',
             'audit_events' => 'the audit trail',
             'signing_keys' => 'the keys tokens are signed with',
+            'webhooks' => 'the endpoints audit events are sent to',
             default => 'APIs',
         };
     }

@@ -21,4 +21,5 @@ enum TargetType: string
     case Connection = 'connection';
     case SigningKey = 'signing_key';
     case InitialAccessToken = 'initial_access_token';
+    case Webhook = 'webhook';
 }

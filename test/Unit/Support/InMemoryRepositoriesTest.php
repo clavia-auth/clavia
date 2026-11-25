@@ -14,9 +14,11 @@ namespace ClaviaTest\Unit\Support;
 use ClaviaTest\Support\Contract\ClientRegistrationRepositoryContract;
 use ClaviaTest\Support\Contract\InitialAccessTokenRepositoryContract;
 use ClaviaTest\Support\Contract\UserJobRepositoryContract;
+use ClaviaTest\Support\Contract\WebhookEndpointRepositoryContract;
 use ClaviaTest\Support\Fake\InMemoryClientRegistrationRepository;
 use ClaviaTest\Support\Fake\InMemoryInitialAccessTokenRepository;
 use ClaviaTest\Support\Fake\InMemoryUserJobRepository;
+use ClaviaTest\Support\Fake\InMemoryWebhookEndpointRepository;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
 use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
@@ -58,6 +60,7 @@ use ClaviaTest\Support\Fake\InMemoryRoleRepository;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
 use ClaviaTest\Support\Fake\SeededRandomSource;
+use Clavia\Domain\Webhook\WebhookEndpointRepository;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -77,6 +80,7 @@ final class InMemoryRepositoriesTest extends TestCase
     use ConsentRepositoryContract;
     use ConnectionRepositoryContract;
     use InitialAccessTokenRepositoryContract;
+    use WebhookEndpointRepositoryContract;
     use ClientRegistrationRepositoryContract;
     use UserJobRepositoryContract;
 
@@ -94,6 +98,7 @@ final class InMemoryRepositoriesTest extends TestCase
     private InMemoryConsentRepository $consents;
     private InMemoryConnectionRepository $connections;
     private InMemoryInitialAccessTokenRepository $initialAccessTokens;
+    private InMemoryWebhookEndpointRepository $webhookEndpoints;
     private InMemoryClientRegistrationRepository $clientRegistrations;
     private ?InMemoryUserJobRepository $userJobs = null;
 
@@ -114,6 +119,7 @@ final class InMemoryRepositoriesTest extends TestCase
         $this->roles = new InMemoryRoleRepository($this->resourceServers, $this->users);
         $this->consents = new InMemoryConsentRepository($this->users, $this->clients, $this->resourceServers);
         $this->initialAccessTokens = new InMemoryInitialAccessTokenRepository();
+        $this->webhookEndpoints = new InMemoryWebhookEndpointRepository();
         $this->clientRegistrations = new InMemoryClientRegistrationRepository($this->clients);
     }
 
@@ -223,5 +229,11 @@ final class InMemoryRepositoriesTest extends TestCase
     protected function aClient(string $clientId): ClientId
     {
         return ClientId::fromString($clientId);
+    }
+
+    #[\Override]
+    protected function webhookEndpoints(): WebhookEndpointRepository
+    {
+        return $this->webhookEndpoints;
     }
 }
