@@ -512,8 +512,10 @@ applies however the person signed in.
   `rsa-oaep` with SHA-1 or SHA-256 and MGF1 to match), never `rsa-1_5`; then AES-GCM, or AES-CBC
   unless the connection's `require_gcm`; `require_encryption` refuses a plain assertion. The
   plaintext is held to a plain response's rules, and its signature checked after. Every failure is
-  the same page after the same steps, the handles spent first, and counts against the client address
-  in the sign-in throttle (`LoginThrottle`, which refuses before anything is read once it is reached). The
+  the same page after the same steps, the handles spent first. A refusal of the response itself
+  (`consume()`, a replay) counts against the client address in the sign-in throttle (`LoginThrottle`,
+  which refuses before anything is read once it is reached); an earlier one (expired, another browser)
+  does not, since a forged cross-site POST could otherwise lock its victim out. The
   person is `(connection, subject)` (`ResolveExternalAccount`); the address comes from the attribute
   the operator named or an address `NameID`, verified only when the connection trusts the identity
   provider. An untrusted address still makes an account for a new subject, unverified and linked to

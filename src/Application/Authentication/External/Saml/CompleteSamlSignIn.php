@@ -58,7 +58,9 @@ use Clavia\Domain\Shared\InvalidValue;
  *    factor applies as after any sign-in.
  *
  * Every refusal is one `SignInRefused` and one page. The parked response and the pending sign-in are
- * spent before the response is read, so a failure cannot be tried again with the same handles.
+ * spent before the response is read, so a failure cannot be tried again with the same handles; the
+ * refusals of the response itself (5 and 6) count toward the sign-in throttle, and a throttled address
+ * has its parked response spent and nothing read.
  */
 final readonly class CompleteSamlSignIn
 {
@@ -98,13 +100,18 @@ final readonly class CompleteSamlSignIn
         $refuse = function (
             ExternalSignInFailure $reason,
             ?string $category = null,
+            bool $counted = false,
         ) use (
             $connection,
-            $callback
-): ExternalSignInRefused {
-            // Every SAML failure counts against the address (§7): bounding, among the rest, the tries a
-            // padding oracle would need, each of which also spends a pending sign-in.
-            $this->throttle->recordAddressFailure($callback->clientAddress);
+            $callback,
+        ): ExternalSignInRefused {
+            // A failure counts against the address (§7) only once the response is read: that needs a
+            // pending sign-in paired with this browser's own cookie, which a forged cross-site POST
+            // cannot bring, so nobody locks another person out. It bounds the tries a padding oracle
+            // would need, each of which also spends a pending sign-in.
+            if ($counted) {
+                $this->throttle->recordAddressFailure($callback->clientAddress);
+            }
             $this->events->dispatch(new SignInRefused(
                 AuthenticationMethod::External,
                 $reason->refusal(),
@@ -154,11 +161,11 @@ final readonly class CompleteSamlSignIn
             $saml->options->requireGcm,
         ));
         if (! $identity instanceof SamlIdentity) {
-            return $refuse(ExternalSignInFailure::ProviderFailed, $identity->reason->value);
+            return $refuse(ExternalSignInFailure::ProviderFailed, $identity->reason->value, counted: true);
         }
         $ttl = max(1, $identity->validUntil->getTimestamp() - $now->getTimestamp() + self::SKEW_SECONDS);
         if (! $this->assertions->claimAssertion($connection->name, $identity->assertionId, $ttl)) {
-            return $refuse(ExternalSignInFailure::Expired, 'replayed');
+            return $refuse(ExternalSignInFailure::Expired, 'replayed', counted: true);
         }
 
         try {

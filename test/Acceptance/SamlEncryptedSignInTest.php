@@ -138,6 +138,23 @@ final class SamlEncryptedSignInTest extends AcceptanceTestCase
         self::assertTrue($this->logger->hasRecordContaining('throttled'));
     }
 
+    public function testARefusalBeforeTheResponseIsReadCountsForNothing(): void
+    {
+        $this->boot(['CLAVIA_LOGIN_MAX_ATTEMPTS' => '2']);
+        $this->freezeClock(Idp::NOW);
+        $this->adminToken();
+        $this->registerSaml([]);
+        // Forged cross-site POSTs: no pending sign-in paired with this browser, so nothing is read.
+        foreach ([1, 2, 3] as $attempt) {
+            $this->finish(self::answering('_' . str_repeat('f', 64)), 'forged-' . $attempt);
+        }
+        [$requestId, $relayState] = $this->start();
+
+        $finished = $this->finish(self::answering($requestId), $relayState);
+
+        self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $finished->getStatusCode(), 'Nobody locked out.');
+    }
+
     private function signsInEncrypted(): void
     {
         $this->registerSaml(['require_encryption' => true, 'require_gcm' => true]);
