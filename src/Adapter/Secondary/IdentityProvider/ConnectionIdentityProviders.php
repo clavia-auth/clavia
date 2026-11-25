@@ -57,7 +57,8 @@ final readonly class ConnectionIdentityProviders implements IdentityProviders
     public function for(Connection $connection): ?IdentityProvider
     {
         return match ($connection->strategy) {
-            ConnectionStrategy::Database, ConnectionStrategy::Passwordless => null,
+            // A SAML provider is no IdentityProvider: it signs people in through its own flow.
+            ConnectionStrategy::Database, ConnectionStrategy::Passwordless, ConnectionStrategy::Saml => null,
             ConnectionStrategy::Social => $this->social[$connection->name->value] ?? null,
             ConnectionStrategy::Oidc => $this->openIdProvider($connection),
         };

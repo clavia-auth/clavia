@@ -20,6 +20,8 @@ final readonly class ServiceProviderDescription
      * @param non-empty-string|null $nameIdFormat
      * @param list<non-empty-string> $signingCertificates DER, base64: this server's keys (slice 2).
      * @param list<non-empty-string> $encryptionCertificates DER, base64.
+     * @param bool                   $signsRequests Whether this connection signs its `AuthnRequest`s, which it
+     *                                              can only with a signing certificate.
      */
     public function __construct(
         public string $entityId,
@@ -27,6 +29,7 @@ final readonly class ServiceProviderDescription
         public ?string $nameIdFormat = null,
         public array $signingCertificates = [],
         public array $encryptionCertificates = [],
+        public bool $signsRequests = true,
     ) {
     }
 }

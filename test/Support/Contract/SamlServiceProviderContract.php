@@ -18,6 +18,7 @@ use Clavia\Application\Port\Saml\SamlRefusal;
 use Clavia\Application\Port\Saml\SamlRefused;
 use Clavia\Application\Port\Saml\SamlServiceProvider;
 use Clavia\Application\Port\Saml\ServiceProviderDescription;
+use Clavia\Domain\Connection\Saml\SamlCertificate;
 use Clavia\Domain\Connection\Saml\SamlRequestId;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\Url;
@@ -259,7 +260,64 @@ trait SamlServiceProviderContract
         self::assertSame(Idp::ENTITY_ID, $metadata->entityId);
         self::assertSame('https://idp.acme.example/saml/sso', $metadata->singleSignOnUrl->value);
         self::assertCount(1, $metadata->certificates, 'The same key is one certificate.');
-        self::assertInstanceOf(SamlIdentity::class, $this->consumed(Idp::response(), $metadata->certificates));
+        self::assertInstanceOf(SamlIdentity::class, $this->consumed(
+            Idp::response(),
+            array_map(static fn (SamlCertificate $certificate): string => $certificate->pem, $metadata->certificates),
+        ));
+        self::assertSame(
+            hash('sha256', (string) base64_decode(Idp::der(Idp::rsa()['certificate']), true)),
+            $metadata->certificates[0]->fingerprint,
+        );
+        self::assertNotNull($metadata->certificates[0]->notAfter);
+    }
+
+    /** @return iterable<string, array{0: string, 1: string, 2: string}> */
+    public static function vendors(): iterable
+    {
+        yield 'Entra ID' => [
+            'entra',
+            'https://sts.windows.net/72f988bf-86f1-41af-91ab-2d7cd011db47/',
+            'https://login.microsoftonline.com/72f988bf-86f1-41af-91ab-2d7cd011db47/saml2',
+        ];
+        yield 'Okta' => [
+            'okta',
+            'http://www.okta.com/exk1a2b3c4d5e6f7g8h9',
+            'https://acme.okta.com/app/acme_clavia_1/exk1a2b3c4d5e6f7g8h9/sso/saml',
+        ];
+        yield 'ADFS, an encryption key and an SP role beside' => [
+            'adfs',
+            'http://adfs.acme.example/adfs/services/trust',
+            'https://adfs.acme.example/adfs/ls/',
+        ];
+        yield 'Keycloak, its entity in an aggregate' => [
+            'keycloak',
+            'https://keycloak.acme.example/realms/acme',
+            'https://keycloak.acme.example/realms/acme/protocol/saml',
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('vendors')]
+    public function aVendorsMetadataIsRead(string $vendor, string $entityId, string $singleSignOn): void
+    {
+        $metadata = $this->samlServiceProvider()->readMetadata(Idp::vendorMetadata($vendor));
+
+        self::assertSame($entityId, $metadata->entityId);
+        self::assertSame($singleSignOn, $metadata->singleSignOnUrl->value);
+        self::assertCount(1, $metadata->certificates, 'The signing key alone, once.');
+        self::assertSame(Idp::rsa()['certificate'], $metadata->certificates[0]->pem);
+    }
+
+    #[Test]
+    public function anAggregateOfSeveralEntitiesIsRefused(): void
+    {
+        $one = Idp::metadata([Idp::rsa()['certificate']]);
+        $entity = substr($one, (int) strpos($one, '<EntityDescriptor'));
+        $federation = '<EntitiesDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata">' . $entity
+            . str_replace(Idp::ENTITY_ID, 'https://other.example/idp', $entity) . '</EntitiesDescriptor>';
+
+        $this->expectException(InvalidValue::class);
+        $this->samlServiceProvider()->readMetadata($federation);
     }
 
     /** @return iterable<string, array{0: string}> */

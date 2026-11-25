@@ -35,9 +35,12 @@ enum ConnectionStrategy: string
      */
     case Passwordless = 'passwordless';
 
+    /** A SAML 2.0 identity provider, registered by an operator from its metadata. */
+    case Saml = 'saml';
+
     /** Signs people in at another party rather than here. */
     public function isExternal(): bool
     {
-        return $this === self::Social || $this === self::Oidc;
+        return $this === self::Social || $this === self::Oidc || $this === self::Saml;
     }
 }

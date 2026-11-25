@@ -36,6 +36,7 @@ use Clavia\Domain\Client\Registration\ClientRegistration;
 use Clavia\Domain\Client\Registration\InitialAccessToken;
 use Clavia\Domain\Client\ResponseType;
 use Clavia\Domain\Connection\ConnectionName;
+use Clavia\Domain\Connection\Saml\SamlCertificate;
 use Clavia\Domain\Connection\Saml\ServiceProviderKey;
 use Clavia\Domain\Identity\ExternalIdentity;
 use Clavia\Domain\Identity\Jobs\LineError;
@@ -298,7 +299,40 @@ final class ManagementViews
             'oidc_issuer' => $connection->oidc?->issuer->value,
             'oidc_client_id' => $connection->oidc?->clientId,
             'oidc_scope' => $connection->oidc?->scope->toString(),
+            'saml' => self::saml($described),
             'created_at' => self::instant($connection->createdAt),
+        ];
+    }
+
+    /**
+     * A SAML connection's identity provider (its certificates by fingerprint and stated expiry, read
+     * only), its options, and what to give the identity provider's administrator.
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function saml(DescribedConnection $described): ?array
+    {
+        $saml = $described->connection->saml;
+        $provider = $described->serviceProvider;
+        if ($saml === null || $provider === null) {
+            return null;
+        }
+
+        return [
+            'entity_id' => $saml->entityId,
+            'sso_url' => $saml->singleSignOnUrl->value,
+            'metadata_url' => $saml->metadataUrl?->value,
+            'certificates' => array_map(static fn (SamlCertificate $certificate): array => [
+                'sha256' => $certificate->fingerprint,
+                'not_after' => $certificate->notAfter === null ? null : self::instant($certificate->notAfter),
+            ], $saml->certificates),
+            ...$saml->options->toArray(),
+            'service_provider' => [
+                'entity_id' => $provider->entityId,
+                'acs_url' => $provider->assertionConsumerServiceUrl,
+                'metadata_url' => $provider->metadataUrl,
+                'warning' => $provider->warning,
+            ],
         ];
     }
 

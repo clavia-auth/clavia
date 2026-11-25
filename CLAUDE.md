@@ -291,7 +291,7 @@ objects, repository interfaces, and an `Event` namespace for its domain events.
 | `Shared` | `Clock`, `RandomSource`, `SecretGenerator`, `Digest`, `Scope`/`ScopeSet`, `Audience`, `Url`, `UuidId`, `Base64Url`, `PageRequest`/`Page`, `InvalidValue`, `AlreadyExists`, `DomainEvent` | Secrets are 43-character tokens; codes and tokens are stored as their SHA-256 `Digest`; URLs are kept byte for byte and compared exactly |
 | `Identity` | `User`, `Profile`, `AppMetadata`, `PasswordPolicy`, `ExternalIdentity`, `AssertedIdentity`, `AccountLink` | Every account belongs to one connection; an address is unique within it; a changed address is unverified; an emailed link dies with the address or password it was issued against; application metadata is a JSON object only operators write (16 KiB, five levels, keys sorted), replaced whole |
 | `Client` | `Client`, `ClientId`, `ClientType`, `ClientAuthMethod`, `GrantType`, `ResponseType`, `Ownership`, `BackChannelLogout`, `Registration\InitialAccessToken` | Type, auth method and secret agree; the code flow needs a redirect URI; `client_credentials` needs a confidential client; `tpc_…` ids are third-party |
-| `Connection` | `Connection`, `ConnectionName`, `ConnectionStrategy` (database, social, OIDC, passwordless), `OidcSettings`, `BuiltInConnection` | The default pool, social providers and `email` are switched, never created or deleted; only a pool takes sign-ups or requires a verified address |
+| `Connection` | `Connection`, `ConnectionName`, `ConnectionStrategy` (database, social, OIDC, passwordless, SAML), `OidcSettings`, `BuiltInConnection`, `Saml\*` (`SamlSettings`, `SamlCertificate`, `SamlOptions`, `SamlRequestId`, `ServiceProviderKey[Set]`) | The default pool, social providers and `email` are switched, never created or deleted; only a pool takes sign-ups or requires a verified address; a SAML connection, and only one, has SAML settings: 1 to 3 pinned RSA certificates, https endpoints |
 | `ResourceServer` | `ResourceServer` (an API: `rs_…` id, audience, permissions, `AccessTokenFormat`), `Permission`, `ClientGrant` | A system API (the Management API) can be renamed, never deleted, always enforces roles; tokens are opaque unless the API takes JWTs |
 | `Rbac` | `Role`, `GrantedPermission`, `RoleRepository` (also the assignments) | A person holds a permission only through a role; `permissionsHeld(user, API)` is the question issuance asks |
 | `Consent` | `UserConsent`, `ConsentPolicy`, `PendingConsent` | `ConsentPolicy` alone decides who is asked |
@@ -479,6 +479,22 @@ applies however the person signed in.
   associated data), never hashed. `amr` gains `otp`, or `hwk`/`swk` (and `user` when nobody was
   verified), then `mfa`. Turning the app off keeps the recovery codes while a passkey remains; an
   operator's reset takes them.
+- **SAML connections** (`docs/design/saml-connections.md`, built in slices; sign-in comes in #126).
+  `POST /api/v1/connections` with `strategy: saml` and a `saml` object reads the identity provider
+  from `saml.metadata` (the document) or `saml.metadata_url` (fetched now, `SamlMetadataSource`
+  through `OutboundUrlPolicy`, 1 MiB): `SamlConfiguration` holds it to `SamlServiceProvider::readMetadata()`
+  (one `EntityDescriptor`, or an aggregate of exactly one as Keycloak sends; one SAML 2.0
+  `IDPSSODescriptor`; an https HTTP-Redirect sign-on service; 1 to 3 RSA ≥ 2048 signing
+  certificates), and each refusal is a `422` pointing at its field (`SamlMetadataRefused`).
+  `POST …/{name}/refresh-metadata` reads the URL again (`409` for another kind or a document). The
+  answer shows the certificates by SHA-256 and stated expiry (never enforced: keys are pinned), the
+  options, and the service provider's entity ID, ACS and metadata URLs (`SamlServiceProviderEndpoints`:
+  `https://auth.{domain}/auth/saml/{connection}`), with a warning when there are no keys.
+  `GET /auth/saml/{connection}/metadata` (`DescribeSamlServiceProvider`) is this server's
+  `EntityDescriptor` with the current and next certificates of each usage and the encryption methods,
+  valid against the SAML metadata schema, public for an hour (Caddy's `no-store` excepts it); `404`
+  for anything but an enabled SAML connection. Until sign-in exists a SAML connection is not
+  `configured`, so the login page offers no button for it.
 - **External** (`BeginExternalSignIn`, `CompleteExternalSignIn`): Google, GitHub, or an
   operator-registered OpenID Connect provider. Clavia holds itself to its own rules: an opaque
   `state` in the redirect and in the `clavia_external_state` cookie, compared in constant time

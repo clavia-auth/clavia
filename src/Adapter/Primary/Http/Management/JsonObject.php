@@ -88,6 +88,18 @@ final readonly class JsonObject
         return $strings;
     }
 
+    /** An object member, read the same way; null when absent or null. */
+    public function object(string $name): ?self
+    {
+        /** @var mixed $value */
+        $value = $this->value($name);
+        if ($value === null) {
+            return null;
+        }
+
+        return $value instanceof stdClass ? new self($value) : throw self::mistyped($name, 'an object');
+    }
+
     /**
      * @return list<self>|null
      */

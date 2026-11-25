@@ -1,0 +1,20 @@
+<md:EntitiesDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" Name="urn:keycloak"><md:EntityDescriptor entityID="https://keycloak.acme.example/realms/acme">
+		<md:IDPSSODescriptor WantAuthnRequestsSigned="true" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+			<md:KeyDescriptor use="signing">
+				<ds:KeyInfo>
+					<ds:KeyName>vR5f2aT9kL3mQ8wN1zX4cB7dE0gH6jY2</ds:KeyName>
+					<ds:X509Data>
+						<ds:X509Certificate>{{CERTIFICATE}}</ds:X509Certificate>
+					</ds:X509Data>
+				</ds:KeyInfo>
+			</md:KeyDescriptor>
+			<md:ArtifactResolutionService Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP" Location="https://keycloak.acme.example/realms/acme/protocol/saml/resolve" index="0"></md:ArtifactResolutionService>
+			<md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://keycloak.acme.example/realms/acme/protocol/saml"></md:SingleLogoutService>
+			<md:NameIDFormat>urn:oasis:names:tc:SAML:2.0:nameid-format:persistent</md:NameIDFormat>
+			<md:NameIDFormat>urn:oasis:names:tc:SAML:2.0:nameid-format:transient</md:NameIDFormat>
+			<md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://keycloak.acme.example/realms/acme/protocol/saml"></md:SingleSignOnService>
+			<md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://keycloak.acme.example/realms/acme/protocol/saml"></md:SingleSignOnService>
+			<md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP" Location="https://keycloak.acme.example/realms/acme/protocol/saml"></md:SingleSignOnService>
+		</md:IDPSSODescriptor>
+	</md:EntityDescriptor>
+</md:EntitiesDescriptor>

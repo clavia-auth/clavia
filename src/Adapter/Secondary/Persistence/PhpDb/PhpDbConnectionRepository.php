@@ -16,8 +16,12 @@ use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Connection\ConnectionStrategy;
 use Clavia\Domain\Connection\OidcSettings;
+use Clavia\Domain\Connection\Saml\SamlCertificate;
+use Clavia\Domain\Connection\Saml\SamlOptions;
+use Clavia\Domain\Connection\Saml\SamlSettings;
 use Clavia\Domain\Shared\AlreadyExists;
 use Clavia\Domain\Shared\ScopeSet;
+use Clavia\Domain\Shared\Url;
 use Throwable;
 
 /**
@@ -27,13 +31,22 @@ use Throwable;
  *     is_domain_connection: bool, oidc_issuer: string|null, oidc_client_id: string|null,
  *     oidc_client_secret_encrypted: string|null, oidc_scope: string|null,
  *     oidc_authorization_endpoint: string|null, oidc_token_endpoint: string|null, oidc_jwks_uri: string|null,
- *     created_at: string, allow_sign_up: bool, require_verified_email: bool}
+ *     created_at: string, allow_sign_up: bool, require_verified_email: bool, saml_entity_id: string|null,
+ *     saml_sso_url: string|null, saml_certificates: string|null, saml_metadata_url: string|null,
+ *     saml_options: string|null}
  */
 final readonly class PhpDbConnectionRepository implements ConnectionRepository
 {
     private const string COLUMNS = 'name, display_name, strategy, is_enabled, is_domain_connection, oidc_issuer, '
         . 'oidc_client_id, oidc_client_secret_encrypted, oidc_scope, oidc_authorization_endpoint, '
-        . 'oidc_token_endpoint, oidc_jwks_uri, created_at, allow_sign_up, require_verified_email';
+        . 'oidc_token_endpoint, oidc_jwks_uri, created_at, allow_sign_up, require_verified_email, saml_entity_id, '
+        . 'saml_sso_url, saml_certificates::text AS saml_certificates, saml_metadata_url, '
+        . 'saml_options::text AS saml_options';
+
+    private const string WRITTEN = 'name, display_name, strategy, is_enabled, is_domain_connection, oidc_issuer, '
+        . 'oidc_client_id, oidc_client_secret_encrypted, oidc_scope, oidc_authorization_endpoint, '
+        . 'oidc_token_endpoint, oidc_jwks_uri, created_at, allow_sign_up, require_verified_email, saml_entity_id, '
+        . 'saml_sso_url, saml_certificates, saml_metadata_url, saml_options';
 
     public function __construct(private Database $database)
     {
@@ -65,10 +78,12 @@ final readonly class PhpDbConnectionRepository implements ConnectionRepository
     {
         try {
             $this->database->execute(
-                'INSERT INTO connections (' . self::COLUMNS . ') VALUES (:name, :display_name, :strategy,'
+                'INSERT INTO connections (' . self::WRITTEN . ') VALUES (:name, :display_name, :strategy,'
                 . ' :is_enabled, :is_domain_connection, :oidc_issuer, :oidc_client_id,'
                 . ' :oidc_client_secret_encrypted, :oidc_scope, :oidc_authorization_endpoint,'
-                . ' :oidc_token_endpoint, :oidc_jwks_uri, :created_at, :allow_sign_up, :require_verified_email)',
+                . ' :oidc_token_endpoint, :oidc_jwks_uri, :created_at, :allow_sign_up, :require_verified_email,'
+                . ' :saml_entity_id, :saml_sso_url, CAST(:saml_certificates AS jsonb), :saml_metadata_url,'
+                . ' CAST(:saml_options AS jsonb))',
                 self::parameters($connection),
             );
         } catch (Throwable $failure) {
@@ -101,7 +116,12 @@ final readonly class PhpDbConnectionRepository implements ConnectionRepository
                     oidc_token_endpoint = :oidc_token_endpoint,
                     oidc_jwks_uri = :oidc_jwks_uri,
                     allow_sign_up = :allow_sign_up,
-                    require_verified_email = :require_verified_email
+                    require_verified_email = :require_verified_email,
+                    saml_entity_id = :saml_entity_id,
+                    saml_sso_url = :saml_sso_url,
+                    saml_certificates = CAST(:saml_certificates AS jsonb),
+                    saml_metadata_url = :saml_metadata_url,
+                    saml_options = CAST(:saml_options AS jsonb)
                 WHERE name = :name
                 SQL,
             $parameters,
@@ -120,6 +140,7 @@ final readonly class PhpDbConnectionRepository implements ConnectionRepository
     private static function parameters(Connection $connection): array
     {
         $oidc = $connection->oidc;
+        $saml = $connection->saml;
 
         return [
             'name' => $connection->name->value,
@@ -137,6 +158,17 @@ final readonly class PhpDbConnectionRepository implements ConnectionRepository
             'created_at' => Timestamp::toDatabase($connection->createdAt),
             'allow_sign_up' => $connection->allowsSignUp,
             'require_verified_email' => $connection->requiresVerifiedEmail,
+            'saml_entity_id' => $saml?->entityId,
+            'saml_sso_url' => $saml?->singleSignOnUrl->value,
+            'saml_certificates' => $saml === null ? null : Jsonb::encode(array_map(
+                static fn (SamlCertificate $certificate): array => [
+                    'pem' => $certificate->pem,
+                    'not_after' => Timestamp::toDatabaseOrNull($certificate->notAfter),
+                ],
+                $saml->certificates,
+            )),
+            'saml_metadata_url' => $saml?->metadataUrl?->value,
+            'saml_options' => $saml === null ? null : Jsonb::encode($saml->options->toArray()),
         ];
     }
 
@@ -166,6 +198,32 @@ final readonly class PhpDbConnectionRepository implements ConnectionRepository
             );
         }
 
+        $saml = null;
+        if (
+            $row['saml_entity_id'] !== null
+            && $row['saml_sso_url'] !== null
+            && $row['saml_certificates'] !== null
+            && $row['saml_options'] !== null
+        ) {
+            /** @var list<array{pem: string, not_after: string|null}> $certificates */
+            $certificates = json_decode($row['saml_certificates'], true, 8, JSON_THROW_ON_ERROR);
+            /** @var array<string, mixed> $options */
+            $options = json_decode($row['saml_options'], true, 8, JSON_THROW_ON_ERROR);
+            $saml = SamlSettings::of(
+                $row['saml_entity_id'],
+                Url::fromString($row['saml_sso_url']),
+                array_map(
+                    static fn (array $certificate): SamlCertificate => SamlCertificate::fromPem(
+                        $certificate['pem'],
+                        Timestamp::fromDatabaseOrNull($certificate['not_after']),
+                    ),
+                    $certificates,
+                ),
+                $row['saml_metadata_url'] === null ? null : Url::fromString($row['saml_metadata_url']),
+                SamlOptions::fromArray($options),
+            );
+        }
+
         return Connection::reconstitute(
             ConnectionName::fromString($row['name']),
             $row['display_name'],
@@ -176,6 +234,7 @@ final readonly class PhpDbConnectionRepository implements ConnectionRepository
             Timestamp::fromDatabase($row['created_at']),
             $row['allow_sign_up'],
             $row['require_verified_email'],
+            $saml,
         );
     }
 }

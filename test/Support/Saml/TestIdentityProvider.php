@@ -278,6 +278,24 @@ final class TestIdentityProvider
             . '</IDPSSODescriptor></EntityDescriptor>';
     }
 
+    /**
+     * A vendor's metadata document as published (Entra ID, Okta, ADFS, Keycloak), its signing
+     * certificate the RSA key's, any other one the attacker key's.
+     */
+    public static function vendorMetadata(string $vendor): string
+    {
+        $template = file_get_contents(__DIR__ . '/metadata/' . $vendor . '.xml');
+        if ($template === false) {
+            throw new LogicException('No metadata sample for ' . $vendor);
+        }
+
+        return str_replace(
+            ['{{CERTIFICATE}}', '{{OTHER_CERTIFICATE}}'],
+            [self::der(self::rsa()['certificate']), self::der(self::attacker()['certificate'])],
+            $template,
+        );
+    }
+
     private static function rawEcdsa(string $der, int $size): string
     {
         // SEQUENCE { INTEGER r, INTEGER s }, short lengths for P-256.

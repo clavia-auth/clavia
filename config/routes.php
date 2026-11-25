@@ -25,6 +25,7 @@ use Clavia\Adapter\Primary\Http\Auth\PasswordlessCodeHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessLinkHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessStartHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordResetHandler;
+use Clavia\Adapter\Primary\Http\Auth\Saml\SamlMetadataHandler;
 use Clavia\Adapter\Primary\Http\Auth\SignUpHandler;
 use Clavia\Adapter\Primary\Http\Auth\ThemeHandler;
 use Clavia\Adapter\Primary\Http\Auth\VerifyEmailHandler;
@@ -33,6 +34,7 @@ use Clavia\Adapter\Primary\Http\Management\ClientConnectionsHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientsHandler;
 use Clavia\Adapter\Primary\Http\Management\ConnectionHandler;
+use Clavia\Adapter\Primary\Http\Management\ConnectionMetadataRefreshHandler;
 use Clavia\Adapter\Primary\Http\Management\ConnectionsHandler;
 use Clavia\Adapter\Primary\Http\Management\InitialAccessTokenHandler;
 use Clavia\Adapter\Primary\Http\Management\InitialAccessTokensHandler;
@@ -126,6 +128,7 @@ return static function (Application $app, ContainerInterface $container): void {
     // ── /auth/* — the interactive sign-in. The browser authenticates with its session
     // cookie; every state change is a POST, and logout has no GET on purpose. ──
     $app->get('/auth/login', LoginPageHandler::class, 'auth.login');
+    $app->get('/auth/saml/{connection}/metadata', SamlMetadataHandler::class, 'auth.saml.metadata');
     $app->post('/auth/login', LoginHandler::class, 'auth.login.submit');
     $app->post('/auth/logout', LogoutHandler::class, 'auth.logout');
     $app->post('/auth/theme', ThemeHandler::class, 'auth.theme');
@@ -258,6 +261,11 @@ return static function (Application $app, ContainerInterface $container): void {
         '/api/v1/clients/{client_id}/connections',
         $management(ClientConnectionsHandler::class),
         'api.client.connections',
+    );
+    $app->post(
+        '/api/v1/connections/{name}/refresh-metadata',
+        $management(ConnectionMetadataRefreshHandler::class),
+        'api.connection.refresh-metadata',
     );
     $app->route('/api/v1/connections', $management(ConnectionsHandler::class), ['GET', 'POST'], 'api.connections');
     $app->route(

@@ -57,6 +57,7 @@ use Clavia\Adapter\Primary\Http\Auth\PasswordlessCodeHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessLinkHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordlessStartHandler;
 use Clavia\Adapter\Primary\Http\Auth\PasswordResetHandler;
+use Clavia\Adapter\Primary\Http\Auth\Saml\SamlMetadataHandler;
 use Clavia\Adapter\Primary\Http\Auth\SignUpHandler;
 use Clavia\Adapter\Primary\Http\Auth\ThemeHandler;
 use Clavia\Adapter\Primary\Http\Auth\VerifyEmailHandler;
@@ -65,6 +66,7 @@ use Clavia\Adapter\Primary\Http\Management\ClientConnectionsHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientsHandler;
 use Clavia\Adapter\Primary\Http\Management\ConnectionHandler;
+use Clavia\Adapter\Primary\Http\Management\ConnectionMetadataRefreshHandler;
 use Clavia\Adapter\Primary\Http\Management\ConnectionsHandler;
 use Clavia\Adapter\Primary\Http\Management\InitialAccessTokenHandler;
 use Clavia\Adapter\Primary\Http\Management\InitialAccessTokensHandler;
@@ -201,9 +203,11 @@ use Clavia\Application\Clients\Registration\RegisteredClients;
 use Clavia\Application\Clients\Registration\RegistrationMetadata;
 use Clavia\Application\Clients\Registration\UpdateClientConfiguration;
 use Clavia\Application\Connection\ConnectionAccess;
+use Clavia\Application\Connection\Saml\DescribeSamlServiceProvider;
 use Clavia\Application\Connection\Saml\GenerateServiceProviderKeys;
 use Clavia\Application\Connection\Saml\ListServiceProviderKeys;
 use Clavia\Application\Connection\Saml\RotateServiceProviderKeys;
+use Clavia\Application\Connection\Saml\SamlServiceProviderEndpoints;
 use Clavia\Application\Development\BuildAuthorizationUrl;
 use Clavia\Application\Development\SeedDashboardClient;
 use Clavia\Application\Development\SeedDevelopmentData;
@@ -221,6 +225,8 @@ use Clavia\Application\Management\Connections\CreateConnection;
 use Clavia\Application\Management\Connections\DeleteConnection;
 use Clavia\Application\Management\Connections\OidcConfiguration;
 use Clavia\Application\Management\Connections\ReadConnections;
+use Clavia\Application\Management\Connections\RefreshSamlMetadata;
+use Clavia\Application\Management\Connections\SamlConfiguration;
 use Clavia\Application\Management\Connections\UpdateConnection;
 use Clavia\Application\Management\InitialAccessTokens\IssueInitialAccessToken;
 use Clavia\Application\Management\InitialAccessTokens\ReadInitialAccessTokens;
@@ -328,6 +334,8 @@ use Clavia\Application\Port\PasskeyVerifier;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Application\Port\PasswordlessChallengeStore;
 use Clavia\Application\Port\PushedAuthorizationRequestStore;
+use Clavia\Application\Port\Saml\SamlMetadataSource;
+use Clavia\Application\Port\Saml\SamlServiceProvider;
 use Clavia\Application\Port\Saml\ServiceProviderKeyStore;
 use Clavia\Application\Port\Saml\ServiceProviderKeys;
 use Clavia\Application\Port\SchemaMigrator;
@@ -488,6 +496,8 @@ final class ConfigProvider
                     PushAuthorizationRequest::class => Container\PushAuthorizationRequestFactory::class,
                     SigningKeysHandler::class => Container\SigningKeysHandlerFactory::class,
                     SamlKeysHandler::class => Container\SamlKeysHandlerFactory::class,
+                    SamlMetadataHandler::class => Container\SamlMetadataHandlerFactory::class,
+                    ConnectionMetadataRefreshHandler::class => Container\ConnectionMetadataRefreshHandlerFactory::class,
                     InitialAccessTokensHandler::class => Container\InitialAccessTokensHandlerFactory::class,
                     WebhooksHandler::class => Container\WebhooksHandlerFactory::class,
                     WebhookHandler::class => Container\WebhookHandlerFactory::class,
@@ -754,6 +764,12 @@ final class ConfigProvider
                     SigningKeyStore::class => Container\SigningKeyStoreFactory::class,
                     ServiceProviderKeyStore::class => Container\ServiceProviderKeyStoreFactory::class,
                     ServiceProviderKeys::class => Container\ServiceProviderKeysFactory::class,
+                    SamlServiceProvider::class => Container\SamlServiceProviderFactory::class,
+                    SamlMetadataSource::class => Container\SamlMetadataSourceFactory::class,
+                    SamlServiceProviderEndpoints::class => Container\SamlServiceProviderEndpointsFactory::class,
+                    SamlConfiguration::class => Container\SamlConfigurationFactory::class,
+                    RefreshSamlMetadata::class => Container\RefreshSamlMetadataFactory::class,
+                    DescribeSamlServiceProvider::class => Container\DescribeSamlServiceProviderFactory::class,
                     CertificateCache::class => Container\SamlCertificateCacheFactory::class,
 
                     // Primary adapter: HTTP

@@ -69,9 +69,10 @@ auth.{$CLAVIA_ROOT_DOMAIN} {
 	# pages, redirects that depend on who is signed in (RFC 6749 §5.1) — with the
 	# exceptions that exist precisely to be cached: the discovery document, the JWKS
 	# (relying parties cache it for the max-age the app sets, which is what makes
-	# key rotation safe), and static assets. The app sets no-store itself on every
+	# key rotation safe), each SAML connection's service provider metadata (public,
+	# read by identity providers), and static assets. The app sets no-store itself on every
 	# sensitive response; this is the belt to those braces.
-	@sensitive not path /.well-known/* /oidc/jwks.json /auth/static/* /favicon.ico
+	@sensitive not path /.well-known/* /oidc/jwks.json /auth/static/* /favicon.ico /auth/saml/*/metadata
 	header @sensitive {
 		Cache-Control "no-store"
 		defer

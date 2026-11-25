@@ -27,6 +27,7 @@ final readonly class DescribedConnection
         public Connection $connection,
         public bool $configured,
         public bool $usable,
+        public ?DescribedServiceProvider $serviceProvider = null,
     ) {
     }
 }

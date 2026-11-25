@@ -8,6 +8,13 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ### Added
 
+- **SAML connections, registered** (#125): `POST /api/v1/connections` takes `strategy: saml` with the
+  identity provider's metadata, as a document or a URL (Entra ID, Okta, ADFS and Keycloak metadata
+  read); `POST /api/v1/connections/{name}/refresh-metadata` reads the URL again. Each connection
+  publishes this server's metadata at `GET /auth/saml/{connection}/metadata`, with the service
+  provider's certificates. Signing in through one comes next. **Migration `0046`**.
+- **Caddy** (#125): `/auth/saml/*/metadata` joins the paths whose caching the application owns.
+
 - **SAML service provider keys in a KMS** (#124): `CLAVIA_SAML_KEY_BACKEND` takes `aws-kms`,
   `gcp-kms` and `azure-key-vault`, the keys named by `CLAVIA_SAML_SIGNING_KEY_REF` and
   `CLAVIA_SAML_ENCRYPTION_KEY_REF` (a key version, never an alias), with
