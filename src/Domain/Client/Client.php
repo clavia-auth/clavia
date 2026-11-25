@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Domain\Client;
 
 use Clavia\Domain\Authentication\MfaPolicy;
+use Clavia\Domain\Claims\ClaimMappings;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\Url;
@@ -65,6 +66,7 @@ final readonly class Client
         public MfaPolicy $mfaPolicy,
         public bool $requiresPushedAuthorizationRequests,
         public bool $requiresDpop,
+        public ClaimMappings $claims,
     ) {
     }
 
@@ -109,6 +111,7 @@ final readonly class Client
         MfaPolicy $mfaPolicy = MfaPolicy::Optional,
         bool $requiresPushedAuthorizationRequests = false,
         bool $requiresDpop = false,
+        ?ClaimMappings $claims = null,
     ): self {
         $secretHash = $secretHash === '' ? null : $secretHash;
 
@@ -189,6 +192,10 @@ final readonly class Client
             throw new InvalidValue('The client credentials grant is available to confidential clients only.');
         }
 
+        if ($claims !== null && ! $claims->isEmpty() && $id->ownership() === Ownership::ThirdParty) {
+            throw new InvalidValue('A third-party application takes no custom claims: no consent screen names them.');
+        }
+
         return new self(
             $id,
             $name,
@@ -206,6 +213,7 @@ final readonly class Client
             $mfaPolicy,
             $requiresPushedAuthorizationRequests,
             $requiresDpop,
+            $claims ?? ClaimMappings::none(),
         );
     }
 
@@ -235,7 +243,23 @@ final readonly class Client
             $this->mfaPolicy,
             $this->requiresPushedAuthorizationRequests,
             $this->requiresDpop,
+            $this->claims,
         );
+    }
+
+    /**
+     * The same client, with these custom claims in its ID tokens and userinfo answers
+     * (docs/design/custom-claims.md).
+     *
+     * @throws InvalidValue For a third-party application: no consent screen would name them.
+     */
+    public function withClaims(ClaimMappings $claims): self
+    {
+        if (! $claims->isEmpty() && ! $this->isFirstParty()) {
+            throw new InvalidValue('A third-party application takes no custom claims: no consent screen names them.');
+        }
+
+        return clone($this, ['claims' => $claims]);
     }
 
     /** Whether it lists `$connection` among those its users may sign in through. */
@@ -287,6 +311,7 @@ final readonly class Client
             $this->mfaPolicy,
             $this->requiresPushedAuthorizationRequests,
             $this->requiresDpop,
+            $this->claims,
         );
     }
 
@@ -312,6 +337,7 @@ final readonly class Client
             $this->mfaPolicy,
             $this->requiresPushedAuthorizationRequests,
             $this->requiresDpop,
+            $this->claims,
         );
     }
 
@@ -339,6 +365,7 @@ final readonly class Client
             $this->mfaPolicy,
             $this->requiresPushedAuthorizationRequests,
             $this->requiresDpop,
+            $this->claims,
         );
     }
 
@@ -364,6 +391,7 @@ final readonly class Client
             $policy,
             $this->requiresPushedAuthorizationRequests,
             $this->requiresDpop,
+            $this->claims,
         );
     }
 
@@ -389,6 +417,7 @@ final readonly class Client
             $this->mfaPolicy,
             $required,
             $this->requiresDpop,
+            $this->claims,
         );
     }
 
@@ -415,6 +444,7 @@ final readonly class Client
             $this->mfaPolicy,
             $this->requiresPushedAuthorizationRequests,
             $required,
+            $this->claims,
         );
     }
 
@@ -448,6 +478,7 @@ final readonly class Client
             $this->mfaPolicy,
             $this->requiresPushedAuthorizationRequests,
             $this->requiresDpop,
+            $this->claims,
         );
     }
 

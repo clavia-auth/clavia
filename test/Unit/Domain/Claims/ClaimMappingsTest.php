@@ -11,11 +11,13 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Domain\Claims;
 
+use Clavia\Domain\Claims\ClaimDestination;
 use Clavia\Domain\Claims\ClaimMapping;
 use Clavia\Domain\Claims\ClaimMappings;
 use Clavia\Domain\Claims\ClaimName;
 use Clavia\Domain\Claims\ClaimSource;
 use Clavia\Domain\Shared\InvalidValue;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class ClaimMappingsTest extends TestCase
@@ -79,6 +81,52 @@ final class ClaimMappingsTest extends TestCase
         $loaded = ClaimMappings::forApiFromJson('[{"name":"sub","source":"email"}]');
 
         self::assertTrue($loaded->mappings[0]->name->isReserved());
+    }
+
+    public function testAnApplicationsMappingSaysWhereItGoes(): void
+    {
+        $both = ClaimMapping::forApplication(
+            ClaimName::fromString('tenant', onAnApi: false),
+            ClaimSource::fromString('app_metadata.tenant'),
+            [ClaimDestination::UserInfo, ClaimDestination::IdToken],
+        );
+
+        self::assertSame(['id_token', 'userinfo'], $both->toArray()['in'] ?? null, 'In a fixed order.');
+        self::assertTrue($both->goesTo(ClaimDestination::IdToken));
+        self::assertFalse($both->goesTo(ClaimDestination::AccessToken));
+        self::assertArrayNotHasKey('in', self::mapping('plan', 'email')->toArray(), "An API's says nothing.");
+
+        $json = ClaimMappings::of([$both])->toJson();
+        self::assertSame($json, ClaimMappings::forApplicationFromJson($json)->toJson());
+    }
+
+    /** @return iterable<string, array{list<ClaimDestination>}> */
+    public static function badDestinations(): iterable
+    {
+        yield 'nowhere' => [[]];
+        yield 'an access token' => [[ClaimDestination::AccessToken]];
+        yield 'twice the same' => [[ClaimDestination::IdToken, ClaimDestination::IdToken]];
+    }
+
+    /** @param list<ClaimDestination> $destinations */
+    #[DataProvider('badDestinations')]
+    public function testAnApplicationsMappingGoesSomewhereItMay(array $destinations): void
+    {
+        $this->expectException(InvalidValue::class);
+
+        ClaimMapping::forApplication(
+            ClaimName::fromString('tenant', onAnApi: false),
+            ClaimSource::fromString('email'),
+            $destinations,
+        );
+    }
+
+    public function testInIsAListOfIdTokenAndUserinfo(): void
+    {
+        self::assertSame([ClaimDestination::IdToken], ClaimMappings::destinations(['id_token']));
+
+        $this->expectException(InvalidValue::class);
+        ClaimMappings::destinations(['access_token_please']);
     }
 
     private static function mapping(string $name, string $source, ?string $value = null): ClaimMapping

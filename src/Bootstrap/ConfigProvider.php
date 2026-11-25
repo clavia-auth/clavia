@@ -274,6 +274,7 @@ use Clavia\Application\OAuth2\Token\UserScope;
 use Clavia\Application\OAuth2\TokenManagement\IntrospectToken;
 use Clavia\Application\OAuth2\TokenManagement\IssuedTokens;
 use Clavia\Application\OAuth2\TokenManagement\RevokeToken;
+use Clavia\Application\Oidc\ApplicationClaims;
 use Clavia\Application\Oidc\CompactJws;
 use Clavia\Application\Oidc\Discovery\ProviderMetadata;
 use Clavia\Application\Oidc\IdTokenIssuer;
@@ -502,6 +503,7 @@ final class ConfigProvider
                     DescribeLoginPage::class => Container\DescribeLoginPageFactory::class,
                     CompactJws::class => Container\CompactJwsFactory::class,
                     IdTokenIssuer::class => Container\IdTokenIssuerFactory::class,
+                    ApplicationClaims::class => Container\ApplicationClaimsFactory::class,
                     ProviderMetadata::class => Container\ProviderMetadataFactory::class,
                     PublishSigningKeys::class => Container\PublishSigningKeysFactory::class,
                     GenerateSigningKey::class => Container\GenerateSigningKeyFactory::class,

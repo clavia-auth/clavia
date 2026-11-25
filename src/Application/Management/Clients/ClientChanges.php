@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Management\Clients;
 
+use Clavia\Domain\Claims\ClaimMappings;
+
 /**
  * Changes to a client's registration; null leaves a field alone. The type is not among
  * them: switching between public and confidential is a different client.
@@ -39,6 +41,7 @@ final readonly class ClientChanges
         public ?string $mfaPolicy = null,
         public ?bool $requirePushedAuthorizationRequests = null,
         public ?bool $requireDpop = null,
+        public ?ClaimMappings $claims = null,
     ) {
     }
 }

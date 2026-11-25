@@ -680,10 +680,18 @@ OpenAPI document says so where the format is chosen.
 
 ### OpenID Connect
 
-- **ID tokens** carry `sub` and protocol claims only (`iss`, `aud`, `exp`, `iat`, `nonce`,
-  `auth_time`, `amr`, `acr`, `sid`, `at_hash`). What a scope releases (`IdentityClaims::of()`) is
-  served by `/oidc/userinfo` alone; an unknown value is left out, never null. `auth_time` and
-  `amr` come from the session that approved the code.
+- **ID tokens** carry `sub` and protocol claims (`iss`, `aud`, `exp`, `iat`, `nonce`,
+  `auth_time`, `amr`, `acr`, `sid`, `at_hash`), then the application's custom claims meant for
+  them, and nothing else. What a scope releases (`IdentityClaims::of()`) is served by
+  `/oidc/userinfo` alone, followed there by the custom claims meant for userinfo; an unknown value
+  is left out, never null. `auth_time` and `amr` come from the session that approved the code.
+- **An application's custom claims** (`Client::$claims`, `Oidc\ApplicationClaims`,
+  docs/design/custom-claims.md): each `{name, source, value?, in}` goes to the ID token,
+  userinfo or both, worked out from the account at issuance or at each request. A first-party
+  application's only (refused for a third-party one, never set by dynamic registration); `roles`
+  is not a name it may use, and the `roles` source gives all of the person's roles. A custom claim
+  never replaces a protocol or standard claim: its name is never reserved, and both places add it
+  after them.
 - **Levels** (`AuthenticationLevel`, design in `docs/design/mfa-policies.md`): `acr` is worked
   out from `amr`, never stored. Two values: the PAPE multi-factor URI (`amr` has `mfa`), then
   `phr` (and a passkey, `hwk` or `swk`). One factor has no `acr`. No `phrh`: passkeys are

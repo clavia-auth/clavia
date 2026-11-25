@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Application\Oidc\ApplicationClaims;
 use Clavia\Application\Oidc\CompactJws;
 use Clavia\Application\Oidc\IdTokenIssuer;
 use Clavia\Application\Port\TokenSigner;
@@ -32,6 +33,9 @@ final class IdTokenIssuerFactory
         $lifetime = $settings->idTokenLifetime;
         assert($issuer !== '' && $lifetime > 0);
 
-        return new IdTokenIssuer($signer, $jws, $issuer, $lifetime);
+        /** @var ApplicationClaims $claims */
+        $claims = $container->get(ApplicationClaims::class);
+
+        return new IdTokenIssuer($signer, $jws, $issuer, $lifetime, $claims);
     }
 }

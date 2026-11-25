@@ -11,6 +11,9 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Application\Oidc;
 
+use ClaviaTest\Support\Fake\InMemoryClientRepository;
+use ClaviaTest\Support\Fake\InMemoryRoleRepository;
+use Clavia\Application\Oidc\ApplicationClaims;
 use Clavia\Application\Oidc\CompactJws;
 use Clavia\Application\Oidc\IdTokenIssuer;
 use Clavia\Application\Port\NoActiveSigningKey;
@@ -46,7 +49,13 @@ final class IdTokenIssuerTest extends TestCase
     {
         $this->clock = new FrozenClock('2026-01-15T10:00:00Z');
         $this->keys = new InMemorySigningKeys($this->clock);
-        $this->issuer = new IdTokenIssuer($this->keys, new CompactJws($this->keys), 'https://auth.clavia.test', 300);
+        $this->issuer = new IdTokenIssuer(
+            $this->keys,
+            new CompactJws($this->keys),
+            'https://auth.clavia.test',
+            300,
+            new ApplicationClaims(new InMemoryClientRepository(), new InMemoryRoleRepository()),
+        );
         $this->user = User::register(
             UserId::generate(new SeededRandomSource(5)),
             'ada@example.com',

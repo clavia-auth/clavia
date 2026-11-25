@@ -11,6 +11,11 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Support\Contract;
 
+use Clavia\Domain\Claims\ClaimDestination;
+use Clavia\Domain\Claims\ClaimMapping;
+use Clavia\Domain\Claims\ClaimMappings;
+use Clavia\Domain\Claims\ClaimName;
+use Clavia\Domain\Claims\ClaimSource;
 use Clavia\Domain\Client\BackChannelLogout;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
@@ -31,6 +36,26 @@ use PHPUnit\Framework\Attributes\Test;
 trait ClientRepositoryContract
 {
     abstract protected function clients(): ClientRepository;
+
+    #[Test]
+    public function anApplicationsCustomClaimsAreSavedAndReadBackWhole(): void
+    {
+        $claims = ClaimMappings::of([
+            ClaimMapping::forApplication(
+                ClaimName::fromString('tenant', onAnApi: false),
+                ClaimSource::fromString('app_metadata.tenant'),
+                [ClaimDestination::UserInfo, ClaimDestination::IdToken],
+            ),
+            ClaimMapping::forApplication(
+                ClaimName::fromString('https://example.com/deployment', onAnApi: false),
+                ClaimSource::fromString('constant', '{"region":"eu","n":1}'),
+                [ClaimDestination::IdToken],
+            ),
+        ]);
+        $this->clients()->save($this->aPublicClient('spa', 'My SPA')->withClaims($claims));
+
+        self::assertSame($claims->toJson(), $this->clients()->find(ClientId::fromString('spa'))?->claims->toJson());
+    }
 
     #[Test]
     public function aSavedPublicClientIsReadBackWhole(): void

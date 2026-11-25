@@ -15,6 +15,7 @@ use Clavia\Domain\Authentication\AuthenticationContext;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\User;
 use DateTimeImmutable;
+use LogicException;
 
 /**
  * The claims of an ID token (OIDC Core §2): who authenticated, to whom it is said, when
@@ -39,7 +40,7 @@ final readonly class IdTokenClaims
     public const string TYPE = 'JWT';
 
     /**
-     * @param array<non-empty-string, string|bool|int|list<string>> $claims
+     * @param array<non-empty-string, mixed> $claims
      */
     private function __construct(private array $claims)
     {
@@ -50,6 +51,11 @@ final readonly class IdTokenClaims
      * @param positive-int     $lifetimeSeconds
      * @param string           $atHash          The half hash of the access token issued alongside
      *                                          (OIDC Core §3.1.3.6), which binds the two together.
+     * @param array<non-empty-string, mixed> $custom The application's custom claims for its ID
+     *                                               tokens (docs/design/custom-claims.md), added after
+     *                                               the protocol's, which they never replace.
+     *
+     * @throws LogicException When a custom claim would replace a protocol claim.
      */
     public static function issue(
         string $issuer,
@@ -60,6 +66,7 @@ final readonly class IdTokenClaims
         string $atHash,
         DateTimeImmutable $now,
         int $lifetimeSeconds,
+        array $custom = [],
     ): self {
         $issuedAt = $now->getTimestamp();
 
@@ -97,12 +104,20 @@ final readonly class IdTokenClaims
             $claims['sid'] = $authentication->sid;
         }
         $claims['at_hash'] = $atHash;
+        /** @var mixed $value */
+        foreach ($custom as $name => $value) {
+            if (array_key_exists($name, $claims)) {
+                throw new LogicException('A custom claim would replace a protocol claim of the ID token.');
+            }
+            /** @psalm-suppress MixedAssignment */
+            $claims[$name] = $value;
+        }
 
         return new self($claims);
     }
 
     /**
-     * @return array<non-empty-string, string|bool|int|list<string>>
+     * @return array<non-empty-string, mixed>
      */
     public function toArray(): array
     {

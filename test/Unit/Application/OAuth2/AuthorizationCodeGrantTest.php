@@ -11,12 +11,14 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Application\OAuth2;
 
+use ClaviaTest\Support\Fake\InMemoryClientRepository;
 use Clavia\Application\OAuth2\RequestParameters;
 use Clavia\Application\OAuth2\Token\AccessTokenMinter;
 use Clavia\Application\OAuth2\Token\ApiClaims;
 use Clavia\Application\OAuth2\Token\AuthorizationCodeGrant;
 use Clavia\Application\OAuth2\Token\IssuedToken;
 use Clavia\Application\OAuth2\Token\UserScope;
+use Clavia\Application\Oidc\ApplicationClaims;
 use Clavia\Application\Oidc\CompactJws;
 use Clavia\Application\Oidc\IdTokenIssuer;
 use Clavia\Application\Port\NoActiveSigningKey;
@@ -101,7 +103,13 @@ final class AuthorizationCodeGrantTest extends TestCase
             new SecretGenerator($random),
             $random,
             $this->clock,
-            new IdTokenIssuer($this->keys, new CompactJws($this->keys), 'https://auth.clavia.test', 300),
+            new IdTokenIssuer(
+                $this->keys,
+                new CompactJws($this->keys),
+                'https://auth.clavia.test',
+                300,
+                new ApplicationClaims(new InMemoryClientRepository(), new InMemoryRoleRepository()),
+            ),
             new UserScope(
                 $this->resourceServers,
                 new InMemoryRoleRepository($this->resourceServers, $this->users),
