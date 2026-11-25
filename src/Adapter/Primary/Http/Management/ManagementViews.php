@@ -213,6 +213,7 @@ final class ManagementViews
             'id' => $role->id->value,
             'name' => $role->name,
             'description' => $role->description,
+            'provisionable' => $role->provisionable,
             'created_at' => self::instant($role->createdAt),
         ];
     }

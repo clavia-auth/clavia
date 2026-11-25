@@ -27,6 +27,7 @@ use Clavia\Application\Management\Roles\RoleAssignments;
 use Clavia\Application\Management\Roles\RoleChanges;
 use Clavia\Application\Management\Roles\RolePermissions;
 use Clavia\Application\Management\Roles\UpdateRole;
+use Clavia\Application\Provisioning\Groups\GroupRoles;
 use Clavia\Application\Management\Users\ManagedUser;
 use Clavia\Application\Management\Users\ReadUsers;
 use Clavia\Domain\Identity\User;
@@ -43,6 +44,7 @@ use Clavia\Domain\Shared\PageRequest;
 use Clavia\Domain\Shared\ScopeSet;
 use Clavia\Domain\Shared\SecretGenerator;
 use ClaviaTest\Support\Fake\FrozenClock;
+use ClaviaTest\Support\Fake\InMemoryScimGroupRepository;
 use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
 use ClaviaTest\Support\Fake\InMemoryPasskeyRepository;
@@ -148,7 +150,13 @@ final class RolesTest extends TestCase
     public function testAnUpdateChangesOnlyWhatItNames(): void
     {
         $role = $this->create('Billing', [$this->reference($this->invoices, 'invoices:read')]);
-        $update = new UpdateRole($this->roles, $this->permissions(), new InMemoryDomainEvents());
+        $events = new InMemoryDomainEvents();
+        $update = new UpdateRole(
+            $this->roles,
+            $this->permissions(),
+            new GroupRoles(new InMemoryScimGroupRepository($this->users), $this->roles, $this->clock, $events),
+            $events,
+        );
 
         $renamed = $update($role->id, new RoleChanges(name: 'Accounts'));
         self::assertSame('Accounts', $renamed->name);

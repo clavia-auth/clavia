@@ -134,6 +134,8 @@ final readonly class PhpDbProvisionedAccountRepository implements ProvisionedAcc
                 ScimFilterAttribute::ExternalId => 'pa.external_id = :' . $name,
                 ScimFilterAttribute::Id => 'pa.user_id = CAST(:' . $name . ' AS uuid)',
                 ScimFilterAttribute::EmailValue => 'lower(u.email) = lower(:' . $name . ')',
+                // A user has no displayName to filter on: nothing matches.
+                ScimFilterAttribute::DisplayName => 'false',
             };
             if ($attribute === ScimFilterAttribute::Id) {
                 try {

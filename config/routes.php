@@ -84,6 +84,8 @@ use Clavia\Adapter\Primary\Http\Oidc\EndSessionHandler;
 use Clavia\Adapter\Primary\Http\Oidc\JwksHandler;
 use Clavia\Adapter\Primary\Http\Oidc\UserInfoHandler;
 use Clavia\Adapter\Primary\Http\Scim\ProvisioningMiddleware;
+use Clavia\Adapter\Primary\Http\Scim\ScimGroupHandler;
+use Clavia\Adapter\Primary\Http\Scim\ScimGroupsHandler;
 use Clavia\Adapter\Primary\Http\Scim\ScimCatalogueHandler;
 use Clavia\Adapter\Primary\Http\Scim\ScimNotFoundHandler;
 use Clavia\Adapter\Primary\Http\Scim\ScimNotImplementedHandler;
@@ -390,6 +392,13 @@ return static function (Application $app, ContainerInterface $container): void {
         $scim(ScimUserHandler::class),
         ['GET', 'PUT', 'PATCH', 'DELETE'],
         'scim.user',
+    );
+    $app->route('/scim/v2/Groups', $scim(ScimGroupsHandler::class), ['GET', 'POST'], 'scim.groups');
+    $app->route(
+        '/scim/v2/Groups/{id}',
+        $scim(ScimGroupHandler::class),
+        ['GET', 'PUT', 'PATCH', 'DELETE'],
+        'scim.group',
     );
     // Offered by no directory this is for (§1): 501, as RFC 7644 §3.12 answers a missing feature.
     $app->post('/scim/v2/Bulk', $scim(ScimNotImplementedHandler::class), 'scim.bulk');

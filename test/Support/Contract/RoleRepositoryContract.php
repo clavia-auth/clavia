@@ -223,6 +223,48 @@ trait RoleRepositoryContract
         self::assertSame(0, $this->roles()->holders($kept->id, PageRequest::of())->total);
     }
 
+    #[Test]
+    public function aGroupTakesBackOnlyTheRoleItGave(): void
+    {
+        $role = $this->aRole('rol_aaaaaaaaaaaaaaaa', 'Support', []);
+        $this->roles()->save($role);
+        $jane = $this->aRoleHolder('jane@example.com');
+        $john = $this->aRoleHolder('john@example.com');
+        $at = new DateTimeImmutable('2026-01-15T10:00:00Z');
+
+        self::assertTrue($this->roles()->grantThroughGroup($role->id, $jane, $at));
+        self::assertFalse($this->roles()->grantThroughGroup($role->id, $jane, $at), 'Held already.');
+        self::assertSame([$role->id->value], array_map(
+            static fn (RoleId $id): string => $id->value,
+            $this->roles()->rolesThroughGroups($jane),
+        ));
+        self::assertTrue($this->roles()->withdrawGroupGrant($role->id, $jane));
+        self::assertSame([], $this->roles()->rolesOf($jane));
+
+        $this->roles()->assign($role->id, $john, $at);
+        self::assertFalse($this->roles()->grantThroughGroup($role->id, $john, $at), 'Given by hand.');
+        self::assertFalse($this->roles()->withdrawGroupGrant($role->id, $john), 'A group takes back only its own.');
+        self::assertSame(['Support'], $this->roleNames($this->roles()->rolesOf($john)));
+        self::assertSame([], $this->roles()->rolesThroughGroups($john));
+
+        self::assertTrue($this->roles()->grantThroughGroup($role->id, $jane, $at));
+        $this->roles()->assign($role->id, $jane, $at);
+        self::assertSame([], $this->roles()->rolesThroughGroups($jane), 'Given by hand as well: by hand now.');
+        self::assertFalse($this->roles()->withdrawGroupGrant($role->id, $jane));
+    }
+
+    #[Test]
+    public function aProvisionableRoleIsReadBackSo(): void
+    {
+        $api = $this->invoicesApi();
+        $role = $this->aRole('rol_aaaaaaaaaaaaaaaa', 'Billing', [[$api, 'invoices:read']])->withProvisionable(true);
+
+        $this->roles()->save($role);
+
+        self::assertTrue($this->roles()->find($role->id)?->provisionable);
+        self::assertFalse($this->roles()->find($role->id)?->permissions[0]->onSystemApi);
+    }
+
     private function invoicesApi(): ResourceServer
     {
         $api = $this->anApiWithRoles(

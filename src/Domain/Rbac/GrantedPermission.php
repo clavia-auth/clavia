@@ -20,12 +20,16 @@ use Clavia\Domain\Shared\Scope;
  *
  * The pair is exactly the key of the API's permission, and storage holds it as a foreign
  * key onto it: when the API stops defining the permission, no role grants it any more.
+ *
+ * It knows whether its API is a system API (the Management API): a role a directory may grant
+ * through SCIM can never hold one ({@see Role::$provisionable}).
  */
 final readonly class GrantedPermission
 {
     public function __construct(
         public ResourceServerId $resourceServerId,
         public Scope $value,
+        public bool $onSystemApi = false,
     ) {
     }
 

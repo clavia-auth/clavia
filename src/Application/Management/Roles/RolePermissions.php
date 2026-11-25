@@ -52,7 +52,7 @@ final readonly class RolePermissions
                     $reference->resourceServerId,
                 ));
             }
-            $granted[] = new GrantedPermission($api->id, Scope::fromString($reference->value));
+            $granted[] = new GrantedPermission($api->id, Scope::fromString($reference->value), $api->isSystem);
         }
 
         return $granted;

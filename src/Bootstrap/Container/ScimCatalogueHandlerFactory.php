@@ -27,7 +27,6 @@ final class ScimCatalogueHandlerFactory
         /** @var Settings $settings */
         $settings = $container->get(Settings::class);
 
-        // `Group` and its schema join with the slice that serves `/Groups`.
         return new ScimCatalogueHandler($responder, ScimCatalogue::of($settings->scimBaseUrl()));
     }
 }

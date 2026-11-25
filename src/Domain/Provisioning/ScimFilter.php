@@ -27,10 +27,12 @@ final readonly class ScimFilter
     private const int MAX_COMPARISONS = 10;
 
     /** An attribute path, `eq`, a JSON string, anchored at the offset given. */
-    private const string COMPARISON = '/\G\s*((?:urn:ietf:params:scim:schemas:core:2\.0:User:)?[A-Za-z][A-Za-z0-9.]*)'
+    private const string COMPARISON = '/\G\s*((?:urn:ietf:params:scim:schemas:core:2\.0:(?:User|Group):)?'
+        . '[A-Za-z][A-Za-z0-9.]*)'
         . '\s+([A-Za-z]+)\s+("(?:[^"\\\\\x00-\x1F]|\\\\.)*")\s*/i';
     private const string CONJUNCTION = '/\G\s*and\s+/i';
     private const string URN = 'urn:ietf:params:scim:schemas:core:2.0:user:';
+    private const string GROUP_URN = 'urn:ietf:params:scim:schemas:core:2.0:group:';
 
     /** @param non-empty-list<array{ScimFilterAttribute, string}> $conditions Every one must hold. */
     private function __construct(public array $conditions)
@@ -38,10 +40,13 @@ final readonly class ScimFilter
     }
 
     /**
+     * @param list<ScimFilterAttribute> $attributes What may be compared: a user's, by default.
+     *
      * @throws InvalidValue When the filter is not one of the forms supported.
      */
-    public static function parse(string $filter): self
+    public static function parse(string $filter, array $attributes = ScimFilterAttribute::USERS): self
     {
+        $names = implode(', ', array_map(static fn (ScimFilterAttribute $a): string => $a->name(), $attributes));
         if ($filter === '' || strlen($filter) > self::MAX_LENGTH) {
             throw new InvalidValue('A filter is 1 to 1024 bytes.');
         }
@@ -49,12 +54,10 @@ final readonly class ScimFilter
         $offset = 0;
         while (true) {
             if (preg_match(self::COMPARISON, $filter, $match, 0, $offset) !== 1) {
-                throw new InvalidValue(
-                    'A filter compares userName, externalId, id or emails.value with eq, joined by and.',
-                );
+                throw new InvalidValue(sprintf('A filter compares %s with eq, joined by and.', $names));
             }
             $offset += strlen($match[0]);
-            $conditions[] = [self::attribute($match[1]), self::operand($match[2], $match[3])];
+            $conditions[] = [self::attribute($match[1], $attributes, $names), self::operand($match[2], $match[3])];
             if (count($conditions) > self::MAX_COMPARISONS) {
                 throw new InvalidValue('A filter has at most ten comparisons.');
             }
@@ -68,16 +71,21 @@ final readonly class ScimFilter
         }
     }
 
-    private static function attribute(string $path): ScimFilterAttribute
+    /** @param list<ScimFilterAttribute> $attributes */
+    private static function attribute(string $path, array $attributes, string $names): ScimFilterAttribute
     {
         $path = strtolower($path);
-        if (str_starts_with($path, self::URN)) {
-            $path = substr($path, strlen(self::URN));
+        foreach ([self::URN, self::GROUP_URN] as $urn) {
+            if (str_starts_with($path, $urn)) {
+                $path = substr($path, strlen($urn));
+            }
+        }
+        $attribute = ScimFilterAttribute::tryFrom($path);
+        if ($attribute === null || ! in_array($attribute, $attributes, true)) {
+            throw new InvalidValue(sprintf('A filter compares %s.', $names));
         }
 
-        return ScimFilterAttribute::tryFrom($path) ?? throw new InvalidValue(
-            'A filter compares userName, externalId, id or emails.value.',
-        );
+        return $attribute;
     }
 
     private static function operand(string $operator, string $literal): string

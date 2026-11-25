@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Scim;
 
+use Clavia\Domain\Provisioning\ScimGroupResource;
 use Clavia\Domain\Provisioning\ScimUser;
 
 /**
@@ -43,6 +44,14 @@ final class ScimCatalogue
                 'description' => 'An account of the connection the provisioning token reaches.',
                 'schema' => ScimUser::SCHEMA,
                 'meta' => ['resourceType' => 'ResourceType', 'location' => $baseUrl . '/ResourceTypes/User'],
+            ], [
+                'schemas' => [self::RESOURCE_TYPE_SCHEMA],
+                'id' => 'Group',
+                'name' => 'Group',
+                'endpoint' => '/Groups',
+                'description' => "A group of the connection's accounts; one named as a provisionable role grants it.",
+                'schema' => ScimGroupResource::SCHEMA,
+                'meta' => ['resourceType' => 'ResourceType', 'location' => $baseUrl . '/ResourceTypes/Group'],
             ]],
             'Schemas' => [[
                 'schemas' => [self::SCHEMA_SCHEMA],
@@ -82,6 +91,29 @@ final class ScimCatalogue
                     ),
                 ],
                 'meta' => ['resourceType' => 'Schema', 'location' => $baseUrl . '/Schemas/' . ScimUser::SCHEMA],
+            ], [
+                'schemas' => [self::SCHEMA_SCHEMA],
+                'id' => ScimGroupResource::SCHEMA,
+                'name' => 'Group',
+                'description' => 'A group of accounts. One named exactly as a provisionable role gives its members '
+                    . 'that role.',
+                'attributes' => [
+                    self::attribute('displayName', 'Unique in the connection, ignoring case.', required: true),
+                    self::attribute('externalId', "The directory's own identifier for the group.", caseExact: true),
+                    self::attribute(
+                        'members',
+                        'The accounts of the group.',
+                        type: 'complex',
+                        multiValued: true,
+                        subAttributes: [
+                            self::attribute('value', 'The id of a User of the connection.', caseExact: true),
+                        ],
+                    ),
+                ],
+                'meta' => [
+                    'resourceType' => 'Schema',
+                    'location' => $baseUrl . '/Schemas/' . ScimGroupResource::SCHEMA,
+                ],
             ]],
         ];
     }

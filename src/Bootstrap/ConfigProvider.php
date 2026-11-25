@@ -120,6 +120,8 @@ use Clavia\Adapter\Primary\Http\Oidc\JwksHandler;
 use Clavia\Adapter\Primary\Http\Oidc\UserInfoHandler;
 use Clavia\Adapter\Primary\Http\Scim\ProvisioningMiddleware;
 use Clavia\Adapter\Primary\Http\Scim\ScimCatalogueHandler;
+use Clavia\Adapter\Primary\Http\Scim\ScimGroupHandler;
+use Clavia\Adapter\Primary\Http\Scim\ScimGroupsHandler;
 use Clavia\Adapter\Primary\Http\Scim\ScimNotFoundHandler;
 use Clavia\Adapter\Primary\Http\Scim\ScimNotImplementedHandler;
 use Clavia\Adapter\Primary\Http\Scim\ScimResponder;
@@ -369,6 +371,13 @@ use Clavia\Application\Port\TransactionManager;
 use Clavia\Application\Port\WebAuthnChallengeStore;
 use Clavia\Application\Port\WebhookSender;
 use Clavia\Application\Provisioning\AuthenticateProvisioningToken;
+use Clavia\Application\Provisioning\Groups\CreateScimGroup;
+use Clavia\Application\Provisioning\Groups\DeleteScimGroup;
+use Clavia\Application\Provisioning\Groups\GroupMembers;
+use Clavia\Application\Provisioning\Groups\GroupRoles;
+use Clavia\Application\Provisioning\Groups\PatchScimGroup;
+use Clavia\Application\Provisioning\Groups\ReadScimGroups;
+use Clavia\Application\Provisioning\Groups\ReplaceScimGroup;
 use Clavia\Application\Provisioning\Users\CreateScimUser;
 use Clavia\Application\Provisioning\Users\DeleteScimUser;
 use Clavia\Application\Provisioning\Users\PatchScimUser;
@@ -387,6 +396,7 @@ use Clavia\Domain\Client\Registration\ClientRegistrationRepository;
 use Clavia\Domain\Client\Registration\InitialAccessTokenRepository;
 use Clavia\Domain\Provisioning\ProvisionedAccountRepository;
 use Clavia\Domain\Provisioning\ProvisioningTokenRepository;
+use Clavia\Domain\Provisioning\ScimGroupRepository;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Consent\ConsentRepository;
 use Clavia\Domain\Identity\ExternalIdentityRepository;
@@ -554,6 +564,8 @@ final class ConfigProvider
                     ScimNotFoundHandler::class => Container\ScimNotFoundHandlerFactory::class,
                     ScimUsersHandler::class => Container\ScimUsersHandlerFactory::class,
                     ScimUserHandler::class => Container\ScimUserHandlerFactory::class,
+                    ScimGroupsHandler::class => Container\ScimGroupsHandlerFactory::class,
+                    ScimGroupHandler::class => Container\ScimGroupHandlerFactory::class,
                     ClientRegistrationHandler::class => Container\ClientRegistrationHandlerFactory::class,
                     UserImportsHandler::class => Container\UserImportsHandlerFactory::class,
                     UserJobHandler::class => Container\UserJobHandlerFactory::class,
@@ -745,6 +757,13 @@ final class ConfigProvider
                     ReplaceScimUser::class => Container\ReplaceScimUserFactory::class,
                     PatchScimUser::class => Container\PatchScimUserFactory::class,
                     DeleteScimUser::class => Container\DeleteScimUserFactory::class,
+                    GroupRoles::class => Container\GroupRolesFactory::class,
+                    GroupMembers::class => Container\GroupMembersFactory::class,
+                    ReadScimGroups::class => Container\ReadScimGroupsFactory::class,
+                    CreateScimGroup::class => Container\CreateScimGroupFactory::class,
+                    ReplaceScimGroup::class => Container\ReplaceScimGroupFactory::class,
+                    PatchScimGroup::class => Container\PatchScimGroupFactory::class,
+                    DeleteScimGroup::class => Container\DeleteScimGroupFactory::class,
                     RegistrationMetadata::class => Container\RegistrationMetadataFactory::class,
                     RegisterClientDynamically::class => Container\RegisterClientDynamicallyFactory::class,
                     ImportLine::class => Container\ImportLineFactory::class,
@@ -790,6 +809,7 @@ final class ConfigProvider
                     InitialAccessTokenRepository::class => Container\InitialAccessTokenRepositoryFactory::class,
                     ProvisioningTokenRepository::class => Container\ProvisioningTokenRepositoryFactory::class,
                     ProvisionedAccountRepository::class => Container\ProvisionedAccountRepositoryFactory::class,
+                    ScimGroupRepository::class => Container\ScimGroupRepositoryFactory::class,
                     WebhookEndpointRepository::class => Container\WebhookEndpointRepositoryFactory::class,
                     WebhookDeliveryRepository::class => Container\WebhookDeliveryRepositoryFactory::class,
                     ClientRegistrationRepository::class => Container\ClientRegistrationRepositoryFactory::class,

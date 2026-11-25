@@ -24,6 +24,11 @@ use DateTimeImmutable;
  * ({@see \Clavia\Domain\ResourceServer\ResourceServer::$enforcePolicies}), a token issued
  * on someone's behalf carries only what their roles grant there, re-read at every
  * issuance. A machine client acting as itself has no roles: its client grant governs it.
+ *
+ * A **provisionable** role is one a directory's SCIM group may grant (docs/design/scim-provisioning.md
+ * §2): the group whose `displayName` is its name gives it to its members. Such a role never holds a
+ * permission on a system API, whichever way round it is attempted, so a directory's token can never
+ * make anyone an administrator of this server.
  */
 final readonly class Role
 {
@@ -40,6 +45,7 @@ final readonly class Role
         public string $description,
         public array $permissions,
         public DateTimeImmutable $createdAt,
+        public bool $provisionable = false,
     ) {
     }
 
@@ -48,8 +54,9 @@ final readonly class Role
      *
      * @param list<GrantedPermission> $permissions A permission listed twice is granted once.
      *
-     * @throws InvalidValue When the name is blank, longer than 64 characters or not one line, or the
-     *                      description is longer than 500 characters or not one line.
+     * @throws InvalidValue When the name is blank, longer than 64 characters or not one line, the
+     *                      description is longer than 500 characters or not one line, or a
+     *                      provisionable role would hold a permission on a system API.
      */
     public static function define(
         RoleId $id,
@@ -57,6 +64,7 @@ final readonly class Role
         string $description,
         array $permissions,
         DateTimeImmutable $createdAt,
+        bool $provisionable = false,
     ): self {
         if (! self::isOneLine($name, self::MAX_NAME_LENGTH) || trim($name) === '') {
             throw new InvalidValue('A role name is 1 to 64 characters on one line.');
@@ -70,8 +78,24 @@ final readonly class Role
             $byKey[$permission->key()] = $permission;
         }
         ksort($byKey, SORT_STRING);
+        $onSystemApi = array_filter($byKey, static fn (GrantedPermission $granted): bool => $granted->onSystemApi);
+        if ($provisionable && $onSystemApi !== []) {
+            throw new InvalidValue(
+                'A role a directory may grant holds no permission on a system API, such as the Management API.',
+            );
+        }
 
-        return new self($id, $name, $description, array_values($byKey), $createdAt);
+        return new self($id, $name, $description, array_values($byKey), $createdAt, $provisionable);
+    }
+
+    /**
+     * The same role, which a directory's group may grant or not.
+     *
+     * @throws InvalidValue When it holds a permission on a system API.
+     */
+    public function withProvisionable(bool $provisionable): self
+    {
+        return $this->rebuilt(provisionable: $provisionable);
     }
 
     /**
@@ -79,7 +103,7 @@ final readonly class Role
      */
     public function renamed(string $name): self
     {
-        return self::define($this->id, $name, $this->description, $this->permissions, $this->createdAt);
+        return $this->rebuilt(name: $name);
     }
 
     /**
@@ -87,17 +111,19 @@ final readonly class Role
      */
     public function described(string $description): self
     {
-        return self::define($this->id, $this->name, $description, $this->permissions, $this->createdAt);
+        return $this->rebuilt(description: $description);
     }
 
     /**
      * The same role granting exactly `$permissions`.
      *
      * @param list<GrantedPermission> $permissions
+     *
+     * @throws InvalidValue When a provisionable role would hold a permission on a system API.
      */
     public function granting(array $permissions): self
     {
-        return self::define($this->id, $this->name, $this->description, $permissions, $this->createdAt);
+        return $this->rebuilt(permissions: $permissions);
     }
 
     /**
@@ -120,6 +146,29 @@ final readonly class Role
                 static fn (GrantedPermission $granted): bool => $granted->resourceServerId->equals($resourceServerId),
             )),
         ));
+    }
+
+    /**
+     * The role with one thing changed, held to every rule again.
+     *
+     * @param list<GrantedPermission>|null $permissions
+     *
+     * @throws InvalidValue
+     */
+    private function rebuilt(
+        ?string $name = null,
+        ?string $description = null,
+        ?array $permissions = null,
+        ?bool $provisionable = null,
+    ): self {
+        return self::define(
+            $this->id,
+            $name ?? $this->name,
+            $description ?? $this->description,
+            $permissions ?? $this->permissions,
+            $this->createdAt,
+            $provisionable ?? $this->provisionable,
+        );
     }
 
     private static function isOneLine(string $text, int $maxLength): bool
