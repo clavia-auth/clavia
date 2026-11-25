@@ -14,6 +14,7 @@ namespace ClaviaTest\Integration\Persistence;
 use ClaviaTest\Support\Contract\ClientRegistrationRepositoryContract;
 use ClaviaTest\Support\Contract\InitialAccessTokenRepositoryContract;
 use ClaviaTest\Support\Contract\UserJobRepositoryContract;
+use ClaviaTest\Support\Contract\WebhookEndpointRepositoryContract;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbAuthorizationCodeRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientGrantRepository;
@@ -31,6 +32,7 @@ use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbRoleRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbTransactionManager;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbUserJobRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbUserRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbWebhookEndpointRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PostgresUrl;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
@@ -81,6 +83,7 @@ use ClaviaTest\Support\Fake\SeededRandomSource;
 use ClaviaTest\Support\IntegrationTestCase;
 use ClaviaTest\Support\TestEnvironment;
 use ClaviaTest\Support\TestStorage;
+use Clavia\Domain\Webhook\WebhookEndpointRepository;
 use DateTimeImmutable;
 use LogicException;
 use Throwable;
@@ -102,6 +105,7 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
     use ConsentRepositoryContract;
     use ConnectionRepositoryContract;
     use InitialAccessTokenRepositoryContract;
+    use WebhookEndpointRepositoryContract;
     use ClientRegistrationRepositoryContract;
     use UserJobRepositoryContract;
 
@@ -457,5 +461,11 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
         }
 
         return implode("\n", $messages);
+    }
+
+    #[\Override]
+    protected function webhookEndpoints(): WebhookEndpointRepository
+    {
+        return new PhpDbWebhookEndpointRepository(TestStorage::database());
     }
 }

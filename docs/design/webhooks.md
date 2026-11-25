@@ -1,6 +1,6 @@
 # Design: Webhooks for the audit trail
 
-**Status:** proposed · **Date:** 2026-11-24 · **Issue:** clavia-auth/clavia#18 ·
+**Status:** agreed · **Date:** 2026-11-24 · **Issue:** clavia-auth/clavia#18 ·
 **Specifications:** the Standard Webhooks specification (headers, signature, secrets, retries), RFC 2104 (HMAC),
 RFC 9110 §15 (status codes), the audit trail as `GET /api/v1/audit-events` describes it
 

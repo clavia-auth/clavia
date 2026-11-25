@@ -18,6 +18,7 @@ use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Rbac\RoleId;
 use Clavia\Domain\ResourceServer\ResourceServerId;
 use Clavia\Domain\Shared\InvalidValue;
+use Clavia\Domain\Webhook\WebhookEndpointId;
 
 /**
  * The thing an audit event was about, by type and identifier: the account signed in to,
@@ -81,5 +82,10 @@ final readonly class AuditTarget
     public static function initialAccessToken(InitialAccessTokenId $id): self
     {
         return self::of(TargetType::InitialAccessToken, $id->value);
+    }
+
+    public static function webhook(WebhookEndpointId $id): self
+    {
+        return self::of(TargetType::Webhook, $id->value);
     }
 }

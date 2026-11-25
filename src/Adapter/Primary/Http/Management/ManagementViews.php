@@ -21,6 +21,7 @@ use Clavia\Application\Management\Roles\EffectivePermission;
 use Clavia\Application\Management\Users\DescribedConsent;
 use Clavia\Application\Management\Users\ManagedSession;
 use Clavia\Application\Management\Users\ManagedUser;
+use Clavia\Application\Management\Webhooks\WebhookWithSecret;
 use Clavia\Application\Oidc\Keys\ListedSigningKey;
 use Clavia\Application\Oidc\Keys\Rotation;
 use Clavia\Domain\Audit\AuditEvent;
@@ -42,6 +43,7 @@ use Clavia\Domain\ResourceServer\Permission;
 use Clavia\Domain\ResourceServer\ResourceServer;
 use Clavia\Domain\Shared\Page;
 use Clavia\Domain\Shared\Url;
+use Clavia\Domain\Webhook\WebhookEndpoint;
 use DateTimeImmutable;
 use DateTimeZone;
 
@@ -464,6 +466,38 @@ final class ManagementViews
             ),
             'failure' => $job->failure(),
         ];
+    }
+
+    /**
+     * An endpoint, never its secret: its URL, what it listens to, whether it is on, and until when
+     * the secret before the last rotation still signs.
+     *
+     * @return array<string, mixed>
+     */
+    public static function webhook(WebhookEndpoint $endpoint): array
+    {
+        return [
+            'id' => $endpoint->id->value,
+            'url' => $endpoint->url->value,
+            'description' => $endpoint->description,
+            'events' => $endpoint->events->toStrings(),
+            'is_enabled' => $endpoint->isEnabled,
+            'previous_secret_until' => $endpoint->previousSecretUntil === null
+                ? null
+                : self::instant($endpoint->previousSecretUntil),
+            'created_at' => self::instant($endpoint->createdAt),
+            'updated_at' => self::instant($endpoint->updatedAt),
+        ];
+    }
+
+    /**
+     * An endpoint with its new secret: the one answer that carries it.
+     *
+     * @return array<string, mixed>
+     */
+    public static function webhookWithSecret(WebhookWithSecret $created): array
+    {
+        return self::webhook($created->endpoint) + ['secret' => $created->secret->reveal()];
     }
 
     private static function instant(DateTimeImmutable $instant): string
