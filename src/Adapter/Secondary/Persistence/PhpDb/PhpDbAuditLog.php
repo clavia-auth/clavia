@@ -23,13 +23,15 @@ use Clavia\Domain\Audit\Outcome;
 use Clavia\Domain\Audit\TargetType;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\UserId;
+use Clavia\Domain\Provisioning\ProvisioningTokenId;
 use Clavia\Domain\Shared\Page;
 use Clavia\Domain\Shared\PageRequest;
 use DateTimeImmutable;
 
 /**
  * @psalm-type AuditEventRow = array{id: string, type: string, occurred_at: string, outcome: string,
- *     actor_kind: string, actor_user_id: string|null, actor_client_id: string|null, target_type: string|null,
+ *     actor_kind: string, actor_user_id: string|null, actor_client_id: string|null,
+ *     actor_provisioning_token_id: string|null, target_type: string|null,
  *     target_id: string|null, details: string, client_address: string|null, user_agent: string|null}
  *
  * The audit trail in `audit_events` — append-only, as the table's trigger enforces.
@@ -40,7 +42,7 @@ use DateTimeImmutable;
 final readonly class PhpDbAuditLog implements AuditLog
 {
     private const string COLUMNS = 'id, type, occurred_at, outcome, actor_kind, actor_user_id, actor_client_id, '
-        . 'target_type, target_id, details::text AS details, client_address, user_agent';
+        . 'actor_provisioning_token_id, target_type, target_id, details::text AS details, client_address, user_agent';
 
     public function __construct(private Database $database)
     {
@@ -65,10 +67,11 @@ final readonly class PhpDbAuditLog implements AuditLog
             <<<'SQL'
                 INSERT INTO audit_events (
                     id, type, occurred_at, outcome, actor_kind, actor_user_id, actor_client_id,
-                    target_type, target_id, details, client_address, user_agent
+                    actor_provisioning_token_id, target_type, target_id, details, client_address, user_agent
                 ) VALUES (
                     :id, :type, :occurred_at, :outcome, :actor_kind, :actor_user_id, :actor_client_id,
-                    :target_type, :target_id, CAST(:details AS jsonb), :client_address, :user_agent
+                    :actor_provisioning_token_id, :target_type, :target_id, CAST(:details AS jsonb),
+                    :client_address, :user_agent
                 )
                 SQL,
             [
@@ -79,6 +82,7 @@ final readonly class PhpDbAuditLog implements AuditLog
                 'actor_kind' => $event->actor->kind->value,
                 'actor_user_id' => $event->actor->userId?->value,
                 'actor_client_id' => $event->actor->clientId?->value,
+                'actor_provisioning_token_id' => $event->actor->provisioningTokenId?->value,
                 'target_type' => $event->target?->type->value,
                 'target_id' => $event->target?->id,
                 'details' => json_encode((object) $event->details, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
@@ -178,6 +182,9 @@ final readonly class PhpDbAuditLog implements AuditLog
                 ActorKind::from($row['actor_kind']),
                 $row['actor_user_id'] === null ? null : UserId::fromString($row['actor_user_id']),
                 $row['actor_client_id'] === null ? null : ClientId::fromString($row['actor_client_id']),
+                $row['actor_provisioning_token_id'] === null
+                    ? null
+                    : ProvisioningTokenId::fromString($row['actor_provisioning_token_id']),
             ),
             $row['target_type'] === null || $row['target_id'] === null
                 ? null

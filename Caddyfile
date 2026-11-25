@@ -86,8 +86,11 @@ auth.{$CLAVIA_ROOT_DOMAIN} {
 	# every surface from one front controller, so the host split is enforced at
 	# this layer: a machine plane reachable on the origin where credentials are
 	# typed would undo the separation "Domain configuration" in CLAUDE.md calls a
-	# security property.
+	# security property. The same goes for SCIM (/scim/v2/*), the directories' plane.
 	handle /api/v1/* {
+		respond 404
+	}
+	handle /scim/v2/* {
 		respond 404
 	}
 
@@ -141,6 +144,15 @@ management.{$CLAVIA_ROOT_DOMAIN} {
 	# because there is no cross-origin caller that should present a cookie, and
 	# a machine client calling from anywhere needs no CORS at all.
 	handle /api/v1/* {
+		header Cache-Control "no-store" {
+			defer
+		}
+		import clavia_app
+	}
+
+	# SCIM 2.0 (RFC 7644): directories provisioning accounts with a provisioning token, the
+	# fifth surface. Served by the same PHP application; nothing on it is cacheable.
+	handle /scim/v2/* {
 		header Cache-Control "no-store" {
 			defer
 		}

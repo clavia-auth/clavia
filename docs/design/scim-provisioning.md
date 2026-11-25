@@ -1,6 +1,6 @@
 # Design: SCIM 2.0 provisioning
 
-**Status:** proposed · **Date:** 2026-11-24 · **Issue:** clavia-auth/clavia#21 ·
+**Status:** agreed · **Date:** 2026-11-24 · **Issue:** clavia-auth/clavia#21 ·
 **Specifications:** RFC 7643 (SCIM core schema: §2 attributes, §3 common attributes and `meta`,
 §4.1 `User`, §4.2 `Group`, §4.3 the enterprise extension, §5 `ServiceProviderConfig`, §6
 `ResourceType`, §7 `Schema`), RFC 7644 (SCIM protocol: §3.3 create, §3.4.1 retrieve, §3.4.2 list
@@ -79,7 +79,8 @@ bound failed tokens, as at the machine endpoints.
 
 A new context, `Domain\Provisioning`:
 
-- `ProvisioningToken` (aggregate, like `InitialAccessToken`): id (`prov_…`), digest, connection,
+- `ProvisioningToken` (aggregate, like `InitialAccessToken`): id (a UUID, as an initial access
+  token's: the trail and the Management API name it by kind already), digest, connection,
   description, created, expires, revoked, the subject attribute (`externalId` or `userName`),
   `addresses_trusted`, `delete_deactivates`. `isUsableAt()`, `stateAt()`, `revoke()`.
 - `ProvisionedAccount`: the user id, the connection, `userName` (and its case-folded key),
@@ -243,3 +244,24 @@ such, and removed only if it came from the group.
 4. **Token lifetime** (§2)? *Recommendation:* one year by default, two at most, with the Management
    API (and the dashboard) flagging tokens within 30 days of expiry. Never-expiring tokens are what
    leak from old directory configurations.
+
+## 11. As built
+
+What slice 1 (#129) settled:
+
+- **The actor is a fifth kind with a column of its own**: `audit_events.actor_provisioning_token_id`,
+  set for `provisioning` only (the actor check says so), and `provisioning_token_id` in the audit
+  event's `actor` in the Management API and the webhook payload.
+- **The failure throttle is the machine endpoints'** (`ClientFailureThrottle`), by client address only:
+  a provisioning token has no client to count against. A request with no token at all is refused but
+  not counted (it guesses nothing); past the limit it is `429` like the rest. A genuine token whose
+  connection went away is refused without counting.
+- **The surface states only what is built.** `ServiceProviderConfig` says no to PATCH, filtering and
+  ETags until slices 2 and 3 build them; `ResourceTypes` and `Schemas` are empty lists until `User`
+  joins with slice 2 and `Group` with slice 4, as discovery names only what exists. Any other path
+  under `/scim/v2` is a SCIM `404` behind the token, so a caller without one learns nothing.
+- **Reading a body** (§5.2, step 4: `application/scim+json` or `application/json`, 1 MiB,
+  `invalidSyntax`) comes with slice 2, the first that takes one.
+- **`expiring_soon`** is the thirty-day flag of question 4; `GET /api/v1/provisioning-tokens` takes
+  `?connection=`, for the dashboard's connection page.
+

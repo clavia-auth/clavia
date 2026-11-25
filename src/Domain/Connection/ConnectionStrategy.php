@@ -38,6 +38,16 @@ enum ConnectionStrategy: string
     /** A SAML 2.0 identity provider, registered by an operator from its metadata. */
     case Saml = 'saml';
 
+    /**
+     * Whether a directory may provision its accounts through SCIM (docs/design/scim-provisioning.md
+     * §2): a pool, or an enterprise connection, whose staff the directory owns. A social provider's
+     * accounts are the provider's, and passwordless has no account of its own to provision.
+     */
+    public function isProvisionable(): bool
+    {
+        return $this === self::Database || $this === self::Oidc || $this === self::Saml;
+    }
+
     /** Signs people in at another party rather than here. */
     public function isExternal(): bool
     {

@@ -452,6 +452,18 @@ final readonly class Settings
         return 'management.' . $this->rootDomain;
     }
 
+    /**
+     * The SCIM service provider's base URL (RFC 7644 §3), what a directory is configured with beside
+     * its provisioning token: on the management host, the fifth surface beside `/api/v1`
+     * (docs/design/scim-provisioning.md §2).
+     *
+     * @return non-empty-string
+     */
+    public function scimBaseUrl(): string
+    {
+        return 'https://' . $this->managementHost() . '/scim/v2';
+    }
+
     /** The Management API's identifier, derived from the domain unless overridden. */
     public function managementApiAudience(): string
     {

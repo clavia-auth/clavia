@@ -73,6 +73,8 @@ use Clavia\Adapter\Primary\Http\Management\ConnectionMetadataRefreshHandler;
 use Clavia\Adapter\Primary\Http\Management\ConnectionsHandler;
 use Clavia\Adapter\Primary\Http\Management\InitialAccessTokenHandler;
 use Clavia\Adapter\Primary\Http\Management\InitialAccessTokensHandler;
+use Clavia\Adapter\Primary\Http\Management\ProvisioningTokenHandler;
+use Clavia\Adapter\Primary\Http\Management\ProvisioningTokensHandler;
 use Clavia\Adapter\Primary\Http\Management\ManagementApiMiddleware;
 use Clavia\Adapter\Primary\Http\Management\ManagementContract;
 use Clavia\Adapter\Primary\Http\Management\ManagementResponder;
@@ -116,6 +118,12 @@ use Clavia\Adapter\Primary\Http\Oidc\DiscoveryHandler;
 use Clavia\Adapter\Primary\Http\Oidc\EndSessionHandler;
 use Clavia\Adapter\Primary\Http\Oidc\JwksHandler;
 use Clavia\Adapter\Primary\Http\Oidc\UserInfoHandler;
+use Clavia\Adapter\Primary\Http\Scim\ProvisioningMiddleware;
+use Clavia\Adapter\Primary\Http\Scim\ScimCatalogueHandler;
+use Clavia\Adapter\Primary\Http\Scim\ScimNotFoundHandler;
+use Clavia\Adapter\Primary\Http\Scim\ScimNotImplementedHandler;
+use Clavia\Adapter\Primary\Http\Scim\ScimResponder;
+use Clavia\Adapter\Primary\Http\Scim\ServiceProviderConfigHandler;
 use Clavia\Adapter\Primary\Http\Shared\AuditContextMiddleware;
 use Clavia\Adapter\Primary\Http\Shared\BearerChallenger;
 use Clavia\Adapter\Primary\Http\Shared\ErrorResponder;
@@ -237,6 +245,9 @@ use Clavia\Application\Management\Connections\UpdateConnection;
 use Clavia\Application\Management\InitialAccessTokens\IssueInitialAccessToken;
 use Clavia\Application\Management\InitialAccessTokens\ReadInitialAccessTokens;
 use Clavia\Application\Management\InitialAccessTokens\RevokeInitialAccessToken;
+use Clavia\Application\Management\ProvisioningTokens\IssueProvisioningToken;
+use Clavia\Application\Management\ProvisioningTokens\ReadProvisioningTokens;
+use Clavia\Application\Management\ProvisioningTokens\RevokeProvisioningToken;
 use Clavia\Application\Management\Provisioning\AssignRole;
 use Clavia\Application\Management\Provisioning\EnsureRole;
 use Clavia\Application\Management\Provisioning\GrantClientAccess;
@@ -355,6 +366,7 @@ use Clavia\Application\Port\TokenSigner;
 use Clavia\Application\Port\TransactionManager;
 use Clavia\Application\Port\WebAuthnChallengeStore;
 use Clavia\Application\Port\WebhookSender;
+use Clavia\Application\Provisioning\AuthenticateProvisioningToken;
 use Clavia\Application\Secrets\GenerateEncryptionKey;
 use Clavia\Application\Webhooks\DeliverWebhooks;
 use Clavia\Configuration\Settings;
@@ -366,6 +378,7 @@ use Clavia\Domain\Authentication\Passkey\RelyingParty;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\Registration\ClientRegistrationRepository;
 use Clavia\Domain\Client\Registration\InitialAccessTokenRepository;
+use Clavia\Domain\Provisioning\ProvisioningTokenRepository;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Consent\ConsentRepository;
 use Clavia\Domain\Identity\ExternalIdentityRepository;
@@ -523,6 +536,14 @@ final class ConfigProvider
                     TestWebhook::class => Container\TestWebhookFactory::class,
                     ReadWebhookDeliveries::class => Container\ReadWebhookDeliveriesFactory::class,
                     InitialAccessTokenHandler::class => Container\InitialAccessTokenHandlerFactory::class,
+                    ProvisioningTokensHandler::class => Container\ProvisioningTokensHandlerFactory::class,
+                    ProvisioningTokenHandler::class => Container\ProvisioningTokenHandlerFactory::class,
+                    ProvisioningMiddleware::class => Container\ProvisioningMiddlewareFactory::class,
+                    ScimResponder::class => Container\ScimResponderFactory::class,
+                    ServiceProviderConfigHandler::class => Container\ServiceProviderConfigHandlerFactory::class,
+                    ScimCatalogueHandler::class => Container\ScimCatalogueHandlerFactory::class,
+                    ScimNotImplementedHandler::class => Container\ScimNotImplementedHandlerFactory::class,
+                    ScimNotFoundHandler::class => Container\ScimNotFoundHandlerFactory::class,
                     ClientRegistrationHandler::class => Container\ClientRegistrationHandlerFactory::class,
                     UserImportsHandler::class => Container\UserImportsHandlerFactory::class,
                     UserJobHandler::class => Container\UserJobHandlerFactory::class,
@@ -705,6 +726,10 @@ final class ConfigProvider
                     ReadWebhooks::class => Container\ReadWebhooksFactory::class,
                     RevokeInitialAccessToken::class => Container\RevokeInitialAccessTokenFactory::class,
                     ReadInitialAccessTokens::class => Container\ReadInitialAccessTokensFactory::class,
+                    IssueProvisioningToken::class => Container\IssueProvisioningTokenFactory::class,
+                    ReadProvisioningTokens::class => Container\ReadProvisioningTokensFactory::class,
+                    RevokeProvisioningToken::class => Container\RevokeProvisioningTokenFactory::class,
+                    AuthenticateProvisioningToken::class => Container\AuthenticateProvisioningTokenFactory::class,
                     RegistrationMetadata::class => Container\RegistrationMetadataFactory::class,
                     RegisterClientDynamically::class => Container\RegisterClientDynamicallyFactory::class,
                     ImportLine::class => Container\ImportLineFactory::class,
@@ -748,6 +773,7 @@ final class ConfigProvider
                     ClientGrantRepository::class => Container\ClientGrantRepositoryFactory::class,
                     RoleRepository::class => Container\RoleRepositoryFactory::class,
                     InitialAccessTokenRepository::class => Container\InitialAccessTokenRepositoryFactory::class,
+                    ProvisioningTokenRepository::class => Container\ProvisioningTokenRepositoryFactory::class,
                     WebhookEndpointRepository::class => Container\WebhookEndpointRepositoryFactory::class,
                     WebhookDeliveryRepository::class => Container\WebhookDeliveryRepositoryFactory::class,
                     ClientRegistrationRepository::class => Container\ClientRegistrationRepositoryFactory::class,

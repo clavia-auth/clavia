@@ -22,6 +22,8 @@ use Clavia\Domain\Audit\Outcome;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\PageRequest;
+use Clavia\Domain\Audit\ActorKind;
+use Clavia\Domain\Provisioning\ProvisioningTokenId;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\Test;
@@ -89,6 +91,20 @@ trait AuditLogContract
             static fn (AuditEvent $e): string => $e->id->value,
             $page->items,
         ));
+    }
+
+    #[Test]
+    public function aDirectoryIsReadBackAsItsProvisioningToken(): void
+    {
+        $token = ProvisioningTokenId::generate(new SeededRandomSource(7));
+        $event = $this->append(1, AuditEventType::UserCreated, '09:00', Actor::provisioning($token));
+
+        $stored = $this->auditLog()->find($event->id);
+
+        self::assertSame(ActorKind::Provisioning, $stored?->actor->kind);
+        self::assertTrue($stored?->actor->provisioningTokenId?->equals($token));
+        self::assertNull($stored?->actor->userId);
+        self::assertNull($stored?->actor->clientId);
     }
 
     #[Test]

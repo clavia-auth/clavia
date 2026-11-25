@@ -37,6 +37,7 @@ final readonly class AuditEventDocument
                 'kind' => $event->actor->kind->value,
                 'user_id' => $event->actor->userId?->value,
                 'client_id' => $event->actor->clientId?->value,
+                'provisioning_token_id' => $event->actor->provisioningTokenId?->value,
             ],
             'target' => $event->target === null
                 ? null

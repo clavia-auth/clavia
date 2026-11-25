@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Domain\Audit;
 
-/** Who acted, in the four shapes an action reaches this server in. */
+/** Who acted, in the five shapes an action reaches this server in. */
 enum ActorKind: string
 {
     /** A person — signing in, or through an application acting for them (`client_id` then set). */
@@ -22,6 +22,12 @@ enum ActorKind: string
 
     /** Whoever runs the server, at its console: `clavia` commands. */
     case System = 'system';
+
+    /**
+     * A directory, through its provisioning token (SCIM): the token is named, since "system" would
+     * hide that a directory acted and "application" would name a client that does not exist.
+     */
+    case Provisioning = 'provisioning';
 
     /** Nobody known yet: a failed sign-in for an account that may not exist. */
     case Anonymous = 'anonymous';

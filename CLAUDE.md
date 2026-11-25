@@ -101,13 +101,13 @@ public/index.php            HTTP entry point (PHP-FPM); public/auth/static/ serv
 src/
   Domain/                   pure PHP: aggregates, value objects, policies, repository interfaces
     Shared/  Identity/  Client/  Connection/  ResourceServer/  Rbac/  Consent/
-    OAuth2/  Oidc/  Authentication/  Audit/  Claims/  Webhook/
+    OAuth2/  Oidc/  Authentication/  Audit/  Claims/  Webhook/  Provisioning/
   Application/              use cases, by context, and the technical ports
     OAuth2/  Oidc/  Authentication/  Management/  Connection/  Clients/  Audit/
     Event/  Secrets/  Development/  Port/
   Adapter/
     Primary/                what calls the application
-      Http/{OAuth2,Oidc,Auth,Management,OpenApi,Shared}/   Cli/
+      Http/{OAuth2,Oidc,Auth,Management,OpenApi,Scim,Shared}/   Cli/
     Secondary/              what the application calls
       Persistence/{PhpDb,Migrations}/  Redis/  Signing/{Postgres,Remote,Jose}/
       Crypto/  Mail/  Http/  IdentityProvider/  Events/  System/
@@ -239,8 +239,8 @@ it. Two hosts must exist wherever Clavia runs, and their separation is a securit
   host-only (no `Domain` attribute), and no script runs on this origin but the one module a page
   that needs it loads (passkeys). Credentials are typed and tokens minted here, and nothing else
   shares it.
-- **`management.{domain}`**: the Management API at `/api/v1/*`, and the dashboard at
-  `/dashboard`. Keeping it apart means an XSS on the sign-in UI cannot reach the administrative
+- **`management.{domain}`**: the Management API at `/api/v1/*`, SCIM at `/scim/v2/*`, and the
+  dashboard at `/dashboard`. Keeping it apart means an XSS on the sign-in UI cannot reach the administrative
   session, and the reverse.
 
 There is no `api.{domain}`: the Management API is a path on the dashboard's origin, so the
@@ -250,12 +250,13 @@ reserves and every resolver answers from `/etc/hosts`. Never `.local`, which mac
 through Bonjour at seconds per lookup, and never a real suffix such as `.dev`.
 
 **Caddy** terminates TLS (mkcert in development, a wildcard for `*.{domain}`), serves
-`public/auth/static/*` itself, sends everything else on `auth.*` and `/api/v1/*` to PHP-FPM
+`public/auth/static/*` itself, sends everything else on `auth.*`, and `/api/v1/*` and `/scim/v2/*`
+on `management.*`, to PHP-FPM (both answer `404` on `auth.*`)
 (`index.php` is the only script it runs), and reverse-proxies `/dashboard` to
 `CLAVIA_DASHBOARD_UPSTREAM` with the `Host` header kept. No `X-Forwarded-*` header is trusted
 unless `CLAVIA_TRUSTED_PROXIES` names the proxy, and the host never comes from a header.
 
-### Four surfaces, four authentication mechanisms
+### Five surfaces, five authentication mechanisms
 
 | Path | Purpose | The caller proves itself with |
 |---|---|---|
@@ -263,10 +264,12 @@ unless `CLAVIA_TRUSTED_PROXIES` names the proxy, and the host never comes from a
 | `/oidc/*`, `/.well-known/*` | Discovery, JWKS, userinfo, logout | A bearer token, or nothing |
 | `/auth/*` | Sign-in, second factor, consent, device approval, sign-out | The browser session cookie |
 | `/api/v1/*` | Management API | A bearer access token for the Management API |
+| `/scim/v2/*` | SCIM 2.0 provisioning (RFC 7644), for directories | A provisioning token, as `Authorization: Bearer` |
 
 Keeping them apart is the central design constraint. The failure to avoid is authenticating
 `/api/v1/*` with the `/auth/*` session cookie: the Management API is a machine plane, reachable
-only with an access token, and the dashboard is an OAuth client like any other.
+only with an access token, and the dashboard is an OAuth client like any other. A provisioning
+token reaches `/scim/v2` alone, and a Management API token never does.
 
 ### Storage split
 
@@ -301,6 +304,7 @@ objects, repository interfaces, and an `Event` namespace for its domain events.
 | `Audit` | `AuditEvent`, `AuditEventType`, `Actor`, `AuditTarget`, `Outcome`, `AuditQuery`, `AuditLog` | Append-only; facts, never secrets |
 | `Claims` | `ClaimName`, `ClaimSource`, `ClaimMapping`, `ClaimMappings`, `ClaimSubject`, `CustomClaims` | A custom claim never has a reserved name (registered, standard, or this server's), checked when saved and again at issuance; its source is the account (address, connection, profile, `app_metadata`, roles) or a constant, never the request; a source with no value leaves its claim out; at most twenty per API, no two reading nested metadata; 32 KiB per token, refused rather than cut |
 | `Webhook` | `WebhookEndpoint`, `WebhookEndpointId`, `WebhookSecret`, `EventFilter`, `WebhookEndpointRepository` | An endpoint is https, at most twenty, listening to known audit event types or `*`; its secret (`whsec_`, 32 random bytes) is the server's, shown once, sealed (`webhook:<id>:secret`), never hashed; after a rotation the previous one signs beside it for a day |
+| `Provisioning` | `ProvisioningToken`, `ProvisioningTokenId`, `ProvisioningTokenState`, `SubjectAttribute`, `ProvisioningTokenRepository` | A token is for one pool or enterprise connection and goes with it; shown once, kept as its digest; a day to two years, a year by default, flagged within thirty days; revoked, never changed otherwise |
 
 The application mirrors these contexts (`Application\OAuth2`, `Authentication`, `Oidc`,
 `Management`, `Connection`, `Audit`…). `Application\Port` holds the technical ports: signing
@@ -895,6 +899,36 @@ one failing `WebhookEndpoint::DEAD_AFTER_DAYS` (5) is switched off by the worker
 system) until an operator switches it on. The payload is in the contract as `WebhookPayload`, with
 a signed example `WebhookPayloadDocumentationTest` verifies.
 
+### SCIM provisioning
+
+Design in `docs/design/scim-provisioning.md` (RFC 7643, RFC 7644), built in slices. A directory
+(Entra ID, Okta, Google Workspace) holds a **provisioning token** (`Domain\Provisioning\ProvisioningToken`)
+for **one connection**, a pool or an enterprise connection (`ConnectionStrategy::isProvisionable()`:
+database, OIDC, SAML; never social or `email`), where every account it reaches lives. A token is
+its own kind, like an initial access token: a 43-character secret shown once and stored as its
+digest, a description, an expiry (a day to two years, a year by default, `expiring_soon` within
+thirty days), a revocation, and its options (`subject_attribute`, `externalId` or `userName`;
+`addresses_trusted`; `delete_deactivates`). It goes with its connection (a cascade). The Management
+API issues it (`POST /api/v1/provisioning-tokens`, `create:provisioning_tokens`, `422` for any
+other connection, never naming it), with the base URL (`Settings::scimBaseUrl()`) in the `201`;
+lists (`?connection=`), reads and revokes it (`read|delete:provisioning_tokens`;
+`provisioning_token.issued|revoked`).
+
+`ProvisioningMiddleware` fronts every `/scim/v2/*` route (`AuthenticateProvisioningToken`): an
+address past `CLAVIA_TOKEN_MAX_FAILURES` failed tokens within `CLAVIA_TOKEN_FAILURE_WINDOW` (the
+machine endpoints' `ClientFailureThrottle`, by address only) is `429` with `Retry-After` before
+anything is read; then exactly one `Authorization: Bearer` (`ProvisioningCredentials`: no DPoP, no
+query or form) looked up by digest. Missing, malformed, unknown, expired, revoked, or a token whose
+connection is gone is one `401` document (`WWW-Authenticate: Bearer realm="scim"`, with
+`error="invalid_token"` when one was presented). A wrong token counts; a usable one never does, nor
+a genuine one whose connection went away. The caller (`ProvisioningCaller`: the token and its
+connection) is attached for the handlers (`ScimRequest`), and the trail names the token. Every answer
+is `application/scim+json`, `no-store` (`ScimResponder`), errors RFC 7644 §3.12 documents (`status`
+a string, never a value sent). `/ServiceProviderConfig` states only what is built (no PATCH, filter,
+ETag, bulk, sort or password change yet); `/ResourceTypes` and `/Schemas` (`ScimCatalogueHandler`)
+list what exists, nothing until `/Users` is served; `/Bulk` and `/Me` are `501`; any other path is a
+SCIM `404`, behind the token like the rest.
+
 ### Domain events and the audit trail
 
 A use case says what happened; it does not decide what follows. It dispatches a domain event
@@ -909,8 +943,9 @@ back-channel logout. The port is implemented on PSR-14 (`Adapter\Secondary\Event
   its subscriber (`DeferredTasks`). A refusal worth recording (a wrong password, a replayed code)
   is dispatched outside any transaction that would roll it back.
 - **Who acted comes from the request.** `AuditContext` is filled at the edge: origin and user
-  agent by `AuditContextMiddleware`, the Management API caller by `ManagementApiMiddleware`. The
-  shell leaves it empty, so the system is the actor.
+  agent by `AuditContextMiddleware`, the Management API caller by `ManagementApiMiddleware`, a
+  directory by `ProvisioningMiddleware` (`Actor::provisioning()`, kind `provisioning`, naming its
+  token). The shell leaves it empty, so the system is the actor.
 - **The trail holds facts, never secrets.** Detail names containing `secret`, `password`,
   `token`, `credential`, `assertion`, `verifier`, `private` or `cookie` are refused with a
   `LogicException`. A change lists the fields it touched, not their values.

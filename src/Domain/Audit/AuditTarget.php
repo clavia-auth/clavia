@@ -13,6 +13,7 @@ namespace Clavia\Domain\Audit;
 
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\Registration\InitialAccessTokenId;
+use Clavia\Domain\Provisioning\ProvisioningTokenId;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Rbac\RoleId;
@@ -88,6 +89,11 @@ final readonly class AuditTarget
     public static function initialAccessToken(InitialAccessTokenId $id): self
     {
         return self::of(TargetType::InitialAccessToken, $id->value);
+    }
+
+    public static function provisioningToken(ProvisioningTokenId $id): self
+    {
+        return self::of(TargetType::ProvisioningToken, $id->value);
     }
 
     public static function webhook(WebhookEndpointId $id): self

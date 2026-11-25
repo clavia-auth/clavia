@@ -13,6 +13,7 @@ namespace ClaviaTest\Integration\Persistence;
 
 use ClaviaTest\Support\Contract\ClientRegistrationRepositoryContract;
 use ClaviaTest\Support\Contract\InitialAccessTokenRepositoryContract;
+use ClaviaTest\Support\Contract\ProvisioningTokenRepositoryContract;
 use ClaviaTest\Support\Contract\UserJobRepositoryContract;
 use ClaviaTest\Support\Contract\WebhookEndpointRepositoryContract;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
@@ -24,6 +25,7 @@ use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbConnectionRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbConsentRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbExternalIdentityRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbInitialAccessTokenRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbProvisioningTokenRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbMfaFactorRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbPasskeyRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbRecoveryCodeRepository;
@@ -51,6 +53,7 @@ use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\Registration\ClientRegistrationRepository;
 use Clavia\Domain\Client\Registration\InitialAccessTokenRepository;
+use Clavia\Domain\Provisioning\ProvisioningTokenRepository;
 use Clavia\Domain\Client\ResponseType;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Consent\ConsentRepository;
@@ -105,6 +108,7 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
     use ConsentRepositoryContract;
     use ConnectionRepositoryContract;
     use InitialAccessTokenRepositoryContract;
+    use ProvisioningTokenRepositoryContract;
     use WebhookEndpointRepositoryContract;
     use ClientRegistrationRepositoryContract;
     use UserJobRepositoryContract;
@@ -125,6 +129,12 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
     protected function initialAccessTokens(): InitialAccessTokenRepository
     {
         return new PhpDbInitialAccessTokenRepository(TestStorage::database());
+    }
+
+    #[\Override]
+    protected function provisioningTokens(): ProvisioningTokenRepository
+    {
+        return new PhpDbProvisioningTokenRepository(TestStorage::database());
     }
 
     #[\Override]

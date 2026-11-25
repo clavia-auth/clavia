@@ -8,6 +8,16 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ### Added
 
+- **SCIM provisioning tokens and the `/scim/v2` surface** (#129, the first slice of SCIM 2.0): an
+  operator issues a provisioning token for one pool, OpenID Connect or SAML connection
+  (`/api/v1/provisioning-tokens`, scopes `read|create|delete:provisioning_tokens`), shown once with the
+  base URL to give the directory, and flagged 30 days before it expires (a year by default, two at
+  most). A directory reaches `https://management.{domain}/scim/v2` with it, and reads the service
+  provider's configuration; failed tokens are throttled per address like the machine endpoints. The
+  audit trail names a directory's token as a new actor kind, `provisioning` (`provisioning_token_id`).
+  Migration `0047_provisioning_tokens`. **Caddy routes `/scim/v2/*` on `management.*`**: deployments
+  with their own proxy must send it to PHP as they do `/api/v1/*`.
+
 - **Signed SAML requests and encrypted assertions** (#127): with service provider keys, a SAML
   connection signs its requests (`sign_requests`, on by default) and reads assertions encrypted to this
   server (AES-GCM, the key wrapped with RSA-OAEP; never RSA PKCS#1 v1.5), with keys in PostgreSQL or a

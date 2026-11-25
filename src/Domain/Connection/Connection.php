@@ -278,6 +278,12 @@ final readonly class Connection
         return $this->strategy === ConnectionStrategy::Passwordless;
     }
 
+    /** Whether a directory may provision its accounts: a pool, OIDC or SAML. */
+    public function isProvisionable(): bool
+    {
+        return $this->strategy->isProvisionable();
+    }
+
     /** Signs people in at another party — social, OIDC or SAML — rather than here. */
     public function isExternal(): bool
     {

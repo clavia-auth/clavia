@@ -34,6 +34,7 @@ use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\Registration\ClientRegistration;
 use Clavia\Domain\Client\Registration\InitialAccessToken;
+use Clavia\Domain\Provisioning\ProvisioningToken;
 use Clavia\Domain\Client\ResponseType;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Connection\Saml\SamlCertificate;
@@ -384,6 +385,29 @@ final class ManagementViews
             'uses' => $token->uses,
             'state' => $token->stateAt($now)->value,
             'revoked_at' => $token->revokedAt === null ? null : self::instant($token->revokedAt),
+        ];
+    }
+
+    /**
+     * A provisioning token, its state told at `$now`, flagged within thirty days of its expiry.
+     * Never its value: that is not kept.
+     *
+     * @return array<string, mixed>
+     */
+    public static function provisioningToken(ProvisioningToken $token, DateTimeImmutable $now): array
+    {
+        return [
+            'id' => $token->id->value,
+            'connection' => $token->connection->value,
+            'description' => $token->description,
+            'created_at' => self::instant($token->createdAt),
+            'expires_at' => self::instant($token->expiresAt),
+            'expiring_soon' => $token->isExpiringSoonAt($now),
+            'state' => $token->stateAt($now)->value,
+            'revoked_at' => $token->revokedAt === null ? null : self::instant($token->revokedAt),
+            'subject_attribute' => $token->subjectAttribute->value,
+            'addresses_trusted' => $token->addressesTrusted,
+            'delete_deactivates' => $token->deleteDeactivates,
         ];
     }
 
