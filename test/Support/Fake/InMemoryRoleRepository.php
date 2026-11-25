@@ -36,6 +36,9 @@ final class InMemoryRoleRepository implements RoleRepository
     /** @var array<string, array<string, DateTimeImmutable>> When each role was assigned, by user id then role id. */
     private array $assignments = [];
 
+    /** @var array<string, array<string, true>> The assignments a group made, not a hand, by user then role. */
+    private array $throughGroups = [];
+
     public function __construct(
         private readonly ?InMemoryResourceServerRepository $resourceServers = null,
         private readonly ?InMemoryUserRepository $users = null,
@@ -106,12 +109,49 @@ final class InMemoryRoleRepository implements RoleRepository
     public function assign(RoleId $role, UserId $user, DateTimeImmutable $at): void
     {
         $this->assignments[$user->value][$role->value] ??= $at;
+        unset($this->throughGroups[$user->value][$role->value]);
     }
 
     #[\Override]
     public function unassign(RoleId $role, UserId $user): void
     {
-        unset($this->assignments[$user->value][$role->value]);
+        unset($this->assignments[$user->value][$role->value], $this->throughGroups[$user->value][$role->value]);
+    }
+
+    #[\Override]
+    public function grantThroughGroup(RoleId $role, UserId $user, DateTimeImmutable $at): bool
+    {
+        if (isset($this->assignments[$user->value][$role->value])) {
+            return false;
+        }
+        $this->assignments[$user->value][$role->value] = $at;
+        $this->throughGroups[$user->value][$role->value] = true;
+
+        return true;
+    }
+
+    #[\Override]
+    public function withdrawGroupGrant(RoleId $role, UserId $user): bool
+    {
+        if (! isset($this->throughGroups[$user->value][$role->value])) {
+            return false;
+        }
+        $this->unassign($role, $user);
+
+        return true;
+    }
+
+    #[\Override]
+    public function rolesThroughGroups(UserId $user): array
+    {
+        $ids = array_keys(array_filter(
+            $this->throughGroups[$user->value] ?? [],
+            fn (bool $_, string $role): bool => isset($this->roles[$role], $this->assignments[$user->value][$role]),
+            ARRAY_FILTER_USE_BOTH,
+        ));
+        sort($ids);
+
+        return array_map(static fn (string $id): RoleId => RoleId::fromString($id), $ids);
     }
 
     #[\Override]
@@ -122,6 +162,8 @@ final class InMemoryRoleRepository implements RoleRepository
             $kept[$role->value] = $this->assignments[$user->value][$role->value] ?? $at;
         }
         $this->assignments[$user->value] = $kept;
+        // Every role kept is held by hand now.
+        unset($this->throughGroups[$user->value]);
     }
 
     #[\Override]

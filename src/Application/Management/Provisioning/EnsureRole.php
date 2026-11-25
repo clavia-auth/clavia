@@ -71,7 +71,11 @@ final readonly class EnsureRole
         }
 
         $granted = array_map(
-            static fn (Scope $value): GrantedPermission => new GrantedPermission($resourceServer->id, $value),
+            static fn (Scope $value): GrantedPermission => new GrantedPermission(
+                $resourceServer->id,
+                $value,
+                $resourceServer->isSystem,
+            ),
             iterator_to_array($wanted, false),
         );
 

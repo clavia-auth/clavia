@@ -24,6 +24,7 @@ final readonly class RoleChanges
         public ?string $name = null,
         public ?string $description = null,
         public ?array $permissions = null,
+        public ?bool $provisionable = null,
     ) {
     }
 }

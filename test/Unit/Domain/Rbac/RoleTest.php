@@ -125,6 +125,36 @@ final class RoleTest extends TestCase
         RoleId::fromString('rs_aaaaaaaaaaaaaaaa');
     }
 
+    /** docs/design/scim-provisioning.md §2, §7. */
+    public function testAProvisionableRoleHoldsNoPermissionOnASystemApi(): void
+    {
+        $system = new GrantedPermission(
+            ResourceServerId::fromString('rs_aaaaaaaaaaaaaaaa'),
+            Scope::fromString('read:users'),
+            true,
+        );
+        $ordinary = self::grant('rs_bbbbbbbbbbbbbbbb', 'read:reports');
+        $staff = self::role('Staff', [$ordinary])->withProvisionable(true);
+
+        self::assertTrue($staff->provisionable);
+        self::assertTrue($staff->renamed('Employees')->provisionable, 'Kept through a change.');
+        foreach (
+            [
+            static fn (): Role => self::role('Admins', [$system])->withProvisionable(true),
+            static fn (): Role => $staff->granting([$ordinary, $system]),
+            static fn (): Role => $staff->alsoGranting([$system]),
+            ] as $attempt
+        ) {
+            try {
+                $attempt();
+                self::fail('A provisionable role on a system API.');
+            } catch (InvalidValue $refusal) {
+                self::assertStringContainsString('system API', $refusal->getMessage());
+            }
+        }
+        self::assertFalse(self::role('Admins', [$system])->provisionable, 'A role on a system API is fine otherwise.');
+    }
+
     /**
      * @param list<GrantedPermission> $permissions
      */

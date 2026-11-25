@@ -52,6 +52,7 @@ final readonly class RolesHandler implements RequestHandlerInterface
             $body->string('name') ?? throw new LogicException("The contract requires 'name'."),
             $body->string('description') ?? '',
             RoleFields::permissions($body) ?? [],
+            $body->bool('provisionable') ?? false,
         ));
 
         return $this->responder->created(

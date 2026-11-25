@@ -58,17 +58,40 @@ interface RoleRepository
     public function all(): array;
 
     /**
-     * Give the role to the user. Giving it again changes nothing.
+     * Give the role to the user, by an operator's hand: a group that also grants it will not take it
+     * away. Giving it again changes nothing but that.
      */
     public function assign(RoleId $role, UserId $user, DateTimeImmutable $at): void;
 
     /**
-     * Take the role from the user. Taking one they do not hold changes nothing.
+     * Take the role from the user, however it was given. Taking one they do not hold changes nothing.
      */
     public function unassign(RoleId $role, UserId $user): void;
 
     /**
-     * Make the user hold exactly `$roles`. A role they keep keeps when it was assigned.
+     * Give the role to the user through a directory's group (docs/design/scim-provisioning.md §5.5),
+     * unless they already hold it, by hand or through another group.
+     *
+     * @return bool Whether they hold it now and did not before.
+     */
+    public function grantThroughGroup(RoleId $role, UserId $user, DateTimeImmutable $at): bool;
+
+    /**
+     * Take back a role a group gave: one given by hand stays.
+     *
+     * @return bool Whether it was taken.
+     */
+    public function withdrawGroupGrant(RoleId $role, UserId $user): bool;
+
+    /**
+     * The roles the user holds through groups alone, not by hand.
+     *
+     * @return list<RoleId>
+     */
+    public function rolesThroughGroups(UserId $user): array;
+
+    /**
+     * Make the user hold exactly `$roles`, by hand. A role they keep keeps when it was assigned.
      *
      * @param list<RoleId> $roles
      */

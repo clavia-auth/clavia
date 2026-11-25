@@ -36,7 +36,8 @@ final readonly class CreateRole
     }
 
     /**
-     * @throws InvalidValue  When the name or description is invalid, or a permission is not defined.
+     * @throws InvalidValue  When the name or description is invalid, a permission is not defined, or a
+     *                       provisionable role would hold a permission on a system API.
      * @throws AlreadyExists When another role has the name.
      */
     public function __invoke(NewRole $new): Role
@@ -47,6 +48,7 @@ final readonly class CreateRole
             $new->description,
             $this->permissions->resolve($new->permissions),
             $this->clock->now(),
+            $new->provisionable,
         );
         $this->roles->save($role);
         $this->events->dispatch(new RoleCreated($role));

@@ -296,7 +296,7 @@ objects, repository interfaces, and an `Event` namespace for its domain events.
 | `Client` | `Client`, `ClientId`, `ClientType`, `ClientAuthMethod`, `GrantType`, `ResponseType`, `Ownership`, `BackChannelLogout`, `Registration\InitialAccessToken` | Type, auth method and secret agree; the code flow needs a redirect URI; `client_credentials` needs a confidential client; `tpc_…` ids are third-party |
 | `Connection` | `Connection`, `ConnectionName`, `ConnectionStrategy` (database, social, OIDC, passwordless, SAML), `OidcSettings`, `BuiltInConnection`, `Saml\*` (`SamlSettings`, `SamlCertificate`, `SamlOptions`, `SamlRequestId`, `ServiceProviderKey[Set]`) | The default pool, social providers and `email` are switched, never created or deleted; only a pool takes sign-ups or requires a verified address; only an OIDC or SAML connection requires provisioning; a SAML connection, and only one, has SAML settings: 1 to 3 pinned RSA certificates, https endpoints |
 | `ResourceServer` | `ResourceServer` (an API: `rs_…` id, audience, permissions, `AccessTokenFormat`), `Permission`, `ClientGrant` | A system API (the Management API) can be renamed, never deleted, always enforces roles; tokens are opaque unless the API takes JWTs |
-| `Rbac` | `Role`, `GrantedPermission`, `RoleRepository` (also the assignments) | A person holds a permission only through a role; `permissionsHeld(user, API)` is the question issuance asks |
+| `Rbac` | `Role`, `GrantedPermission`, `RoleRepository` (also the assignments) | A person holds a permission only through a role; `permissionsHeld(user, API)` is the question issuance asks; a **provisionable** role (one a SCIM group may grant) never holds a system API's permission, refused by the role and by a database trigger; an assignment is `by_hand` or a group's, and a group takes back only its own |
 | `Consent` | `UserConsent`, `ConsentPolicy`, `PendingConsent` | `ConsentPolicy` alone decides who is asked |
 | `OAuth2` | `AuthorizationCode`, `AccessToken`, `AccessTokenClaims` (RFC 9068), `RefreshToken` (families), `DeviceAuthorization`, `UserCode`, `CodeChallenge`/`CodeVerifier` (S256), `Prompt`, `MaxAge`, `OAuth2Error`/`ErrorCode`, `BearerTokenError` | Single use, exact matching, rotation with replay revocation |
 | `Oidc` | `SigningKey`, `SigningAlgorithm`, `PublicJwk`, `Nonce`, `OidcScope`, `IdentityClaims`, `IdTokenClaims`, `LogoutTokenClaims` | One active key; retired keys stay published until their tokens expire |
@@ -963,6 +963,22 @@ Management API, or deactivates it with the token's `delete_deactivates`. Every r
 `meta.version` and `ETag`, a weak tag of its last change to the microsecond
 (`ProvisionedUser::version()`); `If-Match` (`*`, weak or strong tags) on `PUT`, `PATCH` and `DELETE`
 is `412` when stale.
+
+**Groups** (`/scim/v2/Groups`, `Application\Provisioning\Groups`): a `ScimGroup` per connection,
+`displayName` unique ignoring case and `externalId` exactly, its members accounts provisioned into
+the same connection (`GroupMembers`; anything else is `400`, never naming which). Create, read, list
+(`filter` on `displayName`, `externalId`, `id`; `excludedAttributes=members`), `PUT`, `PATCH` (the
+same `ScimPatch`: `add` to `members`, `remove` of `members[value eq "…"]`, `replace`) and `DELETE`,
+with ETags as for users. **A group grants a role** through `GroupRoles`, in the same transaction as the
+change: for each person it reaches, the wanted roles are the **provisionable** roles named exactly as
+one of their groups; a group grant is a `user_roles` row `by_hand` false (`grantThroughGroup`), taken
+back only if a group gave it (`withdrawGroupGrant`), so a role an operator gave stays; an operator's
+`assign` makes it `by_hand`, their `unassign` takes it whatever gave it (a later group change gives it
+back). Each change is `RoleGiven` or `RoleTaken` by the directory. An operator renaming a role or
+switching `provisionable` (`UpdateRole`) works out again everyone a group of the old or new name reaches.
+A provisionable role holding a permission on a system API is refused when the role is defined, given a
+permission, or switched (`Role::define()`, `GrantedPermission::$onSystemApi`), and by the database
+(`provisionable_role_check`): no group can make anyone an administrator of this server.
 
 ### Domain events and the audit trail
 

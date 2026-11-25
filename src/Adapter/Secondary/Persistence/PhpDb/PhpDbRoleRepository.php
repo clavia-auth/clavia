@@ -33,11 +33,12 @@ use Throwable;
  * Writes that touch several rows run in a transaction of their own (or of the caller's),
  * so a role is never seen with half its permissions, nor a person with half their roles.
  *
- * @psalm-type RoleRow = array{id: string, name: string, description: string, created_at: string}
+ * @psalm-type RoleRow = array{id: string, name: string, description: string, created_at: string,
+ *                             provisionable: bool}
  */
 final readonly class PhpDbRoleRepository implements RoleRepository
 {
-    private const string COLUMNS = 'id, name, description, created_at';
+    private const string COLUMNS = 'id, name, description, created_at, provisionable';
 
     public function __construct(
         private Database $database,
@@ -105,11 +106,46 @@ final readonly class PhpDbRoleRepository implements RoleRepository
     {
         $this->database->execute(
             <<<'SQL'
-                INSERT INTO user_roles (user_id, role_id, assigned_at) VALUES (:user_id, :role_id, :assigned_at)
-                ON CONFLICT (user_id, role_id) DO NOTHING
+                INSERT INTO user_roles (user_id, role_id, assigned_at, by_hand)
+                VALUES (:user_id, :role_id, :assigned_at, true)
+                ON CONFLICT (user_id, role_id) DO UPDATE SET by_hand = true
                 SQL,
             ['user_id' => $user->value, 'role_id' => $role->value, 'assigned_at' => Timestamp::toDatabase($at)],
         );
+    }
+
+    #[\Override]
+    public function grantThroughGroup(RoleId $role, UserId $user, DateTimeImmutable $at): bool
+    {
+        return $this->database->execute(
+            <<<'SQL'
+                INSERT INTO user_roles (user_id, role_id, assigned_at, by_hand)
+                VALUES (:user_id, :role_id, :assigned_at, false)
+                ON CONFLICT (user_id, role_id) DO NOTHING
+                SQL,
+            ['user_id' => $user->value, 'role_id' => $role->value, 'assigned_at' => Timestamp::toDatabase($at)],
+        ) === 1;
+    }
+
+    #[\Override]
+    public function withdrawGroupGrant(RoleId $role, UserId $user): bool
+    {
+        return $this->database->execute(
+            'DELETE FROM user_roles WHERE user_id = :user_id AND role_id = :role_id AND NOT by_hand',
+            ['user_id' => $user->value, 'role_id' => $role->value],
+        ) === 1;
+    }
+
+    #[\Override]
+    public function rolesThroughGroups(UserId $user): array
+    {
+        /** @var list<string> $ids */
+        $ids = array_column($this->database->fetchAll(
+            'SELECT role_id FROM user_roles WHERE user_id = :user_id AND NOT by_hand ORDER BY role_id',
+            ['user_id' => $user->value],
+        ), 'role_id');
+
+        return array_map(RoleId::fromString(...), $ids);
     }
 
     #[\Override]
@@ -147,7 +183,7 @@ final readonly class PhpDbRoleRepository implements RoleRepository
         /** @var list<RoleRow> $rows */
         $rows = $this->database->fetchAll(
             <<<'SQL'
-                SELECT roles.id, roles.name, roles.description, roles.created_at
+                SELECT roles.id, roles.name, roles.description, roles.created_at, roles.provisionable
                 FROM roles JOIN user_roles ON user_roles.role_id = roles.id
                 WHERE user_roles.user_id = :user_id
                 ORDER BY roles.name
@@ -202,14 +238,19 @@ final readonly class PhpDbRoleRepository implements RoleRepository
     {
         $this->database->execute(
             <<<'SQL'
-                INSERT INTO roles (id, name, description, created_at) VALUES (:id, :name, :description, :created_at)
-                ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description
+                INSERT INTO roles (id, name, description, created_at, provisionable)
+                VALUES (:id, :name, :description, :created_at, :provisionable)
+                ON CONFLICT (id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    description = EXCLUDED.description,
+                    provisionable = EXCLUDED.provisionable
                 SQL,
             [
                 'id' => $role->id->value,
                 'name' => $role->name,
                 'description' => $role->description,
                 'created_at' => Timestamp::toDatabase($role->createdAt),
+                'provisionable' => $role->provisionable,
             ],
         );
 
@@ -246,9 +287,14 @@ final readonly class PhpDbRoleRepository implements RoleRepository
      */
     private function hydrate(array $row): Role
     {
-        /** @var list<array{resource_server_id: string, value: string}> $permissions */
+        /** @var list<array{resource_server_id: string, value: string, is_system: bool}> $permissions */
         $permissions = $this->database->fetchAll(
-            'SELECT resource_server_id, value FROM role_permissions WHERE role_id = :id',
+            <<<'SQL'
+                SELECT role_permissions.resource_server_id, role_permissions.value, resource_servers.is_system
+                FROM role_permissions
+                JOIN resource_servers ON resource_servers.id = role_permissions.resource_server_id
+                WHERE role_permissions.role_id = :id
+                SQL,
             ['id' => $row['id']],
         );
 
@@ -260,10 +306,12 @@ final readonly class PhpDbRoleRepository implements RoleRepository
                 static fn (array $permission): GrantedPermission => new GrantedPermission(
                     ResourceServerId::fromString($permission['resource_server_id']),
                     Scope::fromString($permission['value']),
+                    $permission['is_system'],
                 ),
                 $permissions,
             ),
             Timestamp::fromDatabase($row['created_at']),
+            $row['provisionable'],
         );
     }
 }

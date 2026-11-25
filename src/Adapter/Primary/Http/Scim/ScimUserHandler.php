@@ -102,7 +102,7 @@ final readonly class ScimUserHandler implements RequestHandlerInterface
      *
      * @return list<string>|null
      */
-    private static function ifMatch(ServerRequestInterface $request): ?array
+    public static function ifMatch(ServerRequestInterface $request): ?array
     {
         if (! $request->hasHeader('If-Match')) {
             return null;

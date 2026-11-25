@@ -97,6 +97,7 @@ final class InMemoryProvisionedAccountRepository implements ProvisionedAccountRe
                 ScimFilterAttribute::EmailValue => mb_strtolower(
                     $this->users->find($account->userId)->email ?? '',
                 ) === mb_strtolower($value),
+                ScimFilterAttribute::DisplayName => false,
             };
             if (! $holds) {
                 return false;

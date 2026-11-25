@@ -17,7 +17,7 @@ namespace Clavia\Application\Provisioning\Users;
  */
 final readonly class AttributeTaken
 {
-    /** @param 'userName'|'externalId'|'emails' $attribute */
+    /** @param 'userName'|'externalId'|'emails'|'displayName' $attribute */
     public function __construct(public string $attribute)
     {
     }

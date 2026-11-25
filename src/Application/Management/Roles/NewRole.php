@@ -23,6 +23,7 @@ final readonly class NewRole
         public string $name,
         public string $description = '',
         public array $permissions = [],
+        public bool $provisionable = false,
     ) {
     }
 }

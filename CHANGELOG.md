@@ -8,6 +8,12 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ### Added
 
+- **SCIM: groups to provisionable roles** (#132): directories manage groups at `/scim/v2/Groups`. A
+  role an operator marks **`provisionable`** (Management API) is given to the members of the group named
+  like it, and taken back when they leave or the group goes; a role also given by hand stays. A
+  provisionable role can never hold a permission on a system API, such as the Management API, so no
+  directory can make anyone an administrator. Migration `0049_scim_groups`.
+
 - **SCIM: replace, modify and delete users** (#131): a directory replaces an account (`PUT`), changes
   it with the `PATCH` forms Entra ID and Okta send, and deletes it, or deactivates it with the token's
   `delete_deactivates`. Deactivating a leaver ends every session, with back-channel logout, and stops

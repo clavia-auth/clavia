@@ -32,7 +32,10 @@ final readonly class ScimPatch
     public const string SCHEMA = 'urn:ietf:params:scim:api:messages:2.0:PatchOp';
 
     private const int MAX_OPERATIONS = 100;
-    private const string URN = 'urn:ietf:params:scim:schemas:core:2.0:user:';
+    private const array URNS = [
+        'urn:ietf:params:scim:schemas:core:2.0:user:',
+        'urn:ietf:params:scim:schemas:core:2.0:group:',
+    ];
 
     /** `attr`, `attr.sub`, or `attr[sub eq value]` with an optional `.sub` after it. */
     private const string PATH = '/^([A-Za-z][A-Za-z0-9\-_]*)(?:\.([A-Za-z][A-Za-z0-9\-_]*))?'
@@ -40,7 +43,7 @@ final readonly class ScimPatch
         . '(?:\.([A-Za-z][A-Za-z0-9]*))?)?$/Di';
 
     /** The multi-valued attributes of the resource: an `add` appends to them. */
-    private const array MULTI_VALUED = ['emails'];
+    private const array MULTI_VALUED = ['emails', 'members'];
 
     /** @param non-empty-list<array{op: 'add'|'replace'|'remove', path: ?string, value: mixed}> $operations */
     private function __construct(private array $operations)
@@ -119,7 +122,9 @@ final readonly class ScimPatch
 
     private function at(stdClass $document, string $op, string $path, mixed $value): void
     {
-        $path = str_starts_with(strtolower($path), self::URN) ? substr($path, strlen(self::URN)) : $path;
+        foreach (self::URNS as $urn) {
+            $path = str_starts_with(strtolower($path), $urn) ? substr($path, strlen($urn)) : $path;
+        }
         if (str_starts_with(strtolower($path), 'urn:')) {
             return; // An extension's attribute: not kept, so not changed.
         }

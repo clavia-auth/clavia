@@ -49,6 +49,7 @@ final readonly class RoleHandler implements RequestHandlerInterface
                     $management->body->string('name'),
                     $management->body->string('description'),
                     RoleFields::permissions($management->body),
+                    $management->body->bool('provisionable'),
                 ));
 
                 return $this->responder->json(ManagementViews::roleWithPermissions($this->read->describe($role)));

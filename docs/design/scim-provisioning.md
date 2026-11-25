@@ -304,3 +304,24 @@ What slice 3 (#131) settled:
   longer sign in.
 - **The picture is kept**: SCIM does not manage it, so a `PUT` leaves it as it is.
 
+What slice 4 (#132) settled:
+
+- **A grant knows who gave it**: `user_roles.by_hand`. A group's grant is `false` and taken back only
+  by groups; an operator's `assign` sets it `true`, so a role also given by hand is never taken back by
+  a group. An operator's `unassign` takes the role whatever gave it; the next change to a group that
+  grants it gives it back, the directory being the source of truth for its groups.
+- **Roles are worked out per person** (`GroupRoles::reconcile()`), after every change to a group (its
+  members, its name, the group gone) and after an operator renames a role or switches `provisionable`:
+  wanted are the provisionable roles named exactly as one of the person's groups, in any connection the
+  person has groups in (only their own). Simpler to prove than deltas, and bounded by a group's 10,000
+  members.
+- **A group's name is unique in its connection, ignoring case**, so a group names one role; the role
+  is matched by its exact name.
+- **The system API rule is held three times**: by `Role` (`GrantedPermission::$onSystemApi`, read from
+  the API's `is_system`), at every way a role changes (defined, given permissions, switched), and by a
+  constraint trigger on `roles` and `role_permissions`, whichever row is written first.
+- **No group events**: what a group does to access is recorded as `RoleGiven` and `RoleTaken` by the
+  directory; the group itself is the directory's to show.
+- **`excludedAttributes=members`** is honoured on reads, as Entra ID and Okta ask before they change a
+  large group; other `attributes` and `excludedAttributes` are ignored.
+

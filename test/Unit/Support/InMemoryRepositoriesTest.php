@@ -15,12 +15,14 @@ use ClaviaTest\Support\Contract\ClientRegistrationRepositoryContract;
 use ClaviaTest\Support\Contract\InitialAccessTokenRepositoryContract;
 use ClaviaTest\Support\Contract\ProvisionedAccountRepositoryContract;
 use ClaviaTest\Support\Contract\ProvisioningTokenRepositoryContract;
+use ClaviaTest\Support\Contract\ScimGroupRepositoryContract;
 use ClaviaTest\Support\Contract\UserJobRepositoryContract;
 use ClaviaTest\Support\Contract\WebhookEndpointRepositoryContract;
 use ClaviaTest\Support\Fake\InMemoryClientRegistrationRepository;
 use ClaviaTest\Support\Fake\InMemoryInitialAccessTokenRepository;
 use ClaviaTest\Support\Fake\InMemoryProvisionedAccountRepository;
 use ClaviaTest\Support\Fake\InMemoryProvisioningTokenRepository;
+use ClaviaTest\Support\Fake\InMemoryScimGroupRepository;
 use ClaviaTest\Support\Fake\InMemoryUserJobRepository;
 use ClaviaTest\Support\Fake\InMemoryWebhookEndpointRepository;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
@@ -32,6 +34,7 @@ use Clavia\Domain\Client\Registration\ClientRegistrationRepository;
 use Clavia\Domain\Client\Registration\InitialAccessTokenRepository;
 use Clavia\Domain\Provisioning\ProvisionedAccountRepository;
 use Clavia\Domain\Provisioning\ProvisioningTokenRepository;
+use Clavia\Domain\Provisioning\ScimGroupRepository;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Consent\ConsentRepository;
 use Clavia\Domain\Identity\ExternalIdentityRepository;
@@ -88,6 +91,7 @@ final class InMemoryRepositoriesTest extends TestCase
     use InitialAccessTokenRepositoryContract;
     use ProvisioningTokenRepositoryContract;
     use ProvisionedAccountRepositoryContract;
+    use ScimGroupRepositoryContract;
     use WebhookEndpointRepositoryContract;
     use ClientRegistrationRepositoryContract;
     use UserJobRepositoryContract;
@@ -110,6 +114,8 @@ final class InMemoryRepositoriesTest extends TestCase
     private InMemoryProvisioningTokenRepository $provisioningTokens;
 
     private ?InMemoryProvisionedAccountRepository $provisionedAccounts = null;
+
+    private ?InMemoryScimGroupRepository $scimGroups = null;
     private InMemoryWebhookEndpointRepository $webhookEndpoints;
     private InMemoryClientRegistrationRepository $clientRegistrations;
     private ?InMemoryUserJobRepository $userJobs = null;
@@ -164,6 +170,12 @@ final class InMemoryRepositoriesTest extends TestCase
     protected function provisionedAccounts(): ProvisionedAccountRepository
     {
         return $this->provisionedAccounts ??= new InMemoryProvisionedAccountRepository($this->users());
+    }
+
+    #[\Override]
+    protected function scimGroups(): ScimGroupRepository
+    {
+        return $this->scimGroups ??= new InMemoryScimGroupRepository($this->users());
     }
 
     #[\Override]

@@ -15,6 +15,7 @@ use ClaviaTest\Support\Contract\ClientRegistrationRepositoryContract;
 use ClaviaTest\Support\Contract\InitialAccessTokenRepositoryContract;
 use ClaviaTest\Support\Contract\ProvisionedAccountRepositoryContract;
 use ClaviaTest\Support\Contract\ProvisioningTokenRepositoryContract;
+use ClaviaTest\Support\Contract\ScimGroupRepositoryContract;
 use ClaviaTest\Support\Contract\UserJobRepositoryContract;
 use ClaviaTest\Support\Contract\WebhookEndpointRepositoryContract;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
@@ -28,6 +29,7 @@ use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbExternalIdentityRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbInitialAccessTokenRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbProvisionedAccountRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbProvisioningTokenRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbScimGroupRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbMfaFactorRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbPasskeyRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbRecoveryCodeRepository;
@@ -57,6 +59,7 @@ use Clavia\Domain\Client\Registration\ClientRegistrationRepository;
 use Clavia\Domain\Client\Registration\InitialAccessTokenRepository;
 use Clavia\Domain\Provisioning\ProvisionedAccountRepository;
 use Clavia\Domain\Provisioning\ProvisioningTokenRepository;
+use Clavia\Domain\Provisioning\ScimGroupRepository;
 use Clavia\Domain\Client\ResponseType;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Consent\ConsentRepository;
@@ -92,6 +95,7 @@ use ClaviaTest\Support\TestStorage;
 use Clavia\Domain\Webhook\WebhookEndpointRepository;
 use DateTimeImmutable;
 use LogicException;
+use PHPUnit\Framework\Attributes\Test;
 use Throwable;
 
 /**
@@ -113,6 +117,7 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
     use InitialAccessTokenRepositoryContract;
     use ProvisioningTokenRepositoryContract;
     use ProvisionedAccountRepositoryContract;
+    use ScimGroupRepositoryContract;
     use WebhookEndpointRepositoryContract;
     use ClientRegistrationRepositoryContract;
     use UserJobRepositoryContract;
@@ -145,6 +150,14 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
     protected function provisionedAccounts(): ProvisionedAccountRepository
     {
         return new PhpDbProvisionedAccountRepository(TestStorage::database());
+    }
+
+    #[\Override]
+    protected function scimGroups(): ScimGroupRepository
+    {
+        $database = TestStorage::database();
+
+        return new PhpDbScimGroupRepository($database, new PhpDbTransactionManager($database));
     }
 
     #[\Override]
@@ -487,5 +500,42 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
     protected function webhookEndpoints(): WebhookEndpointRepository
     {
         return new PhpDbWebhookEndpointRepository(TestStorage::database());
+    }
+
+    /** docs/design/scim-provisioning.md §7: the database refuses it too, whichever row comes first. */
+    #[Test]
+    public function theDatabaseRefusesAProvisionableRoleOnASystemApi(): void
+    {
+        $database = TestStorage::database();
+        $database->execute(
+            "INSERT INTO resource_servers (id, identifier, name, is_system, enforce_policies, created_at)
+             VALUES ('rs_system0000000001', 'https://system.example/', 'System', true, true, now())",
+        );
+        $database->execute(
+            "INSERT INTO permissions (resource_server_id, value, description)
+             VALUES ('rs_system0000000001', 'admin', '')",
+        );
+        $database->execute("INSERT INTO roles (id, name, created_at) VALUES ('rol_aaaaaaaaaaaaaaaa', 'Admins', now())");
+        $database->execute(
+            "INSERT INTO role_permissions (role_id, resource_server_id, value)
+             VALUES ('rol_aaaaaaaaaaaaaaaa', 'rs_system0000000001', 'admin')",
+        );
+
+        try {
+            $database->execute("UPDATE roles SET provisionable = true WHERE id = 'rol_aaaaaaaaaaaaaaaa'");
+            self::fail('Made provisionable.');
+        } catch (Throwable $refused) {
+            $message = $refused->getMessage() . ($refused->getPrevious()?->getMessage() ?? '');
+            self::assertStringContainsString('provisionable role', $message);
+        }
+        $database->execute(
+            "INSERT INTO roles (id, name, created_at, provisionable)
+             VALUES ('rol_bbbbbbbbbbbbbbbb', 'Staff', now(), true)",
+        );
+        $this->expectException(Throwable::class);
+        $database->execute(
+            "INSERT INTO role_permissions (role_id, resource_server_id, value)
+             VALUES ('rol_bbbbbbbbbbbbbbbb', 'rs_system0000000001', 'admin')",
+        );
     }
 }
