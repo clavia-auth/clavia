@@ -6,142 +6,159 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-25
+
+Integrations: directories provisioning accounts through SCIM 2.0, enterprise sign-in through SAML 2.0,
+webhooks for the audit trail, custom claims in tokens, and bulk jobs on the users
+(`docs/design/scim-provisioning.md`, `docs/design/saml-connections.md`, `docs/design/webhooks.md`,
+`docs/design/custom-claims.md`).
+
+**Before upgrading, read Changed below: passwords and client secrets are now PBKDF2 hashes, and
+bcrypt hashes no longer verify.**
+
 ### Added
 
-- **SCIM: groups to provisionable roles** (#132): directories manage groups at `/scim/v2/Groups`. A
-  role an operator marks **`provisionable`** (Management API) is given to the members of the group named
-  like it, and taken back when they leave or the group goes; a role also given by hand stays. A
-  provisionable role can never hold a permission on a system API, such as the Management API, so no
-  directory can make anyone an administrator. Migration `0049_scim_groups`.
+**Directories: SCIM 2.0** (RFC 7643, RFC 7644)
 
-- **SCIM: replace, modify and delete users** (#131): a directory replaces an account (`PUT`), changes
-  it with the `PATCH` forms Entra ID and Okta send, and deletes it, or deactivates it with the token's
-  `delete_deactivates`. Deactivating a leaver ends every session, with back-channel logout, and stops
-  their tokens, as an operator's deactivation does. Resources carry ETags, and `If-Match` is honoured.
-
-- **SCIM: create, read and list users** (#130): a directory creates accounts at `POST /scim/v2/Users`
-  (no password; the address verified only when its token trusts the directory), and reads and lists
-  them with the filters Entra ID and Okta send (`userName`, `externalId`, `id`, `emails.value`).
+- **Provisioning tokens** (#129): `/api/v1/provisioning-tokens` issues a token for one pool, OpenID
+  Connect or SAML connection, shown once with the base URL to give the directory
+  (`https://management.{domain}/scim/v2`). It lasts a year by default (two at most), is flagged
+  `expiring_soon` thirty days before its end, and can be revoked. Its options: the attribute naming a
+  person to an enterprise connection (`externalId` or `userName`), whether the directory's addresses
+  are trusted (off by default), and whether a `DELETE` only deactivates (off by default). A wrong token
+  is one `401`, and failed tokens are throttled per address like the machine endpoints.
+- **Users** (#130, #131): a directory creates, reads, lists (filters on `userName`, `externalId`, `id`
+  and `emails.value`), replaces, modifies (the `PATCH` forms Entra ID and Okta send) and deletes the
+  accounts of its token's connection. Accounts have no password, and a password sent is refused.
   In an OpenID Connect or SAML connection, the account is linked ahead of the person's first sign-in,
-  so that sign-in finds it. A new connection option, **`require_provisioning`** (OIDC and SAML), lets
-  in only the people a directory provisioned. Migration `0048_provisioned_accounts`.
+  so that sign-in finds it. **Deactivating a leaver ends every session, with back-channel logout,
+  and stops their tokens**, as an operator's deactivation does. Resources carry ETags, and
+  `If-Match` is honoured.
+- **Groups** (#132): `/scim/v2/Groups`. A role an operator marks **`provisionable`** is given to the
+  members of the group named like it, and taken back when they leave or the group goes; a role also
+  given by hand stays.
+- **`require_provisioning`** on OpenID Connect and SAML connections (#130): only the people a
+  directory provisioned sign in through it, and nobody else's account is created on the way.
+- What a directory does is recorded with its token as the actor, a new actor kind, `provisioning`.
 
-- **SCIM provisioning tokens and the `/scim/v2` surface** (#129, the first slice of SCIM 2.0): an
-  operator issues a provisioning token for one pool, OpenID Connect or SAML connection
-  (`/api/v1/provisioning-tokens`, scopes `read|create|delete:provisioning_tokens`), shown once with the
-  base URL to give the directory, and flagged 30 days before it expires (a year by default, two at
-  most). A directory reaches `https://management.{domain}/scim/v2` with it, and reads the service
-  provider's configuration; failed tokens are throttled per address like the machine endpoints. The
-  audit trail names a directory's token as a new actor kind, `provisioning` (`provisioning_token_id`).
-  Migration `0047_provisioning_tokens`. **Caddy routes `/scim/v2/*` on `management.*`**: deployments
-  with their own proxy must send it to PHP as they do `/api/v1/*`.
+**Enterprise sign-in: SAML 2.0**
 
-- **Signed SAML requests and encrypted assertions** (#127): with service provider keys, a SAML
-  connection signs its requests (`sign_requests`, on by default) and reads assertions encrypted to this
-  server (AES-GCM, the key wrapped with RSA-OAEP; never RSA PKCS#1 v1.5), with keys in PostgreSQL or a
-  KMS. AES-CBC is refused unless a connection turns `require_gcm` off, for an identity provider such as
-  ADFS that encrypts with it; `require_encryption` refuses plain assertions. SAML sign-in failures count
-  toward the sign-in throttle.
+- **SAML connections** (#125): `POST /api/v1/connections` takes `strategy: saml` with the identity
+  provider's metadata, as a document or a URL (Entra ID, Okta, ADFS and Keycloak read);
+  `POST /api/v1/connections/{name}/refresh-metadata` reads the URL again. Each connection publishes
+  this server's metadata at `GET /auth/saml/{connection}/metadata`.
+- **Signing in** (#126): the login page offers each enabled SAML connection. A person is known by the
+  connection and their subject, never by their address; an address is verified only when the
+  connection trusts its identity provider for addresses (`email_trusted`). A second factor applies as
+  after any sign-in, and a replayed assertion signs nobody in.
+- **Signed requests and encrypted assertions** (#127): a connection signs its requests
+  (`sign_requests`, on by default) and reads assertions encrypted to this server
+  (`require_encryption` refuses plain ones). AES-CBC is refused unless the connection turns
+  `require_gcm` off, for an identity provider such as ADFS that encrypts with it.
+- **Service provider keys** (#123, #124): a signing key and an encryption key (RSA 3072), sealed in
+  PostgreSQL, or kept in AWS KMS, Google Cloud KMS or Azure Key Vault, where they never leave the
+  provider. `bin/clavia saml-keys:generate`, `saml-keys:rotate` (a next pair published, promoted after
+  `CLAVIA_SAML_KEY_OVERLAP_DAYS`) and `saml-keys:list`; `GET /api/v1/saml-keys` and
+  `POST /api/v1/saml-keys/rotate`. **Generate them before registering a SAML connection** that signs
+  its requests or receives encrypted assertions.
 
-- **Signing in through a SAML identity provider** (#126): the login page offers each enabled SAML
-  connection; the person is sent to the identity provider and comes back through
-  `/auth/saml/{connection}/acs`. They are known by the connection and their subject, a second factor
-  applies as after any sign-in, and a replayed assertion signs nobody in. An address is verified only
-  when the connection trusts its identity provider for addresses (`email_trusted`).
+**Webhooks**
 
-- **SAML connections, registered** (#125): `POST /api/v1/connections` takes `strategy: saml` with the
-  identity provider's metadata, as a document or a URL (Entra ID, Okta, ADFS and Keycloak metadata
-  read); `POST /api/v1/connections/{name}/refresh-metadata` reads the URL again. Each connection
-  publishes this server's metadata at `GET /auth/saml/{connection}/metadata`, with the service
-  provider's certificates. Signing in through one comes next. **Migration `0046`**.
-- **Caddy** (#125): `/auth/saml/*/metadata` joins the paths whose caching the application owns.
+- **Endpoints** (#118): `/api/v1/webhooks`, up to twenty https endpoints, each listening to audit
+  event types or `*`, held to the outbound URL policy. The secret is generated, shown once and kept
+  sealed; a rotation keeps the previous one signing for a day.
+- **Delivery** (#119): every audit event an enabled endpoint subscribes to is queued in its own
+  transaction and sent by **`bin/clavia webhooks:deliver`**, to run every minute: the event as
+  `GET /api/v1/audit-events` shows it, signed per the Standard Webhooks specification, retried for
+  about a day and a half, then abandoned.
+- **Operating them** (#120): each endpoint's delivery log, a test event on demand, and endpoints failing
+  for five days switched off until switched on again.
 
-- **SAML service provider keys in a KMS** (#124): `CLAVIA_SAML_KEY_BACKEND` takes `aws-kms`,
-  `gcp-kms` and `azure-key-vault`, the keys named by `CLAVIA_SAML_SIGNING_KEY_REF` and
-  `CLAVIA_SAML_ENCRYPTION_KEY_REF` (a key version, never an alias), with
-  `CLAVIA_SAML_NEXT_SIGNING_KEY_REF` and `CLAVIA_SAML_NEXT_ENCRYPTION_KEY_REF` ahead of a rotation and
-  `CLAVIA_SAML_RETIRED_ENCRYPTION_KEY_REFS` after one. Requests are signed and content keys decrypted
-  by the KMS; the private halves never reach this server. Rotate at the provider: the rotate operation
-  answers `409`. **Migration `0045`**.
+**Custom claims**
 
-- **SAML service provider keys** (#123), ahead of SAML connections: a signing key and an encryption key
-  (RSA 3072), sealed in PostgreSQL, each with a self-signed certificate. `bin/clavia saml-keys:generate`,
-  `saml-keys:rotate` (a next pair published, promoted after `CLAVIA_SAML_KEY_OVERLAP_DAYS`, 14 by
-  default) and `saml-keys:list`; `GET /api/v1/saml-keys` and `POST /api/v1/saml-keys/rotate`.
-  New settings `CLAVIA_SAML_KEY_BACKEND` (`postgres` only for now) and `CLAVIA_SAML_KEY_OVERLAP_DAYS`.
-  **Migration `0044`**.
+- **Application metadata** on accounts (#114): `app_metadata`, a JSON object only operators write,
+  with a new scope, `update:users_app_metadata`.
+- **On APIs** (#115): `claims`, up to twenty mappings read from the account (`email`,
+  `email_verified`, `connection`, `profile.<field>`, `app_metadata.<path>`, `roles`) or a constant,
+  in the API's JWT access tokens and in introspection.
+- **On applications** (#116): `claims`, in the application's ID tokens, its userinfo answers, or both;
+  first-party applications only.
 
-- **Operating webhooks** (#120): each endpoint's delivery log (`GET /api/v1/webhooks/{id}/deliveries`),
-  a test event on demand (`POST /api/v1/webhooks/{id}/test`, recorded as `webhook.tested` and sent to
-  that endpoint alone), and endpoints failing every delivery for five days switched off by
-  `webhooks:deliver` (`webhook.disabled`) until switched on again. Endpoints show `disabled_reason` and
-  `failing_since`. The Management API document now describes the payload receivers get
-  (`WebhookPayload`) and how to verify its signature. **Migration `0043`**.
+**Bulk jobs on the users**
 
-- **Webhook delivery** (#119): every audit event an enabled endpoint subscribes to is queued in its
-  own transaction and sent by **`bin/clavia webhooks:deliver`**, to run every minute: the event as
-  `GET /api/v1/audit-events` shows it, signed per the Standard Webhooks specification
-  (`webhook-id`, `webhook-timestamp`, `webhook-signature`), retried for about a day and a half,
-  then abandoned. **Migration `0042`**.
+- **Import** (#19): `POST /api/v1/jobs/users-imports` queues an NDJSON file into one pool, at most
+  10,000 lines and 5 MiB. A password hash is taken only as PBKDF2-HMAC-SHA-256, and an address
+  already in the pool is refused, never updated.
+- **Export** (#19): `POST /api/v1/jobs/users-exports` queues an export of one connection, in the shape
+  an import takes, **never with a password hash**; `GET /api/v1/jobs/{job_id}/output` downloads it.
+- **`bin/clavia jobs:run`**, to run every minute, runs the queued jobs.
+- **`bin/clavia users:import-sqs <queue-url>`** (#108) imports accounts from an AWS SQS queue, one per
+  message. It needs `aws/aws-sdk-php`.
 
-- **Webhook endpoints** (#118, the first step of webhooks, `docs/design/webhooks.md`): `GET|POST
-  /api/v1/webhooks`, `GET|PATCH|DELETE /api/v1/webhooks/{id}` and `POST …/rotate-secret`, with
-  four new scopes, `read|create|update|delete:webhooks`; creating an endpoint, or changing where
-  it points or what it hears, also needs `read:audit_events`. Up to twenty https endpoints, each
-  listening to audit event types or `*`, held to the outbound URL policy. The secret is generated,
-  shown once and kept sealed; a rotation keeps the previous one signing for a day. Nothing is
-  delivered yet. Run `bin/clavia management-api:register` after upgrading, then give the new
-  permissions to the roles that should hold them. **Migration `0041`**.
+**The Management API reference** is published to GitHub Pages for each release (#101), with a short
+label for each operation and an example for each body and answer (#99, #100).
 
-- **Custom claims on applications** (#116): `claims` on a client, set with
-  `PATCH /api/v1/clients/{client_id}`, each going to the application's ID tokens, its userinfo
-  answers, or both (`in`). First-party applications only; dynamic registration never sets them.
-  **Migration `0040`**.
-- **Custom claims on APIs** (#115, `docs/design/custom-claims.md`): `claims` on an API, set with
-  `PATCH /api/v1/resource-servers/{id}`, up to twenty `{name, source}` mappings read from the
-  account (`email`, `email_verified`, `connection`, `profile.<field>`, `app_metadata.<path>`,
-  `roles`) or a constant. They go into the API's JWT access tokens, recomputed at every refresh,
-  and into introspection for opaque tokens too; never to a third-party application; constants
-  only for a machine. Names that are registered or standard JWT claims are refused, `roles`
-  (RFC 9068) excepted. **Migration `0039`**.
-- **Application metadata on accounts** (#114, the first step of custom claims, `docs/design/custom-claims.md`):
-  `app_metadata`, a JSON object (16 KiB, five levels, keys sorted) read with every user and replaced
-  whole by `PATCH /api/v1/users/{user_id}`. Writing it needs a new scope,
-  **`update:users_app_metadata`**, beside `update:users`. Run `bin/clavia management-api:register`
-  after upgrading, then give the new permission to the roles that should hold it (your
-  administrators). Exports write it; imports ignore it. **Migration `0038`**.
+**Settings**
 
-- **Bulk import of users** (#19): `POST /api/v1/jobs/users-imports` (`create:users`) queues an NDJSON
-  file, one account per line, at most 10,000 lines and 5 MiB, into one pool; `GET /api/v1/jobs/{job_id}`
-  (`read:users`) follows it. A password hash is taken only in a format Clavia verifies (PBKDF2-HMAC-SHA-256),
-  and replaced at today's count at the account's first sign-in. An address already in the pool is
-  refused, never updated; refused lines are reported by number and reason. The file, hashes included, is
-  let go when the job ends.
-- **Bulk export of users** (#19): `POST /api/v1/jobs/users-exports` (`read:users`) queues an export
-  of one connection; `GET /api/v1/jobs/{job_id}/output` downloads it, NDJSON in the shape an import
-  takes, so an export imports as it is. **Never a password hash.** Each export is recorded in the
-  audit trail (`user.exported`); its output is kept seven days, like the job. **Migration `0037`**.
-- **`bin/clavia jobs:run`**, to run every minute: it runs the queued jobs, fails a job whose worker
-  stopped, and purges finished jobs after seven days. **Migration `0036`**.
-- **`bin/clavia users:import-sqs <queue-url>`** (#108): imports accounts from an AWS SQS queue, one per
-  message, under the same rules as an import line, the pool in the `connection` message attribute.
-  Needs `aws/aws-sdk-php`, and `sqs:ReceiveMessage` and `sqs:DeleteMessage` on the queue; give the
-  queue a dead-letter queue for the messages that keep failing.
+| Setting | Default | What it does |
+|---|---|---|
+| `CLAVIA_SAML_KEY_BACKEND` | `postgres` | Where the SAML service provider keys live: `postgres`, `aws-kms`, `gcp-kms` or `azure-key-vault` |
+| `CLAVIA_SAML_SIGNING_KEY_REF` | none | With a KMS: the signing key's version (never an alias) |
+| `CLAVIA_SAML_ENCRYPTION_KEY_REF` | none | With a KMS: the encryption key's version |
+| `CLAVIA_SAML_NEXT_SIGNING_KEY_REF` | none | With a KMS: the next signing key, published ahead of a rotation |
+| `CLAVIA_SAML_NEXT_ENCRYPTION_KEY_REF` | none | With a KMS: the next encryption key |
+| `CLAVIA_SAML_RETIRED_ENCRYPTION_KEY_REFS` | none | With a KMS: encryption keys still tried after a rotation |
+| `CLAVIA_SAML_KEY_OVERLAP_DAYS` | 14 | How long a next pair is published before it is promoted, and a retired one kept |
+
+**Migrations**: `0036` to `0049`, applied by `bin/clavia db:migrate`. All of them add tables, columns,
+indexes or checks; none rewrites existing data.
+
+**Management API scopes**: `update:users_app_metadata`, `read:webhooks`, `create:webhooks`,
+`update:webhooks`, `delete:webhooks`, `read:provisioning_tokens`, `create:provisioning_tokens` and
+`delete:provisioning_tokens`. On an existing server, run `bin/clavia management-api:register` once
+after upgrading, then give them to the roles (and the machine clients' grants, with `clients:grant`)
+that should hold them: nobody holds a new scope until then.
+
+**Scheduled commands**: run `bin/clavia jobs:run` and `bin/clavia webhooks:deliver` every minute.
 
 ### Changed
 
-- **The PHP image includes `bcmath`** (#122), which the SAML library (`simplesamlphp/saml2`, added for
-  the coming SAML connections) needs. An image built from your own Dockerfile needs it too.
-
-- Password sign-in replaces a hash at another iteration count with one at today's.
-
-- **Passwords and client secrets are hashed with PBKDF2-HMAC-SHA-256**, for FIPS 140 (NIST
+- **Passwords and client secrets are hashed with PBKDF2-HMAC-SHA-256** (#106), for FIPS 140 (NIST
   SP 800-132): 600,000 iterations, a 16-byte random salt each, derived through OpenSSL, so its FIPS
   provider does the work when the system runs in FIPS mode. **bcrypt hashes no longer verify**:
   every account must choose its password again (the reset link, or
-  `POST /api/v1/users/{user_id}/password-reset`), and every confidential client needs a new
-  secret (`POST /api/v1/clients/{client_id}/rotate-secret`, or a new `clients:create-m2m`).
-- A password or a client secret may be up to 1,024 bytes, where bcrypt took 72.
+  `POST /api/v1/users/{user_id}/password-reset`), and every confidential client needs a new secret
+  (`POST /api/v1/clients/{client_id}/rotate-secret`, or a new `clients:create-m2m`). A password or a
+  secret may now be up to 1,024 bytes, where bcrypt took 72, and a sign-in replaces a hash at another
+  iteration count with one at today's.
+- **Caddy routes `/scim/v2/*` on `management.*`** and refuses it on `auth.*` (#129), and leaves the
+  caching of `/auth/saml/*/metadata` to the application (#125). A deployment with its own proxy must do
+  the same: send `/scim/v2/*` to PHP as it does `/api/v1/*`.
+- **The PHP image includes `bcmath`** (#122), which the SAML library needs. An image built from your own
+  Dockerfile needs it too.
+- **`CLAVIA_AZURE_FEDERATED_TOKEN_FILE` must be an absolute local path** (#104): a URL or a stream
+  wrapper there now stops the server from starting.
+- **New required fields in the Management API document**: an audit event's actor gains
+  `provisioning_token_id`, and its kind `provisioning`; a user gains `app_metadata`; a client and an API
+  gain `claims`; a connection gains `saml` and `require_provisioning`; a role gains `provisionable`.
+  Clients that generate types from `docs/openapi/management-api.yaml` regenerate them.
+
+### Security
+
+- **No directory can make anyone an administrator of this server**: a provisionable role never holds a
+  permission on a system API, refused by the role and by the database, and only provisionable roles are
+  granted through groups.
+- **A provisioning token reaches one connection.** Another connection's accounts and groups are not
+  found, an address from a directory is verified only on the operator's word, and a token is shown
+  once and stored as its digest.
+- **SAML**: identity providers' certificates are pinned (RSA only, 1 to 3 per connection); content keys
+  are unwrapped with RSA-OAEP only, never RSA PKCS#1 v1.5; AES-GCM is required unless a connection opts
+  out; an assertion is accepted once; every failure gives the same page after the same steps, and
+  failures of the response itself count toward the sign-in throttle.
+- **Webhooks** go only to https URLs that pass the outbound URL policy at registration and at every
+  delivery, connect to the addresses checked, follow no redirect, and never read the answer.
+- An export never holds a password hash, a factor, a passkey or a session, and an import's input is
+  let go when its job ends.
 
 ## [0.3.0] - 2026-11-23
 
@@ -414,7 +431,8 @@ forbids passing (a code flow with neither PKCE nor a `nonce`); see
 - Request objects (`request`, `request_uri`) and the `address` and `phone` scopes.
 - A queue for mail: a sign-in email is sent while the person waits.
 
-[Unreleased]: https://github.com/clavia-auth/clavia/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/clavia-auth/clavia/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/clavia-auth/clavia/releases/tag/v0.4.0
 [0.3.0]: https://github.com/clavia-auth/clavia/releases/tag/v0.3.0
 [0.2.0]: https://github.com/clavia-auth/clavia/releases/tag/v0.2.0
 [0.1.0]: https://github.com/clavia-auth/clavia/releases/tag/v0.1.0
