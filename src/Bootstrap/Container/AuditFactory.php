@@ -16,6 +16,7 @@ use Clavia\Application\Audit\AuditContext;
 use Clavia\Domain\Audit\AuditLog;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\RandomSource;
+use Clavia\Domain\Webhook\WebhookDeliveryRepository;
 use Psr\Container\ContainerInterface;
 
 final class AuditFactory
@@ -31,6 +32,9 @@ final class AuditFactory
         /** @var RandomSource $random */
         $random = $container->get(RandomSource::class);
 
-        return new Audit($log, $context, $clock, $random);
+        /** @var WebhookDeliveryRepository $webhooks */
+        $webhooks = $container->get(WebhookDeliveryRepository::class);
+
+        return new Audit($log, $context, $clock, $random, $webhooks);
     }
 }

@@ -8,6 +8,12 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ### Added
 
+- **Webhook delivery** (#119): every audit event an enabled endpoint subscribes to is queued in its
+  own transaction and sent by **`bin/clavia webhooks:deliver`**, to run every minute: the event as
+  `GET /api/v1/audit-events` shows it, signed per the Standard Webhooks specification
+  (`webhook-id`, `webhook-timestamp`, `webhook-signature`), retried for about a day and a half,
+  then abandoned. **Migration `0042`**.
+
 - **Webhook endpoints** (#118, the first step of webhooks, `docs/design/webhooks.md`): `GET|POST
   /api/v1/webhooks`, `GET|PATCH|DELETE /api/v1/webhooks/{id}` and `POST …/rotate-secret`, with
   four new scopes, `read|create|update|delete:webhooks`; creating an endpoint, or changing where

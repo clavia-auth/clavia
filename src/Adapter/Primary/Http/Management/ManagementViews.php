@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Management;
 
+use Clavia\Application\Audit\AuditEventDocument;
 use Clavia\Application\Management\Clients\ClientWithSecret;
 use Clavia\Application\Management\Clients\DescribedClient;
 use Clavia\Application\Management\Connections\DescribedConnection;
@@ -418,23 +419,8 @@ final class ManagementViews
      */
     public static function auditEvent(AuditEvent $event): array
     {
-        return [
-            'id' => $event->id->value,
-            'type' => $event->type->value,
-            'occurred_at' => self::instant($event->occurredAt),
-            'outcome' => $event->outcome->value,
-            'actor' => [
-                'kind' => $event->actor->kind->value,
-                'user_id' => $event->actor->userId?->value,
-                'client_id' => $event->actor->clientId?->value,
-            ],
-            'target' => $event->target === null
-                ? null
-                : ['type' => $event->target->type->value, 'id' => $event->target->id],
-            'details' => (object) $event->details,
-            'client_address' => $event->clientAddress,
-            'user_agent' => $event->userAgent,
-        ];
+        // The one rendering, shared with webhook deliveries.
+        return AuditEventDocument::of($event);
     }
 
     /**

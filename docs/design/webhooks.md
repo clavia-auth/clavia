@@ -207,7 +207,22 @@ trail records `webhook.created` with the URL's host and the event types.
 4. **Dashboard** (clavia-dashboard): the Webhooks page. *Done when* all of the above is possible
    without the API.
 
-## 10. Open questions
+## 10. As built
+
+What the slices settled differently from the sections above, so the code and this document agree.
+
+- **Endpoint ids are UUIDs**, as initial access tokens' are, not `wh_…`.
+- **The worker claims endpoints, not deliveries** (§2, "The worker"; §5.3): `webhook_endpoints`
+  carries `delivering_until`, set with `FOR UPDATE SKIP LOCKED`. Claiming deliveries could not keep
+  one in flight per endpoint: two workers would each lock a different delivery of the same
+  endpoint. A worker sends an endpoint's due deliveries one at a time, and a failure stops that
+  endpoint for the run.
+- **A timeout is a `connection` failure**: PSR-18 does not tell a timeout from a refusal without a
+  vendor's exception, and the category tells an operator the same thing either way.
+- **The answer is never downloaded** rather than read up to 1 KiB: the sender's client is built with
+  `stream`, and the body is closed unread.
+
+## 11. Open questions
 
 1. **A minute of latency** (§2, the worker)? *Recommendation:* accept it for now. A trail stream is
    read by machines that tolerate it. If not, the worker can also run after a response

@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace ClaviaTest\Support\Fake;
 
 use Clavia\Domain\Audit\AuditEvent;
+use Clavia\Domain\Audit\AuditEventId;
 use Clavia\Domain\Audit\AuditEventType;
 use Clavia\Domain\Audit\AuditLog;
 use Clavia\Domain\Audit\AuditQuery;
@@ -23,6 +24,18 @@ final class InMemoryAuditLog implements AuditLog
 {
     /** @var list<AuditEvent> In the order appended. */
     private array $events = [];
+
+    #[\Override]
+    public function find(AuditEventId $id): ?AuditEvent
+    {
+        foreach ($this->events as $event) {
+            if ($event->id->equals($id)) {
+                return $event;
+            }
+        }
+
+        return null;
+    }
 
     #[\Override]
     public function append(AuditEvent $event): void

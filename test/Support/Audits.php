@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Support;
 
+use ClaviaTest\Support\Fake\InMemoryWebhookDeliveryRepository;
 use Clavia\Application\Audit\Audit;
 use Clavia\Application\Audit\AuditContext;
 use Clavia\Domain\Shared\Clock;
@@ -37,6 +38,12 @@ final class Audits
         ?Clock $clock = null,
         AuditContext $context = new AuditContext(),
     ): Audit {
-        return new Audit($log, $context, $clock ?? new FrozenClock(), new SeededRandomSource());
+        return new Audit(
+            $log,
+            $context,
+            $clock ?? new FrozenClock(),
+            new SeededRandomSource(),
+            new InMemoryWebhookDeliveryRepository(),
+        );
     }
 }
