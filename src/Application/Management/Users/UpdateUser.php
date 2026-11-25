@@ -75,6 +75,9 @@ final readonly class UpdateUser
         if ($changes->profile !== []) {
             $user->changeProfile(ProfileFields::apply($user->profile(), $changes->profile), $now);
         }
+        if ($changes->appMetadata !== null) {
+            $user->changeAppMetadata($changes->appMetadata, $now);
+        }
 
         $this->users->save($user);
         // What changed, by field — never the password, only that it was set.
@@ -84,6 +87,7 @@ final readonly class UpdateUser
                 'email_verified' => $changes->emailVerified !== null,
                 'has_password' => $changes->password !== null,
                 'is_active' => $changes->isActive !== null,
+                'app_metadata' => $changes->appMetadata !== null,
             ])),
             array_map(strval(...), array_keys($changes->profile)),
         ), $deactivated));

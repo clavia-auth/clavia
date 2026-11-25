@@ -104,6 +104,10 @@ final readonly class ManagementApiMiddleware implements MiddlewareInterface
 
         try {
             return $handler->handle(new ManagementRequest($caller, $validated, $body)->attachTo($request));
+        } catch (BearerTokenError $error) {
+            // A scope an operation needs only for some of what it is sent (`app_metadata` on a user):
+            // refused as the operation's own scope is, before anything changed.
+            return $this->challenger->refuse($error, $credentials->scheme);
         } catch (NotFound $refusal) {
             return $this->responder->problem(
                 new Problem(StatusCodeInterface::STATUS_NOT_FOUND, $refusal->getMessage()),

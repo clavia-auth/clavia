@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Management\Users;
 
+use Clavia\Domain\Identity\AppMetadata;
+
 /**
  * Changes to an account. A field left null is left alone; a profile field present in
  * `$profile` with a null value is cleared.
@@ -26,6 +28,7 @@ final readonly class UserChanges
         public ?bool $emailVerified = null,
         public ?bool $isActive = null,
         public array $profile = [],
+        public ?AppMetadata $appMetadata = null,
     ) {
     }
 }

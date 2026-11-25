@@ -36,14 +36,31 @@ final class ManagementContractTest extends TestCase
     public function testTheDocumentRequiresExactlyTheManagementPermissions(): void
     {
         // Each operation names one; together they are every permission and nothing else,
-        // so no scope is granted that no route checks, and no route checks one nobody holds.
+        // so no scope is granted that no route checks, and no route checks one nobody holds. A
+        // permission a field needs is checked by its handler, and the operation's description
+        // names it.
+        $byField = array_values(array_filter(
+            ManagementPermission::cases(),
+            static fn (ManagementPermission $permission): bool => $permission->isRequiredByAField(),
+        ));
         self::assertEqualsCanonicalizing(
             array_map(
                 static fn (ManagementPermission $permission): string => $permission->value,
-                ManagementPermission::cases(),
+                array_values(array_filter(
+                    ManagementPermission::cases(),
+                    static fn (ManagementPermission $permission): bool => ! $permission->isRequiredByAField(),
+                )),
             ),
             self::contract()->requiredPermissions(),
         );
+        $document = (string) file_get_contents(__DIR__ . '/../../../../../../docs/openapi/management-api.yaml');
+        foreach ($byField as $permission) {
+            self::assertStringContainsString(
+                '`' . $permission->value . '`',
+                $document,
+                $permission->value . ' is checked by a field: the document must say where.',
+            );
+        }
     }
 
     public function testTheMostSpecificPathIsTheOperation(): void

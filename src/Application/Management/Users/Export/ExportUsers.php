@@ -24,7 +24,10 @@ use DateTimeZone;
  * - `email`, `email_verified`, `is_active`, and the profile fields that are set (`name`, `given_name`,
  *   `family_name`, `nickname`, `picture`, `locale`);
  * - `user_id`, `connection`, `created_at` and `updated_at`, which say where the account came from,
- *   and which an import ignores.
+ *   and which an import ignores;
+ * - `app_metadata`, when the account has any, which an import ignores for now: setting it needs
+ *   `update:users_app_metadata`, which an import is not queued with (docs/design/custom-claims.md
+ *   §10, question 4).
  *
  * **Never a password hash**, nor anything of a second factor, a passkey, a linked identity or a
  * session: an export is a copy of the directory, not of anybody's means of signing in. An account
@@ -60,7 +63,7 @@ final readonly class ExportUsers
         return new ExportedUsers($content, $count);
     }
 
-    /** @return array<string, string|bool> */
+    /** @return array<string, string|bool|\stdClass> */
     public static function line(User $user): array
     {
         $profile = $user->profile();
@@ -85,6 +88,12 @@ final readonly class ExportUsers
             if ($value !== null) {
                 $line[$field] = $value;
             }
+        }
+
+        if (! $user->appMetadata()->isEmpty()) {
+            /** @var \stdClass $metadata An object: AppMetadata holds nothing else. */
+            $metadata = json_decode($user->appMetadata()->toJson(), false, 64, JSON_THROW_ON_ERROR);
+            $line['app_metadata'] = $metadata;
         }
 
         return $line + [

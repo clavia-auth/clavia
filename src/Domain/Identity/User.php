@@ -41,6 +41,7 @@ final class User
         public readonly DateTimeImmutable $createdAt,
         private DateTimeImmutable $updatedAt,
         public readonly ConnectionName $connection,
+        private AppMetadata $appMetadata,
     ) {
     }
 
@@ -71,6 +72,7 @@ final class User
             $now,
             $now,
             $pool ?? ConnectionName::defaultPool(),
+            AppMetadata::empty(),
         );
     }
 
@@ -98,6 +100,7 @@ final class User
             $now,
             $now,
             $connection,
+            AppMetadata::empty(),
         );
     }
 
@@ -116,6 +119,7 @@ final class User
         DateTimeImmutable $createdAt,
         DateTimeImmutable $updatedAt,
         ConnectionName $connection,
+        ?AppMetadata $appMetadata = null,
     ): self {
         return new self(
             $id,
@@ -127,6 +131,7 @@ final class User
             $createdAt,
             $updatedAt,
             $connection,
+            $appMetadata ?? AppMetadata::empty(),
         );
     }
 
@@ -228,6 +233,25 @@ final class User
     {
         if (! $profile->equals($this->profile)) {
             $this->profile = $profile;
+            $this->updatedAt = $now;
+        }
+    }
+
+    /** What operators keep about the account ({@see AppMetadata}); `{}` when nothing. */
+    public function appMetadata(): AppMetadata
+    {
+        return $this->appMetadata;
+    }
+
+    /**
+     * Replace the application metadata as a whole: what is given is what is kept, and a key is
+     * removed by leaving it out. Only an operator's change reaches this (docs/design/custom-claims.md
+     * §5.1).
+     */
+    public function changeAppMetadata(AppMetadata $metadata, DateTimeImmutable $now): void
+    {
+        if (! $metadata->equals($this->appMetadata)) {
+            $this->appMetadata = $metadata;
             $this->updatedAt = $now;
         }
     }

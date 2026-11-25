@@ -11,11 +11,15 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Management;
 
+use Clavia\Application\Management\ManagementPermission;
 use Clavia\Application\Management\Users\DeleteUser;
 use Clavia\Application\Management\Users\ReadUsers;
 use Clavia\Application\Management\Users\UpdateUser;
 use Clavia\Application\Management\Users\UserChanges;
+use Clavia\Domain\Identity\AppMetadata;
 use Clavia\Domain\Identity\UserId;
+use Clavia\Domain\Shared\InvalidValue;
+use Fig\Http\Message\StatusCodeInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -46,6 +50,21 @@ final readonly class UserHandler implements RequestHandlerInterface
                 return $this->responder->json(ManagementViews::user($this->read->one($id)));
             case 'PATCH':
                 $body = $management->body;
+                $metadata = null;
+                if ($body->has('app_metadata')) {
+                    // Writing it is granting access (custom claims, authorization): a scope of its own,
+                    // on top of the operation's `update:users`, checked before anything changes.
+                    $management->caller->require(ManagementPermission::UpdateUsersAppMetadata);
+                    try {
+                        $metadata = AppMetadata::fromJson($body->json('app_metadata') ?? '{}');
+                    } catch (InvalidValue $refusal) {
+                        return $this->responder->problem(new Problem(
+                            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
+                            ContractViolation::DETAIL,
+                            [['pointer' => '/app_metadata', 'detail' => $refusal->getMessage()]],
+                        ));
+                    }
+                }
 
                 return $this->responder->json(ManagementViews::user(($this->update)($id, new UserChanges(
                     $body->string('email'),
@@ -53,6 +72,7 @@ final readonly class UserHandler implements RequestHandlerInterface
                     $body->bool('email_verified'),
                     $body->bool('is_active'),
                     UserFields::profileChanges($body),
+                    $metadata,
                 ))));
             case 'DELETE':
                 ($this->delete)($id, $management->caller);
