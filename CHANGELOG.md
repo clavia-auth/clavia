@@ -8,6 +8,13 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ### Added
 
+- **Application metadata on accounts** (#114, the first step of custom claims, `docs/design/custom-claims.md`):
+  `app_metadata`, a JSON object (16 KiB, five levels, keys sorted) read with every user and replaced
+  whole by `PATCH /api/v1/users/{user_id}`. Writing it needs a new scope,
+  **`update:users_app_metadata`**, beside `update:users`. Run `bin/clavia management-api:register`
+  after upgrading, then give the new permission to the roles that should hold it (your
+  administrators). Exports write it; imports ignore it. **Migration `0038`**.
+
 - **Bulk import of users** (#19): `POST /api/v1/jobs/users-imports` (`create:users`) queues an NDJSON
   file, one account per line, at most 10,000 lines and 5 MiB, into one pool; `GET /api/v1/jobs/{job_id}`
   (`read:users`) follows it. A password hash is taken only in a format Clavia verifies (PBKDF2-HMAC-SHA-256),

@@ -287,7 +287,7 @@ objects, repository interfaces, and an `Event` namespace for its domain events.
 | Context | Holds | Key rules |
 |---|---|---|
 | `Shared` | `Clock`, `RandomSource`, `SecretGenerator`, `Digest`, `Scope`/`ScopeSet`, `Audience`, `Url`, `UuidId`, `Base64Url`, `PageRequest`/`Page`, `InvalidValue`, `AlreadyExists`, `DomainEvent` | Secrets are 43-character tokens; codes and tokens are stored as their SHA-256 `Digest`; URLs are kept byte for byte and compared exactly |
-| `Identity` | `User`, `Profile`, `PasswordPolicy`, `ExternalIdentity`, `AssertedIdentity`, `AccountLink` | Every account belongs to one connection; an address is unique within it; a changed address is unverified; an emailed link dies with the address or password it was issued against |
+| `Identity` | `User`, `Profile`, `AppMetadata`, `PasswordPolicy`, `ExternalIdentity`, `AssertedIdentity`, `AccountLink` | Every account belongs to one connection; an address is unique within it; a changed address is unverified; an emailed link dies with the address or password it was issued against; application metadata is a JSON object only operators write (16 KiB, five levels, keys sorted), replaced whole |
 | `Client` | `Client`, `ClientId`, `ClientType`, `ClientAuthMethod`, `GrantType`, `ResponseType`, `Ownership`, `BackChannelLogout`, `Registration\InitialAccessToken` | Type, auth method and secret agree; the code flow needs a redirect URI; `client_credentials` needs a confidential client; `tpc_…` ids are third-party |
 | `Connection` | `Connection`, `ConnectionName`, `ConnectionStrategy` (database, social, OIDC, passwordless), `OidcSettings`, `BuiltInConnection` | The default pool, social providers and `email` are switched, never created or deleted; only a pool takes sign-ups or requires a verified address |
 | `ResourceServer` | `ResourceServer` (an API: `rs_…` id, audience, permissions, `AccessTokenFormat`), `Permission`, `ClientGrant` | A system API (the Management API) can be renamed, never deleted, always enforces roles; tokens are opaque unless the API takes JWTs |
@@ -715,7 +715,11 @@ source of truth. `ManagementApiMiddleware` checks every request in one order:
    active, and — when the Management API's own `mfa_policy` is `required` — a person's token
    from a sign-in meeting MFA, or `401 insufficient_user_authentication` with the `acr_values`
    to ask for (RFC 9470 §3; a machine token is not concerned; `seed-dev` turns it on);
-3. the scope named by the operation's `security` requirement (there is no second list);
+3. the scope named by the operation's `security` requirement (there is no second list). A
+   scope a *field* needs (`app_metadata` on a user needs `update:users_app_metadata`, since it
+   feeds claims and authorization) is checked by the handler with `ManagementCaller::require()`,
+   is marked by `ManagementPermission::isRequiredByAField()`, and is named in the operation's
+   description; refused, it is the same `403`, before anything changes;
 4. the request against the contract: a parameter twice, unreadable JSON or bad
    percent-encoding is 400; not JSON is 415; anything the contract or the domain refuses is
    422, with every violation listed (at most fifty).

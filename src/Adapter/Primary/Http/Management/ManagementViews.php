@@ -101,6 +101,8 @@ final class ManagementViews
             'locale' => $profile->locale,
             'created_at' => self::instant($user->createdAt),
             'updated_at' => self::instant($user->updatedAt()),
+            // An object, `{}` when empty: decoded as objects, so JSON keeps it one.
+            'app_metadata' => json_decode($user->appMetadata()->toJson(), false, 64, JSON_THROW_ON_ERROR),
         ];
     }
 

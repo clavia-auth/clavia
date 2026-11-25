@@ -14,6 +14,7 @@ namespace ClaviaTest\Support\Contract;
 use Clavia\Domain\Connection\Connection;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Connection\ConnectionRepository;
+use Clavia\Domain\Identity\AppMetadata;
 use Clavia\Domain\Identity\Profile;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
@@ -314,6 +315,23 @@ trait UserRepositoryContract
         sort($sorted);
         self::assertSame($sorted, $seen, 'By id.');
         self::assertCount(5, $seen, 'Each account of the pool once, and none of another connection.');
+    }
+
+    #[Test]
+    public function theApplicationMetadataIsSavedAndReadBackWhole(): void
+    {
+        $user = $this->aUser('jane@example.com');
+        $this->users()->save($user);
+        self::assertTrue($this->users()->find($user->id)?->appMetadata()->isEmpty());
+
+        $metadata = AppMetadata::fromJson('{"tenant":{"region":"eu","id":42},"plan":"pro","flags":[],"extra":{}}');
+        $user->changeAppMetadata($metadata, new DateTimeImmutable('2026-01-16T10:00:00Z'));
+        $this->users()->save($user);
+
+        $read = $this->users()->find($user->id);
+        self::assertNotNull($read);
+        self::assertTrue($read->appMetadata()->equals($metadata), $read->appMetadata()->toJson());
+        self::assertSame($metadata->toJson(), $read->appMetadata()->toJson());
     }
 
     private function aUser(string $email): User

@@ -40,6 +40,11 @@ enum ManagementPermission: string
     case CreateUsers = 'create:users';
     case UpdateUsers = 'update:users';
     case DeleteUsers = 'delete:users';
+    /**
+     * Writing an account's application metadata, which claim mappings copy into tokens and APIs
+     * authorize on: granting access, which `update:users` (a name, an address) does not imply.
+     */
+    case UpdateUsersAppMetadata = 'update:users_app_metadata';
     case ReadClients = 'read:clients';
     case CreateClients = 'create:clients';
     case UpdateClients = 'update:clients';
@@ -65,6 +70,17 @@ enum ManagementPermission: string
     case DeleteInitialAccessTokens = 'delete:initial_access_tokens';
 
     /** A sentence for the permission, shown wherever one is assigned. */
+    /**
+     * Whether this permission is needed by a field of an operation rather than by the operation
+     * (`app_metadata` on `PATCH /api/v1/users/{user_id}`): OpenAPI's security requirements cannot say
+     * "only when this is sent", so its handler checks it, and the document says so in the
+     * operation's description.
+     */
+    public function isRequiredByAField(): bool
+    {
+        return $this === self::UpdateUsersAppMetadata;
+    }
+
     public function description(): string
     {
         [$verb, $resource] = explode(':', $this->value, 2) + [1 => ''];
@@ -76,6 +92,7 @@ enum ManagementPermission: string
             default => 'Delete',
         } . ' ' . match ($resource) {
             'users' => 'end users',
+            'users_app_metadata' => 'the application metadata of end users',
             'clients' => 'client applications',
             'roles' => 'roles and who holds them',
             'connections' => 'the ways users sign in',

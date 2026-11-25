@@ -109,6 +109,26 @@ final readonly class JsonObject
         return $objects;
     }
 
+    /**
+     * An object member as its JSON, for a value the domain reads whole (application metadata);
+     * null when absent or null.
+     *
+     * @throws LogicException When the contract let something other than an object through.
+     */
+    public function json(string $name): ?string
+    {
+        /** @var mixed $value */
+        $value = $this->value($name);
+        if ($value === null) {
+            return null;
+        }
+
+        return $value instanceof stdClass
+            ? json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION
+                | JSON_THROW_ON_ERROR)
+            : throw self::mistyped($name, 'an object');
+    }
+
     private function value(string $name): mixed
     {
         return $this->has($name) ? $this->members->{$name} : null;

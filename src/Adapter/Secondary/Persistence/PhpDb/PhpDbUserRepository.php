@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Secondary\Persistence\PhpDb;
 
 use Clavia\Domain\Connection\ConnectionName;
+use Clavia\Domain\Identity\AppMetadata;
 use Clavia\Domain\Identity\Profile;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
@@ -27,7 +28,7 @@ use Throwable;
 final readonly class PhpDbUserRepository implements UserRepository
 {
     private const string COLUMNS = 'id, connection, email, password_hash, email_verified, is_active, name, '
-        . 'given_name, family_name, nickname, picture, locale, created_at, updated_at';
+        . 'given_name, family_name, nickname, picture, locale, created_at, updated_at, app_metadata';
 
     public function __construct(private Database $database)
     {
@@ -145,10 +146,11 @@ final readonly class PhpDbUserRepository implements UserRepository
             <<<'SQL'
                 INSERT INTO users (
                     id, connection, email, password_hash, email_verified, is_active, name, given_name,
-                    family_name, nickname, picture, locale, created_at, updated_at
+                    family_name, nickname, picture, locale, created_at, updated_at, app_metadata
                 ) VALUES (
                     :id, :connection, :email, :password_hash, :email_verified, :is_active, :name, :given_name,
-                    :family_name, :nickname, :picture, :locale, :created_at, :updated_at
+                    :family_name, :nickname, :picture, :locale, :created_at, :updated_at,
+                    CAST(:app_metadata AS jsonb)
                 )
                 ON CONFLICT (id) DO UPDATE SET
                     email = EXCLUDED.email,
@@ -161,7 +163,8 @@ final readonly class PhpDbUserRepository implements UserRepository
                     nickname = EXCLUDED.nickname,
                     picture = EXCLUDED.picture,
                     locale = EXCLUDED.locale,
-                    updated_at = EXCLUDED.updated_at
+                    updated_at = EXCLUDED.updated_at,
+                    app_metadata = EXCLUDED.app_metadata
                 SQL,
             [
                 'id' => $user->id->value,
@@ -178,6 +181,7 @@ final readonly class PhpDbUserRepository implements UserRepository
                 'locale' => $user->profile()->locale,
                 'created_at' => Timestamp::toDatabase($user->createdAt),
                 'updated_at' => Timestamp::toDatabase($user->updatedAt()),
+                'app_metadata' => $user->appMetadata()->toJson(),
             ],
         );
     }
@@ -192,7 +196,7 @@ final readonly class PhpDbUserRepository implements UserRepository
          *            email_verified: bool,
          *            is_active: bool, name: string|null, given_name: string|null, family_name: string|null,
          *            nickname: string|null, picture: string|null, locale: string|null, created_at: string,
-         *            updated_at: string} $row
+         *            updated_at: string, app_metadata: string} $row
          */
         return User::reconstitute(
             UserId::fromString($row['id']),
@@ -211,6 +215,8 @@ final readonly class PhpDbUserRepository implements UserRepository
             Timestamp::fromDatabase($row['created_at']),
             Timestamp::fromDatabase($row['updated_at']),
             ConnectionName::fromString($row['connection']),
+            // PostgreSQL's jsonb text, read through the same rules it was written under.
+            AppMetadata::fromJson($row['app_metadata']),
         );
     }
 }

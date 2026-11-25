@@ -24,8 +24,9 @@ use stdClass;
  * - `password_hash` is one this server can verify (`PBKDF2-HMAC-SHA-256`, at any count from 1,000):
  *   anything else is refused, never stored for a sign-in that could not succeed. A hash at another
  *   count is replaced at the account's first sign-in;
- * - `user_id`, `connection`, `created_at` and `updated_at`, which an export writes, are ignored: the
- *   account gets a new id, the job's pool, and today as its creation;
+ * - `user_id`, `connection`, `created_at`, `updated_at` and `app_metadata`, which an export writes,
+ *   are ignored: the account gets a new id, the job's pool, today as its creation, and no
+ *   application metadata (setting it needs a scope an import is not queued with);
  * - a plaintext `password`, or any member not listed, refuses the line: an import is as strict as
  *   the API, and a password is never carried in a file.
  *
@@ -37,7 +38,7 @@ final readonly class ImportLine
     private const array KNOWN = ['email', 'email_verified', 'is_active', 'password_hash', ...self::PROFILE];
 
     /** What an export adds, saying where an account came from: ignored, so an export imports as it is. */
-    private const array EXPORTED = ['user_id', 'connection', 'created_at', 'updated_at'];
+    private const array EXPORTED = ['user_id', 'connection', 'created_at', 'updated_at', 'app_metadata'];
 
     public function __construct(private PasswordHasher $hasher)
     {
