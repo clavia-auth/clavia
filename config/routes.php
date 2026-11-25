@@ -87,6 +87,8 @@ use Clavia\Adapter\Primary\Http\Scim\ProvisioningMiddleware;
 use Clavia\Adapter\Primary\Http\Scim\ScimCatalogueHandler;
 use Clavia\Adapter\Primary\Http\Scim\ScimNotFoundHandler;
 use Clavia\Adapter\Primary\Http\Scim\ScimNotImplementedHandler;
+use Clavia\Adapter\Primary\Http\Scim\ScimUserHandler;
+use Clavia\Adapter\Primary\Http\Scim\ScimUsersHandler;
 use Clavia\Adapter\Primary\Http\Scim\ServiceProviderConfigHandler;
 use Clavia\Adapter\Primary\Http\Shared\HealthHandler;
 use Clavia\Configuration\ClientRegistration;
@@ -382,6 +384,8 @@ return static function (Application $app, ContainerInterface $container): void {
         $scim(ScimCatalogueHandler::class),
         'scim.catalogue',
     );
+    $app->route('/scim/v2/Users', $scim(ScimUsersHandler::class), ['GET', 'POST'], 'scim.users');
+    $app->get('/scim/v2/Users/{id}', $scim(ScimUserHandler::class), 'scim.user');
     // Offered by no directory this is for (§1): 501, as RFC 7644 §3.12 answers a missing feature.
     $app->post('/scim/v2/Bulk', $scim(ScimNotImplementedHandler::class), 'scim.bulk');
     $app->route(

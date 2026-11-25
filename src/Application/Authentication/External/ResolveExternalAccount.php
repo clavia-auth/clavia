@@ -19,6 +19,7 @@ use Clavia\Domain\Identity\ExternalIdentityRepository;
 use Clavia\Domain\Identity\User;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
+use Clavia\Domain\Provisioning\ProvisionedAccountRepository;
 use Clavia\Domain\Shared\AlreadyExists;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\RandomSource;
@@ -45,6 +46,10 @@ use Clavia\Domain\Shared\RandomSource;
  * 4. **Otherwise a new account is created**: password-less, its address verified, and
  *    belonging to the provider's connection.
  *
+ * A connection that requires provisioning (docs/design/scim-provisioning.md §5.4) replaces all of
+ * it with one rule: the identity must be one a directory provisioned there, and nothing is linked or
+ * created on the way.
+ *
  * A first sign-in racing with itself is settled by the storage's uniqueness: the loser
  * finds what the winner linked or created, and resolves again.
  */
@@ -53,6 +58,7 @@ final readonly class ResolveExternalAccount
     public function __construct(
         private UserRepository $users,
         private ExternalIdentityRepository $identities,
+        private ProvisionedAccountRepository $provisioned,
         private TransactionManager $transactions,
         private RandomSource $random,
         private Clock $clock,
@@ -65,12 +71,18 @@ final readonly class ResolveExternalAccount
      * @param bool $unverifiedAddress Whether a new identity whose address nothing vouches for still gets an
      *                                account, the address unverified and linked to nothing (a SAML connection
      *                                not trusted for addresses: the assertion vouches for the subject).
+     * @param bool $requireProvisioning Whether only an account a directory provisioned through the provider's
+     *                                  connection may sign in: nothing is linked or created.
      */
     public function __invoke(
         AssertedIdentity $asserted,
         array $pools,
         bool $unverifiedAddress = false,
+        bool $requireProvisioning = false,
     ): User|ExternalSignInFailure {
+        if ($requireProvisioning) {
+            return $this->provisionedAccount($asserted);
+        }
         try {
             return $this->resolve($asserted, $pools, $unverifiedAddress);
         } catch (AlreadyExists) {
@@ -122,6 +134,21 @@ final readonly class ResolveExternalAccount
 
             return $user;
         });
+    }
+
+    /**
+     * The account a directory provisioned for this identity in the provider's connection, or nothing:
+     * an identity linked before provisioning, or never linked, is refused alike.
+     */
+    private function provisionedAccount(AssertedIdentity $asserted): User|ExternalSignInFailure
+    {
+        $linked = $this->identities->find($asserted->provider, $asserted->subject);
+        if ($linked === null || $this->provisioned->find($asserted->provider, $linked->userId) === null) {
+            return ExternalSignInFailure::NotProvisioned;
+        }
+        $user = $this->users->find($linked->userId);
+
+        return $user !== null && $user->isActive() ? $user : ExternalSignInFailure::AccountDisabled;
     }
 
     /**

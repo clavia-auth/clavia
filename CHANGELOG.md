@@ -8,6 +8,13 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ### Added
 
+- **SCIM: create, read and list users** (#130): a directory creates accounts at `POST /scim/v2/Users`
+  (no password; the address verified only when its token trusts the directory), and reads and lists
+  them with the filters Entra ID and Okta send (`userName`, `externalId`, `id`, `emails.value`).
+  In an OpenID Connect or SAML connection, the account is linked ahead of the person's first sign-in,
+  so that sign-in finds it. A new connection option, **`require_provisioning`** (OIDC and SAML), lets
+  in only the people a directory provisioned. Migration `0048_provisioned_accounts`.
+
 - **SCIM provisioning tokens and the `/scim/v2` surface** (#129, the first slice of SCIM 2.0): an
   operator issues a provisioning token for one pool, OpenID Connect or SAML connection
   (`/api/v1/provisioning-tokens`, scopes `read|create|delete:provisioning_tokens`), shown once with the

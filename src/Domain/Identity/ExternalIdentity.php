@@ -45,6 +45,23 @@ final readonly class ExternalIdentity
     }
 
     /**
+     * The identity a directory provisions ahead of the person's first sign-in through an enterprise
+     * connection (docs/design/scim-provisioning.md §2): that sign-in then finds the account by
+     * `(connection, subject)`, as any other, instead of creating a second one.
+     *
+     * @param non-empty-string $subject The SCIM attribute the provisioning token names.
+     */
+    public static function provision(
+        ConnectionName $connection,
+        string $subject,
+        UserId $userId,
+        string $email,
+        DateTimeImmutable $now,
+    ): self {
+        return new self($connection, $subject, $userId, $email, $now);
+    }
+
+    /**
      * @param non-empty-string $subject
      */
     public static function reconstitute(

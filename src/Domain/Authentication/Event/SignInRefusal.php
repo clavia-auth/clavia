@@ -66,4 +66,7 @@ enum SignInRefusal: string
 
     /** The application does not enable that connection, or it cannot work. */
     case NotAvailable = 'not_available';
+
+    /** An enterprise connection lets in only the people a directory provisioned, and this was nobody it did. */
+    case NotProvisioned = 'not_provisioned';
 }

@@ -49,7 +49,7 @@ final class ExternalSignInMessages
             ExternalSignInFailure::AddressAlreadyUsed => 'An account with this email address already exists. '
                 . 'Sign in with your password to continue.',
             ExternalSignInFailure::AccountDisabled => 'This account is disabled.',
-            ExternalSignInFailure::NotAvailable => self::notAvailable($provider),
+            ExternalSignInFailure::NotAvailable, ExternalSignInFailure::NotProvisioned => self::notAvailable($provider),
         };
     }
 }

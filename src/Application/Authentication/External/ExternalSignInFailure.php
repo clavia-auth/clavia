@@ -46,6 +46,12 @@ enum ExternalSignInFailure
      */
     case NotAvailable;
 
+    /**
+     * The connection lets in only the people a directory provisioned, and this identity is not one
+     * (docs/design/scim-provisioning.md §5.4). Worded as {@see self::NotAvailable}.
+     */
+    case NotProvisioned;
+
     /** The same failure, as the audit trail names it. */
     public function refusal(): SignInRefusal
     {
@@ -58,6 +64,7 @@ enum ExternalSignInFailure
             self::AddressAlreadyUsed => SignInRefusal::AddressAlreadyUsed,
             self::AccountDisabled => SignInRefusal::AccountDisabled,
             self::NotAvailable => SignInRefusal::NotAvailable,
+            self::NotProvisioned => SignInRefusal::NotProvisioned,
         };
     }
 }

@@ -13,11 +13,13 @@ namespace ClaviaTest\Unit\Support;
 
 use ClaviaTest\Support\Contract\ClientRegistrationRepositoryContract;
 use ClaviaTest\Support\Contract\InitialAccessTokenRepositoryContract;
+use ClaviaTest\Support\Contract\ProvisionedAccountRepositoryContract;
 use ClaviaTest\Support\Contract\ProvisioningTokenRepositoryContract;
 use ClaviaTest\Support\Contract\UserJobRepositoryContract;
 use ClaviaTest\Support\Contract\WebhookEndpointRepositoryContract;
 use ClaviaTest\Support\Fake\InMemoryClientRegistrationRepository;
 use ClaviaTest\Support\Fake\InMemoryInitialAccessTokenRepository;
+use ClaviaTest\Support\Fake\InMemoryProvisionedAccountRepository;
 use ClaviaTest\Support\Fake\InMemoryProvisioningTokenRepository;
 use ClaviaTest\Support\Fake\InMemoryUserJobRepository;
 use ClaviaTest\Support\Fake\InMemoryWebhookEndpointRepository;
@@ -28,6 +30,7 @@ use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\Registration\ClientRegistrationRepository;
 use Clavia\Domain\Client\Registration\InitialAccessTokenRepository;
+use Clavia\Domain\Provisioning\ProvisionedAccountRepository;
 use Clavia\Domain\Provisioning\ProvisioningTokenRepository;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Consent\ConsentRepository;
@@ -84,6 +87,7 @@ final class InMemoryRepositoriesTest extends TestCase
     use ConnectionRepositoryContract;
     use InitialAccessTokenRepositoryContract;
     use ProvisioningTokenRepositoryContract;
+    use ProvisionedAccountRepositoryContract;
     use WebhookEndpointRepositoryContract;
     use ClientRegistrationRepositoryContract;
     use UserJobRepositoryContract;
@@ -104,6 +108,8 @@ final class InMemoryRepositoriesTest extends TestCase
     private InMemoryInitialAccessTokenRepository $initialAccessTokens;
 
     private InMemoryProvisioningTokenRepository $provisioningTokens;
+
+    private ?InMemoryProvisionedAccountRepository $provisionedAccounts = null;
     private InMemoryWebhookEndpointRepository $webhookEndpoints;
     private InMemoryClientRegistrationRepository $clientRegistrations;
     private ?InMemoryUserJobRepository $userJobs = null;
@@ -152,6 +158,12 @@ final class InMemoryRepositoriesTest extends TestCase
     protected function provisioningTokens(): ProvisioningTokenRepository
     {
         return $this->provisioningTokens;
+    }
+
+    #[\Override]
+    protected function provisionedAccounts(): ProvisionedAccountRepository
+    {
+        return $this->provisionedAccounts ??= new InMemoryProvisionedAccountRepository($this->users());
     }
 
     #[\Override]

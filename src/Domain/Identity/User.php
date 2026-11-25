@@ -106,6 +106,37 @@ final class User
     }
 
     /**
+     * Create an account a directory provisions through SCIM (docs/design/scim-provisioning.md §2): no
+     * password, in the connection the directory's token reaches, active or not as the directory says.
+     * The address is verified only when the operator trusts the directory for addresses, so a
+     * directory cannot verify an address it does not own.
+     *
+     * @throws InvalidValue When the email address cannot be one.
+     */
+    public static function provision(
+        UserId $id,
+        string $email,
+        bool $emailVerified,
+        bool $active,
+        Profile $profile,
+        ConnectionName $connection,
+        DateTimeImmutable $now,
+    ): self {
+        return new self(
+            $id,
+            self::email($email),
+            null,
+            $emailVerified,
+            $active,
+            $profile,
+            $now,
+            $now,
+            $connection,
+            AppMetadata::empty(),
+        );
+    }
+
+    /**
      * Create an account for a person whose address something vouched for — an external
      * provider reporting it as verified, or a code or link sent to it coming back: no
      * password, the address verified — an account is never created from an address nothing

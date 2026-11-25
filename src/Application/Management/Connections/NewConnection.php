@@ -34,6 +34,7 @@ final readonly class NewConnection
         public bool $allowSignUp = false,
         public bool $requireVerifiedEmail = false,
         public ?NewSamlConnection $saml = null,
+        public bool $requireProvisioning = false,
     ) {
     }
 

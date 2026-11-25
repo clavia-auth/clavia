@@ -43,6 +43,7 @@ final class ScimSurfaceTest extends AcceptanceTestCase
         $document = self::document($config);
         self::assertSame(['urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig'], $document['schemas']);
         self::assertSame(['supported' => false], $document['patch'], 'Not until it is built.');
+        self::assertSame(['supported' => true, 'maxResults' => 200], $document['filter']);
         self::assertSame(['supported' => false], $document['sort']);
         self::assertIsArray($document['bulk']);
         self::assertFalse($document['bulk']['supported']);
@@ -57,16 +58,23 @@ final class ScimSurfaceTest extends AcceptanceTestCase
     {
         $token = $this->provisioningToken();
 
-        foreach (['/scim/v2/ResourceTypes', '/scim/v2/Schemas'] as $path) {
-            $listed = $this->scim('GET', $path, $token);
+        $types = self::document($this->scim('GET', '/scim/v2/ResourceTypes', $token));
+        $schemas = self::document($this->scim('GET', '/scim/v2/Schemas', $token));
+        $user = $this->scim('GET', '/scim/v2/ResourceTypes/User', $token);
+        $schema = $this->scim('GET', '/scim/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:User', $token);
 
-            self::assertSame(StatusCodeInterface::STATUS_OK, $listed->getStatusCode(), $path);
-            $document = self::document($listed);
-            self::assertSame(['urn:ietf:params:scim:api:messages:2.0:ListResponse'], $document['schemas']);
-            self::assertSame(0, $document['totalResults'], 'Users and groups join with their slices.');
-            self::assertSame([], $document['Resources']);
-            self::assertScimError(StatusCodeInterface::STATUS_NOT_FOUND, $this->scim('GET', $path . '/User', $token));
-        }
+        self::assertSame(['urn:ietf:params:scim:api:messages:2.0:ListResponse'], $types['schemas']);
+        self::assertSame(1, $types['totalResults'], 'Groups join with their slice.');
+        self::assertSame(1, $schemas['totalResults']);
+        self::assertSame(StatusCodeInterface::STATUS_OK, $user->getStatusCode());
+        self::assertSame('/Users', self::document($user)['endpoint']);
+        self::assertSame(StatusCodeInterface::STATUS_OK, $schema->getStatusCode());
+        $attributes = self::document($schema)['attributes'];
+        self::assertIsArray($attributes);
+        self::assertContains('userName', array_column($attributes, 'name'));
+        self::assertNotContains('password', array_column($attributes, 'name'), 'Never provisioned.');
+        $group = $this->scim('GET', '/scim/v2/ResourceTypes/Group', $token);
+        self::assertScimError(StatusCodeInterface::STATUS_NOT_FOUND, $group);
     }
 
     public function testBulkAndMeAreNotImplemented(): void

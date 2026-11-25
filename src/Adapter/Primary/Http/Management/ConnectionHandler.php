@@ -67,6 +67,7 @@ final readonly class ConnectionHandler implements RequestHandlerInterface
                     $oidc,
                     $body->bool('allow_sign_up'),
                     $body->bool('require_verified_email'),
+                    $body->bool('require_provisioning'),
                 );
 
                 return $this->responder->json(ManagementViews::connection($this->read->describe($connection)));

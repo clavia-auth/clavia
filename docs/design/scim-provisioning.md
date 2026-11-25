@@ -265,3 +265,22 @@ What slice 1 (#129) settled:
 - **`expiring_soon`** is the thirty-day flag of question 4; `GET /api/v1/provisioning-tokens` takes
   `?connection=`, for the dashboard's connection page.
 
+What slice 2 (#130) settled:
+
+- **A directory sees what it provisioned.** `GET /Users` and `GET /Users/{id}` read the token's
+  connection's provisioned accounts only: an account made there by a sign-in has no `userName`, and a
+  directory finding it would have nothing to match on. Provisioning a person who already signed in is
+  a `409` on the address (or the subject), and adopting such an account is left for later.
+- **The `userName` key is PHP's `mb_strtolower()`**, kept beside the value as sent, and the filter folds
+  the same way, so both sides of a comparison are folded by one function. `externalId` compares exactly.
+- **Each conflict is named by the step that met it**, inside one transaction: the address (`emails`),
+  the provisioned record (`userName` or `externalId`, told apart by the repository's two documented
+  messages), the identity (the token's subject attribute). The storage stays the arbiter.
+- **`displayName` is the profile's name**, `name.formatted` standing in when it is absent;
+  `name.formatted` is not returned on its own. `locale` is held to the profile's language tag.
+- **`require_provisioning` refuses as `NotProvisioned`**, its own failure so the trail says
+  `not_provisioned`, worded to the person as an unavailable connection. An identity linked by a
+  sign-in before provisioning was required is refused alike.
+- **A page is 100 resources unless `count` says otherwise**, 200 at most; `count=0` only counts. The
+  users of a page are read one by one, at most two hundred lookups by key.
+

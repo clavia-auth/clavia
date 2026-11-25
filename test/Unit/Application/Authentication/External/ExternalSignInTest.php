@@ -52,6 +52,7 @@ use ClaviaTest\Support\Fake\InMemoryMfaChallengeStore;
 use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
 use ClaviaTest\Support\Fake\InMemoryPasskeyRepository;
 use ClaviaTest\Support\Fake\InMemorySessionStore;
+use ClaviaTest\Support\Fake\InMemoryProvisionedAccountRepository;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
 use ClaviaTest\Support\Fake\RecordingMailer;
@@ -486,6 +487,7 @@ final class ExternalSignInTest extends TestCase
             new ResolveExternalAccount(
                 $this->users,
                 $this->identities,
+                new InMemoryProvisionedAccountRepository($this->users),
                 new InMemoryTransactionManager(),
                 new SeededRandomSource(4),
                 $this->clock,
