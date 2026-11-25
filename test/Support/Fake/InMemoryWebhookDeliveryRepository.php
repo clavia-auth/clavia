@@ -12,6 +12,10 @@ declare(strict_types=1);
 namespace ClaviaTest\Support\Fake;
 
 use Clavia\Domain\Audit\AuditEvent;
+use Clavia\Domain\Audit\AuditEventType;
+use Clavia\Domain\Audit\TargetType;
+use Clavia\Domain\Shared\Page;
+use Clavia\Domain\Shared\PageRequest;
 use Clavia\Domain\Webhook\WebhookDelivery;
 use Clavia\Domain\Webhook\WebhookDeliveryId;
 use Clavia\Domain\Webhook\WebhookDeliveryRepository;
@@ -41,14 +45,19 @@ final class InMemoryWebhookDeliveryRepository implements WebhookDeliveryReposito
     public function enqueueFor(AuditEvent $event, DateTimeImmutable $now): int
     {
         $queued = 0;
+        $tested = $event->type === AuditEventType::WebhookTested;
         foreach ($this->endpoints->all() as $endpoint) {
-            if (! $endpoint->isEnabled || ! $endpoint->events->matches($event->type)) {
+            $wanted = $tested
+                ? $event->target?->type === TargetType::Webhook && $event->target->id === $endpoint->id->value
+                : $endpoint->events->matches($event->type);
+            if (! $endpoint->isEnabled || ! $wanted) {
                 continue;
             }
             $delivery = WebhookDelivery::reconstitute(
                 WebhookDeliveryId::generate($this->random),
                 $endpoint->id,
                 $event->id,
+                $event->type,
                 WebhookDeliveryStatus::Pending,
                 0,
                 $now,
@@ -102,6 +111,22 @@ final class InMemoryWebhookDeliveryRepository implements WebhookDeliveryReposito
         if (isset($this->deliveries[$delivery->id->value])) {
             $this->deliveries[$delivery->id->value] = $delivery;
         }
+    }
+
+    #[\Override]
+    public function page(WebhookEndpointId $endpoint, PageRequest $request): Page
+    {
+        $mine = array_values(array_filter(
+            $this->deliveries,
+            static fn (WebhookDelivery $d): bool => $d->endpointId->equals($endpoint),
+        ));
+        usort(
+            $mine,
+            static fn (WebhookDelivery $a, WebhookDelivery $b): int
+                => [$b->createdAt, $b->id->value] <=> [$a->createdAt, $a->id->value],
+        );
+
+        return new Page(array_slice($mine, $request->offset(), $request->perPage), count($mine), $request);
     }
 
     #[\Override]

@@ -75,6 +75,14 @@ final readonly class ManagementResponder
         return $response;
     }
 
+    /** `202`: queued, with nothing to show yet. */
+    public function accepted(): ResponseInterface
+    {
+        return $this->responses->createResponse(
+            StatusCodeInterface::STATUS_ACCEPTED,
+        )->withHeader('Cache-Control', 'no-store');
+    }
+
     public function noContent(): ResponseInterface
     {
         return $this->responses->createResponse(

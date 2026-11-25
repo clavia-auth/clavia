@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Domain\Webhook;
 
 use Clavia\Domain\Audit\AuditEventId;
+use Clavia\Domain\Audit\AuditEventType;
 use Clavia\Domain\Shared\RandomSource;
 use DateTimeImmutable;
 use LogicException;
@@ -27,6 +28,7 @@ final readonly class WebhookDelivery
         public WebhookDeliveryId $id,
         public WebhookEndpointId $endpointId,
         public AuditEventId $auditEventId,
+        public AuditEventType $eventType,
         public WebhookDeliveryStatus $status,
         public int $attempts,
         public DateTimeImmutable $nextAttemptAt,
@@ -43,6 +45,7 @@ final readonly class WebhookDelivery
         WebhookDeliveryId $id,
         WebhookEndpointId $endpointId,
         AuditEventId $auditEventId,
+        AuditEventType $eventType,
         WebhookDeliveryStatus $status,
         int $attempts,
         DateTimeImmutable $nextAttemptAt,
@@ -56,6 +59,7 @@ final readonly class WebhookDelivery
             $id,
             $endpointId,
             $auditEventId,
+            $eventType,
             $status,
             $attempts,
             $nextAttemptAt,

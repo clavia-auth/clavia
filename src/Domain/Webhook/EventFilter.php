@@ -52,6 +52,9 @@ final readonly class EventFilter
                     ? "'*' stands alone: it is every event type."
                     : 'An event type the audit trail does not record is named.',
             );
+            if ($type === AuditEventType::WebhookTested) {
+                throw new InvalidValue("'webhook.tested' goes to the endpoint tested, and is not subscribed to.");
+            }
             if (in_array($type, $types, true)) {
                 throw new InvalidValue('An event type is named twice.');
             }
@@ -62,8 +65,13 @@ final readonly class EventFilter
         return new self($types);
     }
 
+    /** Never a test event: that goes to the endpoint tested alone, even past `*`. */
     public function matches(AuditEventType $type): bool
     {
+        if ($type === AuditEventType::WebhookTested) {
+            return false;
+        }
+
         return $this->types === null || in_array($type, $this->types, true);
     }
 

@@ -12,6 +12,8 @@ declare(strict_types=1);
 namespace Clavia\Domain\Webhook;
 
 use Clavia\Domain\Audit\AuditEvent;
+use Clavia\Domain\Shared\Page;
+use Clavia\Domain\Shared\PageRequest;
 use DateTimeImmutable;
 
 /**
@@ -22,7 +24,8 @@ use DateTimeImmutable;
 interface WebhookDeliveryRepository
 {
     /**
-     * Queue the event for every enabled endpoint whose filter matches it, due now.
+     * Queue the event for every enabled endpoint whose filter matches it, due now; a test event
+     * (`webhook.tested`) for the enabled endpoint it targets, and no other.
      *
      * @return int How many deliveries were queued.
      */
@@ -41,6 +44,9 @@ interface WebhookDeliveryRepository
     public function due(WebhookEndpointId $endpoint, DateTimeImmutable $now, int $limit): array;
 
     public function save(WebhookDelivery $delivery): void;
+
+    /** @return Page<WebhookDelivery> An endpoint's deliveries, newest first. */
+    public function page(WebhookEndpointId $endpoint, PageRequest $request): Page;
 
     /** Let another worker take the endpoint. */
     public function release(WebhookEndpointId $endpoint): void;

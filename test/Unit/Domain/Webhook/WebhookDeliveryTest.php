@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace ClaviaTest\Unit\Domain\Webhook;
 
 use Clavia\Domain\Audit\AuditEventId;
+use Clavia\Domain\Audit\AuditEventType;
 use Clavia\Domain\Webhook\DeliveryFailure;
 use Clavia\Domain\Webhook\RetrySchedule;
 use Clavia\Domain\Webhook\StandardWebhookSignature;
@@ -112,6 +113,7 @@ final class WebhookDeliveryTest extends TestCase
             WebhookDeliveryId::generate(new SeededRandomSource(1)),
             WebhookEndpointId::generate(new SeededRandomSource(2)),
             AuditEventId::generate(new SeededRandomSource(3)),
+            AuditEventType::UserCreated,
             WebhookDeliveryStatus::Pending,
             0,
             $now,

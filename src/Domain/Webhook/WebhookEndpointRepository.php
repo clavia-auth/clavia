@@ -12,6 +12,8 @@ declare(strict_types=1);
 namespace Clavia\Domain\Webhook;
 
 /** Where webhook endpoints are kept, their secrets sealed. */
+use DateTimeImmutable;
+
 interface WebhookEndpointRepository
 {
     public function find(WebhookEndpointId $id): ?WebhookEndpoint;
@@ -25,4 +27,25 @@ interface WebhookEndpointRepository
     public function save(WebhookEndpoint $endpoint): void;
 
     public function delete(WebhookEndpointId $id): void;
+
+    /**
+     * A delivery to it failed: it is failing since now, unless it already was. A conditional write,
+     * so the worker never overwrites what an operator just changed.
+     */
+    public function recordFailure(WebhookEndpointId $id, DateTimeImmutable $now): void;
+
+    /** A delivery to it succeeded: it is no longer failing. */
+    public function recordSuccess(WebhookEndpointId $id): void;
+
+    /**
+     * Switch it off as dead if it is enabled and has been failing since before `$before`.
+     *
+     * @return bool Whether this call switched it off.
+     */
+    #[\NoDiscard]
+    public function disableIfFailingSince(
+        WebhookEndpointId $id,
+        DateTimeImmutable $before,
+        DateTimeImmutable $now,
+    ): bool;
 }

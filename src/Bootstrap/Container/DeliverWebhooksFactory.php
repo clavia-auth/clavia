@@ -11,7 +11,9 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\SecretCipher;
+use Clavia\Application\Port\TransactionManager;
 use Clavia\Application\Port\WebhookSender;
 use Clavia\Application\Webhooks\DeliverWebhooks;
 use Clavia\Domain\Audit\AuditLog;
@@ -39,6 +41,10 @@ final class DeliverWebhooksFactory
         $random = $container->get(RandomSource::class);
         /** @var Clock $clock */
         $clock = $container->get(Clock::class);
+        /** @var TransactionManager $transactions */
+        $transactions = $container->get(TransactionManager::class);
+        /** @var DomainEvents $events */
+        $events = $container->get(DomainEvents::class);
 
         return new DeliverWebhooks(
             $endpoints,
@@ -48,6 +54,8 @@ final class DeliverWebhooksFactory
             $sender,
             $random,
             $clock,
+            $transactions,
+            $events,
         );
     }
 }

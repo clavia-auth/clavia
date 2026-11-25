@@ -77,4 +77,8 @@ enum AuditEventType: string
     case WebhookUpdated = 'webhook.updated';
     case WebhookDeleted = 'webhook.deleted';
     case WebhookSecretRotated = 'webhook.secret_rotated';
+    /** An operator asked for a test delivery: it goes to the endpoint tested, and no other. */
+    case WebhookTested = 'webhook.tested';
+    /** Every delivery to it failed for five days running, so the worker switched it off. */
+    case WebhookDisabled = 'webhook.disabled';
 }

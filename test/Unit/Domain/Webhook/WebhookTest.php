@@ -15,6 +15,7 @@ use Clavia\Domain\Audit\AuditEventType;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\Url;
 use Clavia\Domain\Webhook\EventFilter;
+use Clavia\Domain\Webhook\WebhookDisabledReason;
 use Clavia\Domain\Webhook\WebhookEndpoint;
 use Clavia\Domain\Webhook\WebhookEndpointId;
 use Clavia\Domain\Webhook\WebhookSecret;
@@ -108,6 +109,41 @@ final class WebhookTest extends TestCase
         self::assertSame('sealed-1', $rotated->previousSecretAt($at->modify('+23 hours')));
         self::assertNull($rotated->previousSecretAt($at->modify('+24 hours')));
         self::assertNull(self::endpoint()->previousSecretAt($at), 'None before any rotation.');
+    }
+
+    public function testATestEventIsNeverSubscribedToNotEvenPastTheWildcard(): void
+    {
+        self::assertFalse(EventFilter::all()->matches(AuditEventType::WebhookTested));
+        self::assertTrue(EventFilter::all()->matches(AuditEventType::WebhookDisabled));
+
+        $this->expectException(InvalidValue::class);
+        EventFilter::fromStrings(['webhook.tested']);
+    }
+
+    public function testSwitchingAnEndpointOnOrOffStartsTheFailureClockOver(): void
+    {
+        $now = new DateTimeImmutable('2026-03-04T09:00:00Z');
+        $failing = WebhookEndpoint::reconstitute(
+            WebhookEndpointId::generate(new SeededRandomSource(1)),
+            Url::fromString('https://hooks.example/'),
+            '',
+            EventFilter::all(),
+            false,
+            'sealed',
+            null,
+            null,
+            $now,
+            $now,
+            $now->modify('-6 days'),
+            WebhookDisabledReason::Failing,
+        );
+
+        $on = $failing->enabled(true, $now);
+        self::assertTrue($on->isEnabled);
+        self::assertNull($on->failingSince);
+        self::assertNull($on->disabledReason);
+        self::assertSame(WebhookDisabledReason::Operator, $on->enabled(false, $now)->disabledReason);
+        self::assertEquals($now->modify('-5 days'), WebhookEndpoint::deadIfFailingBefore($now));
     }
 
     private static function endpoint(string $url = 'https://hooks.example/audit'): WebhookEndpoint

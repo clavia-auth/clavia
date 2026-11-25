@@ -44,6 +44,7 @@ use Clavia\Domain\ResourceServer\Permission;
 use Clavia\Domain\ResourceServer\ResourceServer;
 use Clavia\Domain\Shared\Page;
 use Clavia\Domain\Shared\Url;
+use Clavia\Domain\Webhook\WebhookDelivery;
 use Clavia\Domain\Webhook\WebhookEndpoint;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -468,11 +469,31 @@ final class ManagementViews
             'description' => $endpoint->description,
             'events' => $endpoint->events->toStrings(),
             'is_enabled' => $endpoint->isEnabled,
+            'disabled_reason' => $endpoint->disabledReason?->value,
+            'failing_since' => $endpoint->failingSince === null ? null : self::instant($endpoint->failingSince),
             'previous_secret_until' => $endpoint->previousSecretUntil === null
                 ? null
                 : self::instant($endpoint->previousSecretUntil),
             'created_at' => self::instant($endpoint->createdAt),
             'updated_at' => self::instant($endpoint->updatedAt),
+        ];
+    }
+
+    /** @return array<string, mixed> One delivery, as the log shows it: never a body. */
+    public static function webhookDelivery(WebhookDelivery $delivery): array
+    {
+        return [
+            'id' => $delivery->id->value,
+            'event_id' => $delivery->auditEventId->value,
+            'event_type' => $delivery->eventType->value,
+            'status' => $delivery->status->value,
+            'attempts' => $delivery->attempts,
+            'next_attempt_at' => $delivery->endedAt === null ? self::instant($delivery->nextAttemptAt) : null,
+            'last_status_code' => $delivery->lastStatusCode,
+            'last_duration_ms' => $delivery->lastDurationMs,
+            'last_failure' => $delivery->lastFailure?->value,
+            'created_at' => self::instant($delivery->createdAt),
+            'ended_at' => $delivery->endedAt === null ? null : self::instant($delivery->endedAt),
         ];
     }
 

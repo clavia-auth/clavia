@@ -8,6 +8,13 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ### Added
 
+- **Operating webhooks** (#120): each endpoint's delivery log (`GET /api/v1/webhooks/{id}/deliveries`),
+  a test event on demand (`POST /api/v1/webhooks/{id}/test`, recorded as `webhook.tested` and sent to
+  that endpoint alone), and endpoints failing every delivery for five days switched off by
+  `webhooks:deliver` (`webhook.disabled`) until switched on again. Endpoints show `disabled_reason` and
+  `failing_since`. The Management API document now describes the payload receivers get
+  (`WebhookPayload`) and how to verify its signature. **Migration `0043`**.
+
 - **Webhook delivery** (#119): every audit event an enabled endpoint subscribes to is queued in its
   own transaction and sent by **`bin/clavia webhooks:deliver`**, to run every minute: the event as
   `GET /api/v1/audit-events` shows it, signed per the Standard Webhooks specification

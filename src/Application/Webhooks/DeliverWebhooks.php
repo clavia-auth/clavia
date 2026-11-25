@@ -13,13 +13,16 @@ namespace Clavia\Application\Webhooks;
 
 use Clavia\Application\Audit\AuditEventDocument;
 use Clavia\Application\Management\Webhooks\WebhookSecrets;
+use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\SecretCipher;
+use Clavia\Application\Port\TransactionManager;
 use Clavia\Application\Port\WebhookSender;
 use Clavia\Domain\Audit\AuditEvent;
 use Clavia\Domain\Audit\AuditLog;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\RandomSource;
 use Clavia\Domain\Webhook\DeliveryFailure;
+use Clavia\Domain\Webhook\Event\WebhookDisabled;
 use Clavia\Domain\Webhook\StandardWebhookSignature;
 use Clavia\Domain\Webhook\WebhookDelivery;
 use Clavia\Domain\Webhook\WebhookDeliveryRepository;
@@ -39,6 +42,10 @@ use Clavia\Domain\Webhook\WebhookSecret;
  * deliveries, and those whose event was purged, are abandoned. The run stops after
  * {@see BUDGET_SECONDS}, leaving the rest to the next minute, then deletes the deliveries that
  * ended {@see RETENTION_DAYS} days ago.
+ *
+ * Each attempt tells the endpoint whether it is failing; one every delivery to which has failed for
+ * {@see WebhookEndpoint::DEAD_AFTER_DAYS} days is switched off (`webhook.disabled`) until an
+ * operator switches it on again, so a dead receiver stops filling the outbox.
  */
 final readonly class DeliverWebhooks
 {
@@ -58,13 +65,15 @@ final readonly class DeliverWebhooks
         private WebhookSender $sender,
         private RandomSource $random,
         private Clock $clock,
+        private TransactionManager $transactions,
+        private DomainEvents $events,
     ) {
     }
 
     public function __invoke(): WebhooksDelivered
     {
         $deadline = $this->clock->now()->modify(sprintf('+%d seconds', self::BUDGET_SECONDS));
-        $counts = ['succeeded' => 0, 'failed' => 0, 'abandoned' => 0];
+        $counts = ['succeeded' => 0, 'failed' => 0, 'abandoned' => 0, 'disabled' => 0];
         $done = [];
 
         while ($this->clock->now() < $deadline) {
@@ -95,10 +104,16 @@ final readonly class DeliverWebhooks
             $this->clock->now()->modify(sprintf('-%d days', self::RETENTION_DAYS)),
         );
 
-        return new WebhooksDelivered($counts['succeeded'], $counts['failed'], $counts['abandoned'], $purged);
+        return new WebhooksDelivered(
+            $counts['succeeded'],
+            $counts['failed'],
+            $counts['abandoned'],
+            $purged,
+            $counts['disabled'],
+        );
     }
 
-    /** @param array{succeeded: int, failed: int, abandoned: int} $counts */
+    /** @param array{succeeded: int, failed: int, abandoned: int, disabled: int} $counts */
     private function deliverTo(WebhookEndpointId $id, \DateTimeImmutable $deadline, array &$counts): void
     {
         $endpoint = $this->endpoints->find($id);
@@ -117,14 +132,33 @@ final readonly class DeliverWebhooks
             $attempted = $this->attempt($endpoint, $delivery, $event);
             $this->deliveries->save($attempted);
             if ($attempted->lastFailure === null) {
+                $this->endpoints->recordSuccess($id);
                 ++$counts['succeeded'];
                 continue;
             }
             ++$counts[$attempted->endedAt === null ? 'failed' : 'abandoned'];
+            $this->endpoints->recordFailure($id, $this->clock->now());
+            if ($this->disableIfDead($id)) {
+                ++$counts['disabled'];
+            }
 
             // In order: the rest wait behind the one that failed.
             return;
         }
+    }
+
+    /** Switch the endpoint off when every delivery to it has failed for five days. */
+    private function disableIfDead(WebhookEndpointId $id): bool
+    {
+        return $this->transactions->transactional(function () use ($id): bool {
+            $now = $this->clock->now();
+            if (! $this->endpoints->disableIfFailingSince($id, WebhookEndpoint::deadIfFailingBefore($now), $now)) {
+                return false;
+            }
+            $this->events->dispatch(new WebhookDisabled($id));
+
+            return true;
+        });
     }
 
     private function attempt(WebhookEndpoint $endpoint, WebhookDelivery $delivery, AuditEvent $event): WebhookDelivery
