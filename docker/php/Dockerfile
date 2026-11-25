@@ -18,8 +18,9 @@ FROM php:8.5-fpm-alpine AS base
 
 # pdo_pgsql/pgsql: PostgreSQL. redis: sessions and the other short-TTL material.
 # intl: IDN and locale-aware handling. OPcache is part of PHP itself since 8.5.
+# bcmath: simplesamlphp/xml-common, under the SAML service provider (arbitrary-precision integers).
 COPY --from=mlocati/php-extension-installer:latest /usr/bin/install-php-extensions /usr/local/bin/
-RUN install-php-extensions pdo_pgsql pgsql redis intl
+RUN install-php-extensions pdo_pgsql pgsql redis intl bcmath
 
 COPY php.ini /usr/local/etc/php/conf.d/zz-clavia.ini
 COPY fpm.conf /usr/local/etc/php-fpm.d/zz-clavia.conf

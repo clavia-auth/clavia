@@ -1,6 +1,6 @@
 # Design: SAML 2.0 enterprise connections
 
-**Status:** proposed · **Date:** 2026-11-24 · **Issue:** clavia-auth/clavia#20 ·
+**Status:** agreed · **Date:** 2026-11-24 · **Issue:** clavia-auth/clavia#20 ·
 **Specifications:** SAML 2.0 Core (§2.3.3 assertions, §2.3.4 encrypted assertions, §2.5
 conditions, §3.2.2 responses, §3.4 `AuthnRequest`), Bindings (§3.4 HTTP-Redirect with DEFLATE and
 §3.4.4.1 its signature, §3.5 HTTP-POST), Profiles (§4.1 Web Browser SSO: §4.1.4.2 and §4.1.4.3 the
@@ -60,7 +60,7 @@ PostgreSQL sealed or in a KMS that never lets them out.
 | `RelayState` | The opaque handle of the pending sign-in (as `state` is for OpenID Connect), compared with the browser's cookie in constant time, claimed with `GETDEL` | The same pairing as every external sign-in. It never carries a URL: the post-sign-in target stays server-side |
 | What is signed | The **assertion** must be signed by a certificate of the connection; a signed response containing an unsigned assertion is refused. An encrypted assertion is decrypted first, and its signature checked inside (sign, then encrypt) | The assertion is what we act on. Accepting a signature on the envelope alone opens the door to a second, unsigned assertion beside the signed one, which is how wrapping attacks start. Entra ID, Okta, ADFS and Keycloak all sign assertions |
 | Which keys verify | The **certificates named by the connection** (up to three, for rollover), compared by key, never a key carried in the message, never a chain to a CA; their validity dates are ignored | SAML metadata pins keys, and a certificate in the signature (`KeyInfo`) proves nothing. Identity providers ship self-signed certificates whose dates mean nothing; expiry would break sign-in at a date the IdP's administrator never meant |
-| Signature algorithms | RSA-SHA256/384/512 and ECDSA-SHA256/384/512, exclusive canonicalisation; **SHA-1 refused** (signature and digest) | RFC 6931 and the XML Signature Best Practices deprecate SHA-1. ADFS and Entra default to SHA-256; an IdP still on SHA-1 is told to change |
+| Signature algorithms | RSA-SHA256/384/512, exclusive canonicalisation; **SHA-1 refused** (signature and digest); **no ECDSA** (§11) | RFC 6931 and the XML Signature Best Practices deprecate SHA-1. ADFS and Entra default to SHA-256; an IdP still on SHA-1 is told to change. The library cannot read an ECDSA signature, and the identity providers in scope sign with RSA |
 | **Keys of our own** | **Two service-provider keys**, both RSA 3072: a **signing** key and an **encryption** key, each with a self-signed X.509 certificate published in the metadata (`KeyDescriptor use="signing"` and `use="encryption"`). One pair for the deployment, shared by every SAML connection | Two, because a KMS key has one usage (AWS KMS `SIGN_VERIFY` or `ENCRYPT_DECRYPT`, GCP's purposes, Azure's key operations), and because one key for both is what the cryptographic guidance warns against. RSA, because XML Encryption key transport is RSA-OAEP everywhere IdPs implement it. One pair for the deployment, because the IdP pins the certificate, and a pair per connection would multiply rotations without separating anything: the entity IDs already differ per connection (§10, question 2) |
 | Where they live | **Behind a port, `ServiceProviderKeys`**, with the token signing backends: `postgres` (generated here, sealed with `SecretCipher`, `saml-sp:<kid>` as associated data, extractable, so a warning in production as for token keys), or a **remote key** in AWS KMS, Google Cloud KMS or Azure Key Vault named by reference. The port signs and decrypts; it never returns a private key | The same reasoning as `TokenSigner`: an interface that hands out a private key excludes every non-extractable backend, which are the ones worth having. Exactly one class reads a private key per backend: its own `sign()` and `decrypt()` |
 | What the key decrypts | Only the **content-encryption key** (the `EncryptedKey`, tens of bytes, RSA-OAEP); the assertion itself is decrypted in PHP with that AES key, which exists in memory for the time of one response | A KMS decrypts small payloads; XML Encryption is hybrid by design. The content key is single-use and per message: holding it in memory exposes one assertion, never the private key |
@@ -100,7 +100,7 @@ backend without both references (exit 78). `CLAVIA_SOCIAL_AUTO_LINK` and
 
 - `ConnectionStrategy::Saml`, external (`isExternal()`).
 - `SamlSettings` (value object): IdP entity ID, SSO URL (https), 1 to 3 signing certificates (PEM,
-  read once to refuse anything that is not RSA ≥ 2048 or EC P-256/384/521), metadata URL or none,
+  read once to refuse anything that is not RSA ≥ 2048), metadata URL or none,
   subject source (`name_id` or an attribute name), `NameIDFormat` requested, address source and
   whether it is trusted, profile attribute names, `sign_requests` (on), `require_encryption` and
   `require_gcm` (off).
@@ -249,7 +249,7 @@ reads the URL again.
 ## 8. Tests
 
 - **A test identity provider** in `test/Support` that builds, signs and encrypts responses with real
-  keys (RSA and EC for signatures; RSA-OAEP with AES-GCM and AES-CBC for encryption), so the
+  keys (RSA for signatures, and EC to prove it is refused; RSA-OAEP with AES-GCM and AES-CBC for encryption), so the
   adapter's contract checks genuine XML, as the passkey verifier's does with genuine CBOR. A double
   for the use cases answers what it is told.
 - `ServiceProviderKeys`: a contract run by the `postgres` backend and by the remote one over each
@@ -326,3 +326,35 @@ reads the URL again.
 4. **Refreshing metadata automatically** (a daily command)? *Recommendation:* on demand first; a
    `connections:refresh-saml-metadata` command can follow when an operator has missed a
    certificate rotation once.
+
+## 11. As built
+
+What slice 1 (#122) settled, so later slices start from it.
+
+- **Library: `simplesamlphp/saml2` v6.3.5 with `xml-security` 2.3.2** (v7 is still a release
+  candidate). It needs PHP's `bcmath` (for `xml-common`), now in the image. Its Composer plugin
+  (`composer-xmlprovider-installer`, which links each package's element registry) is denied: the
+  library parses and verifies without it.
+- **No ECDSA.** The library's object model refuses an ECDSA `SignatureMethod` (2.3 and 3.1 alike),
+  so an EC-signed assertion cannot even be read; verifying ECDSA ourselves would mean doing the
+  canonicalisation and reference checks the library is here to do. Entra ID, Okta, ADFS, Google
+  Workspace and Keycloak sign SAML with RSA. An EC certificate is refused at registration, and the
+  contract proves an EC-signed response is refused, not crashed on.
+- **`verify()` is always handed a key.** Called without one, the library verifies with the
+  certificate in the message's `KeyInfo`, which proves nothing. The adapter builds a verifier per
+  certificate of the connection and never calls it bare.
+- **The assertion is verified on its own document.** The library digests from the document root,
+  which inside a response is the `Response`; the adapter imports the one assertion into a document
+  of its own first (exclusive canonicalisation gives the same bytes), and reads only the assertion
+  the library rebuilds from the signed bytes.
+- **The signature's shape is the adapter's to check**: the library takes any transform, XPath
+  included, and digests the last of several references. The adapter requires one reference to the
+  assertion's `ID`, enveloped-signature then exclusive canonicalisation without comments, and a
+  SHA-256, 384 or 512 digest.
+- **No comment and no processing instruction anywhere in a response**, and exactly one
+  `saml:Assertion` in the whole document: simpler than tracking which text node a reader takes.
+- **Question 1 answered: yes.** A block-cipher decryptor given to `EncryptedAssertion::decrypt()` is
+  used directly (`EncryptedElementTrait::decryptData()`), so slice 6 reads the `EncryptedKey`,
+  decrypts the content key through `ServiceProviderKeys::decryptKey()`, and hands the library an AES
+  decryptor (`EncryptionAlgorithmFactory`, `SymmetricKey`) with it. AES-CBC and AES-GCM are both
+  there; only the first `EncryptedKey` of an assertion is kept.

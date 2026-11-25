@@ -67,6 +67,9 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ### Changed
 
+- **The PHP image includes `bcmath`** (#122), which the SAML library (`simplesamlphp/saml2`, added for
+  the coming SAML connections) needs. An image built from your own Dockerfile needs it too.
+
 - Password sign-in replaces a hash at another iteration count with one at today's.
 
 - **Passwords and client secrets are hashed with PBKDF2-HMAC-SHA-256**, for FIPS 140 (NIST
