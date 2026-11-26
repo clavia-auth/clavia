@@ -14,6 +14,8 @@
  * @var array<string, string> $languages The switcher's choices, tag => name in itself; empty for none.
  * @var bool        $wide     A wider card, for a QR code or a list of codes.
  * @var string|null $script   A module of this server's the page loads; null for none.
+ * @var string      $stylesheet The stylesheet's address, versioned by its content (StaticAssets).
+ * @var string      $icon       The icon's address, versioned likewise.
  * @var string      $content  The page itself, already rendered.
  *
  * A page puts the line under the heading in the `subtitle` placeholder; it is rendered
@@ -31,8 +33,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="same-origin">
   <title><?= $this->escapeHtml($title) ?> · Clavia</title>
-  <link rel="icon" href="/auth/static/clavia-icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/auth/static/auth.css">
+  <link rel="icon" href="<?= $this->escapeHtmlAttr($icon) ?>" type="image/svg+xml">
+  <link rel="stylesheet" href="<?= $this->escapeHtmlAttr($stylesheet) ?>">
 <?php if ($script !== null): ?>
   <script type="module" src="<?= $this->escapeHtmlAttr($script) ?>"></script>
 <?php endif ?>
@@ -40,7 +42,7 @@
 <body>
   <main class="card<?php if ($wide): ?> card-wide<?php endif ?>">
     <header class="brand">
-      <img class="brand-mark" src="/auth/static/clavia-icon.svg" alt="" width="48" height="48">
+      <img class="brand-mark" src="<?= $this->escapeHtmlAttr($icon) ?>" alt="" width="48" height="48">
       <h1><?= $this->escapeHtml($heading) ?></h1>
 <?= $this->placeholder('subtitle') ?>
     </header>

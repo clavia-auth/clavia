@@ -67,7 +67,11 @@ final class LoginTest extends AcceptanceTestCase
         $body = strtolower((string) $response->getBody());
         self::assertSame(1, substr_count($body, '<script'), 'The module and nothing else.');
         self::assertSame(1, preg_match('#<script type="module" src="([^"]+)"></script>#', $body, $module));
-        self::assertSame('/auth/static/passkeys.js', html_entity_decode($module[1], ENT_QUOTES | ENT_HTML5));
+        self::assertMatchesRegularExpression(
+            '#^/auth/static/passkeys\\.js\\?v=[0-9a-f]{12}$#D',
+            html_entity_decode($module[1], ENT_QUOTES | ENT_HTML5),
+            'The module, versioned by its content.',
+        );
         self::assertStringNotContainsString(' style=', (string) $response->getBody());
         self::assertSame('DENY', $response->getHeaderLine('X-Frame-Options'));
         self::assertSame('nosniff', $response->getHeaderLine('X-Content-Type-Options'));

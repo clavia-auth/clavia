@@ -33,6 +33,11 @@ final class LanguageSwitcherTest extends AcceptanceTestCase
         $page = (string) $this->page('/auth/login')->getBody();
 
         self::assertStringContainsString('<form class="toggle" method="post" action="/auth/language"', $page);
+        self::assertMatchesRegularExpression(
+            '#<link rel="stylesheet" href="&\#x2F;auth&\#x2F;static&\#x2F;auth.css&\#x3F;v&\#x3D;[0-9a-f]{12}">#',
+            $page,
+            'Versioned, so the switcher never meets a stylesheet cached before it.',
+        );
         self::assertStringContainsString('<input type="hidden" name="return_to" value="&#x2F;auth&#x2F;login">', $page);
         self::assertStringContainsString(
             '<button type="submit" name="language" value="en" lang="en" aria-pressed="true">English</button>',

@@ -64,6 +64,7 @@ final readonly class PageRenderer
         private LanguageChoice $choice,
         private PageLanguage $language,
         private Messages $messages,
+        private StaticAssets $assets = new StaticAssets(),
     ) {
     }
 
@@ -86,7 +87,9 @@ final readonly class PageRenderer
                 'returnTo' => $page->returnTo,
                 'languages' => $this->switcher(),
                 'wide' => $page->wide,
-                'script' => $page->script,
+                'script' => $page->script === null ? null : $this->assets->url($page->script),
+                'stylesheet' => $this->assets->url('/auth/static/auth.css'),
+                'icon' => $this->assets->url('/auth/static/clavia-icon.svg'),
             ], 'layout::page'),
             // A variable that is a message reaches its template worded.
             ...array_map(

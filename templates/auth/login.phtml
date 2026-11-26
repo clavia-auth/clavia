@@ -48,7 +48,7 @@
       <button type="submit"><?= $this->escapeHtml($this->t('login.submit')) ?></button>
     </form>
 <?php if ($forgotHref !== ''): ?>
-    <p class="hint"><a href="<?= $this->escapeHtmlAttr($forgotHref) ?>"><?= $this->escapeHtml($this->t('login.forgot_password')) ?></a></p>
+    <p class="hint aside"><a href="<?= $this->escapeHtmlAttr($forgotHref) ?>"><?= $this->escapeHtml($this->t('login.forgot_password')) ?></a></p>
 <?php endif ?>
 <?php endif ?>
 <?php if ($emailSignIn): ?>
@@ -79,6 +79,6 @@
     </ul>
 <?php endif ?>
 <?php if ($signUpHref !== ''): ?>
-    <p class="hint"><?= $this->escapeHtml($this->t('login.new_here')) ?> <a href="<?= $this->escapeHtmlAttr($signUpHref) ?>"><?= $this->escapeHtml($this->t('login.sign_up')) ?></a></p>
+    <p class="hint aside"><?= $this->escapeHtml($this->t('login.new_here')) ?> <a href="<?= $this->escapeHtmlAttr($signUpHref) ?>"><?= $this->escapeHtml($this->t('login.sign_up')) ?></a></p>
 <?php endif ?>
 <?php endif ?>

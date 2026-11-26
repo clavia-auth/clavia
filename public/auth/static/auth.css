@@ -156,6 +156,35 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
+/* A link in a card reads as Clavia's, not the browser's blue: the brand colour, underlined
+   only when pointed at. Buttons drawn as links (a.button, a.provider) keep their own look. */
+.card a:not(.button):not(.provider) {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+  text-underline-offset: 3px;
+}
+
+.card a:not(.button):not(.provider):hover { text-decoration: underline; }
+
+.card a:not(.button):not(.provider):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* The way in by passkey, once its button shows, stands apart from the password form below. */
+form[data-webauthn-get]:has([data-webauthn-start]:not([hidden])) { margin-bottom: 1.5rem; }
+
+/* A side road off the form ("Forgot your password?", "New here?"): centred under it, with room. */
+.hint.aside {
+  margin: 1.25rem 0 0;
+  text-align: center;
+  font-size: .875rem;
+}
+
+.hint.aside + .hint.aside { margin-top: .5rem; }
+
 /* Two submit buttons on one form — the email form's code and link — are two choices. */
 .card form:not(.decision) button + button { margin-top: .5rem; }
 
@@ -362,41 +391,56 @@ input[type="text"] {
   outline-offset: 2px;
 }
 
-/* ---- Language switcher and theme toggle ---- */
+/* ---- Language switcher and theme toggle ----
+   The dashboard's segmented control (its Tabs list): a soft track, the chosen option
+   raised on the card colour, medium-weight muted text that darkens on hover. */
 
 .preferences {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: .5rem;
+  align-items: center;
+  gap: .75rem;
 }
 
 .toggle {
   display: inline-flex;
+  align-items: center;
+  height: 2rem;
   padding: 3px;
-  gap: 2px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 999px;
+  margin: 0;
+  background: light-dark(#e2eee7, #1b2c24);
+  border-radius: 8px;
 }
 
 .toggle button {
-  padding: .3rem .8rem;
+  height: 100%;
+  padding: 0 .75rem;
   font: inherit;
-  font-size: .75rem;
-  font-weight: 600;
+  font-size: .8125rem;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
   color: var(--muted);
   background: transparent;
-  border: 0;
-  border-radius: 999px;
+  border: 1px solid transparent;
+  border-radius: 6px;
   cursor: pointer;
+  transition: color .15s, background-color .15s, box-shadow .15s;
 }
 
 .toggle button:hover { color: var(--text); }
 
+.toggle button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
 .toggle button[aria-pressed="true"] {
-  color: var(--accent-text);
-  background: var(--accent);
+  color: var(--text);
+  background: var(--card);
+  border-color: light-dark(transparent, var(--border));
+  box-shadow: 0 1px 2px light-dark(rgba(18, 33, 26, .1), rgba(0, 0, 0, .3));
 }
 
 /* ---- Passkeys ---- */
