@@ -13,6 +13,7 @@ namespace ClaviaTest\E2e\Context;
 
 use Behat\Behat\Context\Context;
 use Behat\Step\Given;
+use Behat\Step\When;
 use Fig\Http\Message\RequestMethodInterface;
 
 /**
@@ -24,6 +25,7 @@ final class ManagementContext implements Context
     private ?string $token = null;
     private ?Person $person = null;
     private ?Application $application = null;
+    private ?string $pool = null;
     private readonly Browser $api;
 
     public function __construct()
@@ -58,6 +60,63 @@ final class ManagementContext implements Context
     #[Given('an application that allows signing in and refreshing, redirecting to :redirectUri')]
     public function anApplicationThatAllowsSigningInAndRefreshing(string $redirectUri): void
     {
+        $this->application = $this->createApplication($redirectUri, ['password']);
+    }
+
+    #[Given('a pool that takes sign-ups and requires a verified address')]
+    public function aPoolThatTakesSignUps(): void
+    {
+        $name = 'e2e-' . bin2hex(random_bytes(6));
+        $this->call(RequestMethodInterface::METHOD_POST, '/api/v1/connections', [
+            'name' => $name,
+            'display_name' => 'End to end ' . $name,
+            'strategy' => 'database',
+            'is_enabled' => true,
+            'is_domain_connection' => false,
+            'allow_sign_up' => true,
+            'require_verified_email' => true,
+        ]);
+        $this->pool = $name;
+    }
+
+    #[Given('an application whose people come from that pool, redirecting to :redirectUri')]
+    public function anApplicationWhosePeopleComeFromThatPool(string $redirectUri): void
+    {
+        $pool = $this->pool ?? throw new \LogicException('No pool: add a Given step.');
+        $this->application = $this->createApplication($redirectUri, [$pool]);
+    }
+
+    #[Given('a visitor with a new address and password')]
+    public function aVisitorWithANewAddress(): void
+    {
+        $email = 'e2e-' . bin2hex(random_bytes(6)) . '@clavia.test';
+        $this->person = new Person('', $email, 'pw-' . bin2hex(random_bytes(12)));
+    }
+
+    #[Given('a person who was created without a password')]
+    public function aPersonCreatedWithoutAPassword(): void
+    {
+        $email = 'e2e-' . bin2hex(random_bytes(6)) . '@clavia.test';
+        $created = $this->call(RequestMethodInterface::METHOD_POST, '/api/v1/users', ['email' => $email]);
+        $this->person = new Person((string) $created['id'], $email, '');
+    }
+
+    #[When('an operator sends the person a password link')]
+    public function anOperatorSendsThePersonAPasswordLink(): void
+    {
+        $this->call(
+            RequestMethodInterface::METHOD_POST,
+            '/api/v1/users/' . $this->person()->id . '/password-reset',
+            null,
+            202,
+        );
+    }
+
+    /**
+     * @param list<string> $connections
+     */
+    private function createApplication(string $redirectUri, array $connections): Application
+    {
         $created = $this->call(RequestMethodInterface::METHOD_POST, '/api/v1/clients', [
             'name' => 'End to end ' . bin2hex(random_bytes(4)),
             'client_type' => 'public',
@@ -66,23 +125,23 @@ final class ManagementContext implements Context
             'grant_types' => ['authorization_code', 'refresh_token'],
             'response_types' => ['code'],
             'is_first_party' => true,
-            'connections' => ['password'],
+            'connections' => $connections,
         ]);
-        $this->application = new Application((string) $created['client_id'], $redirectUri);
+
+        return new Application((string) $created['client_id'], $redirectUri);
     }
 
     /**
-     * @param array<string, mixed> $body
+     * @param array<string, mixed>|null $body
      * @return array<string, mixed>
      */
-    private function call(string $method, string $path, array $body): array
+    private function call(string $method, string $path, ?array $body, int $expected = 201): array
     {
         $response = $this->api->request($method, $this->api->stack()->managementUrl($path), [
             'headers' => ['Authorization' => 'Bearer ' . $this->token()],
-            'json' => $body,
-        ]);
+        ] + ($body === null ? [] : ['json' => $body]));
         Check::same(
-            201,
+            $expected,
             $response->getStatusCode(),
             sprintf('%s %s: %s', $method, $path, (string) $response->getBody()),
         );

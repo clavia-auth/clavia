@@ -23,6 +23,7 @@ use Jose\Component\Core\JWKSet;
 use Jose\Component\Signature\Algorithm\RS256;
 use Jose\Component\Signature\JWSVerifier;
 use Jose\Component\Signature\Serializer\CompactSerializer;
+use Psr\Http\Message\ResponseInterface;
 
 /**
  * The authorization code flow with PKCE as a browser and an application live it: the authorization
@@ -56,8 +57,18 @@ final class SignInContext implements Context
     #[When('the person signs in to the application, asking for :scope')]
     public function thePersonSignsIn(string $scope): void
     {
+        $page = $this->loginPage($scope);
+        $person = $this->management->person();
+
+        $this->postLogin($page, $person->email, $person->password);
+        $this->loginCookies = array_values($this->browser->last()->getHeader('Set-Cookie'));
+        $this->landAtTheApplication();
+    }
+
+    /** Start an authorization request with nobody signed in, and stop at the login page it sends to. */
+    public function loginPage(string $scope): LoginPage
+    {
         $application = $this->management->application();
-        $stack = $this->browser->stack();
         $this->verifier = self::base64Url(random_bytes(48));
         $this->state = bin2hex(random_bytes(8));
         $this->nonce = bin2hex(random_bytes(8));
@@ -72,11 +83,10 @@ final class SignInContext implements Context
             'code_challenge' => self::base64Url(hash('sha256', $this->verifier, true)),
             'code_challenge_method' => 'S256',
         ]);
-        $this->browser->request(RequestMethodInterface::METHOD_GET, $stack->authUrl($authorize));
-        $toApplication = static fn (string $target): bool => str_starts_with($target, $application->redirectUri);
+        $this->browser->request(RequestMethodInterface::METHOD_GET, $this->browser->stack()->authUrl($authorize));
 
         // Not signed in: sent to the login page, which is shown, not redirected through.
-        $page = $this->browser->follow($toApplication);
+        $page = $this->browser->follow(self::toTheApplication($application));
         Check::same(
             200,
             $page->getStatusCode(),
@@ -86,16 +96,31 @@ final class SignInContext implements Context
         Check::same(1, preg_match('/name="csrf_token" value="([^"]+)"/', $html, $csrf), 'no CSRF token');
         preg_match('/name="state" value="([^"]*)"/', $html, $handle);
 
-        $person = $this->management->person();
-        $this->browser->request(RequestMethodInterface::METHOD_POST, $stack->authUrl('/auth/login'), ['form_params' => [
-            'email' => $person->email,
-            'password' => $person->password,
-            'csrf_token' => $csrf[1],
-            'state' => $handle[1] ?? '',
-        ]]);
-        $this->loginCookies = array_values($this->browser->last()->getHeader('Set-Cookie'));
+        return new LoginPage($html, $csrf[1], $handle[1] ?? '');
+    }
 
-        $answer = $this->browser->follow($toApplication);
+    /** Post the login form, and answer what the server did with it. */
+    public function postLogin(LoginPage $page, string $email, string $password): ResponseInterface
+    {
+        return $this->browser->request(
+            RequestMethodInterface::METHOD_POST,
+            $this->browser->stack()->authUrl('/auth/login'),
+            ['form_params' => [
+                'email' => $email,
+                'password' => $password,
+                'csrf_token' => $page->csrfToken,
+                'state' => $page->handle,
+            ]],
+        );
+    }
+
+    /** Follow what a sign-in answered until the redirect to the application, and keep its code. */
+    public function landAtTheApplication(): void
+    {
+        $application = $this->management->application();
+        $stack = $this->browser->stack();
+
+        $answer = $this->browser->follow(self::toTheApplication($application));
         Check::same(302, $answer->getStatusCode(), 'back to the application: ' . (string) $answer->getBody());
         $location = $this->browser->location();
         Check::startsWith($application->redirectUri . '?', $location);
@@ -105,6 +130,11 @@ final class SignInContext implements Context
         $code = $query['code'] ?? null;
         Check::string($code, 'a code');
         $this->code = $code;
+    }
+
+    private static function toTheApplication(Application $application): callable
+    {
+        return static fn (string $target): bool => str_starts_with($target, $application->redirectUri);
     }
 
     #[Then('the session cookie is host-only, Secure, HttpOnly and SameSite')]
