@@ -8,6 +8,8 @@
 # certificate in its two https sites, starts everything and waits until it is healthy, then runs
 # `seed-dev`. Safe to run again.
 #
+# CLAVIA_E2E_IMAGE=<image> runs that Clavia image instead of building this checkout's.
+#
 # CLAVIA_E2E_DASHBOARD=1 adds the dashboard (ghcr.io/clavia-auth/clavia-dashboard:edge, or the image
 # CLAVIA_E2E_DASHBOARD_IMAGE names).
 #
@@ -44,7 +46,11 @@ if [[ "$(grep -c '^	tls /etc/caddy/certs/' "${work}/Caddyfile")" != 2 ]]; then
   exit 1
 fi
 
-"${compose[@]}" up -d --build --wait
+# CLAVIA_E2E_IMAGE names an image to run as it is (docker pulls it when it is not here; `docker pull` it first
+# to refresh a tag such as :edge); otherwise Clavia is built from this checkout.
+build=(--build)
+[[ -n "${CLAVIA_E2E_IMAGE:-}" ]] && build=(--no-build)
+"${compose[@]}" up -d "${build[@]}" --wait
 "${compose[@]}" exec -T php php bin/clavia seed-dev >"${work}/seed.txt"
 
 echo "Up: https://auth.${domain} and https://management.${domain} (127.0.0.1)."
