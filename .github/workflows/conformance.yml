@@ -41,17 +41,19 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-          cache: maven
 
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
-      # The suite's jar, built once per release of it (conformance/run.sh skips the build when it is there).
+      # The suite's jar, built once per release of it (conformance/run.sh skips the build when it is there),
+      # and Maven's downloads for that build: the suite's pom.xml is in its own checkout, not this one.
       - name: The suite, as built before
         uses: actions/cache@v4
         with:
-          path: conformance/.work/suite
+          path: |
+            conformance/.work/suite
+            ~/.m2/repository
           key: conformance-suite-5.1.36
 
       - name: Run the plans and compare
