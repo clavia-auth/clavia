@@ -132,6 +132,8 @@ use Clavia\Adapter\Primary\Http\Shared\AuditContextMiddleware;
 use Clavia\Adapter\Primary\Http\Shared\BearerChallenger;
 use Clavia\Adapter\Primary\Http\Shared\ErrorResponder;
 use Clavia\Adapter\Primary\Http\Shared\HealthHandler;
+use Clavia\Adapter\Primary\Http\Shared\MetricsHandler;
+use Clavia\Adapter\Primary\Http\Shared\MetricsMiddleware;
 use Clavia\Adapter\Primary\Http\Shared\MethodNotAllowedMiddleware;
 use Clavia\Adapter\Primary\Http\Shared\NotFoundHandler;
 use Clavia\Adapter\Primary\Http\Shared\PageRenderer;
@@ -334,6 +336,8 @@ use Clavia\Application\Oidc\Keys\RotateSigningKey;
 use Clavia\Application\Oidc\Logout\BackChannelLogout;
 use Clavia\Application\Oidc\Logout\EndSession;
 use Clavia\Application\Oidc\UserInfo\ReadUserInfo;
+use Clavia\Application\Metrics\MetricsSubscriber;
+use Clavia\Application\Metrics\ReadMetrics;
 use Clavia\Application\Port\AccountLinkStore;
 use Clavia\Application\Port\AttemptCounter;
 use Clavia\Application\Port\BackChannelLogoutDelivery;
@@ -346,6 +350,7 @@ use Clavia\Application\Port\ExternalSignInStore;
 use Clavia\Application\Port\IdentityProviders;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Application\Port\Mailer;
+use Clavia\Application\Port\Metrics;
 use Clavia\Application\Port\MailOutbox;
 use Clavia\Application\Port\MfaChallengeStore;
 use Clavia\Application\Port\NonceRegistry;
@@ -483,6 +488,7 @@ final class ConfigProvider
         DirectoryTrail::class,
         BackChannelLogout::class,
         MarkRegistrationUsed::class,
+        MetricsSubscriber::class,
     ];
 
     /**
@@ -778,6 +784,9 @@ final class ConfigProvider
                     UpdateClientConfiguration::class => Container\UpdateClientConfigurationFactory::class,
                     DeleteClientConfiguration::class => Container\DeleteClientConfigurationFactory::class,
                     MarkRegistrationUsed::class => Container\MarkRegistrationUsedFactory::class,
+                    MetricsSubscriber::class => Container\MetricsSubscriberFactory::class,
+                    ReadMetrics::class => Container\ReadMetricsFactory::class,
+                    Metrics::class => Container\MetricsFactory::class,
                     PurgeUnusedRegistrations::class => Container\PurgeUnusedRegistrationsFactory::class,
                     UpdateRole::class => Container\UpdateRoleFactory::class,
                     DeleteRole::class => Container\DeleteRoleFactory::class,
@@ -852,6 +861,8 @@ final class ConfigProvider
 
                     // Primary adapter: HTTP
                     HealthHandler::class => Container\HealthHandlerFactory::class,
+                    MetricsHandler::class => Container\MetricsHandlerFactory::class,
+                    MetricsMiddleware::class => Container\MetricsMiddlewareFactory::class,
                     NotFoundHandler::class => Container\NotFoundHandlerFactory::class,
                     MethodNotAllowedMiddleware::class => Container\MethodNotAllowedMiddlewareFactory::class,
                     MezzioErrorResponseGenerator::class => Container\ErrorResponseGeneratorFactory::class,

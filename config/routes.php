@@ -93,6 +93,7 @@ use Clavia\Adapter\Primary\Http\Scim\ScimUserHandler;
 use Clavia\Adapter\Primary\Http\Scim\ScimUsersHandler;
 use Clavia\Adapter\Primary\Http\Scim\ServiceProviderConfigHandler;
 use Clavia\Adapter\Primary\Http\Shared\HealthHandler;
+use Clavia\Adapter\Primary\Http\Shared\MetricsHandler;
 use Clavia\Configuration\ClientRegistration;
 use Clavia\Configuration\Settings;
 use Mezzio\Application;
@@ -108,6 +109,8 @@ return static function (Application $app, ContainerInterface $container): void {
     $settings = $container->get(Settings::class);
 
     $app->get('/healthz', HealthHandler::class, 'ops.healthz');
+    // Answers only on the internal listener (CLAVIA_LISTENER=internal): 404 everywhere else.
+    $app->get('/metrics', MetricsHandler::class, 'ops.metrics');
 
     // ── /oauth2/* — the authorization server. Callers authenticate as clients. ──
     $app->route('/oauth2/authorize', AuthorizeHandler::class, ['GET', 'POST'], 'oauth2.authorize');

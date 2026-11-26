@@ -76,11 +76,14 @@ spec:
           ports:
             - name: http
               containerPort: 80
-          # PHP's /healthz, through Caddy, on a port no Service exposes: ready when both can answer.
+            # The internal listener: /healthz for the probes, /metrics for Prometheus.
+            - name: internal
+              containerPort: 8081
+          # PHP's /healthz, through Caddy, on the internal listener: ready when both can answer.
           readinessProbe:
             httpGet:
               path: /healthz
-              port: 8081
+              port: internal
             periodSeconds: 10
           livenessProbe:
             tcpSocket:

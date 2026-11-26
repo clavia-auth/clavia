@@ -60,11 +60,26 @@
 	}
 }
 
-# ── Liveness of the application, for probes: never published ───
-# PHP's /healthz through this Caddy, on a port no Service or published port exposes.
+# The application, as the internal listener reaches it: the FastCGI parameter CLAVIA_LISTENER says
+# so, and a client cannot set it (its headers reach PHP as HTTP_*). /metrics answers only then.
+(clavia_internal) {
+	root * /app/public
+	php_fastcgi {$CLAVIA_PHP_FASTCGI:php:9000} {
+		try_files index.php
+		env REMOTE_ADDR {client_ip}
+		env CLAVIA_LISTENER internal
+	}
+}
+
+# ── The internal listener: probes and Prometheus, never published ───
+# PHP's /healthz and /metrics through this Caddy, on a port only a probe, or Prometheus on the private
+# network, reaches: no published port and no Ingress leads here.
 :8081 {
 	handle /healthz {
-		import clavia_app
+		import clavia_internal
+	}
+	handle /metrics {
+		import clavia_internal
 	}
 	handle {
 		respond 404
@@ -110,6 +125,10 @@ http:// {
 		respond 404
 	}
 	handle /scim/v2/* {
+		respond 404
+	}
+	# Metrics are the internal listener's alone.
+	handle /metrics {
 		respond 404
 	}
 
@@ -158,6 +177,10 @@ http:// {
 			defer
 		}
 		import clavia_app
+	}
+
+	handle /metrics {
+		respond 404
 	}
 
 	# The dashboard (clavia-dashboard), which sets its own headers, its Content-Security-Policy

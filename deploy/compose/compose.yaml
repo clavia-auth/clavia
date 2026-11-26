@@ -100,6 +100,8 @@ services:
         aliases:
           - auth.${CLAVIA_ROOT_DOMAIN}
           - management.${CLAVIA_ROOT_DOMAIN}
+    # Port 8081, the internal listener, is published nowhere: /healthz for the healthcheck, and
+    # /metrics for a Prometheus you run on the clavia network (target caddy:8081).
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/healthz"]
       interval: 30s

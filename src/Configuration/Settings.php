@@ -227,6 +227,16 @@ final readonly class Settings
         #[Range(min: 1)]
         public int $auditRetentionDays = 90,
         // ------------------------------------------------------------------
+        // Metrics (Prometheus, served on the internal listener only)
+        // ------------------------------------------------------------------
+        /**
+         * Measure tokens, sign-ins, refusals, mail and request latency, kept in Redis and exposed at
+         * `/metrics` on the internal listener (a request Caddy marks `CLAVIA_LISTENER=internal`; never
+         * on auth.* or management.*). On by default: a request's samples cost one Redis round trip,
+         * after its response is out. Off, nothing is recorded and `/metrics` is `404`.
+         */
+        public bool $metricsEnabled = true,
+        // ------------------------------------------------------------------
         // Multi-factor authentication
         // ------------------------------------------------------------------
         /** Seconds the browser has to finish the second step after its password was accepted. */

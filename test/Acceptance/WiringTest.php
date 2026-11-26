@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Acceptance;
 
+use Clavia\Application\Metrics\CountingMailer;
 use Clavia\Adapter\Secondary\Mail\NoMailer;
 use Clavia\Adapter\Secondary\Mail\OutboxMailer;
 use Clavia\Adapter\Secondary\Mail\SmtpMailer;
@@ -68,14 +69,23 @@ final class WiringTest extends AcceptanceTestCase
 
     public function testTheMailerIsTheOneTheBackendNames(): void
     {
-        self::assertInstanceOf(OutboxMailer::class, $this->container()->get(Mailer::class), 'console');
+        self::assertInstanceOf(OutboxMailer::class, $this->backend(), 'console');
 
         $this->boot(['CLAVIA_EMAIL_BACKEND' => 'none']);
-        self::assertInstanceOf(NoMailer::class, $this->container()->get(Mailer::class));
+        self::assertInstanceOf(NoMailer::class, $this->backend());
 
         // Built without connecting: the server is only reached when a message goes out.
         $this->boot(['CLAVIA_EMAIL_BACKEND' => 'smtp', 'CLAVIA_SMTP_HOST' => 'smtp.invalid']);
-        self::assertInstanceOf(SmtpMailer::class, $this->container()->get(Mailer::class));
+        self::assertInstanceOf(SmtpMailer::class, $this->backend());
+    }
+
+    /** The backend behind the mailer, which counts what it sends (#23). */
+    private function backend(): Mailer
+    {
+        $mailer = $this->container()->get(Mailer::class);
+        self::assertInstanceOf(CountingMailer::class, $mailer);
+
+        return $mailer->mailer;
     }
 
     public function testASigningAlgorithmNoKeyCanProduceIsRefused(): void

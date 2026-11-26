@@ -98,6 +98,17 @@ dashboard:
   replicaCount: 1
   resources: {}
 
+# Prometheus metrics, on the internal listener (Caddy's :8081, never the Ingress): a Service of its own,
+# and a ServiceMonitor for the Prometheus Operator. CLAVIA_METRICS_ENABLED (env) turns measuring off.
+metrics:
+  service:
+    enabled: true
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    # Labels your Prometheus selects ServiceMonitors by.
+    labels: {}
+
 # Only the Ingress controller may reach the server pods' HTTP port: no other pod can talk to Caddy
 # directly, and so none can claim a client address it holds through X-Forwarded-For. Needs a CNI
 # that enforces NetworkPolicy.
@@ -108,6 +119,8 @@ networkPolicy:
     - namespaceSelector:
         matchLabels:
           kubernetes.io/metadata.name: ingress-nginx
+  # Who may scrape the internal listener (metrics): Prometheus's pods. Nobody when empty.
+  metricsFrom: []
 
 podAnnotations: {}
 nodeSelector: {}
