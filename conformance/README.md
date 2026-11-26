@@ -4,14 +4,25 @@ Clavia is run against the [OpenID Foundation conformance suite](https://gitlab.c
 (release `v5.1.36`): the **Config OP** plan (`oidcc-config-certification-test-plan`) and the
 **Basic OP** plan (`oidcc-basic-certification-test-plan[server_metadata=discovery][client_registration=static_client]`).
 
-## Results (2026-11-21)
+## Results (2026-11-27)
 
-| Plan | Modules | Conditions | Outcome |
-|---|---|---|---|
-| Config OP | 1 | 25 passed | Passed |
-| Basic OP | 36 | 1637 passed, 1 failed, 6 warnings (4 since) | 20 passed, 4 for review, 6 warnings, 4 skipped, 1 failed |
+What `baseline.json` records, module by module, from the run of the nightly workflow:
 
-**The one failure is deliberate.** `oidcc-ensure-request-without-nonce-succeeds-for-code-flow`
+| Plan | Modules | Outcome |
+|---|---|---|
+| Config OP | 1 | Passed |
+| Basic OP | 35 | 22 passed, 4 for review, 3 warnings, 4 skipped, 2 failed |
+
+**Both failures are deliberate.**
+
+`oidcc-ensure-request-with-acr-values-succeeds` asks for the levels discovery advertises
+(`acr_values_supported`): the multi-factor level and `phr`. The suite signs in as the seeded account,
+which holds no second factor, so Clavia does what `docs/design/mfa-policies.md` §5.3 says: it sends the
+person to enrol one on the way, a page the suite's scripted browser cannot get through. Clavia never
+issues a token claiming less than the request asked without asking the person for more. Until #64
+advertised the levels, this module ended in a warning (no `acr` claim).
+
+The other: `oidcc-ensure-request-without-nonce-succeeds-for-code-flow`
 sends an authorization request with neither PKCE nor a `nonce`. OAuth 2.1 §7.5.1 allows a
 confidential client to omit PKCE only when the OpenID Connect `nonce` binds the code instead;
 without either, nothing ties the code to the client's own request, and Clavia refuses it
@@ -32,12 +43,11 @@ scopes (and `oidcc-scope-all`), and request objects.
 |---|---|---|
 | `oidcc-userinfo-post-body` | The access token in a form body (RFC 6750 §2.2) is not accepted | RFC 6750 says that method SHOULD NOT be used unless the header cannot be; only the `Authorization` header is. |
 | `oidcc-scope-profile` | Not every `profile` claim is returned | Clavia keeps `name`, `given_name`, `family_name`, `nickname`, `picture`, `locale`, `updated_at` — not `middle_name`, `preferred_username`, `profile`, `website`, `gender`, `birthdate`, `zoneinfo`. |
-| `oidcc-ensure-request-with-acr-values-succeeds` | No `acr` claim | `acr_values_supported` is not advertised; `amr` says how the person signed in. |
 | `oidcc-claims-essential` | `name` not returned for an essential `claims` request | The `claims` parameter is not supported (`claims_parameter_supported: false`). |
 
-Two more warnings of that run — `oidcc-scope-email` and `oidcc-ensure-other-scope-order-succeeds`,
-"`email` in the ID token" — are gone since: the ID token now carries `sub` and the protocol
-claims only, and scope claims come from userinfo (OIDC Core §5.4).
+Two more warnings of the first run (2026-11-21), `oidcc-scope-email` and
+`oidcc-ensure-other-scope-order-succeeds`, "`email` in the ID token", are gone since: the ID token
+carries `sub` and the protocol claims only, and scope claims come from userinfo (OIDC Core §5.4).
 
 ## Nightly, against the baseline
 

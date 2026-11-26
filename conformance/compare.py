@@ -1,8 +1,8 @@
 """Compare a conformance run with conformance/baseline.json, and keep what the suite exported.
 
 Reads every plan the suite ran (its API, as the suite's own scripts read it: `api/plan`, `api/info/{id}`),
-takes each module's latest outcome (PASSED, WARNING, REVIEW, SKIPPED, FAILED; a module that did not finish
-is its status, such as INTERRUPTED), and compares them with the baseline, module by module, in both
+takes each module's latest outcome (PASSED, WARNING, REVIEW, SKIPPED, FAILED; a module with no result is
+its status, such as INTERRUPTED), and compares them with the baseline, module by module, in both
 directions: a worse outcome is a regression, a better one means the baseline is stale, and a module
 appearing or disappearing is a change too. Any difference exits 1.
 
@@ -48,8 +48,9 @@ def main() -> int:
                 results[key] = "NOT_RUN"
                 continue
             info = fetch(context, f"{suite}/api/info/{instances[-1]}")
-            status, result = info.get("status"), info.get("result")
-            results[key] = result if status == "FINISHED" and result else str(status or "UNKNOWN")
+            # The suite stops a module at its first failure: INTERRUPTED, its result FAILED. The result is the
+            # outcome; the status only when there is none (a module that broke before deciding anything).
+            results[key] = str(info.get("result") or info.get("status") or "UNKNOWN")
         export = download(context, f"{suite}/api/plan/exporthtml/{plan['_id']}")
         (args.out / f"{plan['planName']}-{plan['_id']}.zip").write_bytes(export)
 
