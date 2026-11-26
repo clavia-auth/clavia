@@ -8,6 +8,12 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ### Added
 
+- **The sign-in pages in French** (#181, the first of #24): the login page and the error pages follow
+  the browser's `Accept-Language`, among the offered languages, and say so in `<html lang>` and
+  `Content-Language`. Messages live in `translations/*.arb` (ICU MessageFormat), which `CatalogueTest`
+  keeps complete. New settings: **`CLAVIA_LANGUAGES`** (`en fr`) and **`CLAVIA_DEFAULT_LANGUAGE`**
+  (`en`); a language without a catalogue refuses to start. The other pages follow in #182.
+
 - **A reference for the authorization server** (#93), beside the Management API's: every endpoint an
   application or an API calls on `auth.{domain}` (token, PAR, introspection, revocation, device code,
   registration, userinfo, the JWKS, discovery, authorize and end session), its parameters, answers and

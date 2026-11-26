@@ -114,6 +114,7 @@ src/
   Configuration/            the typed CLAVIA_* settings
   Bootstrap/                composition root: ConfigProvider and one factory per service
 templates/                  server-rendered pages: layout/, auth/, error/, partial/
+translations/               what a person reads, one ARB catalogue per language (en.arb the source)
 migrations/                 NNNN_name.sql, forward only
 docs/openapi/               management-api.yaml, the Management API's contract
 docs/site/                  the published API references: Scalar over both documents, and the guides (docs.yml)
@@ -1310,6 +1311,14 @@ someone else's or names something deleted gives the same "expired" page.
   the CSRF token.
   One stylesheet (`public/auth/static/auth.css`), light and dark through custom properties; the
   theme toggle is a POST setting a cookie.
+- **Words come from the catalogue** (`translations/*.arb`, docs/design/translated-sign-in-pages.md):
+  `$this->t('login.submit')` in a template, `Message::of('key', $values)` in a page class (an
+  `HtmlPage`'s title, heading, error, or a variable), worded by `PageRenderer` in the page's language
+  (`LanguageChoice`: `Accept-Language` among `CLAVIA_LANGUAGES`, else `CLAVIA_DEFAULT_LANGUAGE`), which
+  `<html lang>` and `Content-Language` state. Messages are ICU MessageFormat, read through the
+  `Messages` port (`IcuMessages`); a value is an argument, never part of a pattern, and a message holds
+  no markup. `CatalogueTest` keeps every translation complete and every key used. Pages not yet worded
+  through it pass text (#182 converts them).
 - **Every printed value is escaped** with `escapeHtml()` or `escapeHtmlAttr()`: laminas-view does
   not escape on its own. `AuthPagesEscapingTest` renders every page with hostile values; a new
   page or variable gets a case there.

@@ -1,6 +1,6 @@
 # Design: translated sign-in pages and mail
 
-**Status:** proposed · **Date:** 2026-11-26 · **Issue:** clavia-auth/clavia#24 ·
+**Status:** agreed · **Date:** 2026-11-26 · **Issue:** clavia-auth/clavia#24 ·
 **Specifications:** OpenID Connect Core 1.0 §3.1.2.1 (`ui_locales`), OpenID Connect Discovery 1.0 §3
 (`ui_locales_supported`), RFC 9110 §12.5.4 (`Accept-Language`) and §8.5 (`Content-Language`), RFC 4647
 §3.4 (lookup), BCP 47 (RFC 5646), ICU MessageFormat

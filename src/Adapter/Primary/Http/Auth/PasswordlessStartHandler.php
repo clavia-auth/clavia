@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\Shared\ClientAddress;
+use Clavia\Adapter\Primary\Http\Shared\Message;
 use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
 use Clavia\Application\Authentication\Passwordless\PasswordlessCodeSent;
@@ -55,7 +56,7 @@ final readonly class PasswordlessStartHandler implements RequestHandlerInterface
                 $request,
                 $loginState,
                 $email,
-                LoginPages::EXPIRED_FORM,
+                Message::of(LoginPages::EXPIRED_FORM),
                 StatusCodeInterface::STATUS_BAD_REQUEST,
             );
         }
@@ -90,7 +91,7 @@ final readonly class PasswordlessStartHandler implements RequestHandlerInterface
         ServerRequestInterface $request,
         ?string $loginState,
         string $email,
-        string $error,
+        Message|string $error,
         int $status,
     ): ResponseInterface {
         return $this->responder->page(

@@ -606,4 +606,36 @@ final class SettingsTest extends TestCase
         yield 'a window too short' => ['CLAVIA_PASSKEY_REAUTH_WINDOW', '59'];
         yield 'a window too long' => ['CLAVIA_PASSKEY_REAUTH_WINDOW', '86401'];
     }
+
+    public function testTheLanguagesAreEnglishAndFrenchWithEnglishTheDefault(): void
+    {
+        $settings = Settings::fromEnvironment(self::MINIMAL);
+
+        self::assertSame(['en', 'fr'], $settings->languages);
+        self::assertSame('en', $settings->defaultLanguage);
+    }
+
+    /** docs/design/translated-sign-in-pages.md §3. */
+    #[DataProvider('languagesThatAreRefused')]
+    public function testALanguageIsATagOfferedOnceTheDefaultAmongThem(
+        string $languages,
+        string $default,
+        string $reason,
+    ): void {
+        $this->expectException(InvalidSettings::class);
+        $this->expectExceptionMessageIsOrContains($reason);
+
+        Settings::fromEnvironment(
+            self::MINIMAL + ['CLAVIA_LANGUAGES' => $languages, 'CLAVIA_DEFAULT_LANGUAGE' => $default],
+        );
+    }
+
+    /** @return iterable<string, array{string, string, string}> */
+    public static function languagesThatAreRefused(): iterable
+    {
+        yield 'not a tag' => ['en fr_FR', 'en', 'is not a language'];
+        yield 'a path' => ['en ../etc', 'en', 'is not a language'];
+        yield 'twice' => ['en fr FR', 'en', 'names a language twice'];
+        yield 'a default not offered' => ['en fr', 'de', 'is not one of CLAVIA_LANGUAGES'];
+    }
 }

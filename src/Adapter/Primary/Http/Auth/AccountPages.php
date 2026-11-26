@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
+use Clavia\Adapter\Primary\Http\Shared\Message;
 use Clavia\Application\Authentication\Account\AccountMail;
 use Clavia\Application\Authentication\Account\SignUpFailure;
 use Fig\Http\Message\StatusCodeInterface;
@@ -53,7 +54,7 @@ final class AccountPages
         array $formOrigins,
         bool $requiresVerification,
         string $email = '',
-        ?string $error = null,
+        Message|string|null $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): HtmlPage {
         return new HtmlPage(
@@ -74,10 +75,10 @@ final class AccountPages
     }
 
     /** The sign-up form refused for a reason the person can act on. */
-    public static function signUpMessage(SignUpFailure $reason, string $detail): string
+    public static function signUpMessage(SignUpFailure $reason, string $detail): Message|string
     {
         return match ($reason) {
-            SignUpFailure::InvalidEmail => LoginPages::INVALID_EMAIL,
+            SignUpFailure::InvalidEmail => Message::of(LoginPages::INVALID_EMAIL),
             SignUpFailure::PasswordRejected => $detail,
             SignUpFailure::NotAvailable => self::SIGN_UP_UNAVAILABLE,
             SignUpFailure::TooManySignUps => self::TOO_MANY_SIGN_UPS,
@@ -121,7 +122,7 @@ final class AccountPages
     public static function confirmEmail(
         string $email,
         #[\SensitiveParameter] string $token,
-        ?string $error = null,
+        Message|string|null $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): HtmlPage {
         return new HtmlPage(
@@ -168,7 +169,7 @@ final class AccountPages
     public static function forgot(
         ?string $loginState,
         string $email = '',
-        ?string $error = null,
+        Message|string|null $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): HtmlPage {
         return new HtmlPage(
@@ -190,7 +191,7 @@ final class AccountPages
     public static function resetForm(
         string $email,
         #[\SensitiveParameter] string $token,
-        ?string $error = null,
+        Message|string|null $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): HtmlPage {
         return new HtmlPage(

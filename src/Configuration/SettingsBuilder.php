@@ -368,6 +368,7 @@ final class SettingsBuilder
         $env = $this->quote($settings->env->value);
 
         $this->refuseUnusableSamlKeys($settings);
+        $this->refuseUnknownLanguages($settings);
 
         if ($settings->signingBackend !== 'postgres' && $settings->signingKeyRef === null) {
             throw new InvalidSettings(sprintf(
@@ -502,6 +503,33 @@ final class SettingsBuilder
             throw new InvalidSettings(
                 'The CLAVIA_SAML_*_KEY_REF settings name each key once: one key, one usage, one place in the rotation.',
             );
+        }
+    }
+
+    /**
+     * Each language a BCP 47 tag of a language and an optional region, offered once, the default among
+     * them. Whether each has a catalogue is the composition root's to check: it knows where they are.
+     */
+    private function refuseUnknownLanguages(Settings $settings): void
+    {
+        $tag = '/^[A-Za-z]{2,3}(?:-(?:[A-Za-z]{2}|[0-9]{3}))?$/D';
+        foreach ([...$settings->languages, $settings->defaultLanguage] as $language) {
+            if (preg_match($tag, $language) !== 1) {
+                throw new InvalidSettings(sprintf(
+                    '%s is not a language: a BCP 47 tag of a language and an optional region (fr, pt-BR).',
+                    $this->quote($language),
+                ));
+            }
+        }
+        $offered = array_map('strtolower', $settings->languages);
+        if (count(array_unique($offered)) !== count($offered)) {
+            throw new InvalidSettings('CLAVIA_LANGUAGES names a language twice.');
+        }
+        if (! in_array(strtolower($settings->defaultLanguage), $offered, true)) {
+            throw new InvalidSettings(sprintf(
+                'CLAVIA_DEFAULT_LANGUAGE %s is not one of CLAVIA_LANGUAGES.',
+                $this->quote($settings->defaultLanguage),
+            ));
         }
     }
 

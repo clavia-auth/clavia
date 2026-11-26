@@ -13,9 +13,9 @@ namespace ClaviaTest\Unit\Adapter\Primary\Http;
 
 use Clavia\Adapter\Primary\Http\OAuth2\OAuth2Responder;
 use Clavia\Adapter\Primary\Http\Shared\ErrorResponder;
-use Clavia\Adapter\Primary\Http\Shared\PageRenderer;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use ClaviaTest\Support\Fake\RecordingTemplateRenderer;
+use ClaviaTest\Support\TestPages;
 use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\ResponseFactory;
 use Laminas\Diactoros\ServerRequest;
@@ -35,7 +35,7 @@ final class OAuth2ResponderTest extends TestCase
         $this->templates = new RecordingTemplateRenderer();
         $this->responder = new OAuth2Responder(
             new ResponseFactory(),
-            new ErrorResponder(new PageRenderer($this->templates)),
+            new ErrorResponder(TestPages::renderer($this->templates)),
             self::ISSUER,
         );
     }

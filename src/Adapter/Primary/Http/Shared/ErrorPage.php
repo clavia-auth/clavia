@@ -20,35 +20,38 @@ namespace Clavia\Adapter\Primary\Http\Shared;
 final readonly class ErrorPage
 {
     /**
-     * @param string      $title   The heading: what happened, in a few words.
-     * @param string      $message What happened, in a sentence.
-     * @param string      $advice  What to do now.
-     * @param string|null $code    A reference to quote to whoever can help: an OAuth2 error code,
-     *                             a log reference. Null when there is nothing worth quoting.
+     * @param Message|string $title   The heading: what happened, in a few words.
+     * @param Message|string $message What happened, in a sentence.
+     * @param Message|string $advice  What to do now.
+     * @param string|null    $code    A reference to quote to whoever can help: an OAuth2 error code,
+     *                                a log reference. Null when there is nothing worth quoting.
+     * @param string|null    $detail  The server's own technical description, for an application's
+     *                                developer: English, as every OAuth `error_description` is.
      */
     public function __construct(
-        public string $title,
-        public string $message,
-        public string $advice,
+        public Message|string $title,
+        public Message|string $message,
+        public Message|string $advice,
         public ?string $code = null,
+        public ?string $detail = null,
     ) {
     }
 
     public static function notFound(): self
     {
         return new self(
-            'Page not found',
-            'There is nothing at this address.',
-            'Check the link, or go back to the application that sent you here.',
+            Message::of('error.not_found.title'),
+            Message::of('error.not_found.message'),
+            Message::of('error.not_found.advice'),
         );
     }
 
     public static function methodNotAllowed(): self
     {
         return new self(
-            'This page cannot be opened this way',
-            'This address exists, but not for the kind of request your browser made.',
-            'Go back to the application that sent you here and start again from there.',
+            Message::of('error.method_not_allowed.title'),
+            Message::of('error.method_not_allowed.message'),
+            Message::of('error.method_not_allowed.advice'),
         );
     }
 
@@ -58,10 +61,9 @@ final readonly class ErrorPage
     public static function internalError(string $reference): self
     {
         return new self(
-            'Something went wrong',
-            'The server could not complete this request. Nothing you did caused it.',
-            'Try again in a moment. If it keeps happening, contact whoever runs this service '
-                . 'and quote the reference below.',
+            Message::of('error.internal.title'),
+            Message::of('error.internal.message'),
+            Message::of('error.internal.advice'),
             $reference,
         );
     }
@@ -76,11 +78,11 @@ final readonly class ErrorPage
     public static function authorizationRefused(string $description, string $code): self
     {
         return new self(
-            'This sign-in cannot continue',
-            $description,
-            'The application that sent you here made a request this server cannot accept. '
-                . 'Close this page and go back to the application; if it keeps happening, tell whoever runs it.',
+            Message::of('error.authorization_refused.title'),
+            Message::of('error.authorization_refused.message'),
+            Message::of('error.authorization_refused.advice'),
             $code,
+            $description,
         );
     }
 
@@ -94,7 +96,12 @@ final readonly class ErrorPage
             template: 'error::page',
             title: $this->title,
             heading: $this->title,
-            variables: ['message' => $this->message, 'advice' => $this->advice, 'code' => $this->code],
+            variables: [
+                'message' => $this->message,
+                'advice' => $this->advice,
+                'code' => $this->code,
+                'detail' => $this->detail,
+            ],
             status: $status,
         );
     }

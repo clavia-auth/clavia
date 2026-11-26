@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
+use Clavia\Adapter\Primary\Http\Shared\Message;
 use Clavia\Application\Authentication\Passwordless\PasswordlessFailure;
 use Clavia\Application\Authentication\Passwordless\PasswordlessPrompt;
 use Fig\Http\Message\StatusCodeInterface;
@@ -36,7 +37,7 @@ final class PasswordlessPages
 
     public static function code(
         PasswordlessPrompt $prompt,
-        ?string $error = null,
+        Message|string|null $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): HtmlPage {
         return new HtmlPage(
@@ -73,7 +74,7 @@ final class PasswordlessPages
     public static function linkConfirm(
         PasswordlessPrompt $prompt,
         #[\SensitiveParameter] string $token,
-        ?string $error = null,
+        Message|string|null $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): HtmlPage {
         return new HtmlPage(
@@ -105,13 +106,13 @@ final class PasswordlessPages
     }
 
     /** What the person is told, for every way a passwordless sign-in can stop. */
-    public static function message(PasswordlessFailure $reason): string
+    public static function message(PasswordlessFailure $reason): Message|string
     {
         return match ($reason) {
-            PasswordlessFailure::InvalidRequest => LoginPages::INVALID_EMAIL,
-            PasswordlessFailure::NotAvailable => LoginPages::EMAIL_UNAVAILABLE,
-            PasswordlessFailure::TooManyEmails => LoginPages::TOO_MANY_EMAILS,
-            PasswordlessFailure::MailUnavailable => LoginPages::MAIL_UNAVAILABLE,
+            PasswordlessFailure::InvalidRequest => Message::of(LoginPages::INVALID_EMAIL),
+            PasswordlessFailure::NotAvailable => Message::of(LoginPages::EMAIL_UNAVAILABLE),
+            PasswordlessFailure::TooManyEmails => Message::of(LoginPages::TOO_MANY_EMAILS),
+            PasswordlessFailure::MailUnavailable => Message::of(LoginPages::MAIL_UNAVAILABLE),
             PasswordlessFailure::Expired, PasswordlessFailure::InvalidLink => self::INVALID_LINK,
             PasswordlessFailure::AccountDisabled => self::ACCOUNT_DISABLED,
         };

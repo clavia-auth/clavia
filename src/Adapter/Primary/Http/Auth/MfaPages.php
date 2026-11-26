@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
+use Clavia\Adapter\Primary\Http\Shared\Message;
 use Clavia\Application\Authentication\Mfa\EnrolmentOnTheWay;
 use Clavia\Application\Authentication\Mfa\MfaStatus;
 use Clavia\Application\Authentication\Mfa\SecondFactorPage;
@@ -57,7 +58,7 @@ final class MfaPages
     public static function challenge(
         SecondFactorPage $page,
         ?AssertionOptions $passkey = null,
-        ?string $error = null,
+        Message|string|null $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): HtmlPage {
         return new HtmlPage(

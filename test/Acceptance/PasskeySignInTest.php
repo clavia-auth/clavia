@@ -11,7 +11,6 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Acceptance;
 
-use Clavia\Adapter\Primary\Http\Auth\LoginPages;
 use Clavia\Application\Port\PasskeyVerifier;
 use Clavia\Domain\Audit\AuditEvent;
 use Clavia\Domain\Audit\AuditEventType;
@@ -209,7 +208,8 @@ final class PasskeySignInTest extends AcceptanceTestCase
         $refused = $this->signInWithPasskey($answering, $state, $handle, origin: $origin);
 
         self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $refused->getStatusCode(), $case);
-        self::assertStringContainsString(LoginPages::INVALID_CREDENTIALS, (string) $refused->getBody());
+        $wrongPassword = 'Incorrect email or password.';
+        self::assertStringContainsString($wrongPassword, (string) $refused->getBody(), 'A wrong password\'s answer.');
         self::assertStringContainsString('data-webauthn-get', (string) $refused->getBody(), 'A fresh ceremony.');
         self::assertNull($this->cookie(self::SESSION_COOKIE));
         self::assertCount(1, $this->audited(AuditEventType::SignInFailed), $case);

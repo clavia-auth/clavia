@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Auth;
 
+use Clavia\Adapter\Primary\Http\Shared\Message;
 use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
 use Clavia\Application\Authentication\SignIn\BeginPasskeySignIn;
 use Fig\Http\Message\StatusCodeInterface;
@@ -36,7 +37,7 @@ final readonly class LoginForm
         ServerRequestInterface $request,
         #[\SensitiveParameter] ?string $loginState,
         ?string $email = null,
-        ?string $error = null,
+        Message|string|null $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): ResponseInterface {
         $methods = $this->describe->methods($loginState);

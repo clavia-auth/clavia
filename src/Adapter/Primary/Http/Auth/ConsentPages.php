@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
+use Clavia\Adapter\Primary\Http\Shared\Message;
 use Clavia\Application\OAuth2\Consent\ConsentScreen;
 use Fig\Http\Message\StatusCodeInterface;
 
@@ -37,7 +38,7 @@ final class ConsentPages
     public static function question(
         ConsentScreen $screen,
         string $consentState,
-        ?string $error = null,
+        Message|string|null $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): HtmlPage {
         return new HtmlPage(

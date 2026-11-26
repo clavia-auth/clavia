@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\Shared\ClientAddress;
+use Clavia\Adapter\Primary\Http\Shared\Message;
 use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\Authentication\Account\CheckYourInbox;
 use Clavia\Application\Authentication\Account\RequestPasswordReset;
@@ -56,7 +57,7 @@ final readonly class PasswordForgotHandler implements RequestHandlerInterface
                 AccountPages::forgot(
                     $loginState,
                     $email,
-                    LoginPages::EXPIRED_FORM,
+                    Message::of(LoginPages::EXPIRED_FORM),
                     StatusCodeInterface::STATUS_BAD_REQUEST,
                 ),
             );
@@ -79,7 +80,7 @@ final readonly class PasswordForgotHandler implements RequestHandlerInterface
                 : AccountPages::forgot(
                     $loginState,
                     $email,
-                    LoginPages::INVALID_EMAIL,
+                    Message::of(LoginPages::INVALID_EMAIL),
                     StatusCodeInterface::STATUS_BAD_REQUEST,
                 ),
         );

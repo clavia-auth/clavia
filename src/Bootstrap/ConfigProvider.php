@@ -132,6 +132,9 @@ use Clavia\Adapter\Primary\Http\Shared\AuditContextMiddleware;
 use Clavia\Adapter\Primary\Http\Shared\BearerChallenger;
 use Clavia\Adapter\Primary\Http\Shared\ErrorResponder;
 use Clavia\Adapter\Primary\Http\Shared\HealthHandler;
+use Clavia\Adapter\Primary\Http\Shared\LanguageChoice;
+use Clavia\Adapter\Primary\Http\Shared\PageLanguage;
+use Clavia\Adapter\Primary\Http\Shared\Translate;
 use Clavia\Adapter\Primary\Http\Shared\MetricsHandler;
 use Clavia\Adapter\Primary\Http\Shared\MetricsMiddleware;
 use Clavia\Adapter\Primary\Http\Shared\MethodNotAllowedMiddleware;
@@ -142,6 +145,7 @@ use Clavia\Adapter\Secondary\Http\OutboundUrlPolicy;
 use Clavia\Adapter\Secondary\IdentityProvider\IdTokenVerifier;
 use Clavia\Adapter\Secondary\IdentityProvider\JwksCache;
 use Clavia\Adapter\Secondary\IdentityProvider\ProviderHttp;
+use Clavia\Adapter\Secondary\Messages\IcuMessages;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use Clavia\Adapter\Secondary\Redis\RedisConnection;
 use Clavia\Adapter\Secondary\Saml\Remote\CertificateCache;
@@ -350,6 +354,7 @@ use Clavia\Application\Port\ExternalSignInStore;
 use Clavia\Application\Port\IdentityProviders;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Application\Port\Mailer;
+use Clavia\Application\Port\Messages;
 use Clavia\Application\Port\Metrics;
 use Clavia\Application\Port\MailOutbox;
 use Clavia\Application\Port\MfaChallengeStore;
@@ -415,6 +420,7 @@ use Clavia\Domain\Rbac\RoleRepository;
 use Clavia\Domain\ResourceServer\ClientGrantRepository;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\Shared\Clock;
+use Clavia\Domain\Shared\Languages;
 use Clavia\Domain\Shared\RandomSource;
 use Clavia\Domain\Shared\SecretGenerator;
 use Clavia\Domain\Webhook\WebhookDeliveryRepository;
@@ -494,6 +500,7 @@ final class ConfigProvider
     /**
      * @return array{
      *     dependencies: array<string, array<string, string>>,
+     *     view_helpers: array<string, array<string, string>>,
      *     templates: array{extension: string, paths: array<string, list<string>>},
      * }
      */
@@ -509,6 +516,8 @@ final class ConfigProvider
 
                     // One per request: where it came from and who is acting, for the audit trail.
                     AuditContext::class => AuditContext::class,
+                    // One per request: the language of the page being rendered, for its templates' t().
+                    PageLanguage::class => PageLanguage::class,
 
                     // Ports whose adapter needs nothing to be built
                     Clock::class => SystemClock::class,
@@ -861,6 +870,9 @@ final class ConfigProvider
 
                     // Primary adapter: HTTP
                     HealthHandler::class => Container\HealthHandlerFactory::class,
+                    LanguageChoice::class => Container\LanguageChoiceFactory::class,
+                    Languages::class => Container\LanguagesFactory::class,
+                    IcuMessages::class => Container\IcuMessagesFactory::class,
                     MetricsHandler::class => Container\MetricsHandlerFactory::class,
                     MetricsMiddleware::class => Container\MetricsMiddlewareFactory::class,
                     NotFoundHandler::class => Container\NotFoundHandlerFactory::class,
@@ -939,11 +951,18 @@ final class ConfigProvider
                     // The entry point runs the tasks; the application only defers them.
                     DeferredTasks::class => AfterResponseTasks::class,
                     OutboundUrls::class => OutboundUrlPolicy::class,
+                    Messages::class => IcuMessages::class,
                 ],
             ],
             // The server-rendered pages: `layout::page`, `auth::login`, `error::page`,
             // `partial::field`…
             // laminas-view's PhpRenderer, through Mezzio's TemplateRendererInterface.
+            // The templates' helpers beside laminas-view's own: t() words a message (docs/design/
+            // translated-sign-in-pages.md).
+            'view_helpers' => [
+                'aliases' => ['t' => Translate::class],
+                'factories' => [Translate::class => Container\TranslateFactory::class],
+            ],
             'templates' => [
                 'extension' => 'phtml',
                 'paths' => [

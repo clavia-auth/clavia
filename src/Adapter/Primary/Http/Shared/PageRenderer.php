@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Shared;
 
+use Clavia\Application\Port\Messages;
+use Clavia\Domain\Shared\Language;
 use Laminas\Diactoros\Response\HtmlResponse;
 use Laminas\View\Model\ViewModel;
 use Mezzio\Template\TemplateRendererInterface;
@@ -56,8 +58,12 @@ final readonly class PageRenderer
         'Permissions-Policy' => 'publickey-credentials-create=(self), publickey-credentials-get=(self)',
     ];
 
-    public function __construct(private TemplateRendererInterface $templates)
-    {
+    public function __construct(
+        private TemplateRendererInterface $templates,
+        private LanguageChoice $choice,
+        private PageLanguage $language,
+        private Messages $messages,
+    ) {
     }
 
     /**
@@ -65,25 +71,43 @@ final readonly class PageRenderer
      */
     public function render(ServerRequestInterface $request, HtmlPage $page, array $variables = []): ResponseInterface
     {
+        // The page's language, for its messages here and its templates' t() (docs/design/
+        // translated-sign-in-pages.md §5.1); said in <html lang> and Content-Language (RFC 9110 §8.5).
+        $language = ($this->choice)($request);
+        $this->language->set($language);
         $html = $this->templates->render($page->template, [
             'layout' => new ViewModel([
-                'title' => $page->title,
-                'heading' => $page->heading,
-                'error' => $page->error,
+                'language' => $language->tag,
+                'title' => $this->word($language, $page->title),
+                'heading' => $this->word($language, $page->heading),
+                'error' => $page->error === null ? null : $this->word($language, $page->error),
                 'theme' => self::theme($request),
                 'returnTo' => $page->returnTo,
                 'wide' => $page->wide,
                 'script' => $page->script,
             ], 'layout::page'),
-            ...$page->variables,
+            // A variable that is a message reaches its template worded.
+            ...array_map(
+                fn (mixed $value): mixed => $value instanceof Message ? $this->word($language, $value) : $value,
+                $page->variables,
+            ),
             ...$variables,
         ]);
 
         return new HtmlResponse(
             $html,
             $page->status,
-            self::HEADERS + ['Content-Security-Policy' => self::policy($page->formOrigins, $page->script !== null)],
+            self::HEADERS + [
+                'Content-Language' => $language->tag,
+                'Content-Security-Policy' => self::policy($page->formOrigins, $page->script !== null),
+            ],
         );
+    }
+
+    /** A page's message in its language; text as it is, until every page is worded through the catalogue. */
+    private function word(Language $language, Message|string $text): string
+    {
+        return $text instanceof Message ? $this->messages->text($language, $text->key, $text->values) : $text;
     }
 
     /**

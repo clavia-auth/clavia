@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\Shared\ClientAddress;
+use Clavia\Adapter\Primary\Http\Shared\Message;
 use Clavia\Adapter\Primary\Http\Shared\RequestCookies;
 use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\Authentication\EndUser;
@@ -68,7 +69,11 @@ final readonly class DeviceHandler implements RequestHandlerInterface
         if ($isPost && ! CsrfToken::isValid($request, $form->get('csrf_token'))) {
             return $this->responder->page(
                 $request,
-                DevicePages::entry($typed, LoginPages::EXPIRED_FORM, StatusCodeInterface::STATUS_BAD_REQUEST),
+                DevicePages::entry(
+                    $typed,
+                    Message::of(LoginPages::EXPIRED_FORM),
+                    StatusCodeInterface::STATUS_BAD_REQUEST,
+                ),
             );
         }
         if ($typed === '') {
