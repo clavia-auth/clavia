@@ -52,13 +52,13 @@ final readonly class DeleteConnection
         $accounts = $this->users->countIn($connection->name);
         $identities = $this->identities->countThrough($connection->name);
         if ($accounts > 0 || $identities > 0) {
-            throw new Conflict(sprintf(
-                '%d %s to this connection and %d %s linked through it. Delete or move them first.',
-                $accounts,
-                $accounts === 1 ? 'account belongs' : 'accounts belong',
-                $identities,
-                $identities === 1 ? 'identity is' : 'identities are',
-            ));
+            // Counts only: nothing the caller sent is repeated (ConflictMessagesTest).
+            throw new Conflict(
+                ($accounts === 1 ? '1 account belongs' : $accounts . ' accounts belong')
+                . ' to this connection and '
+                . ($identities === 1 ? '1 identity is' : $identities . ' identities are')
+                . ' linked through it. Delete or move them first.',
+            );
         }
 
         $this->connections->delete($connection->name);

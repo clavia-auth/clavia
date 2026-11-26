@@ -65,7 +65,7 @@ final readonly class PhpDbRoleRepository implements RoleRepository
             $this->transactions->transactional(fn () => $this->write($role));
         } catch (Throwable $failure) {
             throw Constraint::isUniqueViolation($failure, 'uq_roles_name')
-                ? new AlreadyExists(sprintf("A role named '%s' already exists.", $role->name), 0, $failure)
+                ? new AlreadyExists('A role with this name already exists.', 0, $failure)
                 : $failure;
         }
     }

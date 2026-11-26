@@ -70,7 +70,7 @@ final class InMemoryRoleRepository implements RoleRepository
     {
         $other = $this->findByName($role->name);
         if ($other !== null && ! $other->id->equals($role->id)) {
-            throw new AlreadyExists(sprintf("A role named '%s' already exists.", $role->name));
+            throw new AlreadyExists('A role with this name already exists.');
         }
 
         $this->roles[$role->id->value] = $role;

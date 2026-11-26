@@ -807,7 +807,8 @@ Handlers then read a `ManagementRequest`, call one use case and render with `Man
 The middleware maps expected refusals: `NotFound` is 404; `Conflict`, `AlreadyExists` and
 `SystemApiProtected` are 409. Errors are RFC 9457 problem documents (`type`, `title`, `status`,
 `detail`, `errors[]` with a `pointer` or `parameter`); bearer refusals stay RFC 6750 documents.
-No error repeats the value at fault, and nothing is cacheable. Lists are
+No error repeats the value at fault (a `409` names the kind of thing taken, never its name or
+address: `ConflictMessagesTest`), and nothing is cacheable. Lists are
 `{items, total, page, per_page}`, newest first, with a case-insensitive literal search. A
 collection small by nature (an account's roles) is a plain array. Acceptance tests check every
 response against the document (`ManagementFixtures::api()`).

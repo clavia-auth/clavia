@@ -85,11 +85,7 @@ final class InMemoryUserRepository implements UserRepository
     {
         $other = $this->findByEmail($user->connection, $user->email);
         if ($other !== null && ! $other->id->equals($user->id)) {
-            throw new AlreadyExists(sprintf(
-                "Another account in '%s' uses the address %s.",
-                $user->connection->value,
-                $user->email,
-            ));
+            throw new AlreadyExists('Another account in this connection uses this address.');
         }
 
         $this->users[$user->id->value] = clone $user;

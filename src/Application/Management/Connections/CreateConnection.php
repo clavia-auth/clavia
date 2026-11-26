@@ -52,7 +52,7 @@ final readonly class CreateConnection
         $strategy = ConnectionStrategy::tryFrom($new->strategy)
             ?? throw new InvalidValue(sprintf("Unknown connection strategy '%s'.", $new->strategy));
         if ($this->connections->find($name) !== null) {
-            throw new AlreadyExists(sprintf("A connection named '%s' already exists.", $name->value));
+            throw new AlreadyExists('A connection with this name already exists.');
         }
 
         if (($new->saml !== null) !== ($strategy === ConnectionStrategy::Saml)) {

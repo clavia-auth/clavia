@@ -111,7 +111,7 @@ final readonly class PhpDbUserRepository implements UserRepository
         } catch (Throwable $failure) {
             throw Constraint::isUniqueViolation($failure, 'uq_users_connection_email')
                 ? new AlreadyExists(
-                    sprintf("Another account in '%s' uses the address %s.", $user->connection->value, $user->email),
+                    'Another account in this connection uses this address.',
                     0,
                     $failure,
                 )
