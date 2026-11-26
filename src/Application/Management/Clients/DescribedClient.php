@@ -23,6 +23,7 @@ final readonly class DescribedClient
     public function __construct(
         public Client $client,
         public ?ClientRegistration $registration,
+        public ?string $logoVersion = null,
     ) {
     }
 }

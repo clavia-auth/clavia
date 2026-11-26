@@ -75,6 +75,22 @@ final readonly class ManagementResponder
         return $response;
     }
 
+    /**
+     * An image this server keeps (an application's logo), as its content was recognised: `nosniff`, and a
+     * policy that allows nothing, so it is only ever an image.
+     */
+    public function image(string $mediaType, string $content): ResponseInterface
+    {
+        $response = $this->responses->createResponse(StatusCodeInterface::STATUS_OK)
+            ->withHeader('Content-Type', $mediaType)
+            ->withHeader('X-Content-Type-Options', 'nosniff')
+            ->withHeader('Content-Security-Policy', "default-src 'none'; sandbox")
+            ->withHeader('Cache-Control', 'no-store');
+        $response->getBody()->write($content);
+
+        return $response;
+    }
+
     /** `202`: queued, with nothing to show yet. */
     public function accepted(): ResponseInterface
     {

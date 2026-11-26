@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Support;
 
+use Clavia\Domain\Client\ClientLogoRepository;
+use ClaviaTest\Support\Contract\ClientLogoRepositoryContract;
 use ClaviaTest\Support\Contract\ClientRegistrationRepositoryContract;
 use ClaviaTest\Support\Contract\InitialAccessTokenRepositoryContract;
 use ClaviaTest\Support\Contract\ProvisionedAccountRepositoryContract;
@@ -18,6 +20,7 @@ use ClaviaTest\Support\Contract\ProvisioningTokenRepositoryContract;
 use ClaviaTest\Support\Contract\ScimGroupRepositoryContract;
 use ClaviaTest\Support\Contract\UserJobRepositoryContract;
 use ClaviaTest\Support\Contract\WebhookEndpointRepositoryContract;
+use ClaviaTest\Support\Fake\InMemoryClientLogoRepository;
 use ClaviaTest\Support\Fake\InMemoryClientRegistrationRepository;
 use ClaviaTest\Support\Fake\InMemoryInitialAccessTokenRepository;
 use ClaviaTest\Support\Fake\InMemoryProvisionedAccountRepository;
@@ -80,6 +83,7 @@ final class InMemoryRepositoriesTest extends TestCase
 {
     use UserRepositoryContract;
     use ClientRepositoryContract;
+    use ClientLogoRepositoryContract;
     use AuthorizationCodeRepositoryContract;
     use ResourceServerRepositoryContract;
     use MfaRepositoriesContract;
@@ -95,6 +99,8 @@ final class InMemoryRepositoriesTest extends TestCase
     use WebhookEndpointRepositoryContract;
     use ClientRegistrationRepositoryContract;
     use UserJobRepositoryContract;
+
+    private ?InMemoryClientLogoRepository $clientLogos = null;
 
     private InMemoryRoleRepository $roles;
     private InMemoryUserRepository $users;
@@ -230,6 +236,12 @@ final class InMemoryRepositoriesTest extends TestCase
     protected function clients(): ClientRepository
     {
         return $this->clients;
+    }
+
+    #[\Override]
+    protected function clientLogos(): ClientLogoRepository
+    {
+        return $this->clientLogos ??= new InMemoryClientLogoRepository();
     }
 
     #[\Override]

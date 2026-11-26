@@ -26,6 +26,8 @@ final readonly class ClientChanges
      * @param list<string>|null $postLogoutRedirectUris
      * @param bool              $changesBackChannelLogoutUri Whether `$backChannelLogoutUri` is a change —
      *                                                       null then clears it — or absent.
+     * @param bool              $changesAccentColor          Whether `$accentColor` is a change — null then
+     *                                                       gives the pages this server's colour back.
      */
     public function __construct(
         public ?string $name = null,
@@ -42,6 +44,8 @@ final readonly class ClientChanges
         public ?bool $requirePushedAuthorizationRequests = null,
         public ?bool $requireDpop = null,
         public ?ClaimMappings $claims = null,
+        public bool $changesAccentColor = false,
+        public ?string $accentColor = null,
     ) {
     }
 }

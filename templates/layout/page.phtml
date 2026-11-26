@@ -16,6 +16,9 @@
  * @var string|null $script   A module of this server's the page loads; null for none.
  * @var string      $stylesheet The stylesheet's address, versioned by its content (StaticAssets).
  * @var string      $icon       The icon's address, versioned likewise.
+ * @var array{name: string, logo: string|null, style: string|null}|null $brand
+ *                              The look of the application the page serves (its name, and its logo's and
+ *                              stylesheet's addresses on this origin); null for this server's own.
  * @var string      $content  The page itself, already rendered.
  *
  * A page puts the line under the heading in the `subtitle` placeholder; it is rendered
@@ -35,6 +38,10 @@
   <title><?= $this->escapeHtml($title) ?> · Clavia</title>
   <link rel="icon" href="<?= $this->escapeHtmlAttr($icon) ?>" type="image/svg+xml">
   <link rel="stylesheet" href="<?= $this->escapeHtmlAttr($stylesheet) ?>">
+<?php if ($brand !== null && $brand['style'] !== null): ?>
+  <!-- The application's colour: a stylesheet of this origin's, so no inline style is needed. -->
+  <link rel="stylesheet" href="<?= $this->escapeHtmlAttr($brand['style']) ?>">
+<?php endif ?>
 <?php if ($script !== null): ?>
   <script type="module" src="<?= $this->escapeHtmlAttr($script) ?>"></script>
 <?php endif ?>
@@ -42,7 +49,14 @@
 <body>
   <main class="card<?php if ($wide): ?> card-wide<?php endif ?>">
     <header class="brand">
+<?php if ($brand !== null && $brand['logo'] !== null): ?>
+      <img class="brand-logo" src="<?= $this->escapeHtmlAttr($brand['logo']) ?>" alt="">
+<?php else: ?>
       <img class="brand-mark" src="<?= $this->escapeHtmlAttr($icon) ?>" alt="" width="48" height="48">
+<?php endif ?>
+<?php if ($brand !== null): ?>
+      <p class="brand-name"><?= $this->escapeHtml($brand['name']) ?></p>
+<?php endif ?>
       <h1><?= $this->escapeHtml($heading) ?></h1>
 <?= $this->placeholder('subtitle') ?>
     </header>

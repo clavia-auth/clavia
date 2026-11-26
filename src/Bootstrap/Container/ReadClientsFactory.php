@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Management\Clients\ReadClients;
+use Clavia\Domain\Client\ClientLogoRepository;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\Registration\ClientRegistrationRepository;
 use Psr\Container\ContainerInterface;
@@ -25,6 +26,9 @@ final class ReadClientsFactory
         /** @var ClientRegistrationRepository $registrations */
         $registrations = $container->get(ClientRegistrationRepository::class);
 
-        return new ReadClients($clients, $registrations);
+        /** @var ClientLogoRepository $logos */
+        $logos = $container->get(ClientLogoRepository::class);
+
+        return new ReadClients($clients, $registrations, $logos);
     }
 }

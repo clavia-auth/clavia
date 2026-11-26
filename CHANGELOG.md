@@ -8,6 +8,12 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ### Added
 
+- **Branding per application** (#25): an application's logo, name and accent colour on the sign-in
+  pages of its requests. Set through the Management API: `accent_color` on a client, and
+  `GET | PUT | DELETE /api/v1/clients/{client_id}/logo` (PNG, JPEG or WebP, 16 to 1024 pixels a side, at
+  most 256 KiB; never SVG). The pages load both from the sign-in origin, so their security policy is
+  unchanged. Migration `0050_client_branding`.
+
 - **Every sign-in page in French** (#182): sign-up, verification and reset, second factor and its
   settings, passkeys (their dates too), consent, device approval, passwordless, sign-out, and the SAML
   and external sign-in refusals. The standard OpenID Connect scopes are worded in the person's language;

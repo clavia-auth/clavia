@@ -14,15 +14,14 @@ namespace Clavia\Application\Authentication;
 use Clavia\Application\Port\ConsentStateStore;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Application\Port\MfaChallengeStore;
-use Clavia\Domain\OAuth2\UiLocales;
 
 /**
- * The languages the request a page serves asked for (`ui_locales`, docs/design/
- * translated-sign-in-pages.md §5.2): whatever holds that request, a login state or a pending consent by
- * the handle the page carries, or the second-factor challenge its cookie names. Read only: nothing is
- * claimed, and a handle that is unknown, spent or someone else's simply holds no languages.
+ * The authorization request a page serves (docs/design/translated-sign-in-pages.md §5.2, and #25): whatever
+ * holds it, a login state or a pending consent by the handle the page carries, or the second-factor
+ * challenge its cookie names. Its languages choose the page's language; its application, the page's look.
+ * Read only: nothing is claimed, and a handle that is unknown, spent or someone else's holds nothing.
  */
-final readonly class HeldLanguages
+final readonly class HeldRequests
 {
     public function __construct(
         private LoginStateStore $loginStates,
@@ -38,17 +37,24 @@ final readonly class HeldLanguages
     public function __invoke(
         #[\SensitiveParameter] ?string $handle,
         #[\SensitiveParameter] ?string $challenge,
-    ): UiLocales {
+    ): HeldRequest {
         if ($handle !== null && $handle !== '') {
-            $held = $this->loginStates->get($handle)?->uiLocales ?? $this->consentStates->find($handle)?->uiLocales;
-            if ($held !== null && ! $held->isEmpty()) {
-                return $held;
+            $state = $this->loginStates->get($handle);
+            if ($state !== null) {
+                return new HeldRequest($state->uiLocales, $state->clientId);
+            }
+            $consent = $this->consentStates->find($handle);
+            if ($consent !== null) {
+                return new HeldRequest($consent->uiLocales, $consent->clientId, $consent->userId);
             }
         }
         if ($challenge !== null && $challenge !== '') {
-            return $this->challenges->find($challenge)?->uiLocales ?? UiLocales::none();
+            $pending = $this->challenges->find($challenge);
+            if ($pending !== null) {
+                return new HeldRequest($pending->uiLocales, $pending->clientId);
+            }
         }
 
-        return UiLocales::none();
+        return HeldRequest::none();
     }
 }

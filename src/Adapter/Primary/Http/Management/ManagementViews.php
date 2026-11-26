@@ -120,7 +120,7 @@ final class ManagementViews
      */
     public static function client(DescribedClient $described): array
     {
-        return self::clientOf($described->client, $described->registration);
+        return self::clientOf($described->client, $described->registration, $described->logoVersion);
     }
 
     /**
@@ -134,8 +134,11 @@ final class ManagementViews
     /**
      * @return array<string, mixed>
      */
-    private static function clientOf(Client $client, ?ClientRegistration $registration): array
-    {
+    private static function clientOf(
+        Client $client,
+        ?ClientRegistration $registration,
+        ?string $logoVersion = null,
+    ): array {
         return [
             'client_id' => $client->id->value,
             'name' => $client->name,
@@ -162,6 +165,9 @@ final class ManagementViews
             'mfa_policy' => $client->mfaPolicy->value,
             'require_pushed_authorization_requests' => $client->requiresPushedAuthorizationRequests,
             'dpop_bound_access_tokens' => $client->requiresDpop,
+            // Branding on the sign-in pages (#25): the logo is read at GET …/logo, named by its version.
+            'accent_color' => $client->accentColor?->hex,
+            'logo_version' => $logoVersion,
             // RFC 7591: which initial access token let it in, and when; null for the operator's own.
             'claims' => array_map(
                 static fn (ClaimMapping $mapping): array => $mapping->toArray(),

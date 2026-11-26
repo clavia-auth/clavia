@@ -9,6 +9,7 @@
 
 declare(strict_types=1);
 
+use Clavia\Adapter\Primary\Http\Auth\BrandingHandler;
 use Clavia\Adapter\Primary\Http\Auth\ConsentHandler;
 use Clavia\Adapter\Primary\Http\Auth\DeviceHandler;
 use Clavia\Adapter\Primary\Http\Auth\ExternalSignInCallbackHandler;
@@ -36,6 +37,7 @@ use Clavia\Adapter\Primary\Http\Auth\VerifyEmailHandler;
 use Clavia\Adapter\Primary\Http\Management\AuditEventsHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientConnectionsHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientHandler;
+use Clavia\Adapter\Primary\Http\Management\ClientLogoHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientsHandler;
 use Clavia\Adapter\Primary\Http\Management\ConnectionHandler;
 use Clavia\Adapter\Primary\Http\Management\ConnectionMetadataRefreshHandler;
@@ -165,6 +167,8 @@ return static function (Application $app, ContainerInterface $container): void {
     $app->post('/auth/logout', LogoutHandler::class, 'auth.logout');
     $app->post('/auth/theme', ThemeHandler::class, 'auth.theme');
     $app->post('/auth/language', LanguageHandler::class, 'auth.language');
+    // An application's logo and colour on its sign-in pages (#25), from this origin.
+    $app->get('/auth/branding/{client_id}/{file:logo|style\.css}', BrandingHandler::class, 'auth.branding');
     // The second step of a sign-in, and the account holder's own two-factor settings.
     $app->route('/auth/mfa', MfaChallengeHandler::class, $getAndPost, 'auth.mfa');
     if ($settings->passkeysEnabled) {
@@ -287,6 +291,12 @@ return static function (Application $app, ContainerInterface $container): void {
             RequestMethodInterface::METHOD_DELETE,
         ],
         'api.client',
+    );
+    $app->route(
+        '/api/v1/clients/{client_id}/logo',
+        $management(ClientLogoHandler::class),
+        [RequestMethodInterface::METHOD_GET, RequestMethodInterface::METHOD_PUT, RequestMethodInterface::METHOD_DELETE],
+        'api.client.logo',
     );
     $app->post(
         '/api/v1/clients/{client_id}/rotate-secret',

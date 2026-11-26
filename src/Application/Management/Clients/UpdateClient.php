@@ -14,6 +14,7 @@ namespace Clavia\Application\Management\Clients;
 use Clavia\Application\Management\NotFound;
 use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\Authentication\MfaPolicy;
+use Clavia\Domain\Client\AccentColor;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
@@ -82,6 +83,11 @@ final readonly class UpdateClient
         if ($changes->claims !== null) {
             $updated = $updated->withClaims($changes->claims);
         }
+        if ($changes->changesAccentColor) {
+            $updated = $updated->withAccentColor(
+                $changes->accentColor === null ? null : AccentColor::fromString($changes->accentColor),
+            );
+        }
         $this->clients->save($updated);
         $this->events->dispatch(new ClientChanged($updated->id, self::fields($changes)));
 
@@ -109,6 +115,7 @@ final readonly class UpdateClient
             'require_pushed_authorization_requests' => $changes->requirePushedAuthorizationRequests !== null,
             'dpop_bound_access_tokens' => $changes->requireDpop !== null,
             'claims' => $changes->claims !== null,
+            'accent_color' => $changes->changesAccentColor,
         ]));
     }
 }

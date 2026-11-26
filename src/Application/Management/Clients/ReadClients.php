@@ -14,6 +14,7 @@ namespace Clavia\Application\Management\Clients;
 use Clavia\Application\Management\NotFound;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientId;
+use Clavia\Domain\Client\ClientLogoRepository;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\Registration\ClientRegistration;
 use Clavia\Domain\Client\Registration\ClientRegistrationRepository;
@@ -29,6 +30,7 @@ final readonly class ReadClients
     public function __construct(
         private ClientRepository $clients,
         private ClientRegistrationRepository $registrations,
+        private ClientLogoRepository $logos,
     ) {
     }
 
@@ -45,11 +47,13 @@ final readonly class ReadClients
         foreach ($this->registrations->ofClients($ids) as $registration) {
             $registrations[$registration->clientId->value] = $registration;
         }
+        $logos = $this->logos->versionsOf($ids);
 
         return $page->map(
             static fn (Client $client): DescribedClient => new DescribedClient(
                 $client,
                 $registrations[$client->id->value] ?? null,
+                $logos[$client->id->value] ?? null,
             ),
         );
     }
@@ -64,7 +68,11 @@ final readonly class ReadClients
 
     public function describe(Client $client): DescribedClient
     {
-        return new DescribedClient($client, $this->registrations->find($client->id));
+        return new DescribedClient(
+            $client,
+            $this->registrations->find($client->id),
+            $this->logos->versionOf($client->id),
+        );
     }
 
     /** The registration of a client, when it registered itself. */

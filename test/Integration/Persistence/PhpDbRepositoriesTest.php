@@ -11,6 +11,9 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Integration\Persistence;
 
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientLogoRepository;
+use Clavia\Domain\Client\ClientLogoRepository;
+use ClaviaTest\Support\Contract\ClientLogoRepositoryContract;
 use ClaviaTest\Support\Contract\ClientRegistrationRepositoryContract;
 use ClaviaTest\Support\Contract\InitialAccessTokenRepositoryContract;
 use ClaviaTest\Support\Contract\ProvisionedAccountRepositoryContract;
@@ -106,6 +109,7 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
 {
     use UserRepositoryContract;
     use ClientRepositoryContract;
+    use ClientLogoRepositoryContract;
     use AuthorizationCodeRepositoryContract;
     use ResourceServerRepositoryContract;
     use MfaRepositoriesContract;
@@ -209,6 +213,12 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
             TestStorage::database(),
             new PhpDbTransactionManager(TestStorage::database()),
         );
+    }
+
+    #[\Override]
+    protected function clientLogos(): ClientLogoRepository
+    {
+        return new PhpDbClientLogoRepository(TestStorage::database());
     }
 
     #[\Override]

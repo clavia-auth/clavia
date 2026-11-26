@@ -66,6 +66,7 @@ final readonly class ClientsHandler implements RequestHandlerInterface
             $body->string('mfa_policy') ?? 'optional',
             $body->bool('require_pushed_authorization_requests') ?? false,
             $body->bool('dpop_bound_access_tokens') ?? false,
+            $body->string('accent_color'),
         ));
 
         return $this->responder->created(
