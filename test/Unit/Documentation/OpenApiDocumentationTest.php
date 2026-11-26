@@ -9,17 +9,19 @@
 
 declare(strict_types=1);
 
-namespace ClaviaTest\Unit\Adapter\Primary\Http\Management;
+namespace ClaviaTest\Unit\Documentation;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Yaml\Yaml;
 
 /**
- * `docs/openapi/management-api.yaml`, read as the documentation it also is: a rendered reference
- * (Scalar, Redoc) builds its navigation from each operation's `summary` and each tag's
- * `x-displayName`, so those stay short labels, and the detail lives in `description`.
+ * Each OpenAPI document (`docs/openapi`: the Management API's, the authorization server's) read as the
+ * documentation it also is: a rendered reference (Scalar, Redoc) builds its navigation from each
+ * operation's `summary` and each tag's `x-displayName`, so those stay short labels, and the detail
+ * lives in `description`.
  */
-final class ManagementDocumentationTest extends TestCase
+final class OpenApiDocumentationTest extends TestCase
 {
     /** A label is a verb and its object: a handful of words fits a sidebar. */
     private const int MAX_SUMMARY_WORDS = 6;
@@ -28,12 +30,13 @@ final class ManagementDocumentationTest extends TestCase
     /** Words in lower case after the first, but for an acronym (`API`, `MFA`), plural or not. */
     private const string LABEL = "/^[A-Z][a-z]*(?: (?:[a-z'’]+|[A-Z]{2,}s?))*$/D";
 
-    /** @var array<array-key, mixed>|null */
-    private static ?array $document = null;
+    /** @var array<string, array<array-key, mixed>> By path. */
+    private static array $documents = [];
 
-    public function testEverySummaryIsAShortLabel(): void
+    #[DataProvider('documents')]
+    public function testEverySummaryIsAShortLabel(string $path): void
     {
-        foreach (self::operations() as $name => $operation) {
+        foreach (self::operations($path) as $name => $operation) {
             $summary = $operation['summary'] ?? null;
             self::assertIsString($summary, $name . ' has no summary.');
             self::assertLessThanOrEqual(self::MAX_SUMMARY_LENGTH, strlen($summary), $name . ': ' . $summary);
@@ -43,9 +46,10 @@ final class ManagementDocumentationTest extends TestCase
         }
     }
 
-    public function testEveryTagIsNamedForTheNavigationAndUsed(): void
+    #[DataProvider('documents')]
+    public function testEveryTagIsNamedForTheNavigationAndUsed(string $path): void
     {
-        $tags = self::document()['tags'] ?? null;
+        $tags = self::document($path)['tags'] ?? null;
         self::assertIsArray($tags);
         $declared = [];
         foreach ($tags as $tag) {
@@ -57,7 +61,7 @@ final class ManagementDocumentationTest extends TestCase
         }
 
         $used = [];
-        foreach (self::operations() as $name => $operation) {
+        foreach (self::operations($path) as $name => $operation) {
             $operationTags = $operation['tags'] ?? null;
             self::assertIsArray($operationTags, $name);
             self::assertCount(1, $operationTags, $name . ' belongs in one place of the navigation.');
@@ -71,9 +75,9 @@ final class ManagementDocumentationTest extends TestCase
     }
 
     /** @return array<string, array<array-key, mixed>> Operations by `METHOD path`. */
-    private static function operations(): array
+    private static function operations(string $path): array
     {
-        $paths = self::document()['paths'] ?? null;
+        $paths = self::document($path)['paths'] ?? null;
         self::assertIsArray($paths);
         $operations = [];
         foreach ($paths as $path => $item) {
@@ -89,16 +93,23 @@ final class ManagementDocumentationTest extends TestCase
         return $operations;
     }
 
-    /** @return array<array-key, mixed> */
-    private static function document(): array
+    /** @return iterable<string, array{string}> */
+    public static function documents(): iterable
     {
-        if (self::$document === null) {
+        yield 'the Management API' => [__DIR__ . '/../../../docs/openapi/management-api.yaml'];
+        yield 'the authorization server' => [__DIR__ . '/../../../docs/openapi/authorization-server.yaml'];
+    }
+
+    /** @return array<array-key, mixed> */
+    private static function document(string $path): array
+    {
+        if (! isset(self::$documents[$path])) {
             /** @var mixed $parsed */
-            $parsed = Yaml::parseFile(__DIR__ . '/../../../../../../docs/openapi/management-api.yaml');
+            $parsed = Yaml::parseFile($path);
             self::assertIsArray($parsed);
-            self::$document = $parsed;
+            self::$documents[$path] = $parsed;
         }
 
-        return self::$document;
+        return self::$documents[$path];
     }
 }

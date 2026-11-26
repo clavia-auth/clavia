@@ -813,9 +813,9 @@ collection small by nature (an account's roles) is a plain array. Acceptance tes
 response against the document (`ManagementFixtures::api()`).
 
 The document is also the published reference, so it reads as one: each `summary` is a short label
-and each tag has an `x-displayName` (`ManagementDocumentationTest`); each request body, success
+and each tag has an `x-displayName` (`OpenApiDocumentationTest`, for every document in `docs/openapi`); each request body, success
 response and shared refusal has an example, named in `components/examples` and reused across
-operations (one cast: Ada, Acme Reports, the Reports API), and `ManagementExamplesTest` validates
+operations (one cast: Ada, Acme Reports, the Reports API), and `OpenApiExamplesTest` validates
 every example against its schema with this validator, so none drifts from the contract. Example
 secrets say they are not real. `info.version` is the API's own version (`1`, the `v1` of its
 paths), never the server release. The Docs workflow publishes the reference (`docs/site/`, Scalar
@@ -833,8 +833,8 @@ change to what a guide describes changes the guide.
 The validator is Clavia's own (`Adapter\Primary\Http\OpenApi`). What it cannot enforce, it
 refuses at load (unknown keywords, OpenAPI 3.1 forms, external references, unsupported parameter
 styles). A body is JSON; or a request's form (`application/x-www-form-urlencoded`, `FormBody`, #169),
-read as named strings, so only an `object` of `type: string` properties, or `allOf`/`anyOf`/`oneOf`
-of such, may describe one; or opaque bytes, `{type: string, format: binary}`. Any other media type
+read as named strings, so only an `object` of `type: string` properties (or `allOf` of strings, a
+reference with its description), or `allOf`/`anyOf`/`oneOf` of such objects, may describe one; or opaque bytes, `{type: string, format: binary}`. Any other media type
 is refused at load. It reports every violation, never repeats a value, coerces exactly (`"02"` is
 not an integer), and is strict where the specification is loose (undescribed query parameters, a
 body sent to an operation without one, a single value or a form field sent twice).
@@ -1325,6 +1325,10 @@ Three suites, three base classes, all under `test/`:
   `OidcFixtures` (`completeFlow`, `verifiedIdToken` checked against the JWKS fetched over HTTP),
   `MachineFixtures`, `ManagementFixtures` (`adminToken()`, `api()`, with every response checked
   against the OpenAPI document), `TestSigningKeys`, `Clients`, `Audits`, `BackChannelLogouts`.
+- **The authorization server's document** (`docs/openapi/authorization-server.yaml`, #93): every
+  acceptance request to `auth.*` that matches one of its operations has its response checked against
+  it (`AuthorizationServerContract`, from `request()`); `AuthorizationServerCoverageTest` keeps its
+  operations and the routes the same set. It describes, never gates: requests are not checked.
 - **Use cases** take `new InMemoryDomainEvents()` and assert on `ofType()`.
 - **Conformance**: the OpenID Foundation suite passes the Config OP plan and, but for one test
   OAuth 2.1 forbids passing (a code flow without a nonce or PKCE), the Basic OP plan.

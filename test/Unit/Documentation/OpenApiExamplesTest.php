@@ -9,7 +9,7 @@
 
 declare(strict_types=1);
 
-namespace ClaviaTest\Unit\Adapter\Primary\Http\Management;
+namespace ClaviaTest\Unit\Documentation;
 
 use Clavia\Adapter\Primary\Http\OpenApi\Content;
 use Clavia\Adapter\Primary\Http\OpenApi\Document;
@@ -17,26 +17,34 @@ use Clavia\Adapter\Primary\Http\OpenApi\MediaType;
 use Clavia\Adapter\Primary\Http\OpenApi\Schema\Direction;
 use Clavia\Adapter\Primary\Http\OpenApi\Schema\SchemaValidator;
 use Clavia\Adapter\Primary\Http\OpenApi\Schema\SchemaViolation;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Symfony\Component\Yaml\Yaml;
 
 /**
- * The examples of `docs/openapi/management-api.yaml`, held to the contract they illustrate: every
- * one is validated against its schema by Clavia's own validator, in its direction, so an example
- * cannot drift from what the API takes and answers. And the reference has one wherever a reader
- * looks for one: each request body, each success response, each shared refusal.
+ * The examples of each OpenAPI document (`docs/openapi`: the Management API's, the authorization
+ * server's), held to the contract they illustrate: every one is validated against its schema by Clavia's
+ * own validator, in its direction, so an example cannot drift from what the API takes and answers. And
+ * the reference has one wherever a reader looks for one: each request body, each success response, each
+ * shared refusal.
  */
-final class ManagementExamplesTest extends TestCase
+final class OpenApiExamplesTest extends TestCase
 {
-    private const string PATH = __DIR__ . '/../../../../../../docs/openapi/management-api.yaml';
     private const string EXAMPLE_REF = '#/components/examples/';
 
-    private static ?Document $document = null;
-    private static ?stdClass $raw = null;
+    /** The document the running test reads, set by each test from its data. */
+    private static string $path = '';
+    /** @var array<string, Document> */
+    private static array $documents = [];
+    /** @var array<string, stdClass> */
+    private static array $raws = [];
 
-    public function testEveryExampleMatchesItsSchema(): void
+    /** @param positive-int $atLeast How many examples the document has, at the least. */
+    #[DataProvider('documentsAndTheirExamples')]
+    public function testEveryExampleMatchesItsSchema(string $path, int $atLeast): void
     {
+        self::$path = $path;
         $checked = 0;
         foreach (self::document()->operations() as $operation) {
             $raw = self::operation($operation->method, $operation->path->template);
@@ -60,11 +68,13 @@ final class ManagementExamplesTest extends TestCase
             }
         }
 
-        self::assertGreaterThan(50, $checked, 'Hardly any example was checked.');
+        self::assertGreaterThanOrEqual($atLeast, $checked, 'Hardly any example was checked.');
     }
 
-    public function testEveryBodyAndSuccessHasAnExample(): void
+    #[DataProvider('documents')]
+    public function testEveryBodyAndSuccessHasAnExample(string $path): void
     {
+        self::$path = $path;
         foreach (self::document()->operations() as $operation) {
             $raw = self::operation($operation->method, $operation->path->template);
             if ($operation->requestBody !== null) {
@@ -88,9 +98,11 @@ final class ManagementExamplesTest extends TestCase
         }
     }
 
-    public function testEveryNamedExampleIsUsed(): void
+    #[DataProvider('documents')]
+    public function testEveryNamedExampleIsUsed(string $path): void
     {
-        $yaml = (string) file_get_contents(self::PATH);
+        self::$path = $path;
+        $yaml = (string) file_get_contents($path);
         foreach (array_keys(self::children(self::object(self::member(self::components(), 'examples')))) as $name) {
             self::assertStringContainsString(
                 "'" . self::EXAMPLE_REF . $name . "'",
@@ -114,7 +126,7 @@ final class ManagementExamplesTest extends TestCase
         foreach (self::children(self::object($node->content)) as $type => $mediaType) {
             $entry = $content->for(MediaType::parse($type) ?? self::fail('Unreadable ' . $type));
             self::assertNotNull($entry, $where . ' ' . $type);
-            if (! $entry[0]->isJson()) {
+            if (! $entry[0]->isJson() && ! $entry[0]->isForm()) {
                 // Opaque bytes (NDJSON, say): the example is the text itself.
                 /** @var mixed $value */
                 foreach (self::values($mediaType) as $name => $value) {
@@ -236,20 +248,35 @@ final class ManagementExamplesTest extends TestCase
         return $node;
     }
 
+    /** @return iterable<string, array{string}> */
+    public static function documents(): iterable
+    {
+        foreach (self::documentsAndTheirExamples() as $name => [$path]) {
+            yield $name => [$path];
+        }
+    }
+
+    /** @return iterable<string, array{string, positive-int}> */
+    public static function documentsAndTheirExamples(): iterable
+    {
+        yield 'the Management API' => [__DIR__ . '/../../../docs/openapi/management-api.yaml', 50];
+        yield 'the authorization server' => [__DIR__ . '/../../../docs/openapi/authorization-server.yaml', 20];
+    }
+
     private static function document(): Document
     {
-        return self::$document ??= Document::fromYamlFile(self::PATH);
+        return self::$documents[self::$path] ??= Document::fromYamlFile(self::$path);
     }
 
     /** The document as JSON would carry it: objects as objects, so an empty `{}` stays one. */
     private static function raw(): stdClass
     {
-        if (self::$raw === null) {
+        if (! isset(self::$raws[self::$path])) {
             /** @var mixed $parsed */
-            $parsed = Yaml::parseFile(self::PATH, Yaml::PARSE_OBJECT_FOR_MAP);
-            self::$raw = self::object($parsed);
+            $parsed = Yaml::parseFile(self::$path, Yaml::PARSE_OBJECT_FOR_MAP);
+            self::$raws[self::$path] = self::object($parsed);
         }
 
-        return self::$raw;
+        return self::$raws[self::$path];
     }
 }

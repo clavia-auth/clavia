@@ -1,0 +1,1065 @@
+openapi: 3.0.3
+info:
+  title: Clavia authorization server
+  # This document's own version; the server release is shown beside it on the published reference.
+  version: '1'
+  license:
+    name: BSD-3-Clause
+    url: https://opensource.org/licenses/BSD-3-Clause
+  description: |
+    The endpoints an application or an API calls on `auth.{domain}`: OAuth 2.1 and OpenID Connect,
+    as Clavia implements them. The flows themselves (how PKCE is verified, what a grant means, how a
+    DPoP proof is built) are the RFCs'; each operation links the section it follows, and says what is
+    Clavia's: which client authentication, which grants, which refusals, which limits.
+
+    **Bodies are forms.** Every request to these endpoints is `application/x-www-form-urlencoded`
+    (RFC 6749 §3.2), and every answer JSON. A parameter sent twice is refused (RFC 6749 §3.1); one the
+    endpoint does not know is ignored.
+
+    **Clients authenticate one way per request**, the way they were registered
+    (`token_endpoint_auth_method`):
+    - `client_secret_basic`: HTTP Basic, the client id and secret, each form-encoded first (RFC 6749 §2.3.1);
+    - `client_secret_post`: `client_id` and `client_secret` in the body;
+    - `none`: a public client names itself with `client_id` alone, and proves itself with PKCE or DPoP.
+
+    Methods are never tried in turn, and mixing them is refused. Every failure is the same `401
+    invalid_client`.
+
+    **Failures are limited.** Past `CLAVIA_TOKEN_MAX_FAILURES` failed client authentications or
+    refused grants from one address (and, once it proved itself, for one client) within
+    `CLAVIA_TOKEN_FAILURE_WINDOW`, these endpoints answer `429` before looking at the request.
+
+    **Refusals** are RFC 6749 §5.2 error documents: `error`, and `error_description` for a person
+    reading logs. Branch on `error`, never on the description. No refusal repeats a secret or the
+    value at fault, and nothing these endpoints answer may be cached (`Cache-Control: no-store`).
+
+    This document describes the server; it does not drive it. The acceptance suite checks every
+    answer of these endpoints against it.
+
+servers:
+  - url: /
+
+tags:
+  - name: tokens
+    x-displayName: Tokens
+    description: Getting tokens (RFC 6749 §3.2), and asking ahead for an authorization (RFC 9126).
+  - name: token-management
+    x-displayName: Token management
+    description: What a client or an API learns about a token, or gives back (RFC 7662, RFC 7009).
+  - name: devices
+    x-displayName: Devices
+    description: Signing in on a device with no browser, or no keyboard (RFC 8628).
+
+paths:
+  /oauth2/token:
+    post:
+      tags: [tokens]
+      summary: Get a token
+      operationId: getToken
+      description: |
+        Exchanges a grant for tokens (RFC 6749 §3.2): an authorization code, a refresh token, the
+        client's own credentials, or a device code. The body depends on `grant_type`; the client
+        authenticates as it was registered, and may only use the grants it holds.
+
+        - **Authorization code** (RFC 6749 §4.1.3, OAuth 2.1 §4.1.3): the code is spent before its
+          `redirect_uri` and `code_verifier` are checked, so a wrong guess burns it. A code redeemed
+          twice revokes everything it issued. With `openid` in its scope, the answer carries an ID token.
+        - **Refresh token** (RFC 6749 §6): every refresh spends the token and returns a new one; a
+          spent token presented again revokes its whole family. `scope` may narrow, never widen.
+        - **Client credentials** (RFC 6749 §4.4): a confidential client asking as itself, for one API
+          named in `audience`, within its grant there. No refresh token.
+        - **Device code** (RFC 8628 §3.4): polled every `interval` seconds until the person decides.
+
+        **DPoP** (RFC 9449): with a `DPoP` header holding a proof, the tokens are bound to its key
+        (`token_type: DPoP`). The server asks for its nonce first (`use_dpop_nonce`, with `DPoP-Nonce`),
+        and sends the next one with each answer. A client registered with `dpop_bound_access_tokens`
+        must send a proof.
+      security:
+        - clientSecretBasic: []
+        - {}
+      parameters:
+        - $ref: '#/components/parameters/DPoP'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/AuthorizationCodeGrant'
+                - $ref: '#/components/schemas/RefreshTokenGrant'
+                - $ref: '#/components/schemas/ClientCredentialsGrant'
+                - $ref: '#/components/schemas/DeviceCodeGrant'
+            examples:
+              AuthorizationCodeGrant:
+                $ref: '#/components/examples/AuthorizationCodeGrant'
+              RefreshTokenGrant:
+                $ref: '#/components/examples/RefreshTokenGrant'
+              ClientCredentialsGrant:
+                $ref: '#/components/examples/ClientCredentialsGrant'
+              DeviceCodeGrant:
+                $ref: '#/components/examples/DeviceCodeGrant'
+      responses:
+        '200':
+          description: The tokens.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+            Pragma:
+              $ref: '#/components/headers/Pragma'
+            DPoP-Nonce:
+              $ref: '#/components/headers/DPoPNonce'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+              examples:
+                CodeTokens:
+                  $ref: '#/components/examples/CodeTokens'
+                MachineToken:
+                  $ref: '#/components/examples/MachineToken'
+        '400':
+          description: |
+            The request is refused (RFC 6749 §5.2): `invalid_request` (a parameter missing, repeated or
+            malformed), `invalid_grant` (a code, refresh token or device code that is unknown, spent,
+            expired, someone else's, or whose `redirect_uri` or `code_verifier` does not match),
+            `unauthorized_client` (a grant the client does not hold), `unsupported_grant_type`,
+            `invalid_scope` (a scope beyond the client's grant, or a wider one at a refresh),
+            `invalid_target` (an unknown `audience`), `access_denied`, the device flow's
+            `authorization_pending`, `slow_down` and `expired_token` (RFC 8628 §3.5), and DPoP's
+            `invalid_dpop_proof` and `use_dpop_nonce` (with `DPoP-Nonce`).
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+            Pragma:
+              $ref: '#/components/headers/Pragma'
+            DPoP-Nonce:
+              $ref: '#/components/headers/DPoPNonce'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenError'
+              examples:
+                InvalidGrant:
+                  $ref: '#/components/examples/InvalidGrant'
+                AuthorizationPending:
+                  $ref: '#/components/examples/AuthorizationPending'
+                UseDpopNonce:
+                  $ref: '#/components/examples/UseDpopNonce'
+        '401':
+          $ref: '#/components/responses/InvalidClient'
+        '429':
+          $ref: '#/components/responses/TooManyFailures'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /oauth2/par:
+    post:
+      tags: [tokens]
+      summary: Push an authorization request
+      operationId: pushAuthorizationRequest
+      description: |
+        Sends an authorization request over the back channel (RFC 9126 §2.1) and gets a handle for it,
+        `request_uri`, to send the browser to `/oauth2/authorize` with instead (`client_id` and
+        `request_uri` only). The parameters never reach the address bar, and the request is checked
+        here, before anyone signs in.
+
+        The body is an authorization request, held to the authorization endpoint's rules, from the
+        client that will use it, authenticated as at the token endpoint. A `request_uri` inside it is
+        refused. The handle is good for `expires_in` seconds (`CLAVIA_PAR_LIFETIME`) and yields one code.
+
+        With a `DPoP` header, the code it yields is bound to the proof's key; a `dpop_jkt` naming
+        another key is `invalid_dpop_proof`.
+      security:
+        - clientSecretBasic: []
+        - {}
+      parameters:
+        - $ref: '#/components/parameters/DPoP'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PushedAuthorizationRequest'
+            examples:
+              PushedAuthorizationRequest:
+                $ref: '#/components/examples/PushedAuthorizationRequest'
+      responses:
+        '201':
+          description: The request is held behind `request_uri`.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+            Pragma:
+              $ref: '#/components/headers/Pragma'
+            DPoP-Nonce:
+              $ref: '#/components/headers/DPoPNonce'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushedAuthorizationResponse'
+              examples:
+                PushedAuthorizationResponse:
+                  $ref: '#/components/examples/PushedAuthorizationResponse'
+        '400':
+          description: |
+            The request is refused (RFC 9126 §2.3, RFC 6749 §4.1.2.1): `invalid_request`,
+            `unauthorized_client`, `unsupported_response_type`, `invalid_scope`, `invalid_target`,
+            `access_denied` (a third-party application asking for a system API), `request_not_supported`
+            and `request_uri_not_supported` (request objects), and DPoP's `invalid_dpop_proof` and
+            `use_dpop_nonce` (with `DPoP-Nonce`).
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+            Pragma:
+              $ref: '#/components/headers/Pragma'
+            DPoP-Nonce:
+              $ref: '#/components/headers/DPoPNonce'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushedAuthorizationError'
+              examples:
+                InvalidRequest:
+                  $ref: '#/components/examples/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/InvalidClient'
+        '429':
+          $ref: '#/components/responses/TooManyFailures'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /oauth2/introspect:
+    post:
+      tags: [token-management]
+      summary: Introspect a token
+      operationId: introspectToken
+      description: |
+        Tells an API whether a token is live, and what it carries (RFC 7662 §2). For a JWT access
+        token too: a JWT and its introspection agree when issued, and introspection then follows
+        revocation and later changes.
+
+        Only a client authenticating **with a secret** may ask, and only about a token it has a stake
+        in: one issued to it, or one for an API it holds a grant on. Everything else (an unknown,
+        expired or revoked token, or somebody else's) is `{"active": false}`, never an error.
+      security:
+        - clientSecretBasic: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenReference'
+            examples:
+              TokenReference:
+                $ref: '#/components/examples/TokenReference'
+      responses:
+        '200':
+          description: 'What the token is, or `active: false`.'
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+            Pragma:
+              $ref: '#/components/headers/Pragma'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Introspection'
+              examples:
+                ActiveToken:
+                  $ref: '#/components/examples/ActiveToken'
+                InactiveToken:
+                  $ref: '#/components/examples/InactiveToken'
+        '400':
+          description: |
+            The request is refused: `invalid_request` (no `token`, or a parameter repeated).
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+            Pragma:
+              $ref: '#/components/headers/Pragma'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenManagementError'
+              examples:
+                InvalidRequest:
+                  $ref: '#/components/examples/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/InvalidClient'
+        '429':
+          $ref: '#/components/responses/TooManyFailures'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /oauth2/revoke:
+    post:
+      tags: [token-management]
+      summary: Revoke a token
+      operationId: revokeToken
+      description: |
+        Gives back a token the client no longer needs (RFC 7009 §2.1). Any client may revoke a token
+        issued to it, a public one by its `client_id`. A refresh token takes its whole family along; an
+        access token goes alone (an API that validates a JWT on its own accepts it until it expires).
+
+        A token the server does not know is a quiet `200` (RFC 7009 §2.2). `token_type_hint` says where
+        to look first, never where to look only.
+      security:
+        - clientSecretBasic: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenReference'
+            examples:
+              TokenReference:
+                $ref: '#/components/examples/TokenReference'
+      responses:
+        '200':
+          description: Revoked, or unknown. No body.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+            Pragma:
+              $ref: '#/components/headers/Pragma'
+        '400':
+          description: |
+            The request is refused: `invalid_request` (no `token`, or a parameter repeated),
+            `invalid_grant` (a token issued to another client), `unsupported_token_type`.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+            Pragma:
+              $ref: '#/components/headers/Pragma'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenManagementError'
+              examples:
+                RevokedElsewhere:
+                  $ref: '#/components/examples/RevokedElsewhere'
+        '401':
+          $ref: '#/components/responses/InvalidClient'
+        '429':
+          $ref: '#/components/responses/TooManyFailures'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /oauth2/device/code:
+    post:
+      tags: [devices]
+      summary: Sign in a device
+      operationId: startDeviceAuthorization
+      description: |
+        Starts the device flow (RFC 8628 §3.1): the device shows `user_code` and `verification_uri`
+        (or a QR code of `verification_uri_complete`), the person approves on another screen, and
+        the device polls `/oauth2/token` with `device_code` every `interval` seconds.
+
+        The client must hold the device grant. The request is held to the authorization endpoint's
+        rules for `scope` and `audience`.
+      security:
+        - clientSecretBasic: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DeviceAuthorizationRequest'
+            examples:
+              DeviceAuthorizationRequest:
+                $ref: '#/components/examples/DeviceAuthorizationRequest'
+      responses:
+        '200':
+          description: The codes, and where the person goes.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+            Pragma:
+              $ref: '#/components/headers/Pragma'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceAuthorization'
+              examples:
+                DeviceAuthorization:
+                  $ref: '#/components/examples/DeviceAuthorization'
+        '400':
+          description: |
+            The request is refused: `invalid_request`, `unauthorized_client` (a client without the
+            device grant), `invalid_scope`, `invalid_target`, `access_denied`.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+            Pragma:
+              $ref: '#/components/headers/Pragma'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceAuthorizationError'
+              examples:
+                UnauthorizedClient:
+                  $ref: '#/components/examples/UnauthorizedClient'
+        '401':
+          $ref: '#/components/responses/InvalidClient'
+        '429':
+          $ref: '#/components/responses/TooManyFailures'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+components:
+  securitySchemes:
+    clientSecretBasic:
+      type: http
+      scheme: basic
+      description: |
+        `client_secret_basic` (RFC 6749 §2.3.1): the client id as the user name and the secret as the
+        password, each form-encoded before they are joined. A client registered for
+        `client_secret_post` or `none` sends no `Authorization` header: its `client_id` (and
+        `client_secret`) are body fields, and this requirement is then the empty one.
+
+  parameters:
+    DPoP:
+      name: DPoP
+      in: header
+      description: |
+        A DPoP proof (RFC 9449 §4): a JWT of type `dpop+jwt`, signed with ES256, EdDSA or RS256 by the
+        key the tokens are to be bound to, for this request's method and URL, at most a minute old,
+        and carrying the server's nonce. One proof per request, one header.
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
+
+  headers:
+    CacheControl:
+      description: Nothing these endpoints answer may be stored (RFC 6749 §5.1).
+      required: true
+      schema:
+        type: string
+        enum: [no-store]
+    Pragma:
+      description: For HTTP/1.0 caches (RFC 6749 §5.1).
+      required: true
+      schema:
+        type: string
+        enum: [no-cache]
+    DPoPNonce:
+      description: The nonce the client's next DPoP proof must carry (RFC 9449 §8).
+      schema:
+        type: string
+        minLength: 1
+    RetryAfter:
+      description: Seconds to wait before trying again.
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    BasicChallenge:
+      description: The client authentication scheme, and this server's realm, its issuer.
+      required: true
+      schema:
+        type: string
+        pattern: '^Basic realm="[^"]+"$'
+
+  responses:
+    InvalidClient:
+      description: |
+        The client did not authenticate (RFC 6749 §5.2): an unknown client, a wrong secret, a method
+        other than the one it registered, two methods at once, or none where one is needed. One
+        answer for every reason.
+      headers:
+        WWW-Authenticate:
+          $ref: '#/components/headers/BasicChallenge'
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+        Pragma:
+          $ref: '#/components/headers/Pragma'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/InvalidClientError'
+          examples:
+            InvalidClient:
+              $ref: '#/components/examples/InvalidClient'
+    TooManyFailures:
+      description: |
+        Too many failed requests from this address, or for this client (RFC 6585 §4). Nothing was
+        looked at; wait `Retry-After` seconds. RFC 6749 has no code for this at these endpoints: the
+        authorization endpoint's `temporarily_unavailable` says it.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+        Pragma:
+          $ref: '#/components/headers/Pragma'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/TemporarilyUnavailableError'
+          examples:
+            TooManyFailures:
+              $ref: '#/components/examples/TooManyFailures'
+    ServerError:
+      description: |
+        An unexpected failure, a signing failure among them (RFC 6749 §5.2 has no code for it). Nothing
+        was spent: retry. The server's log holds the details under `X-Error-Reference`. The body says
+        nothing more: `Internal Server Error` in plain text, or a page for a browser.
+      headers:
+        X-Error-Reference:
+          description: Twelve characters naming the failure in the server's log.
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9]{12}$'
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+      content:
+        text/plain:
+          schema:
+            type: string
+            format: binary
+          example: Internal Server Error
+        text/html:
+          schema:
+            type: string
+            format: binary
+
+  schemas:
+    ClientAuthentication:
+      description: |
+        The body's part of client authentication: `client_id` alone for a public client (`none`), with
+        `client_secret` for `client_secret_post`. A client using HTTP Basic sends neither.
+      type: object
+      properties:
+        client_id:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: The client's id. Required unless the client authenticates with HTTP Basic.
+        client_secret:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          writeOnly: true
+          description: The client's secret, for `client_secret_post` only.
+
+    Scope:
+      type: string
+      description: Space-separated scopes (RFC 6749 §3.3).
+      pattern: '^[\x21\x23-\x5B\x5D-\x7E]+( [\x21\x23-\x5B\x5D-\x7E]+)*$'
+
+    AuthorizationCodeGrant:
+      title: Authorization code
+      description: Redeems an authorization code (RFC 6749 §4.1.3, with PKCE, RFC 7636 §4.5).
+      allOf:
+        - $ref: '#/components/schemas/ClientAuthentication'
+        - type: object
+          required: [grant_type, code, redirect_uri]
+          properties:
+            grant_type:
+              type: string
+              enum: [authorization_code]
+            code:
+              type: string
+              minLength: 1
+              description: The code `/oauth2/authorize` sent to the redirect URI. Good once.
+            redirect_uri:
+              type: string
+              minLength: 1
+              description: The redirect URI of the authorization request, exactly.
+            code_verifier:
+              type: string
+              minLength: 43
+              maxLength: 128
+              pattern: '^[A-Za-z0-9._~-]+$'
+              writeOnly: true
+              description: |
+                The PKCE verifier whose S256 challenge the authorization request carried. Required
+                but for a confidential client registered with `require_pkce: false` that sent a
+                `nonce` instead (OAuth 2.1 §7.5.1).
+
+    RefreshTokenGrant:
+      title: Refresh token
+      description: Swaps a refresh token for new tokens (RFC 6749 §6).
+      allOf:
+        - $ref: '#/components/schemas/ClientAuthentication'
+        - type: object
+          required: [grant_type, refresh_token]
+          properties:
+            grant_type:
+              type: string
+              enum: [refresh_token]
+            refresh_token:
+              type: string
+              minLength: 1
+              writeOnly: true
+              description: The latest refresh token of the family. Spent by this request.
+            scope:
+              allOf:
+                - $ref: '#/components/schemas/Scope'
+              description: Fewer scopes than were authorized, for this access token only.
+
+    ClientCredentialsGrant:
+      title: Client credentials
+      description: A confidential client asks as itself (RFC 6749 §4.4).
+      allOf:
+        - $ref: '#/components/schemas/ClientAuthentication'
+        - type: object
+          required: [grant_type, audience]
+          properties:
+            grant_type:
+              type: string
+              enum: [client_credentials]
+            audience:
+              type: string
+              minLength: 1
+              description: The identifier of the API the token is for. Required.
+            scope:
+              allOf:
+                - $ref: '#/components/schemas/Scope'
+              description: |
+                Some of the client's grant on that API; the whole grant when left out. Beyond it is
+                `invalid_scope`, never narrowed. `openid` is refused.
+
+    DeviceCodeGrant:
+      title: Device code
+      description: Polls for the person's decision (RFC 8628 §3.4).
+      allOf:
+        - $ref: '#/components/schemas/ClientAuthentication'
+        - type: object
+          required: [grant_type, device_code]
+          properties:
+            grant_type:
+              type: string
+              enum: ['urn:ietf:params:oauth:grant-type:device_code']
+            device_code:
+              type: string
+              minLength: 1
+              writeOnly: true
+              description: The `device_code` `/oauth2/device/code` answered.
+
+    TokenResponse:
+      description: The tokens (RFC 6749 §5.1).
+      type: object
+      required: [access_token, token_type, expires_in]
+      properties:
+        access_token:
+          type: string
+          description: |
+            Opaque, or an RFC 9068 JWT (`typ: at+jwt`) when the API takes JWTs. Pass it on; don't
+            read it.
+        token_type:
+          type: string
+          enum: [Bearer, DPoP]
+          description: '`DPoP` when the token is bound to the key of the request''s proof.'
+        expires_in:
+          type: integer
+          minimum: 1
+          description: Seconds until the access token expires.
+        scope:
+          allOf:
+            - $ref: '#/components/schemas/Scope'
+          description: What the token carries, which may be less than was asked. Absent when none.
+        refresh_token:
+          type: string
+          description: |
+            For an authorization code or a refresh, when the client holds the refresh grant. Replaces
+            the one sent; the old one is spent.
+        id_token:
+          type: string
+          description: For an authorization code whose scope had `openid`. Never at a refresh.
+
+    PushedAuthorizationRequest:
+      description: |
+        An authorization request (RFC 6749 §4.1.1, OpenID Connect Core §3.1.2.1), as
+        `/oauth2/authorize` would take it, and the client's authentication.
+      allOf:
+        - $ref: '#/components/schemas/ClientAuthentication'
+        - type: object
+          required: [response_type, redirect_uri, code_challenge, code_challenge_method]
+          properties:
+            response_type:
+              type: string
+              enum: [code]
+            redirect_uri:
+              type: string
+              minLength: 1
+              description: One of the client's registered redirect URIs, exactly.
+            scope:
+              $ref: '#/components/schemas/Scope'
+            state:
+              type: string
+              description: Sent back unchanged with the code.
+            code_challenge:
+              type: string
+              minLength: 43
+              maxLength: 43
+              description: The base64url SHA-256 of the PKCE verifier.
+            code_challenge_method:
+              type: string
+              enum: [S256]
+            audience:
+              type: string
+              description: The identifier of the API whose permissions the scope may hold.
+            nonce:
+              type: string
+              description: Copied into the ID token (OpenID Connect Core §3.1.2.1).
+            prompt:
+              type: string
+              description: '`none`, `login`, `consent` or `select_account`, space-separated.'
+            max_age:
+              type: string
+              pattern: '^[0-9]+$'
+              description: Seconds since the person last signed in, at most.
+            acr_values:
+              type: string
+              description: The levels of authentication asked for, any one accepted.
+            dpop_jkt:
+              type: string
+              description: The thumbprint of the key the code is to be bound to (RFC 9449 §10).
+
+    PushedAuthorizationResponse:
+      type: object
+      additionalProperties: false
+      required: [request_uri, expires_in]
+      properties:
+        request_uri:
+          type: string
+          pattern: '^urn:ietf:params:oauth:request_uri:[A-Za-z0-9_-]+$'
+          description: The handle to send to `/oauth2/authorize`, with `client_id`.
+        expires_in:
+          type: integer
+          minimum: 1
+          description: Seconds the handle is good for.
+
+    TokenReference:
+      description: The token in question (RFC 7662 §2.1, RFC 7009 §2.1).
+      allOf:
+        - $ref: '#/components/schemas/ClientAuthentication'
+        - type: object
+          required: [token]
+          properties:
+            token:
+              type: string
+              minLength: 1
+              writeOnly: true
+            token_type_hint:
+              type: string
+              enum: [access_token, refresh_token]
+              description: Where to look first.
+
+    Introspection:
+      description: |
+        RFC 7662 §2.2. Inactive is `{"active": false}` and nothing else. An active token's custom
+        claims, configured on its API, follow the members below.
+      type: object
+      required: [active]
+      properties:
+        active:
+          type: boolean
+        client_id:
+          type: string
+        scope:
+          type: string
+        iss:
+          type: string
+        iat:
+          type: integer
+        exp:
+          type: integer
+        token_type:
+          type: string
+          enum: [Bearer, DPoP]
+        aud:
+          type: string
+          description: The API the token is for. Absent for a token for no API.
+        sub:
+          type: string
+          description: The person, or the client acting as itself.
+        username:
+          type: string
+          description: The person's address.
+        auth_time:
+          type: integer
+          description: When the person signed in (RFC 9470 §6.2).
+        acr:
+          type: string
+          description: The level of that sign-in, when it had more than one factor.
+        cnf:
+          type: object
+          additionalProperties: false
+          required: [jkt]
+          properties:
+            jkt:
+              type: string
+              description: The thumbprint of the key a DPoP-bound token is bound to (RFC 9449 §6.2).
+
+    DeviceAuthorizationRequest:
+      description: The device's request (RFC 8628 §3.1).
+      allOf:
+        - $ref: '#/components/schemas/ClientAuthentication'
+        - type: object
+          properties:
+            scope:
+              $ref: '#/components/schemas/Scope'
+            audience:
+              type: string
+              description: The identifier of the API whose permissions the scope may hold.
+
+    DeviceAuthorization:
+      type: object
+      additionalProperties: false
+      required: [device_code, user_code, verification_uri, verification_uri_complete, expires_in, interval]
+      properties:
+        device_code:
+          type: string
+          description: For the device to poll `/oauth2/token` with. Never shown.
+        user_code:
+          type: string
+          pattern: '^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$'
+          description: For the person to type; consonants only, so it spells nothing.
+        verification_uri:
+          type: string
+          description: Where the person goes to type it.
+        verification_uri_complete:
+          type: string
+          description: The same, with the code in it, for a QR code.
+        expires_in:
+          type: integer
+          minimum: 1
+        interval:
+          type: integer
+          minimum: 1
+          description: Seconds between polls; `slow_down` adds five for good.
+
+    TokenError:
+      allOf:
+        - $ref: '#/components/schemas/OAuthError'
+        - type: object
+          properties:
+            error:
+              type: string
+              enum:
+                - invalid_request
+                - invalid_grant
+                - unauthorized_client
+                - unsupported_grant_type
+                - invalid_scope
+                - invalid_target
+                - access_denied
+                - authorization_pending
+                - slow_down
+                - expired_token
+                - invalid_dpop_proof
+                - use_dpop_nonce
+
+    PushedAuthorizationError:
+      allOf:
+        - $ref: '#/components/schemas/OAuthError'
+        - type: object
+          properties:
+            error:
+              type: string
+              enum:
+                - invalid_request
+                - unauthorized_client
+                - unsupported_response_type
+                - invalid_scope
+                - invalid_target
+                - access_denied
+                - request_not_supported
+                - request_uri_not_supported
+                - invalid_dpop_proof
+                - use_dpop_nonce
+
+    TokenManagementError:
+      allOf:
+        - $ref: '#/components/schemas/OAuthError'
+        - type: object
+          properties:
+            error:
+              type: string
+              enum: [invalid_request, invalid_grant, unsupported_token_type]
+
+    DeviceAuthorizationError:
+      allOf:
+        - $ref: '#/components/schemas/OAuthError'
+        - type: object
+          properties:
+            error:
+              type: string
+              enum: [invalid_request, unauthorized_client, invalid_scope, invalid_target, access_denied]
+
+    InvalidClientError:
+      allOf:
+        - $ref: '#/components/schemas/OAuthError'
+        - type: object
+          properties:
+            error:
+              type: string
+              enum: [invalid_client]
+
+    TemporarilyUnavailableError:
+      allOf:
+        - $ref: '#/components/schemas/OAuthError'
+        - type: object
+          properties:
+            error:
+              type: string
+              enum: [temporarily_unavailable]
+
+    OAuthError:
+      description: An RFC 6749 §5.2 error document.
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: The code to branch on.
+        error_description:
+          type: string
+          description: For a person reading logs. Never repeats the value at fault.
+
+  examples:
+    AuthorizationCodeGrant:
+      summary: An authorization code, by a public client
+      value:
+        grant_type: authorization_code
+        client_id: "Xk7pQ2mN9vR4tL8wC3yB6hJ1dF5gS0aE"
+        code: "example-authorization-code-not-real-0000000"
+        redirect_uri: "https://reports.example.com/callback"
+        code_verifier: "example-pkce-verifier-not-real-000000000000000"
+    RefreshTokenGrant:
+      summary: A refresh, narrowed to one scope
+      value:
+        grant_type: refresh_token
+        refresh_token: "example-refresh-token-not-real-000000000000"
+        scope: "read:reports"
+    ClientCredentialsGrant:
+      summary: A machine token for the Reports API
+      value:
+        grant_type: client_credentials
+        audience: "https://api.example.com/reports"
+        scope: "read:reports"
+    DeviceCodeGrant:
+      summary: A device polling
+      value:
+        grant_type: "urn:ietf:params:oauth:grant-type:device_code"
+        client_id: "Xk7pQ2mN9vR4tL8wC3yB6hJ1dF5gS0aE"
+        device_code: "example-device-code-not-real-0000000000000"
+    CodeTokens:
+      summary: An OpenID Connect sign-in's tokens
+      value:
+        token_type: Bearer
+        access_token: "example-access-token-not-real-0000000000000"
+        expires_in: 3600
+        scope: "openid email read:reports"
+        refresh_token: "example-refresh-token-not-real-000000000000"
+        id_token: "example.id-token.not-real"
+    MachineToken:
+      summary: A DPoP-bound machine token
+      value:
+        token_type: DPoP
+        access_token: "example-access-token-not-real-0000000000000"
+        expires_in: 3600
+        scope: "read:reports"
+    InvalidGrant:
+      summary: A code spent, expired, or not this client's
+      value:
+        error: invalid_grant
+        error_description: "The authorization code is invalid, expired, or was issued to another client."
+    AuthorizationPending:
+      summary: The person has not decided yet
+      value:
+        error: authorization_pending
+        error_description: "The user has not yet approved or denied the request."
+    UseDpopNonce:
+      summary: The server's nonce is needed
+      value:
+        error: use_dpop_nonce
+        error_description: "The DPoP proof must carry the server's nonce."
+    InvalidClient:
+      summary: The client did not authenticate
+      value:
+        error: invalid_client
+        error_description: "Client authentication failed."
+    TooManyFailures:
+      summary: Too many failures
+      value:
+        error: temporarily_unavailable
+        error_description: "Too many failed requests. Retry later."
+    PushedAuthorizationRequest:
+      summary: A sign-in with Acme Reports
+      value:
+        client_id: "Xk7pQ2mN9vR4tL8wC3yB6hJ1dF5gS0aE"
+        response_type: code
+        redirect_uri: "https://reports.example.com/callback"
+        scope: "openid email read:reports"
+        audience: "https://api.example.com/reports"
+        state: "af0ifjsldkj"
+        nonce: "n-0S6_WzA2Mj"
+        code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+        code_challenge_method: S256
+    PushedAuthorizationResponse:
+      summary: The handle
+      value:
+        request_uri: "urn:ietf:params:oauth:request_uri:example-handle-not-real-00000"
+        expires_in: 60
+    InvalidRequest:
+      summary: A parameter missing or repeated
+      value:
+        error: invalid_request
+        error_description: "The 'redirect_uri' parameter is required."
+    TokenReference:
+      summary: A token, by an API
+      value:
+        token: "example-access-token-not-real-0000000000000"
+        token_type_hint: access_token
+    ActiveToken:
+      summary: Ada's token for the Reports API
+      value:
+        active: true
+        client_id: "Xk7pQ2mN9vR4tL8wC3yB6hJ1dF5gS0aE"
+        scope: "read:reports"
+        iss: "https://auth.example.com"
+        iat: 1768471200
+        exp: 1768474800
+        token_type: Bearer
+        aud: "https://api.example.com/reports"
+        sub: "3f8e2d1c-5b4a-4c9e-8d7f-6a5b4c3d2e1f"
+        username: "ada@example.com"
+        auth_time: 1768471100
+        acr: "http://schemas.openid.net/pape/policies/2007/06/multi-factor"
+    InactiveToken:
+      summary: Unknown, expired, revoked, or not yours
+      value:
+        active: false
+    RevokedElsewhere:
+      summary: Another client's token
+      value:
+        error: invalid_grant
+        error_description: "The token was issued to another client."
+    DeviceAuthorizationRequest:
+      summary: A television asking to sign in
+      value:
+        client_id: "Xk7pQ2mN9vR4tL8wC3yB6hJ1dF5gS0aE"
+        scope: "openid read:reports"
+        audience: "https://api.example.com/reports"
+    DeviceAuthorization:
+      summary: What the television shows
+      value:
+        device_code: "example-device-code-not-real-0000000000000"
+        user_code: "BCDF-GHJK"
+        verification_uri: "https://auth.example.com/auth/device"
+        verification_uri_complete: "https://auth.example.com/auth/device?user_code=BCDF-GHJK"
+        expires_in: 600
+        interval: 5
+    UnauthorizedClient:
+      summary: A client without the device grant
+      value:
+        error: unauthorized_client
+        error_description: "The client is not allowed to use the device authorization grant."
