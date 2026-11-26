@@ -113,8 +113,15 @@ for userinfo, the RFC 6750 challenges.
   Reports, the Reports API).
 - **Examples**, all validated by an extended `ManagementExamplesTest`-style test; secrets say they are not real.
 - **`docs/site/`**: `index.html` configures Scalar with two sources (`sources: [{title, url}]`), and
-  `build.sh` takes a second document and copies it beside the first. Each release folder holds both; the
-  release picker is unchanged. A server entry per document (`auth.{domain}`, `management.{domain}`).
+  `build.sh` takes a second document and copies it beside the first, as it takes the guides since #98.
+  The Docs workflow takes the document from the tag, as it takes the Management API's and the guides: a
+  release from before it is built with one source, as a release from before the guides is built without
+  them. Each release folder holds what its tag had; the release picker is unchanged. A server entry per
+  document (`auth.{domain}`, `management.{domain}`). Scalar stays the one pinned script, with its SRI
+  hash, so the page loads nothing new.
+- **The guides** (`docs/guides`, #98) link the new reference where they send the reader to the RFCs
+  for the token endpoint (Getting a token, DPoP-bound tokens, Registering clients), and
+  `ManagementGuidesTest` learns to check an operation they name against either document.
 - **Dashboard impact: none.** `contract/management-api.yaml` stays the Management API's copy. Later,
   and optionally, the dashboard's Endpoints page can link each endpoint to its entry in the reference.
 - **`CLAUDE.md`** gains a paragraph beside "Management API" saying the second document exists, is
@@ -162,9 +169,11 @@ for userinfo, the RFC 6750 challenges.
 3. **Registration, userinfo, JWKS, discovery, authorize, end session.** The rest, the coverage test
    without exceptions, the discovery agreement test. *Done when* every route is an operation and the
    suite is green with the hook on for every documented path.
-4. **The site.** Scalar with two sources, `build.sh`, the Docs workflow, the page test; `CLAUDE.md` and
-   `RELEASING.md` updated. *Done when* a preview shows both references, and the Docs workflow builds a
-   release folder with both documents. (Follows #97 if it has not merged.)
+4. **The site.** Scalar with two sources, `build.sh` and the Docs workflow taking the document from the
+   tag (a release without it keeps one source), the page test (two sources, the SRI hash unchanged), the
+   guides' links to the new reference and their test; `CLAUDE.md` and `RELEASING.md` updated. *Done
+   when* a preview shows both references, the guides link the authorization server's operations, and
+   the Docs workflow builds a release folder with both documents, and one without for an older tag.
 
 ## 10. Open questions
 
@@ -176,8 +185,9 @@ for userinfo, the RFC 6750 challenges.
    *Recommendation: extend the validator*; the change is small (a form is a query string in the body)
    and it keeps "refused at load what it cannot enforce".
 3. **Which milestone?** The parent #94 has no milestone and the issue has none: the slices are
-   independent of the product's features. *Recommendation:* 0.5, after the Management API's slices
-   (#95 to #98), so the site changes once.
+   independent of the product's features. *Recommendation:* 0.5. The Management API's slices (#95 to
+   #98) have all merged, so the site is settled and this adds to it; #94 then closes with 0.5's
+   release, which publishes both.
 4. **Should SCIM get its own document, in the same series?** *Recommendation: not now*; open an issue
    when a directory vendor asks for it, since its client side is documented by RFC 7644 and the
    vendors.
