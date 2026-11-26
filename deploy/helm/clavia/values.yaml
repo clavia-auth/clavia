@@ -60,8 +60,10 @@ caddy:
     repository: caddy
     tag: 2-alpine
     pullPolicy: IfNotPresent
-  # What stands in front (the Ingress controller): the client address is read from X-Forwarded-For
-  # only on a request from these ranges. Name your Ingress controller's pods' range if you can.
+  # What stands in front (the Ingress controller): the client address is read from X-Forwarded-For,
+  # right to left, only on a request from these ranges. private_ranges also believes any pod of the
+  # cluster that reaches Caddy directly, so name your Ingress controller's pods' CIDRs, or turn on
+  # networkPolicy below.
   trustedProxies: private_ranges
   resources: {}
 
@@ -95,6 +97,17 @@ dashboard:
   existingSecret: ""
   replicaCount: 1
   resources: {}
+
+# Only the Ingress controller may reach the server pods' HTTP port: no other pod can talk to Caddy
+# directly, and so none can claim a client address it holds through X-Forwarded-For. Needs a CNI
+# that enforces NetworkPolicy.
+networkPolicy:
+  enabled: false
+  # The Ingress controller's pods, as NetworkPolicy peers.
+  from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ingress-nginx
 
 podAnnotations: {}
 nodeSelector: {}

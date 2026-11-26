@@ -1,0 +1,21 @@
+{{- if .Values.networkPolicy.enabled }}
+# Only the Ingress controller reaches the server pods' HTTP port. Caddy believes X-Forwarded-For from
+# caddy.trustedProxies; with this policy, nothing else can stand in that place.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "clavia.fullname" . }}
+  labels:
+    {{- include "clavia.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "clavia.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: server
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        {{- toYaml .Values.networkPolicy.from | nindent 8 }}
+      ports:
+        - port: http
+{{- end }}

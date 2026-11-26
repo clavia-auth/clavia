@@ -61,6 +61,14 @@ final class DeploymentKitTest extends TestCase
         self::assertContains($rule, $production, 'deploy/helm/clavia/files/Caddyfile lost a rule.');
     }
 
+    /** The leftmost X-Forwarded-For entries are the client's to write: read it right to left. */
+    public function testTheClientAddressIsReadRightToLeft(): void
+    {
+        $production = array_map('trim', explode("\n", self::read('deploy/helm/clavia/files/Caddyfile')));
+
+        self::assertContains('trusted_proxies_strict', $production);
+    }
+
     public function testThereAreSecurityRulesToCompare(): void
     {
         self::assertGreaterThan(10, iterator_count(self::securityRules()), 'The development Caddyfile changed shape.');

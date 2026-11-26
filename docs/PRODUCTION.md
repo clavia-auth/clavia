@@ -170,9 +170,11 @@ helm install clavia deploy/helm/clavia -n clavia \
 - **TLS** is the Ingress's. `ingress.tlsSecretName` names a certificate for both hosts. With
   cert-manager, add its annotation to `ingress.annotations` and give the Secret a name it will
   fill.
-- **The client address** is read from the Ingress's `X-Forwarded-For`, believed only from
-  `caddy.trustedProxies` (`private_ranges` by default). Narrow it to your Ingress controller's pod
-  range if you can.
+- **The client address** is read from the Ingress's `X-Forwarded-For`, right to left, believed only
+  from `caddy.trustedProxies` (`private_ranges` by default). Every per-address limit counts against
+  it. `private_ranges` also believes any pod that reaches Caddy directly, so narrow it to your Ingress
+  controller's pod CIDRs, or turn on `networkPolicy` (with its `from` naming the controller), which
+  lets nothing else reach the server pods.
 - **Scaling**: `replicaCount` pods, all equal: sessions are in Redis.
 - **Probes**: Caddy is ready when PHP's `/healthz` answers through it, on a port no Service
   exposes.
@@ -280,3 +282,5 @@ migrations run over it. Practise it on a copy.
 - [ ] The Bootstrap client is deleted, and administrators hold a second factor.
 - [ ] Nothing but Caddy (or your Ingress) is reachable from outside: PHP-FPM, PostgreSQL and
       Redis listen on the private network only.
+- [ ] On Kubernetes, `caddy.trustedProxies` names only the Ingress controller, or `networkPolicy`
+      is on.

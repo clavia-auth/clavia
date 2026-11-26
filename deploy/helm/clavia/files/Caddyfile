@@ -12,7 +12,9 @@
 #                                X-Forwarded-For only on a request from one of these ranges.
 #                                Loopback alone by default, which no client on the network can
 #                                be: at the edge, no forwarded header is ever believed. Behind an
-#                                Ingress, its ranges (private_ranges, or the exact CIDRs).
+#                                Ingress, its ranges: the exact CIDRs of its pods, or
+#                                private_ranges, which also believes any other pod that reaches
+#                                Caddy directly (the chart's NetworkPolicy closes that).
 #   CLAVIA_PHP_FASTCGI           PHP-FPM (php:9000 in Compose, 127.0.0.1:9000 beside it in a pod).
 #   CLAVIA_DASHBOARD_UPSTREAM    the dashboard's server (dashboard:3000).
 #
@@ -30,6 +32,10 @@
 
 	servers {
 		trusted_proxies static {$CLAVIA_CADDY_TRUSTED_PROXIES:127.0.0.1/32 ::1/128}
+		# Right to left, skipping the trusted hops: the client writes the leftmost entries of
+		# X-Forwarded-For, and taking those would let anyone choose the address every per-address
+		# limit (sign-in, the machine endpoints, SCIM tokens) counts against.
+		trusted_proxies_strict
 		client_ip_headers X-Forwarded-For
 	}
 
