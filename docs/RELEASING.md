@@ -15,6 +15,12 @@ What a release publishes:
 | The Management API reference, `/vX.Y.Z/` and the site's root | GitHub Pages (`gh-pages`) | the **Docs** workflow, once **Release** succeeded |
 | The dashboard's tag | clavia-dashboard | the maintainer |
 
+**`ghcr.io/clavia-auth/clavia:edge` is not a release.** The **Image** workflow pushes it, with a
+`sha-<commit>` tag beside it, on every push to `main`, so other repositories' CI (the dashboard's
+end-to-end workflow) can run against `main` as it is. It moves with every merge, carries no version,
+no changelog and no promise, and is never a pull request's build. Run a release (`X.Y.Z`) anywhere
+that matters; `latest` and `X.Y` follow releases only.
+
 Claude prepares the release pull request (the **ticket-release** skill); tagging and publishing
 are public and hard to take back, so they are the maintainer's.
 
