@@ -15,8 +15,9 @@ use Clavia\Adapter\Primary\Http\OpenApi\Schema\Schema;
 
 /**
  * A Content map (OpenAPI 3.0 §4.7.10): the media types a body may have, each with the
- * schema it must satisfy. Only JSON media types are supported, so a body is always
- * parsed and validated, never passed through unchecked.
+ * schema it must satisfy. A JSON body is parsed and validated; a request's form is read as named
+ * strings and validated ({@see Validation\FormBody}); anything else is opaque bytes, and said so
+ * (`{type: string, format: binary}`), so nothing passes as checked that was not.
  */
 final readonly class Content
 {

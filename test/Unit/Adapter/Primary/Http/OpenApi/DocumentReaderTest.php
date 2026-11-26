@@ -208,6 +208,47 @@ final class DocumentReaderTest extends TestCase
             ]]]],
             'its schema must be {type: string, format: binary}',
         ];
+        yield 'a form whose field is not a string' => [
+            self::withForm(['type' => 'object', 'properties' => ['n' => ['type' => 'integer']]]),
+            'is a form value: it must be {type: string}, not nullable',
+        ];
+        yield 'a form whose field may be null' => [
+            self::withForm(['type' => 'object', 'properties' => ['n' => ['type' => 'string', 'nullable' => true]]]),
+            'is a form value: it must be {type: string}, not nullable',
+        ];
+        yield 'a form that is not an object' => [
+            self::withForm(['type' => 'string']),
+            'describes a form: it must be an object of string properties',
+        ];
+        yield 'a form whose extra fields are not strings' => [
+            self::withForm(['type' => 'object', 'additionalProperties' => ['type' => 'array', 'items' => []]]),
+            'is a form value',
+        ];
+        yield 'a form among whose alternatives one is not an object of strings' => [
+            self::withForm(['oneOf' => [
+                ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]],
+                ['type' => 'object', 'properties' => ['b' => ['type' => 'boolean']]],
+            ]]),
+            '#/paths/~1a/post/requestBody/content/application~1x-www-form-urlencoded/schema/oneOf/1/properties/b',
+        ];
+        yield 'a form refused by negation' => [
+            self::withForm(['type' => 'object', 'not' => ['required' => ['a']]]),
+            'cannot be enforced on a form',
+        ];
+        yield 'a form without a schema' => [
+            ['paths' => ['/a' => ['post' => [
+                'requestBody' => ['content' => ['application/x-www-form-urlencoded' => new stdClass()]],
+                'responses' => ['200' => ['description' => 'ok']],
+            ]]]],
+            'must have a schema: an object of string properties',
+        ];
+        yield 'a form as a response' => [
+            ['paths' => ['/a' => ['get' => ['responses' => ['200' => [
+                'description' => 'ok',
+                'content' => ['application/x-www-form-urlencoded' => ['schema' => ['type' => 'object']]],
+            ]]]]]],
+            'is not a JSON media type',
+        ];
         yield 'an operation without responses' => [
             ['paths' => ['/a' => ['get' => ['responses' => new stdClass()]]]],
             'must describe at least one response',
@@ -247,6 +288,36 @@ final class DocumentReaderTest extends TestCase
         $this->expectExceptionMessageIsOrContains('not valid YAML');
 
         Document::fromYaml("openapi: [unclosed\n");
+    }
+
+    public function testAFormOfStringsLoadsReferencesAndAlternativesIncluded(): void
+    {
+        $document = Document::fromJson(self::document([
+            'paths' => ['/token' => ['post' => [
+                'requestBody' => ['content' => ['application/x-www-form-urlencoded' => ['schema' => [
+                    'oneOf' => [['$ref' => '#/components/schemas/Code'], ['$ref' => '#/components/schemas/Machine']],
+                ]]]],
+                'responses' => ['200' => ['description' => 'ok']],
+            ]]],
+            'components' => ['schemas' => [
+                'Client' => ['type' => 'object', 'properties' => ['client_id' => ['type' => 'string']]],
+                'Code' => ['allOf' => [['$ref' => '#/components/schemas/Client'], [
+                    'type' => 'object',
+                    'required' => ['grant_type', 'code'],
+                    'properties' => [
+                        'grant_type' => ['type' => 'string', 'enum' => ['authorization_code']],
+                        'code' => ['type' => 'string', 'minLength' => 1],
+                    ],
+                ]]],
+                'Machine' => ['type' => 'object', 'additionalProperties' => false, 'properties' => [
+                    'grant_type' => ['type' => 'string', 'enum' => ['client_credentials']],
+                    'scope' => ['$ref' => '#/components/schemas/Scope'],
+                ]],
+                'Scope' => ['type' => 'string', 'pattern' => '^\\S+( \\S+)*$'],
+            ]],
+        ]));
+
+        self::assertNotNull($document->match('POST', '/token'));
     }
 
     public function testTheManagementApiDocumentLoads(): void
@@ -303,5 +374,20 @@ final class DocumentReaderTest extends TestCase
     private static function pathParameter(string $name): array
     {
         return ['name' => $name, 'in' => 'path', 'required' => true, 'schema' => ['type' => 'string']];
+    }
+
+    /**
+     * A document whose one operation takes a form with this schema.
+     *
+     * @param array<string, mixed> $schema
+     *
+     * @return array<string, mixed>
+     */
+    private static function withForm(array $schema): array
+    {
+        return ['paths' => ['/a' => ['post' => [
+            'requestBody' => ['content' => ['application/x-www-form-urlencoded' => ['schema' => $schema]]],
+            'responses' => ['200' => ['description' => 'ok']],
+        ]]]];
     }
 }
