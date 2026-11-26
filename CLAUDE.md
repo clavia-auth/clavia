@@ -210,7 +210,8 @@ A violation is a build failure, not a review comment.
 - **HTTP**: `public/index.php` builds the container (`config/container.php`,
   laminas-servicemanager), pipes the middleware (`config/pipeline.php`) and the routes
   (`config/routes.php`), runs the request, then calls `fastcgi_finish_request()` and runs the
-  deferred tasks (`System\AfterResponseTasks`).
+  deferred tasks (`System\AfterResponseTasks`). It sets, whatever php.ini says, `display_errors` off
+  and `default_mimetype` empty: a response with no content says no `Content-Type` (`EntryPointTest`).
 - **The pipeline**: `ErrorHandler` → `AuditContextMiddleware` → routing → `MetricsMiddleware` →
   405 → dispatch → 404. There is no implicit `HEAD` or `OPTIONS`: a route answers the methods it lists. Mezzio's
   `ImplicitHeadMiddleware` is absent on purpose, because it would answer `HEAD
