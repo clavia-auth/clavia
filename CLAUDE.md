@@ -1203,7 +1203,7 @@ These follow from the RFCs and from mistakes already made once. Breaking one is 
   verified address, and password reset answer alike. A link emailed to an address changes
   something only on the POST from the page it opens on, never on the GET a mail scanner makes.
 - Every `/auth/*` state change is a POST with a CSRF token (double-submit, per browser). Sign-out
-  and the theme toggle need none: a `SameSite=Lax` cookie never rides a cross-site POST. **The one
+  the theme toggle and the language switcher need none: a `SameSite=Lax` cookie never rides a cross-site POST. **The one
   `/auth/*` POST without a token is the SAML assertion consumer service** (`POST
   /auth/saml/{connection}/acs`): it comes from the identity provider's page, and it changes nothing
   but a one-minute handle; every check runs on the GET it is turned into.
@@ -1315,7 +1315,9 @@ someone else's or names something deleted gives the same "expired" page.
   `$this->t('login.submit')` in a template, `$this->emphasised('key', $values, 'email')` for a sentence
   with one value in bold, `Message::of('key', $values)` in a page class (an `HtmlPage`'s title, heading,
   error, or a variable: they take a `Message`, never text), worded by `PageRenderer` in the page's language
-  (`LanguageChoice`: the held request's `ui_locales`, then `Accept-Language`, among `CLAVIA_LANGUAGES`,
+  (`LanguageChoice`: the person's choice, `clavia_language`, set by the footer's switcher, `POST
+  /auth/language`, `Path=/` so the pages outside `/auth` follow it; then the held request's `ui_locales`;
+  then `Accept-Language`; each among `CLAVIA_LANGUAGES`,
   else `CLAVIA_DEFAULT_LANGUAGE`; `UiLocales`, recorded on the `LoginState`, `PendingConsent` or
   `MfaChallenge` that holds the request, pushed or not, and read back by `HeldLanguages` from the page's
   `state` or the `clavia_mfa` cookie; a malformed tag is dropped, never refused), which

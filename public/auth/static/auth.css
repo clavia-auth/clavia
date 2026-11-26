@@ -362,9 +362,16 @@ input[type="text"] {
   outline-offset: 2px;
 }
 
-/* ---- Theme toggle ---- */
+/* ---- Language switcher and theme toggle ---- */
 
-.theme {
+.preferences {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: .5rem;
+}
+
+.toggle {
   display: inline-flex;
   padding: 3px;
   gap: 2px;
@@ -373,7 +380,7 @@ input[type="text"] {
   border-radius: 999px;
 }
 
-.theme button {
+.toggle button {
   padding: .3rem .8rem;
   font: inherit;
   font-size: .75rem;
@@ -385,9 +392,9 @@ input[type="text"] {
   cursor: pointer;
 }
 
-.theme button:hover { color: var(--text); }
+.toggle button:hover { color: var(--text); }
 
-.theme button[aria-pressed="true"] {
+.toggle button[aria-pressed="true"] {
   color: var(--accent-text);
   background: var(--accent);
 }

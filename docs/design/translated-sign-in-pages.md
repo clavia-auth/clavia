@@ -1,6 +1,6 @@
 # Design: translated sign-in pages and mail
 
-**Status:** agreed · **Date:** 2026-11-26 · **Issue:** clavia-auth/clavia#24 ·
+**Status:** built · **Date:** 2026-11-26 · **Issue:** clavia-auth/clavia#24 ·
 **Specifications:** OpenID Connect Core 1.0 §3.1.2.1 (`ui_locales`), OpenID Connect Discovery 1.0 §3
 (`ui_locales_supported`), RFC 9110 §12.5.4 (`Accept-Language`) and §8.5 (`Content-Language`), RFC 4647
 §3.4 (lookup), BCP 47 (RFC 5646), ICU MessageFormat
@@ -151,7 +151,8 @@ composition root, which knows the catalogue files (as `SamlKeyReferences` checks
 ### 5.4 The switcher
 
 `POST /auth/language` with `language` and `return_to`: an offered language sets `clavia_language`
-(a year, `HttpOnly; SameSite=Lax`, `Path=/auth`); anything else is ignored. The browser goes back to
+(a year, `HttpOnly; SameSite=Lax`, `Path=/`: the pages a person reads outside `/auth`, a refused
+authorization request and the sign-out confirmation, follow it too); anything else is ignored. The browser goes back to
 `return_to` validated as a `LocalPath`, or `/auth/login`.
 
 ## 6. Interfaces

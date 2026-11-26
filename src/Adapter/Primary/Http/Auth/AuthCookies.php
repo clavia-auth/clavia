@@ -14,6 +14,7 @@ namespace Clavia\Adapter\Primary\Http\Auth;
 use Clavia\Adapter\Primary\Http\Shared\PageRenderer;
 use Clavia\Adapter\Primary\Http\Shared\SetCookie;
 use Clavia\Domain\Authentication\PendingExternalSignIn;
+use Clavia\Domain\Shared\Language;
 
 /**
  * The cookies of the auth surface: their names, paths and lifetimes in one place, so a
@@ -39,6 +40,9 @@ use Clavia\Domain\Authentication\PendingExternalSignIn;
  *   the browser that asked. Lasts as long as the ceremony may; deleted when it is answered.
  * - **Theme** (`clavia_theme`, path `/`): the colour scheme; absent means "follow the
  *   system". Read by nothing but the page's `data-theme` attribute.
+ * - **Language** (`clavia_language`, path `/`): the language the person chose with the switcher, ahead
+ *   of what the application and the browser ask for. Path `/`, not `/auth`, because the pages a person
+ *   reads outside it (a refused authorization request, the sign-out confirmation) must follow it too.
  */
 final readonly class AuthCookies
 {
@@ -61,6 +65,10 @@ final readonly class AuthCookies
     public const string EXTERNAL_SIGN_IN_PATH = '/auth';
 
     public const string WEBAUTHN = 'clavia_webauthn';
+
+    public const string LANGUAGE = 'clavia_language';
+
+    public const int LANGUAGE_LIFETIME = 365 * 24 * 3600;
 
     public const string WEBAUTHN_PATH = '/auth';
 
@@ -190,5 +198,10 @@ final readonly class AuthCookies
     public function expireTheme(): SetCookie
     {
         return SetCookie::expire(self::THEME, '/', $this->secure);
+    }
+
+    public function language(Language $language): SetCookie
+    {
+        return SetCookie::create(self::LANGUAGE, $language->tag, self::LANGUAGE_LIFETIME, '/', $this->secure);
     }
 }

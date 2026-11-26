@@ -20,6 +20,8 @@ use Psr\Http\Message\ServerRequestInterface;
 /**
  * The language a page is shown in (docs/design/translated-sign-in-pages.md §5.1), in order:
  *
+ *  0. what the person chose with the switcher (`clavia_language`, set by `POST /auth/language`):
+ *     the person outranks the application, which knows them better than a shared browser does;
  *  1. what the request the page serves asked for, `ui_locales` (OpenID Connect Core §3.1.2.1), recorded
  *     where it is held ({@see HeldLanguages}): the login state or pending consent the page's `state`
  *     names, or the second-factor challenge of its cookie;
@@ -41,6 +43,10 @@ final readonly class LanguageChoice
 
     public function __invoke(ServerRequestInterface $request): Language
     {
+        $chosen = $this->languages->lookup(RequestCookies::first($request, AuthCookies::LANGUAGE) ?? '');
+        if ($chosen !== null) {
+            return $chosen;
+        }
         $asked = $this->held === null ? [] : ($this->held)(
             RequestParameterReader::queryAndForm($request)->get('state'),
             RequestCookies::first($request, AuthCookies::MFA_CHALLENGE),
@@ -53,6 +59,16 @@ final readonly class LanguageChoice
         }
 
         return $this->languages->default;
+    }
+
+    /**
+     * The languages a person can choose among, in the order they are offered.
+     *
+     * @return list<Language>
+     */
+    public function offered(): array
+    {
+        return $this->languages->offered;
     }
 
     /**

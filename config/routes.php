@@ -13,6 +13,7 @@ use Clavia\Adapter\Primary\Http\Auth\ConsentHandler;
 use Clavia\Adapter\Primary\Http\Auth\DeviceHandler;
 use Clavia\Adapter\Primary\Http\Auth\ExternalSignInCallbackHandler;
 use Clavia\Adapter\Primary\Http\Auth\ExternalSignInHandler;
+use Clavia\Adapter\Primary\Http\Auth\LanguageHandler;
 use Clavia\Adapter\Primary\Http\Auth\LoginHandler;
 use Clavia\Adapter\Primary\Http\Auth\LoginPageHandler;
 use Clavia\Adapter\Primary\Http\Auth\LogoutHandler;
@@ -163,6 +164,7 @@ return static function (Application $app, ContainerInterface $container): void {
     $app->post('/auth/login', LoginHandler::class, 'auth.login.submit');
     $app->post('/auth/logout', LogoutHandler::class, 'auth.logout');
     $app->post('/auth/theme', ThemeHandler::class, 'auth.theme');
+    $app->post('/auth/language', LanguageHandler::class, 'auth.language');
     // The second step of a sign-in, and the account holder's own two-factor settings.
     $app->route('/auth/mfa', MfaChallengeHandler::class, $getAndPost, 'auth.mfa');
     if ($settings->passkeysEnabled) {

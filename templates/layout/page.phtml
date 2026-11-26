@@ -9,7 +9,9 @@
  * @var string      $heading
  * @var string|null $error
  * @var string|null $theme    The forced colour scheme, or null to follow the system.
- * @var string|null $returnTo Where the theme toggle comes back to; null leaves the toggle out.
+ * @var string|null $returnTo Where the theme toggle and the language switcher come back to; null leaves
+ *                            them out.
+ * @var array<string, string> $languages The switcher's choices, tag => name in itself; empty for none.
  * @var bool        $wide     A wider card, for a QR code or a list of codes.
  * @var string|null $script   A module of this server's the page loads; null for none.
  * @var string      $content  The page itself, already rendered.
@@ -53,14 +55,25 @@
   </main>
 
 <?php if ($returnTo !== null): ?>
+  <div class="preferences">
+<?php if ($languages !== []): ?>
+  <!-- The language, as the colour scheme: one form, a button per language named in itself. -->
+  <form class="toggle" method="post" action="/auth/language" aria-label="<?= $this->escapeHtmlAttr($this->t('layout.language.label')) ?>">
+    <input type="hidden" name="return_to" value="<?= $this->escapeHtmlAttr($returnTo) ?>">
+<?php foreach ($languages as $tag => $name): ?>
+    <button type="submit" name="language" value="<?= $this->escapeHtmlAttr((string) $tag) ?>" lang="<?= $this->escapeHtmlAttr((string) $tag) ?>"<?php if ($language === (string) $tag): ?> aria-pressed="true"<?php endif ?>><?= $this->escapeHtml($name) ?></button>
+<?php endforeach ?>
+  </form>
+<?php endif ?>
   <!-- The colour scheme is a cookie set by a form post: three buttons on one form, the
        pressed one's value is the choice, and `next` brings the browser back here. -->
-  <form class="theme" method="post" action="/auth/theme" aria-label="<?= $this->escapeHtmlAttr($this->t('layout.theme.label')) ?>">
+  <form class="toggle" method="post" action="/auth/theme" aria-label="<?= $this->escapeHtmlAttr($this->t('layout.theme.label')) ?>">
     <input type="hidden" name="next" value="<?= $this->escapeHtmlAttr($returnTo) ?>">
 <?php foreach (['auto' => 'layout.theme.auto', 'light' => 'layout.theme.light', 'dark' => 'layout.theme.dark'] as $value => $label): ?>
     <button type="submit" name="theme" value="<?= $value ?>"<?php if (($theme ?? 'auto') === $value): ?> aria-pressed="true"<?php endif ?>><?= $this->escapeHtml($this->t($label)) ?></button>
 <?php endforeach ?>
   </form>
+  </div>
 <?php endif ?>
 </body>
 </html>

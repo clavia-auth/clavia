@@ -15,6 +15,7 @@ use Clavia\Application\Port\Messages;
 use Clavia\Domain\Shared\Language;
 use Laminas\Diactoros\Response\HtmlResponse;
 use Laminas\View\Model\ViewModel;
+use Locale;
 use Mezzio\Template\TemplateRendererInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -83,6 +84,7 @@ final readonly class PageRenderer
                 'error' => $page->error === null ? null : $this->word($language, $page->error),
                 'theme' => self::theme($request),
                 'returnTo' => $page->returnTo,
+                'languages' => $this->switcher(),
                 'wide' => $page->wide,
                 'script' => $page->script,
             ], 'layout::page'),
@@ -111,6 +113,27 @@ final readonly class PageRenderer
     public function language(ServerRequestInterface $request): Language
     {
         return ($this->choice)($request);
+    }
+
+    /**
+     * The switcher's choices: each offered language named in itself (an endonym, from ICU), since a person
+     * who cannot read the page's language must still find their own. None when only one is offered.
+     *
+     * @return array<string, string> Tag => name.
+     */
+    private function switcher(): array
+    {
+        $offered = $this->choice->offered();
+        if (count($offered) < 2) {
+            return [];
+        }
+        $names = [];
+        foreach ($offered as $language) {
+            $name = Locale::getDisplayName($language->tag, $language->tag);
+            $names[$language->tag] = mb_strtoupper(mb_substr($name, 0, 1)) . mb_substr($name, 1);
+        }
+
+        return $names;
     }
 
     /** A page's message in its language. */

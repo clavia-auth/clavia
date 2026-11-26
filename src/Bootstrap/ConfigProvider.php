@@ -44,6 +44,7 @@ use Clavia\Adapter\Primary\Http\Auth\ConsentHandler;
 use Clavia\Adapter\Primary\Http\Auth\DeviceHandler;
 use Clavia\Adapter\Primary\Http\Auth\ExternalSignInCallbackHandler;
 use Clavia\Adapter\Primary\Http\Auth\ExternalSignInHandler;
+use Clavia\Adapter\Primary\Http\Auth\LanguageHandler;
 use Clavia\Adapter\Primary\Http\Auth\LoginForm;
 use Clavia\Adapter\Primary\Http\Auth\LoginHandler;
 use Clavia\Adapter\Primary\Http\Auth\LoginPageHandler;
@@ -896,6 +897,7 @@ final class ConfigProvider
                     LoginHandler::class => Container\LoginHandlerFactory::class,
                     LogoutHandler::class => Container\LogoutHandlerFactory::class,
                     ThemeHandler::class => Container\ThemeHandlerFactory::class,
+                    LanguageHandler::class => Container\LanguageHandlerFactory::class,
                     BearerChallenger::class => Container\BearerChallengerFactory::class,
                     DiscoveryHandler::class => Container\DiscoveryHandlerFactory::class,
                     JwksHandler::class => Container\JwksHandlerFactory::class,

@@ -76,4 +76,27 @@ final class LanguageChoiceTest extends TestCase
         self::assertSame('en', $choice(new ServerRequest(uri: '/auth/login?state=unasked', headers: $english))->tag);
         self::assertSame('en', $choice(new ServerRequest(uri: '/auth/login?state=unknown', headers: $english))->tag);
     }
+
+    /** docs/design/translated-sign-in-pages.md §5.1: the person's choice, before the request and the browser. */
+    public function testThePersonsChoiceComesFirst(): void
+    {
+        $clock = new FrozenClock();
+        $loginStates = new InMemoryLoginStateStore($clock);
+        $loginStates->put('held', new LoginState('/oauth2/authorize', null, UiLocales::fromString('fr')));
+        $choice = new LanguageChoice(
+            Languages::of([Language::fromString('en'), Language::fromString('fr')], Language::fromString('en')),
+            new HeldLanguages(
+                $loginStates,
+                new InMemoryConsentStateStore($clock),
+                new InMemoryMfaChallengeStore($clock),
+            ),
+        );
+        $request = static fn (string $cookie): ServerRequest => new ServerRequest(
+            uri: '/auth/login?state=held',
+            headers: ['Accept-Language' => 'fr', 'Cookie' => $cookie],
+        );
+
+        self::assertSame('en', $choice($request('clavia_language=en'))->tag);
+        self::assertSame('fr', $choice($request('clavia_language=de'))->tag, 'Not offered: the request decides.');
+    }
 }
