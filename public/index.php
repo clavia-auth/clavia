@@ -19,6 +19,9 @@ error_reporting(E_ALL);
 
 // …and none of it is ever printed into a response; it goes to the log.
 ini_set('display_errors', '0');
+// A response says its own Content-Type, or has no content and says none (RFC 9110 §8.3): PHP's
+// default_mimetype would label a 204, a redirect or an empty 200 text/html.
+ini_set('default_mimetype', '');
 
 chdir(dirname(__DIR__));
 
