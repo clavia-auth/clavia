@@ -21,6 +21,9 @@ jobs:
     name: The stack starts, and the scenarios pass against it
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      # The dashboard as main has it (ghcr.io/clavia-auth/clavia-dashboard:edge), behind /dashboard.
+      CLAVIA_E2E_DASHBOARD: "1"
 
     steps:
       - uses: actions/checkout@v7

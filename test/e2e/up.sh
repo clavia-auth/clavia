@@ -8,6 +8,9 @@
 # certificate in its two https sites, starts everything and waits until it is healthy, then runs
 # `seed-dev`. Safe to run again.
 #
+# CLAVIA_E2E_DASHBOARD=1 adds the dashboard (ghcr.io/clavia-auth/clavia-dashboard:edge, or the image
+# CLAVIA_E2E_DASHBOARD_IMAGE names).
+#
 # The stack publishes ports 80 and 443 on 127.0.0.1: stop the development stack (`make down`) first, or
 # move this one with CLAVIA_E2E_HTTP_PORT and CLAVIA_E2E_HTTPS_PORT.
 set -euo pipefail
@@ -17,6 +20,8 @@ root="$(cd "${here}/../.." && pwd)"
 work="${here}/.work"
 domain="clavia.test"
 compose=(docker compose -f "${here}/compose.yaml")
+# The dashboard behind /dashboard is started when asked for (it is pulled, and its image is not Clavia's).
+[[ -n "${CLAVIA_E2E_DASHBOARD:-}" ]] && compose+=(--profile dashboard)
 
 command -v mkcert >/dev/null || { echo "mkcert is needed: https://github.com/FiloSottile/mkcert" >&2; exit 1; }
 
