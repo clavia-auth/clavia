@@ -231,6 +231,12 @@ final class DocumentReaderTest extends TestCase
             ]]),
             '#/paths/~1a/post/requestBody/content/application~1x-www-form-urlencoded/schema/oneOf/1/properties/b',
         ];
+        yield 'a form value combining a string with something else' => [
+            self::withForm(['type' => 'object', 'properties' => ['n' => [
+                'allOf' => [['type' => 'string'], ['type' => 'integer']],
+            ]]]),
+            '#/paths/~1a/post/requestBody/content/application~1x-www-form-urlencoded/schema/properties/n/allOf/1',
+        ];
         yield 'a form refused by negation' => [
             self::withForm(['type' => 'object', 'not' => ['required' => ['a']]]),
             'cannot be enforced on a form',
@@ -312,6 +318,10 @@ final class DocumentReaderTest extends TestCase
                 'Machine' => ['type' => 'object', 'additionalProperties' => false, 'properties' => [
                     'grant_type' => ['type' => 'string', 'enum' => ['client_credentials']],
                     'scope' => ['$ref' => '#/components/schemas/Scope'],
+                    'audience' => [
+                        'allOf' => [['$ref' => '#/components/schemas/Scope']],
+                        'description' => 'A reference, described where it is used.',
+                    ],
                 ]],
                 'Scope' => ['type' => 'string', 'pattern' => '^\\S+( \\S+)*$'],
             ]],

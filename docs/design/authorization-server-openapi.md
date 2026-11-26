@@ -149,8 +149,8 @@ for userinfo, the RFC 6750 challenges.
 | Test | Proves |
 |---|---|
 | `FormBodyTest` (Unit, OpenApi) | decoding, a repeated parameter, an empty value, percent-decoding errors, a body that is not a form, and that the reader refuses a form schema it cannot enforce |
-| `AuthorizationServerDocumentTest` (Unit/Documentation) | the document loads; each `summary` is a short label and each tag has `x-displayName`, as `ManagementDocumentationTest` requires |
-| `AuthorizationServerExamplesTest` | every example validates against its schema |
+| `OpenApiDocumentationTest` (Unit/Documentation; was `ManagementDocumentationTest`, now run over both documents) | the document loads; each `summary` is a short label and each tag has `x-displayName` |
+| `OpenApiExamplesTest` (likewise, was `ManagementExamplesTest`) | every example validates against its schema, a form's as the object of strings it is |
 | `AuthorizationServerCoverageTest` | the routes under `/oauth2`, `/oidc` and `/.well-known` and the document's operations are the same set (method and path); `/auth/*` and the Management API's paths are excluded by name |
 | Harness hook (`AcceptanceTestCase`) | every existing acceptance response from a documented operation conforms: the suite is the proof, and the first run lists the mismatches to fix (in the document, or in a handler if the handler is wrong) |
 | `DiscoveryAgreesWithDocumentTest` | `grant_types_supported`, `token_endpoint_auth_methods_supported`, `code_challenge_methods_supported` and `dpop_signing_alg_values_supported` of discovery equal the enums of the document |

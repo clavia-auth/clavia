@@ -179,6 +179,10 @@ abstract class AcceptanceTestCase extends TestCase
         );
 
         $response = $this->application()->handle($request);
+        if ($host === self::AUTH_HOST) {
+            // What the authorization server answers is what its document says (#93).
+            AuthorizationServerContract::assertDescribes($method, (string) parse_url($path, PHP_URL_PATH), $response);
+        }
         $this->remember($response);
         // As the entry point does once the response is out.
         $this->container()->get(AfterResponseTasks::class)->run();

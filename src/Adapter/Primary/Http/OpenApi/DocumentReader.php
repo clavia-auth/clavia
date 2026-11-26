@@ -395,11 +395,27 @@ final class DocumentReader
         }
     }
 
+    /**
+     * A form value: `type: string`, never nullable; or, with no type of its own, `allOf` of such values,
+     * which is how OpenAPI 3.0 puts a description beside a reference.
+     */
     private function formValue(Node $node): void
     {
         $resolved = $this->references->resolve($node);
-        if ($resolved->stringMember('type') !== Type::String->value || $resolved->boolMember('nullable', false)) {
-            throw $node->invalid('is a form value: it must be {type: string}, not nullable');
+        $refused = $node->invalid('is a form value: it must be {type: string}, not nullable');
+        if ($resolved->boolMember('nullable', false)) {
+            throw $refused;
+        }
+        $type = $resolved->stringMember('type');
+        if ($type === Type::String->value) {
+            return;
+        }
+        $parts = $resolved->optional('allOf')?->items() ?? [];
+        if ($type !== null || $parts === []) {
+            throw $refused;
+        }
+        foreach ($parts as $part) {
+            $this->formValue($part);
         }
     }
 
