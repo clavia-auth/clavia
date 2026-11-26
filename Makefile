@@ -7,7 +7,7 @@
 
 PHP := docker compose exec php
 
-.PHONY: up down install config migrate db-status seed authorize-url check test lint analyse arch shell
+.PHONY: up down install config migrate db-status seed authorize-url check test lint analyse arch shell e2e-up e2e-verify e2e-down
 
 # Caddy, PHP-FPM, PostgreSQL (dev + test) and Redis.
 up:
@@ -59,3 +59,14 @@ arch:
 
 shell:
 	$(PHP) sh
+
+# Clavia as it is deployed, for the end-to-end suites (test/e2e, docs/design/end-to-end-scenarios.md):
+# the production topology on ports 80 and 443 of 127.0.0.1, so stop `make up` first. Needs mkcert.
+e2e-up:
+	test/e2e/up.sh
+
+e2e-verify:
+	test/e2e/verify.sh
+
+e2e-down:
+	test/e2e/down.sh

@@ -1,6 +1,6 @@
 # Design: End-to-end scenarios through the real stack, and nightly conformance
 
-**Status:** proposed · **Date:** 2026-11-26 · **Issue:** clavia-auth/clavia#39 (and
+**Status:** agreed · **Date:** 2026-11-26 · **Issue:** clavia-auth/clavia#39 (and
 clavia-auth/clavia-dashboard#17) ·
 **Specifications:** OpenID Connect Core 1.0, RFC 6749, RFC 7009, RFC 9700 (OAuth 2.0 Security Best
 Current Practice), OpenID Connect Back-Channel Logout 1.0, the OpenID Foundation conformance suite
@@ -83,8 +83,8 @@ Scenarios prove what the in-process suite cannot, grouped by the seam they cross
 each (marked ●) is the Done when of its slice.
 
 **Through Caddy and the headers (Behat)**
-- ● Host separation: `/api/v1/*` and `/scim/v2/*` answer `404` on `auth.`; `/oauth2/*` and `/auth/*` answer
-  `404` on `management.`.
+- ● Host separation: `/api/v1/*` and `/scim/v2/*` answer `404` on `auth.`; `/oauth2/*`, `/auth/*` and the
+  discovery paths are sent to `/dashboard` (a `302`, never reaching PHP) on `management.`.
 - ● The internal listener (`:8081`, `/healthz`, `/metrics`) is not reachable on either public host or published port.
 - Security headers on the sign-in pages and the token endpoint (`Cache-Control: no-store`, the CSP, frame
   denial, HSTS) as Caddy sends them; static assets served by Caddy with their versioned URLs.
@@ -169,7 +169,7 @@ The scenarios are the tests; what tests *them*:
 
 1. **The stack (clavia).** `test/e2e/` compose, env, `up.sh`/`down.sh`, `make e2e-*`, and a workflow that
    builds the image, brings the stack up, seeds it, and checks over HTTPS that discovery answers, the host
-   separation holds and `/healthz` is closed. It also checks that `CLAVIA_ENV=development` changes nothing
+   separation holds and the internal listener is published nowhere. It also checks that `CLAVIA_ENV=development` changes nothing
    in handling (the code reads of §2, confirmed by running one flow in each mode). *Done when* the workflow
    is green on a pull request, a clean clone runs `make e2e-up` and gets the same, and the job's time is
    reported in the pull request.

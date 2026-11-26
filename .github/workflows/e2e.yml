@@ -1,0 +1,47 @@
+name: End to end
+
+# Clavia as it is deployed (docs/design/end-to-end-scenarios.md): the production topology of
+# test/e2e/compose.yaml, built from this pull request, started and checked from outside over HTTPS.
+# The scenarios that drive it come with the next slices.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  stack:
+    name: The stack starts, seeded, and answers as deployed
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # A certificate for *.clavia.test from a CA made on this runner and trusted nowhere else.
+      - name: Install mkcert
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq mkcert
+
+      # What a browser will need in the slices that follow; verify.sh does not.
+      - name: Resolve the stack's names
+        run: echo '127.0.0.1 clavia.test auth.clavia.test management.clavia.test' | sudo tee -a /etc/hosts
+
+      - name: Start the stack
+        run: test/e2e/up.sh
+
+      - name: Check it from outside
+        run: test/e2e/verify.sh
+
+      - name: Server logs
+        if: failure()
+        run: docker compose -f test/e2e/compose.yaml logs --no-color
+
+      - name: Stop the stack
+        if: always()
+        run: test/e2e/down.sh

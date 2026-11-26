@@ -117,6 +117,7 @@ templates/                  server-rendered pages: layout/, auth/, error/, parti
 translations/               what a person reads, one ARB catalogue per language (en.arb the source)
 migrations/                 NNNN_name.sql, forward only
 docs/openapi/               management-api.yaml, the Management API's contract
+test/e2e/                   the end-to-end stack: compose, up.sh, verify.sh (docs/design/end-to-end-scenarios.md)
 docs/site/                  the published API references: Scalar over both documents, and the guides (docs.yml)
 docs/guides/                the Management API guides, for callers: tokens, scopes, errors, paging, DPoP, registration
 docs/SECURITY-REVIEW.md     review of every adapter against the invariants
@@ -1381,6 +1382,7 @@ Three suites, three base classes, all under `test/`:
   acceptance request to `auth.*` that matches one of its operations has its response checked against
   it (`AuthorizationServerContract`, from `request()`); `AuthorizationServerCoverageTest` keeps its
   operations and the routes the same set. It describes, never gates: requests are not checked.
+- **End to end** (`test/e2e/`, `make e2e-up`): the production topology (Caddy with the production Caddyfile, PHP-FPM, PostgreSQL, Redis) built from the checkout, on `127.0.0.1` ports 80 and 443 with a `mkcert` certificate for `*.clavia.test`, and `test/e2e/verify.sh` checking it over HTTPS. It is the base of the Behat and Playwright suites of `docs/design/end-to-end-scenarios.md`, whose slices add the scenarios; the `End to end` workflow runs it.
 - **Use cases** take `new InMemoryDomainEvents()` and assert on `ofType()`.
 - **Conformance**: the OpenID Foundation suite passes the Config OP plan and, but for one test
   OAuth 2.1 forbids passing (a code flow without a nonce or PKCE), the Basic OP plan.
