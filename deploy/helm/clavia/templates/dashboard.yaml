@@ -1,0 +1,59 @@
+{{- if .Values.dashboard.enabled }}
+# The administration dashboard (clavia-dashboard), a confidential client of this server, served by
+# Caddy under management.{rootDomain}/dashboard. It calls auth.{rootDomain} from its own server.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "clavia.fullname" . }}-dashboard
+  labels:
+    {{- include "clavia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: dashboard
+spec:
+  replicas: {{ .Values.dashboard.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "clavia.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: dashboard
+  template:
+    metadata:
+      labels:
+        {{- include "clavia.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: dashboard
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: dashboard
+          image: {{ .Values.dashboard.image.repository }}:{{ .Values.dashboard.image.tag | default .Chart.AppVersion }}
+          imagePullPolicy: {{ .Values.dashboard.image.pullPolicy }}
+          envFrom:
+            - secretRef:
+                name: {{ required "dashboard.existingSecret is required when the dashboard is enabled" .Values.dashboard.existingSecret }}
+          ports:
+            - name: http
+              containerPort: 3000
+          readinessProbe:
+            tcpSocket:
+              port: http
+          {{- with .Values.dashboard.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "clavia.fullname" . }}-dashboard
+  labels:
+    {{- include "clavia.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "clavia.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: dashboard
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+{{- end }}

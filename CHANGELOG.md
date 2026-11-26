@@ -6,6 +6,24 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ## [Unreleased]
 
+### Added
+
+- **A production deployment kit** (#22): [`docs/PRODUCTION.md`](docs/PRODUCTION.md), a guide to hosts,
+  TLS, secrets, signing keys, the first start (the dashboard's client and the first administrator),
+  backups and upgrades; a Docker Compose file for one host ([`deploy/compose`](deploy/compose), with
+  Caddy obtaining certificates, migrations before the application starts, and the scheduled commands
+  run every minute and daily); and a Helm chart ([`deploy/helm/clavia`](deploy/helm/clavia): PHP-FPM
+  and Caddy in each pod, migrations as a Job before every install and upgrade, the scheduled commands
+  as CronJobs, an Ingress for both hosts, and the dashboard). One production Caddyfile serves both.
+
+### Fixed
+
+- **The version reported** by `/healthz` and `bin/clavia --version` is the release's: 0.2.0 to 0.4.0
+  reported `0.1.0`.
+- **The image's files are readable by PHP-FPM's workers** whatever the permissions of the checkout it
+  is built from. An image built from a checkout with private files answered every request with `500`;
+  the published images, built from a fresh checkout, were not affected.
+
 ## [0.4.0] - 2026-11-25
 
 Integrations: directories provisioning accounts through SCIM 2.0, enterprise sign-in through SAML 2.0,

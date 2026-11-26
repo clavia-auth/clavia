@@ -1,0 +1,123 @@
+# The application: PHP-FPM and Caddy in each pod. Caddy serves the static files and speaks FastCGI
+# to PHP-FPM on 127.0.0.1:9000; the init container copies the image's public/ to where Caddy reads
+# it, at the path PHP-FPM knows it by (/app/public), so an upgraded image's files are the ones served.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "clavia.fullname" . }}
+  labels:
+    {{- include "clavia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "clavia.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        {{- include "clavia.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: server
+      annotations:
+        # A new Caddyfile rolls the pods.
+        checksum/caddyfile: {{ .Files.Get "files/Caddyfile" | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: assets
+          image: {{ include "clavia.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["sh", "-c", "cp -a /app/public/. /shared/"]
+          volumeMounts:
+            - name: public
+              mountPath: /shared
+      containers:
+        - name: php
+          image: {{ include "clavia.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            {{- include "clavia.env" . | nindent 12 }}
+          envFrom:
+            {{- include "clavia.envFrom" . | nindent 12 }}
+          ports:
+            - name: fastcgi
+              containerPort: 9000
+          livenessProbe:
+            tcpSocket:
+              port: fastcgi
+            periodSeconds: 20
+          {{- with .Values.php.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        - name: caddy
+          image: {{ .Values.caddy.image.repository }}:{{ .Values.caddy.image.tag }}
+          imagePullPolicy: {{ .Values.caddy.image.pullPolicy }}
+          env:
+            - name: CLAVIA_ROOT_DOMAIN
+              value: {{ .Values.rootDomain | quote }}
+            # The Ingress terminates TLS: Caddy serves plain HTTP behind it, and believes its
+            # X-Forwarded-For only.
+            - name: CLAVIA_CADDY_SCHEME
+              value: http
+            - name: CLAVIA_CADDY_TRUSTED_PROXIES
+              value: {{ .Values.caddy.trustedProxies | quote }}
+            - name: CLAVIA_PHP_FASTCGI
+              value: 127.0.0.1:9000
+            - name: CLAVIA_DASHBOARD_UPSTREAM
+              value: {{ include "clavia.fullname" . }}-dashboard:3000
+          ports:
+            - name: http
+              containerPort: 80
+          # PHP's /healthz, through Caddy, on a port no Service exposes: ready when both can answer.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 20
+          volumeMounts:
+            - name: caddyfile
+              mountPath: /etc/caddy/Caddyfile
+              subPath: Caddyfile
+              readOnly: true
+            - name: public
+              mountPath: /app/public
+              readOnly: true
+            - name: caddy-data
+              mountPath: /data
+          {{- with .Values.caddy.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: caddyfile
+          configMap:
+            name: {{ include "clavia.fullname" . }}-caddy
+        - name: public
+          emptyDir: {}
+        # Caddy keeps no certificate here (the Ingress terminates TLS); it needs a writable /data all the same.
+        - name: caddy-data
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

@@ -1,0 +1,12 @@
+Clavia {{ .Chart.AppVersion }} is installed as {{ include "clavia.fullname" . }}, serving:
+
+  https://auth.{{ .Values.rootDomain }}         sign-in, OAuth 2.1 and OpenID Connect
+  https://management.{{ .Values.rootDomain }}   the Management API, SCIM{{ if .Values.dashboard.enabled }} and the dashboard{{ end }}
+
+The migrations ran before the pods started. On a first install, bootstrap it from a pod
+(docs/PRODUCTION.md, "First start"):
+
+  kubectl -n {{ .Release.Namespace }} exec deploy/{{ include "clavia.fullname" . }} -c php -- php bin/clavia keys:generate
+  kubectl -n {{ .Release.Namespace }} exec deploy/{{ include "clavia.fullname" . }} -c php -- php bin/clavia management-api:register
+
+then register the dashboard's client and the first administrator as the guide says.

@@ -1,0 +1,102 @@
+# Clavia's Helm chart (docs/PRODUCTION.md, "Kubernetes").
+#
+# Before installing, create the Secret named by `existingSecret` with Clavia's secret settings,
+# and, for the dashboard, the one named by `dashboard.existingSecret`. The chart never holds a
+# secret itself, so nothing secret is ever in a values file or in Helm's release history.
+
+# The domain: Clavia serves auth.{rootDomain} and management.{rootDomain}. Required.
+rootDomain: ""
+
+image:
+  repository: ghcr.io/clavia-auth/clavia
+  # The chart's appVersion when empty.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# A Secret in the release's namespace with Clavia's secret settings, passed whole as environment
+# variables: CLAVIA_SECRET_ENCRYPTION_KEY, CLAVIA_DATABASE_URL, CLAVIA_REDIS_URL, CLAVIA_SMTP_PASSWORD,
+# and any other secret setting (a KMS's credentials, a social provider's client secret). Required.
+existingSecret: ""
+
+# Clavia's other settings, as environment variables (every one is in src/Configuration/Settings.php).
+# CLAVIA_ROOT_DOMAIN comes from rootDomain; CLAVIA_ENV is production unless set here.
+env:
+  CLAVIA_ENV: production
+  CLAVIA_EMAIL_BACKEND: smtp
+  # CLAVIA_EMAIL_FROM: "Clavia <no-reply@example.com>"
+  # CLAVIA_SMTP_HOST: smtp.example.com
+  # CLAVIA_SMTP_USERNAME: clavia
+  # CLAVIA_SIGNING_BACKEND: aws-kms
+  # CLAVIA_SIGNING_KEY_REF: arn:aws:kms:eu-west-1:111122223333:key/…
+  # CLAVIA_AWS_REGION: eu-west-1
+
+replicaCount: 2
+
+# Migrations, as a Job before every install and upgrade: the new version starts on a schema it knows.
+migrations:
+  enabled: true
+  backoffLimit: 3
+
+# The scheduled commands, as CronJobs (times are the cluster's, UTC unless it says otherwise). Every
+# command exits when done, and running two at once is safe; Forbid keeps a slow run from piling up.
+schedules:
+  - name: jobs
+    schedule: "* * * * *"
+    command: jobs:run
+  - name: webhooks
+    schedule: "* * * * *"
+    command: webhooks:deliver
+  - name: audit-purge
+    schedule: "0 3 * * *"
+    command: audit:purge
+  - name: clients-purge
+    schedule: "15 3 * * *"
+    command: clients:purge-unused
+
+caddy:
+  image:
+    repository: caddy
+    tag: 2-alpine
+    pullPolicy: IfNotPresent
+  # What stands in front (the Ingress controller): the client address is read from X-Forwarded-For
+  # only on a request from these ranges. Name your Ingress controller's pods' range if you can.
+  trustedProxies: private_ranges
+  resources: {}
+
+php:
+  resources: {}
+
+service:
+  type: ClusterIP
+  port: 80
+
+# One Ingress for both hosts, terminating TLS. Their separation stays: each host goes to its own
+# site in Caddy.
+ingress:
+  enabled: true
+  className: ""
+  annotations: {}
+  # A Secret with a certificate for both hosts (a wildcard, or one cert-manager issues). TLS is off
+  # at the Ingress when empty: then something in front of it must terminate it.
+  tlsSecretName: ""
+
+# The administration dashboard (clavia-dashboard), served under management.{rootDomain}/dashboard.
+dashboard:
+  enabled: true
+  image:
+    repository: ghcr.io/clavia-auth/clavia-dashboard
+    tag: ""
+    pullPolicy: IfNotPresent
+  # A Secret with the dashboard's settings (CLAVIA_ISSUER, CLAVIA_CLIENT_ID, CLAVIA_CLIENT_SECRET,
+  # CLAVIA_MANAGEMENT_API, DASHBOARD_URL, DASHBOARD_SESSION_SECRET, DASHBOARD_REDIS_URL). Required
+  # when the dashboard is enabled.
+  existingSecret: ""
+  replicaCount: 1
+  resources: {}
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

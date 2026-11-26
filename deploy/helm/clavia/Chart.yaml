@@ -1,0 +1,16 @@
+apiVersion: v2
+name: clavia
+description: |
+  Clavia, an open-source OAuth 2.1 and OpenID Connect authorization server: PHP-FPM and Caddy in each
+  pod, migrations before every install and upgrade, the scheduled commands as CronJobs, and the
+  administration dashboard. PostgreSQL and Redis are yours to provide.
+type: application
+# The chart is released with Clavia, at the same version (docs/RELEASING.md).
+version: 0.4.0
+appVersion: "0.4.0"
+kubeVersion: ">=1.25.0-0"
+home: https://github.com/clavia-auth/clavia
+sources:
+  - https://github.com/clavia-auth/clavia
+  - https://github.com/clavia-auth/clavia-dashboard
+keywords: [oauth2, openid-connect, identity, scim, saml]
