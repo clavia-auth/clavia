@@ -15,6 +15,7 @@ use Clavia\Application\Management\Roles\ReadRoleHolders;
 use Clavia\Application\Management\Roles\RoleAssignments;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Rbac\RoleId;
+use Fig\Http\Message\RequestMethodInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -41,16 +42,16 @@ final readonly class RoleUsersHandler implements RequestHandlerInterface
         $role = RoleId::fromString($management->path('role_id'));
 
         switch ($request->getMethod()) {
-            case 'GET':
+            case RequestMethodInterface::METHOD_GET:
                 return $this->responder->json(ManagementViews::page(
                     ($this->holders)($role, Paging::fromRequest($management)),
                     ManagementViews::user(...),
                 ));
-            case 'POST':
+            case RequestMethodInterface::METHOD_POST:
                 $this->assignments->give($role, RoleFields::userIds($management->body));
 
                 return $this->responder->noContent();
-            case 'DELETE':
+            case RequestMethodInterface::METHOD_DELETE:
                 $this->assignments->take($role, UserId::fromString($management->path('user_id')));
 
                 return $this->responder->noContent();

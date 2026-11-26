@@ -35,6 +35,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\OidcFixtures;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -433,7 +434,13 @@ final class PasswordlessTest extends AcceptanceTestCase
         // the person by `sub` alone.
         $accessToken = $token['access_token'] ?? null;
         self::assertIsString($accessToken);
-        $userinfo = self::json($this->request('GET', '/oidc/userinfo', ['Authorization' => 'Bearer ' . $accessToken]));
+        $userinfo = self::json(
+            $this->request(
+                RequestMethodInterface::METHOD_GET,
+                '/oidc/userinfo',
+                ['Authorization' => 'Bearer ' . $accessToken],
+            ),
+        );
         self::assertSame(self::EMAIL, $userinfo['email'] ?? null);
         self::assertTrue($userinfo['email_verified'] ?? null);
     }
@@ -462,22 +469,23 @@ final class PasswordlessTest extends AcceptanceTestCase
     {
         $this->adminToken();
 
-        $email = self::json($this->api('GET', '/api/v1/connections/email'));
+        $email = self::json($this->api(RequestMethodInterface::METHOD_GET, '/api/v1/connections/email'));
         self::assertSame('passwordless', $email['strategy']);
         self::assertTrue($email['usable']);
         self::assertSame(
             StatusCodeInterface::STATUS_CONFLICT,
-            $this->api('DELETE', '/api/v1/connections/email')->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_DELETE, '/api/v1/connections/email')->getStatusCode(),
         );
-        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $this->api('POST', '/api/v1/connections', [
+        $sms = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/connections', [
             'name' => 'sms',
             'display_name' => 'SMS',
             'strategy' => 'passwordless',
-        ])->getStatusCode());
+        ]);
+        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $sms->getStatusCode());
 
         $this->boot(['CLAVIA_EMAIL_BACKEND' => 'none']);
         $this->adminToken();
-        $email = self::json($this->api('GET', '/api/v1/connections/email'));
+        $email = self::json($this->api(RequestMethodInterface::METHOD_GET, '/api/v1/connections/email'));
         self::assertFalse($email['configured']);
         self::assertFalse($email['usable']);
     }

@@ -15,6 +15,7 @@ use ClaviaTest\Support\AcceptanceTestCase;
 use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -35,7 +36,7 @@ final class ScimSurfaceTest extends AcceptanceTestCase
     {
         $token = $this->provisioningToken();
 
-        $config = $this->scim('GET', self::CONFIG, $token);
+        $config = $this->scim(RequestMethodInterface::METHOD_GET, self::CONFIG, $token);
 
         self::assertSame(StatusCodeInterface::STATUS_OK, $config->getStatusCode(), (string) $config->getBody());
         self::assertSame('application/scim+json', $config->getHeaderLine('Content-Type'));
@@ -59,10 +60,14 @@ final class ScimSurfaceTest extends AcceptanceTestCase
     {
         $token = $this->provisioningToken();
 
-        $types = self::document($this->scim('GET', '/scim/v2/ResourceTypes', $token));
-        $schemas = self::document($this->scim('GET', '/scim/v2/Schemas', $token));
-        $user = $this->scim('GET', '/scim/v2/ResourceTypes/User', $token);
-        $schema = $this->scim('GET', '/scim/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:User', $token);
+        $types = self::document($this->scim(RequestMethodInterface::METHOD_GET, '/scim/v2/ResourceTypes', $token));
+        $schemas = self::document($this->scim(RequestMethodInterface::METHOD_GET, '/scim/v2/Schemas', $token));
+        $user = $this->scim(RequestMethodInterface::METHOD_GET, '/scim/v2/ResourceTypes/User', $token);
+        $schema = $this->scim(
+            RequestMethodInterface::METHOD_GET,
+            '/scim/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:User',
+            $token,
+        );
 
         self::assertSame(['urn:ietf:params:scim:api:messages:2.0:ListResponse'], $types['schemas']);
         self::assertSame(['User', 'Group'], array_column((array) $types['Resources'], 'id'));
@@ -74,7 +79,7 @@ final class ScimSurfaceTest extends AcceptanceTestCase
         self::assertIsArray($attributes);
         self::assertContains('userName', array_column($attributes, 'name'));
         self::assertNotContains('password', array_column($attributes, 'name'), 'Never provisioned.');
-        $unknown = $this->scim('GET', '/scim/v2/ResourceTypes/Device', $token);
+        $unknown = $this->scim(RequestMethodInterface::METHOD_GET, '/scim/v2/ResourceTypes/Device', $token);
         self::assertScimError(StatusCodeInterface::STATUS_NOT_FOUND, $unknown);
     }
 
@@ -83,15 +88,25 @@ final class ScimSurfaceTest extends AcceptanceTestCase
         $token = $this->provisioningToken();
 
         $notImplemented = StatusCodeInterface::STATUS_NOT_IMPLEMENTED;
-        self::assertScimError($notImplemented, $this->scim('POST', '/scim/v2/Bulk', $token));
-        self::assertScimError($notImplemented, $this->scim('GET', '/scim/v2/Me', $token));
-        self::assertScimError(StatusCodeInterface::STATUS_NOT_FOUND, $this->scim('GET', '/scim/v2/Nothing', $token));
+        self::assertScimError(
+            $notImplemented,
+            $this->scim(RequestMethodInterface::METHOD_POST, '/scim/v2/Bulk', $token),
+        );
+        self::assertScimError($notImplemented, $this->scim(RequestMethodInterface::METHOD_GET, '/scim/v2/Me', $token));
+        self::assertScimError(
+            StatusCodeInterface::STATUS_NOT_FOUND,
+            $this->scim(RequestMethodInterface::METHOD_GET, '/scim/v2/Nothing', $token),
+        );
     }
 
     public function testWithoutATokenNothingIsTold(): void
     {
         foreach ([self::CONFIG, '/scim/v2/Nothing', '/scim/v2/Bulk'] as $path) {
-            $refused = $this->scim($path === '/scim/v2/Bulk' ? 'POST' : 'GET', $path, null);
+            $refused = $this->scim(
+                $path === '/scim/v2/Bulk' ? RequestMethodInterface::METHOD_POST : RequestMethodInterface::METHOD_GET,
+                $path,
+                null,
+            );
 
             self::assertScimError(StatusCodeInterface::STATUS_UNAUTHORIZED, $refused);
             self::assertSame('Bearer realm="scim"', $refused->getHeaderLine('WWW-Authenticate'), 'RFC 6750 §3.1.');
@@ -103,25 +118,30 @@ final class ScimSurfaceTest extends AcceptanceTestCase
         $clock = $this->freezeClock('2026-01-15T10:00:00Z');
         $this->adminToken();
         $expired = $this->provisioningToken(['expires_in' => 86_400]);
-        $revoked = self::document($this->api('POST', '/api/v1/provisioning-tokens', [
+        $revoked = self::document($this->api(RequestMethodInterface::METHOD_POST, '/api/v1/provisioning-tokens', [
             'connection' => 'password',
             'description' => 'Revoked',
         ]));
         self::assertIsString($revoked['id']);
         self::assertIsString($revoked['token']);
-        $this->api('DELETE', '/api/v1/provisioning-tokens/' . $revoked['id']);
+        $this->api(RequestMethodInterface::METHOD_DELETE, '/api/v1/provisioning-tokens/' . $revoked['id']);
         $clock->advance(86_400);
         $management = $this->adminToken();
 
         $bodies = [];
         foreach (['not-a-real-token', $expired, $revoked['token'], $management] as $token) {
-            $refused = $this->scim('GET', self::CONFIG, $token);
+            $refused = $this->scim(RequestMethodInterface::METHOD_GET, self::CONFIG, $token);
             self::assertScimError(StatusCodeInterface::STATUS_UNAUTHORIZED, $refused);
             self::assertSame('Bearer realm="scim", error="invalid_token"', $refused->getHeaderLine('WWW-Authenticate'));
             $bodies[] = (string) $refused->getBody();
         }
         foreach (['Basic ' . base64_encode('a:b'), 'DPoP abc', 'Bearer'] as $header) {
-            $refused = $this->request('GET', self::CONFIG, ['Authorization' => $header], self::MANAGEMENT_HOST);
+            $refused = $this->request(
+                RequestMethodInterface::METHOD_GET,
+                self::CONFIG,
+                ['Authorization' => $header],
+                self::MANAGEMENT_HOST,
+            );
             self::assertScimError(StatusCodeInterface::STATUS_UNAUTHORIZED, $refused, $header);
             $bodies[] = (string) $refused->getBody();
         }
@@ -133,10 +153,10 @@ final class ScimSurfaceTest extends AcceptanceTestCase
     {
         $this->boot(['CLAVIA_TOKEN_MAX_FAILURES' => '2', 'CLAVIA_TOKEN_FAILURE_WINDOW' => '600']);
         $token = $this->provisioningToken();
-        $this->scim('GET', self::CONFIG, 'wrong-1');
-        $this->scim('GET', self::CONFIG, 'wrong-2');
+        $this->scim(RequestMethodInterface::METHOD_GET, self::CONFIG, 'wrong-1');
+        $this->scim(RequestMethodInterface::METHOD_GET, self::CONFIG, 'wrong-2');
 
-        $throttled = $this->scim('GET', self::CONFIG, $token);
+        $throttled = $this->scim(RequestMethodInterface::METHOD_GET, self::CONFIG, $token);
 
         self::assertScimError(StatusCodeInterface::STATUS_TOO_MANY_REQUESTS, $throttled, 'Even the right token.');
         self::assertSame('600', $throttled->getHeaderLine('Retry-After'));
@@ -148,7 +168,10 @@ final class ScimSurfaceTest extends AcceptanceTestCase
         $token = $this->provisioningToken();
 
         foreach (range(1, 5) as $request) {
-            self::assertSame(StatusCodeInterface::STATUS_OK, $this->scim('GET', self::CONFIG, $token)->getStatusCode());
+            self::assertSame(
+                StatusCodeInterface::STATUS_OK,
+                $this->scim(RequestMethodInterface::METHOD_GET, self::CONFIG, $token)->getStatusCode(),
+            );
         }
     }
 
@@ -156,7 +179,7 @@ final class ScimSurfaceTest extends AcceptanceTestCase
     private function provisioningToken(array $options = []): string
     {
         $this->adminToken();
-        $issued = $this->api('POST', '/api/v1/provisioning-tokens', $options + [
+        $issued = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/provisioning-tokens', $options + [
             'connection' => 'password',
             'description' => 'Entra ID',
         ]);

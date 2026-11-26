@@ -13,6 +13,7 @@ namespace Clavia\Adapter\Primary\Http\Management;
 
 use Clavia\Application\Management\Roles\RoleAssignments;
 use Clavia\Domain\Identity\UserId;
+use Fig\Http\Message\RequestMethodInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -37,8 +38,11 @@ final readonly class UserRolesHandler implements RequestHandlerInterface
         $user = UserId::fromString($management->path('user_id'));
 
         $roles = match ($request->getMethod()) {
-            'GET' => $this->assignments->rolesOf($user),
-            'PUT' => $this->assignments->replaceRolesOf($user, RoleFields::roleIds($management->body)),
+            RequestMethodInterface::METHOD_GET => $this->assignments->rolesOf($user),
+            RequestMethodInterface::METHOD_PUT => $this->assignments->replaceRolesOf(
+                $user,
+                RoleFields::roleIds($management->body),
+            ),
             default => throw new LogicException('Routed with a method the handler does not serve.'),
         };
 

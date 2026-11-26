@@ -16,6 +16,7 @@ use Clavia\Application\Management\ProvisioningTokens\NewProvisioningToken;
 use Clavia\Application\Management\ProvisioningTokens\ReadProvisioningTokens;
 use Clavia\Domain\Provisioning\ProvisioningToken;
 use Clavia\Domain\Provisioning\SubjectAttribute;
+use Fig\Http\Message\RequestMethodInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -42,8 +43,8 @@ final readonly class ProvisioningTokensHandler implements RequestHandlerInterfac
         $management = ManagementRequest::of($request);
 
         return match ($request->getMethod()) {
-            'GET' => $this->list($management),
-            'POST' => $this->issue($management->body),
+            RequestMethodInterface::METHOD_GET => $this->list($management),
+            RequestMethodInterface::METHOD_POST => $this->issue($management->body),
             default => throw new LogicException('Routed with a method the handler does not serve.'),
         };
     }

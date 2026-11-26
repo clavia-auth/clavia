@@ -18,6 +18,7 @@ use Clavia\Domain\OAuth2\Dpop\JwkThumbprint;
 use Clavia\Domain\OAuth2\Dpop\ProofRequirement;
 use Clavia\Domain\Shared\InvalidValue;
 use DateTimeImmutable;
+use Fig\Http\Message\RequestMethodInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -53,7 +54,7 @@ final class ProofRequirementTest extends TestCase
     /** @return iterable<string, array{DpopProof, DpopRefusal}> */
     public static function refusals(): iterable
     {
-        yield 'another method' => [self::proof(method: 'GET'), DpopRefusal::WrongMethod];
+        yield 'another method' => [self::proof(method: RequestMethodInterface::METHOD_GET), DpopRefusal::WrongMethod];
         yield 'the method in lower case' => [self::proof(method: 'post'), DpopRefusal::WrongMethod];
         yield 'another path' => [self::proof(url: 'https://auth.clavia.test/oauth2/par'), DpopRefusal::WrongUrl];
         yield 'another host' => [self::proof(url: 'https://evil.test/oauth2/token'), DpopRefusal::WrongUrl];
@@ -78,7 +79,12 @@ final class ProofRequirementTest extends TestCase
 
     public function testWithATokenThePresentedHashAndTheBoundKeyMustMatch(): void
     {
-        $requirement = new ProofRequirement('POST', self::URL, 'the-token', JwkThumbprint::fromString(self::KEY));
+        $requirement = new ProofRequirement(
+            RequestMethodInterface::METHOD_POST,
+            self::URL,
+            'the-token',
+            JwkThumbprint::fromString(self::KEY),
+        );
         $ath = ProofRequirement::hashOf('the-token');
 
         self::assertNull($requirement->check(self::proof(ath: $ath), self::now(), 60));
@@ -102,7 +108,7 @@ final class ProofRequirementTest extends TestCase
 
     private static function requirement(): ProofRequirement
     {
-        return new ProofRequirement('POST', self::URL);
+        return new ProofRequirement(RequestMethodInterface::METHOD_POST, self::URL);
     }
 
     private static function now(): DateTimeImmutable
@@ -114,7 +120,7 @@ final class ProofRequirementTest extends TestCase
      * @param non-empty-string|null $ath
      */
     private static function proof(
-        string $method = 'POST',
+        string $method = RequestMethodInterface::METHOD_POST,
         string $url = self::URL,
         string $issuedAt = '2026-01-15T10:00:00Z',
         ?string $ath = null,
@@ -123,7 +129,7 @@ final class ProofRequirementTest extends TestCase
         return new DpopProof(
             JwkThumbprint::fromString($key),
             DpopAlgorithm::ES256,
-            $method === '' ? 'POST' : $method,
+            $method === '' ? RequestMethodInterface::METHOD_POST : $method,
             $url === '' ? self::URL : $url,
             new DateTimeImmutable($issuedAt),
             'jti-1',

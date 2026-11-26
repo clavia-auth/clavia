@@ -21,6 +21,7 @@ use Clavia\Domain\Claims\ClaimName;
 use Clavia\Domain\Claims\ClaimSource;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Shared\InvalidValue;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
@@ -48,9 +49,9 @@ final readonly class ClientHandler implements RequestHandlerInterface
         $id = ClientId::fromString($management->path('client_id'));
 
         switch ($request->getMethod()) {
-            case 'GET':
+            case RequestMethodInterface::METHOD_GET:
                 return $this->responder->json(ManagementViews::client($this->read->one($id)));
-            case 'PATCH':
+            case RequestMethodInterface::METHOD_PATCH:
                 $body = $management->body;
                 $claims = self::claims($body);
                 if ($claims instanceof Problem) {
@@ -75,7 +76,7 @@ final readonly class ClientHandler implements RequestHandlerInterface
                 ));
 
                 return $this->responder->json(ManagementViews::client($this->read->describe($updated)));
-            case 'DELETE':
+            case RequestMethodInterface::METHOD_DELETE:
                 ($this->delete)($id, $management->caller);
 
                 return $this->responder->noContent();

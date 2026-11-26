@@ -15,6 +15,7 @@ use Clavia\Application\Management\ManagementPermission;
 use Clavia\Application\Management\Webhooks\ReadWebhooks;
 use Clavia\Application\Management\Webhooks\RegisterWebhook;
 use Clavia\Domain\Webhook\WebhookEndpoint;
+use Fig\Http\Message\RequestMethodInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -40,12 +41,12 @@ final readonly class WebhooksHandler implements RequestHandlerInterface
         $management = ManagementRequest::of($request);
 
         switch ($request->getMethod()) {
-            case 'GET':
+            case RequestMethodInterface::METHOD_GET:
                 return $this->responder->jsonList(array_map(
                     static fn (WebhookEndpoint $endpoint): array => ManagementViews::webhook($endpoint),
                     $this->read->all(),
                 ));
-            case 'POST':
+            case RequestMethodInterface::METHOD_POST:
                 $management->caller->require(ManagementPermission::ReadAuditEvents);
                 $body = $management->body;
                 $created = ($this->register)(

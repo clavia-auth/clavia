@@ -14,6 +14,7 @@ namespace Clavia\Adapter\Primary\Http\Management;
 use Clavia\Application\Management\Users\CreateUser;
 use Clavia\Application\Management\Users\NewUser;
 use Clavia\Application\Management\Users\ReadUsers;
+use Fig\Http\Message\RequestMethodInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -37,11 +38,11 @@ final readonly class UsersHandler implements RequestHandlerInterface
         $management = ManagementRequest::of($request);
 
         return match ($request->getMethod()) {
-            'GET' => $this->responder->json(ManagementViews::page(
+            RequestMethodInterface::METHOD_GET => $this->responder->json(ManagementViews::page(
                 $this->read->page(Paging::fromRequest($management)),
                 ManagementViews::user(...),
             )),
-            'POST' => $this->create($management->body),
+            RequestMethodInterface::METHOD_POST => $this->create($management->body),
             default => throw new LogicException('Routed with a method the handler does not serve.'),
         };
     }

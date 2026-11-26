@@ -13,6 +13,7 @@ namespace ClaviaTest\Support\Fake;
 
 use Clavia\Adapter\Secondary\Signing\Remote\Azure\AzureKeyVaultKey;
 use Clavia\Domain\Shared\Base64Url;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\RequestInterface;
@@ -59,9 +60,9 @@ final class FakeKeyVault
         $numbers = $this->hsm->numbers();
 
         return match ([$request->getMethod(), (string) $request->getUri()->withQuery('')]) {
-            ['POST', $this->keyUrl . '/sign'] => $this->sign($request, $kid),
-            ['POST', $this->keyUrl . '/decrypt'] => $this->decrypt($request, $kid),
-            ['GET', $this->keyUrl] => new JsonResponse([
+            [RequestMethodInterface::METHOD_POST, $this->keyUrl . '/sign'] => $this->sign($request, $kid),
+            [RequestMethodInterface::METHOD_POST, $this->keyUrl . '/decrypt'] => $this->decrypt($request, $kid),
+            [RequestMethodInterface::METHOD_GET, $this->keyUrl] => new JsonResponse([
                 'key' => [
                     'kid' => $kid,
                     'kty' => $this->keyType,

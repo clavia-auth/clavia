@@ -19,6 +19,7 @@ use Clavia\Application\Management\Users\UserChanges;
 use Clavia\Domain\Identity\AppMetadata;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Shared\InvalidValue;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
@@ -46,9 +47,9 @@ final readonly class UserHandler implements RequestHandlerInterface
         $id = UserId::fromString($management->path('user_id'));
 
         switch ($request->getMethod()) {
-            case 'GET':
+            case RequestMethodInterface::METHOD_GET:
                 return $this->responder->json(ManagementViews::user($this->read->one($id)));
-            case 'PATCH':
+            case RequestMethodInterface::METHOD_PATCH:
                 $body = $management->body;
                 $metadata = null;
                 if ($body->has('app_metadata')) {
@@ -74,7 +75,7 @@ final readonly class UserHandler implements RequestHandlerInterface
                     UserFields::profileChanges($body),
                     $metadata,
                 ))));
-            case 'DELETE':
+            case RequestMethodInterface::METHOD_DELETE:
                 ($this->delete)($id, $management->caller);
 
                 return $this->responder->noContent();

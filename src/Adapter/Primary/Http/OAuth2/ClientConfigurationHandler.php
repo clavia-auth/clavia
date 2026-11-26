@@ -21,6 +21,7 @@ use Clavia\Application\Clients\Registration\RegistrationRefused;
 use Clavia\Application\Clients\Registration\UpdateClientConfiguration;
 use Clavia\Application\OAuth2\ProtectedResource\TokenScheme;
 use Clavia\Domain\OAuth2\BearerTokenError;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use LogicException;
 use Psr\Http\Message\ResponseFactoryInterface;
@@ -65,9 +66,11 @@ final readonly class ClientConfigurationHandler implements RequestHandlerInterfa
 
         try {
             return match ($request->getMethod()) {
-                'GET' => $this->describe(($this->read)($token, $clientId)),
-                'PUT' => $this->describe(($this->update)($token, $clientId, ClientMetadataBody::members($request))),
-                'DELETE' => $this->deleted($token, $clientId),
+                RequestMethodInterface::METHOD_GET => $this->describe(($this->read)($token, $clientId)),
+                RequestMethodInterface::METHOD_PUT => $this->describe(
+                    ($this->update)($token, $clientId, ClientMetadataBody::members($request)),
+                ),
+                RequestMethodInterface::METHOD_DELETE => $this->deleted($token, $clientId),
                 default => throw new LogicException('Routed with a method the handler does not serve.'),
             };
         } catch (RegistrationAccessTokenRejected $refusal) {

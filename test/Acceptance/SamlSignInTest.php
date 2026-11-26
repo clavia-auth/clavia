@@ -26,6 +26,7 @@ use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\Saml\TestIdentityProvider as Idp;
 use ClaviaTest\Support\TestStorage;
 use DOMDocument;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -200,7 +201,7 @@ final class SamlSignInTest extends AcceptanceTestCase
     public function testASwitchedOffConnectionIsGone(): void
     {
         $this->registerSaml([]);
-        $this->api('PATCH', '/api/v1/connections/acme', ['is_enabled' => false]);
+        $this->api(RequestMethodInterface::METHOD_PATCH, '/api/v1/connections/acme', ['is_enabled' => false]);
 
         self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $this->get('/auth/saml/acme')->getStatusCode());
     }
@@ -259,7 +260,7 @@ final class SamlSignInTest extends AcceptanceTestCase
     /** @param array<string, mixed> $options */
     private function registerSaml(array $options): void
     {
-        $created = $this->api('POST', '/api/v1/connections', [
+        $created = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/connections', [
             'name' => 'acme',
             'display_name' => 'Acme staff',
             'strategy' => 'saml',

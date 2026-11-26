@@ -26,6 +26,7 @@ use ClaviaTest\Support\OidcFixtures;
 use ClaviaTest\Support\TestEnvironment;
 use ClaviaTest\Support\TestStorage;
 use DateTimeImmutable;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -526,20 +527,28 @@ final class OidcTest extends AcceptanceTestCase
         $payload = $this->completeFlow('openid');
         self::assertIsString($payload['access_token']);
 
-        $malformed = $this->request('GET', '/oidc/userinfo', ['Authorization' => 'Bearer two tokens']);
+        $malformed = $this->request(
+            RequestMethodInterface::METHOD_GET,
+            '/oidc/userinfo',
+            ['Authorization' => 'Bearer two tokens'],
+        );
         self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $malformed->getStatusCode());
         self::assertSame('invalid_request', self::json($malformed)['error']);
 
         // RFC 6750 §2: one way of sending the token per request.
         $twice = $this->request(
-            'GET',
+            RequestMethodInterface::METHOD_GET,
             '/oidc/userinfo?access_token=' . rawurlencode($payload['access_token']),
             ['Authorization' => 'Bearer ' . $payload['access_token']],
         );
         self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $twice->getStatusCode());
 
         // Another scheme is not bearer credentials at all.
-        $basic = $this->request('GET', '/oidc/userinfo', ['Authorization' => 'Basic ' . base64_encode('a:b')]);
+        $basic = $this->request(
+            RequestMethodInterface::METHOD_GET,
+            '/oidc/userinfo',
+            ['Authorization' => 'Basic ' . base64_encode('a:b')],
+        );
         self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $basic->getStatusCode());
         self::assertSame(sprintf('Bearer realm="%s"', self::ISSUER), $basic->getHeaderLine('WWW-Authenticate'));
     }
@@ -547,7 +556,7 @@ final class OidcTest extends AcceptanceTestCase
     public function testUserinfoAnswersJsonEvenToABrowser(): void
     {
         // Its format is fixed by the specification, whatever `Accept` asks for.
-        $response = $this->request('GET', '/oidc/userinfo', [
+        $response = $this->request(RequestMethodInterface::METHOD_GET, '/oidc/userinfo', [
             'Accept' => 'text/html',
             'Authorization' => 'Bearer nope',
         ]);
@@ -604,7 +613,11 @@ final class OidcTest extends AcceptanceTestCase
     {
         self::assertIsString($accessToken);
 
-        return $this->request('GET', '/oidc/userinfo', ['Authorization' => 'Bearer ' . $accessToken]);
+        return $this->request(
+            RequestMethodInterface::METHOD_GET,
+            '/oidc/userinfo',
+            ['Authorization' => 'Bearer ' . $accessToken],
+        );
     }
 
     /** @return list<string> */

@@ -29,6 +29,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use DateTimeImmutable;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -176,10 +177,10 @@ final class RbacTest extends AcceptanceTestCase
         $accessToken = (string) $token['access_token'];
         self::assertSame(
             StatusCodeInterface::STATUS_OK,
-            $this->api('GET', '/api/v1/users', token: $accessToken)->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/users', token: $accessToken)->getStatusCode(),
         );
         $forbidden = $this->api(
-            'POST',
+            RequestMethodInterface::METHOD_POST,
             '/api/v1/users',
             ['email' => 'x@clavia.dev', 'password' => 'a-good-password'],
             token: $accessToken,
@@ -204,10 +205,18 @@ final class RbacTest extends AcceptanceTestCase
         $this->adminToken();
         $id = $this->managementApi()->id->value;
 
-        $response = $this->api('PATCH', '/api/v1/resource-servers/' . $id, ['enforce_policies' => false]);
+        $response = $this->api(
+            RequestMethodInterface::METHOD_PATCH,
+            '/api/v1/resource-servers/' . $id,
+            ['enforce_policies' => false],
+        );
 
         self::assertSame(StatusCodeInterface::STATUS_CONFLICT, $response->getStatusCode());
-        self::assertTrue(self::document($this->api('GET', '/api/v1/resource-servers/' . $id))['enforce_policies']);
+        self::assertTrue(
+            self::document(
+                $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/resource-servers/' . $id),
+            )['enforce_policies'],
+        );
     }
 
     public function testRolesCanBeSwitchedOnAndOffForAnOrdinaryApi(): void
@@ -215,14 +224,14 @@ final class RbacTest extends AcceptanceTestCase
         $this->adminToken();
 
         $created = self::document($this->api(
-            'POST',
+            RequestMethodInterface::METHOD_POST,
             '/api/v1/resource-servers',
             ['identifier' => 'https://ordinary.test/', 'enforce_policies' => true],
         ));
         self::assertTrue($created['enforce_policies']);
 
         $patched = $this->api(
-            'PATCH',
+            RequestMethodInterface::METHOD_PATCH,
             '/api/v1/resource-servers/' . (string) $created['id'],
             ['enforce_policies' => false],
         );
@@ -239,7 +248,7 @@ final class RbacTest extends AcceptanceTestCase
         $user = $this->user();
         $reference = static fn (string $value): array => ['resource_server_id' => $api->id->value, 'value' => $value];
 
-        $created = $this->api('POST', self::ROLES, [
+        $created = $this->api(RequestMethodInterface::METHOD_POST, self::ROLES, [
             'name' => 'Support',
             'description' => 'Read-only for the help desk',
             'permissions' => [$reference('read:users')],
@@ -259,7 +268,7 @@ final class RbacTest extends AcceptanceTestCase
             $role['permissions'],
         );
 
-        $patched = $this->api('PATCH', self::ROLES . '/' . $id, [
+        $patched = $this->api(RequestMethodInterface::METHOD_PATCH, self::ROLES . '/' . $id, [
             'permissions' => [$reference('read:users'), $reference('read:clients')],
         ]);
         self::assertSame(StatusCodeInterface::STATUS_OK, $patched->getStatusCode(), (string) $patched->getBody());
@@ -268,36 +277,46 @@ final class RbacTest extends AcceptanceTestCase
         $body = ['user_ids' => [$user->id->value]];
         self::assertSame(
             StatusCodeInterface::STATUS_NO_CONTENT,
-            $this->api('POST', self::ROLES . '/' . $id . '/users', $body)->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_POST, self::ROLES . '/' . $id . '/users', $body)->getStatusCode(),
         );
         self::assertSame(
             StatusCodeInterface::STATUS_NO_CONTENT,
-            $this->api('POST', self::ROLES . '/' . $id . '/users', $body)->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_POST, self::ROLES . '/' . $id . '/users', $body)->getStatusCode(),
         );
-        $holders = self::document($this->api('GET', self::ROLES . '/' . $id . '/users'));
+        $holders = self::document($this->api(RequestMethodInterface::METHOD_GET, self::ROLES . '/' . $id . '/users'));
         self::assertSame(1, $holders['total'], 'Giving a role again is not a second assignment.');
         /** @var list<array{email: string}> $items */
         $items = $holders['items'];
         self::assertSame(self::TEST_USER_EMAIL, $items[0]['email']);
 
-        $roles = self::document($this->api('GET', '/api/v1/users/' . $user->id->value . '/roles'));
+        $roles = self::document(
+            $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/users/' . $user->id->value . '/roles'),
+        );
         self::assertSame(['Support'], array_column($roles, 'name'));
         /** @var list<array{value: string, roles: list<array{id: string, name: string}>}> $effective */
-        $effective = self::document($this->api('GET', '/api/v1/users/' . $user->id->value . '/permissions'));
+        $effective = self::document(
+            $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/users/' . $user->id->value . '/permissions'),
+        );
         self::assertSame(['read:clients', 'read:users'], array_column($effective, 'value'));
         self::assertSame([['id' => $id, 'name' => 'Support']], $effective[0]['roles']);
 
-        $taken = $this->api('DELETE', self::ROLES . '/' . $id . '/users/' . $user->id->value);
+        $taken = $this->api(
+            RequestMethodInterface::METHOD_DELETE,
+            self::ROLES . '/' . $id . '/users/' . $user->id->value,
+        );
         self::assertSame(StatusCodeInterface::STATUS_NO_CONTENT, $taken->getStatusCode());
-        self::assertSame(0, self::document($this->api('GET', self::ROLES . '/' . $id . '/users'))['total']);
+        self::assertSame(
+            0,
+            self::document($this->api(RequestMethodInterface::METHOD_GET, self::ROLES . '/' . $id . '/users'))['total'],
+        );
 
         self::assertSame(
             StatusCodeInterface::STATUS_NO_CONTENT,
-            $this->api('DELETE', self::ROLES . '/' . $id)->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_DELETE, self::ROLES . '/' . $id)->getStatusCode(),
         );
         self::assertSame(
             StatusCodeInterface::STATUS_NOT_FOUND,
-            $this->api('GET', self::ROLES . '/' . $id)->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_GET, self::ROLES . '/' . $id)->getStatusCode(),
         );
     }
 
@@ -307,14 +326,14 @@ final class RbacTest extends AcceptanceTestCase
         $api = $this->managementApi();
 
         foreach ([[$api->id->value, 'launch:missiles'], ['rs_nonexistent00000', 'read:users']] as [$apiId, $value]) {
-            $response = $this->api('POST', self::ROLES, [
+            $response = $this->api(RequestMethodInterface::METHOD_POST, self::ROLES, [
                 'name' => 'Ghost',
                 'permissions' => [['resource_server_id' => $apiId, 'value' => $value]],
             ]);
 
             self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode(), $value);
         }
-        self::assertSame(0, self::document($this->api('GET', self::ROLES))['total']);
+        self::assertSame(0, self::document($this->api(RequestMethodInterface::METHOD_GET, self::ROLES))['total']);
     }
 
     public function testARoleNameIsTakenOnce(): void
@@ -322,12 +341,12 @@ final class RbacTest extends AcceptanceTestCase
         $this->adminToken();
         self::assertSame(
             StatusCodeInterface::STATUS_CREATED,
-            $this->api('POST', self::ROLES, ['name' => 'Support'])->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_POST, self::ROLES, ['name' => 'Support'])->getStatusCode(),
         );
 
         self::assertSame(
             StatusCodeInterface::STATUS_CONFLICT,
-            $this->api('POST', self::ROLES, ['name' => 'Support'])->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_POST, self::ROLES, ['name' => 'Support'])->getStatusCode(),
         );
     }
 
@@ -341,11 +360,15 @@ final class RbacTest extends AcceptanceTestCase
 
         $path = '/api/v1/users/' . $user->id->value . '/roles';
 
-        $response = $this->api('PUT', $path, ['role_ids' => [$b->id->value]]);
+        $response = $this->api(RequestMethodInterface::METHOD_PUT, $path, ['role_ids' => [$b->id->value]]);
 
         self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         self::assertSame(['B'], array_column(self::document($response), 'name'));
-        $unknown = $this->api('PUT', $path, ['role_ids' => [$a->id->value, 'rol_doesnotexist0000']]);
+        $unknown = $this->api(
+            RequestMethodInterface::METHOD_PUT,
+            $path,
+            ['role_ids' => [$a->id->value, 'rol_doesnotexist0000']],
+        );
         self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $unknown->getStatusCode());
         self::assertSame(
             ['B'],
@@ -360,7 +383,11 @@ final class RbacTest extends AcceptanceTestCase
         $this->adminToken(['update:users', 'read:users']);
         $user = $this->user();
 
-        $response = $this->api('PUT', '/api/v1/users/' . $user->id->value . '/roles', ['role_ids' => []]);
+        $response = $this->api(
+            RequestMethodInterface::METHOD_PUT,
+            '/api/v1/users/' . $user->id->value . '/roles',
+            ['role_ids' => []],
+        );
 
         self::assertSame(StatusCodeInterface::STATUS_FORBIDDEN, $response->getStatusCode());
         self::assertStringContainsString('scope="update:roles"', $response->getHeaderLine('WWW-Authenticate'));
@@ -369,12 +396,30 @@ final class RbacTest extends AcceptanceTestCase
     public function testRolesAreSearchedByNameAndDescription(): void
     {
         $this->adminToken();
-        $this->api('POST', self::ROLES, ['name' => 'Support', 'description' => 'Read-only for the help desk']);
-        $this->api('POST', self::ROLES, ['name' => 'Billing', 'description' => 'Invoicing']);
+        $this->api(
+            RequestMethodInterface::METHOD_POST,
+            self::ROLES,
+            ['name' => 'Support', 'description' => 'Read-only for the help desk'],
+        );
+        $this->api(
+            RequestMethodInterface::METHOD_POST,
+            self::ROLES,
+            ['name' => 'Billing', 'description' => 'Invoicing'],
+        );
 
-        self::assertSame(1, self::document($this->api('GET', self::ROLES, query: ['q' => 'support']))['total']);
-        self::assertSame(1, self::document($this->api('GET', self::ROLES, query: ['q' => 'help desk']))['total']);
-        self::assertSame(2, self::document($this->api('GET', self::ROLES))['total']);
+        self::assertSame(
+            1,
+            self::document(
+                $this->api(RequestMethodInterface::METHOD_GET, self::ROLES, query: ['q' => 'support']),
+            )['total'],
+        );
+        self::assertSame(
+            1,
+            self::document(
+                $this->api(RequestMethodInterface::METHOD_GET, self::ROLES, query: ['q' => 'help desk']),
+            )['total'],
+        );
+        self::assertSame(2, self::document($this->api(RequestMethodInterface::METHOD_GET, self::ROLES))['total']);
     }
 
     public function testTheAdministratorBootstrapIsIdempotent(): void

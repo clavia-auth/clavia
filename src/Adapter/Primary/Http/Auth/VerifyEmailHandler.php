@@ -16,6 +16,7 @@ use Clavia\Application\Authentication\Account\ConfirmEmail;
 use Clavia\Application\Authentication\Account\DescribeAccountLink;
 use Clavia\Application\Authentication\Account\EmailConfirmed;
 use Clavia\Domain\Identity\AccountLinkPurpose;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -41,7 +42,7 @@ final readonly class VerifyEmailHandler implements RequestHandlerInterface
     #[\Override]
     public function handle(ServerRequestInterface $request): ResponseInterface
     {
-        if ($request->getMethod() !== 'POST') {
+        if ($request->getMethod() !== RequestMethodInterface::METHOD_POST) {
             $token = RequestParameterReader::query($request)->get('token') ?? '';
             $email = ($this->describe)($token, AccountLinkPurpose::VerifyEmail);
 

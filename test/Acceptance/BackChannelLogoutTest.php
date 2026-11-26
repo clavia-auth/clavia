@@ -29,6 +29,7 @@ use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\OidcFixtures;
 use ClaviaTest\Support\TestEnvironment;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\Response\EmptyResponse;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -131,7 +132,7 @@ final class BackChannelLogoutTest extends AcceptanceTestCase
         self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertSame([self::LOGOUT_URI], $this->deliveredTo());
         $request = $this->rp->requests[0];
-        self::assertSame('POST', $request->getMethod());
+        self::assertSame(RequestMethodInterface::METHOD_POST, $request->getMethod());
         self::assertSame('application/x-www-form-urlencoded', $request->getHeaderLine('Content-Type'));
 
         $token = $this->verifiedIdToken($this->logoutTokens()[0]);
@@ -303,7 +304,7 @@ final class BackChannelLogoutTest extends AcceptanceTestCase
         $this->publicClient();
         $this->adminToken();
 
-        $response = $this->api('PATCH', '/api/v1/clients/' . self::TEST_CLIENT_ID, [
+        $response = $this->api(RequestMethodInterface::METHOD_PATCH, '/api/v1/clients/' . self::TEST_CLIENT_ID, [
             'backchannel_logout_uri' => self::LOGOUT_URI,
             'backchannel_logout_session_required' => true,
         ]);
@@ -312,7 +313,11 @@ final class BackChannelLogoutTest extends AcceptanceTestCase
         self::assertSame(self::LOGOUT_URI, self::json($response)['backchannel_logout_uri']);
         self::assertTrue(self::json($response)['backchannel_logout_session_required']);
 
-        $cleared = $this->api('PATCH', '/api/v1/clients/' . self::TEST_CLIENT_ID, ['backchannel_logout_uri' => null]);
+        $cleared = $this->api(
+            RequestMethodInterface::METHOD_PATCH,
+            '/api/v1/clients/' . self::TEST_CLIENT_ID,
+            ['backchannel_logout_uri' => null],
+        );
         self::assertSame(StatusCodeInterface::STATUS_OK, $cleared->getStatusCode(), (string) $cleared->getBody());
         self::assertNull(self::json($cleared)['backchannel_logout_uri']);
     }
@@ -336,7 +341,11 @@ final class BackChannelLogoutTest extends AcceptanceTestCase
         $this->publicClient();
         $this->adminToken();
 
-        $response = $this->api('PATCH', '/api/v1/clients/' . self::TEST_CLIENT_ID, ['backchannel_logout_uri' => $uri]);
+        $response = $this->api(
+            RequestMethodInterface::METHOD_PATCH,
+            '/api/v1/clients/' . self::TEST_CLIENT_ID,
+            ['backchannel_logout_uri' => $uri],
+        );
 
         self::assertSame(
             StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
@@ -349,7 +358,7 @@ final class BackChannelLogoutTest extends AcceptanceTestCase
     {
         $this->adminToken();
 
-        $response = $this->api('POST', '/api/v1/clients', [
+        $response = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/clients', [
             'name' => 'RP',
             'redirect_uris' => [self::TEST_REDIRECT_URI],
             'grant_types' => ['authorization_code'],
@@ -373,7 +382,7 @@ final class BackChannelLogoutTest extends AcceptanceTestCase
         $tokens = $this->signInAndGetTokens();
         $this->adminToken();
 
-        $response = $this->api('GET', '/api/v1/users/' . $user->id->value . '/sessions');
+        $response = $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/users/' . $user->id->value . '/sessions');
 
         self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         $sessions = self::json($response);
@@ -397,9 +406,17 @@ final class BackChannelLogoutTest extends AcceptanceTestCase
         $this->signInAndGetTokens();
         $second = $this->cookie(self::SESSION_COOKIE);
         $this->adminToken();
-        self::assertCount(2, self::json($this->api('GET', '/api/v1/users/' . $user->id->value . '/sessions')));
+        self::assertCount(
+            2,
+            self::json(
+                $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/users/' . $user->id->value . '/sessions'),
+            ),
+        );
 
-        $response = $this->api('DELETE', '/api/v1/users/' . $user->id->value . '/sessions');
+        $response = $this->api(
+            RequestMethodInterface::METHOD_DELETE,
+            '/api/v1/users/' . $user->id->value . '/sessions',
+        );
 
         self::assertSame(
             StatusCodeInterface::STATUS_NO_CONTENT,
@@ -408,7 +425,12 @@ final class BackChannelLogoutTest extends AcceptanceTestCase
         );
         self::assertNull($this->session($first));
         self::assertNull($this->session($second));
-        self::assertSame([], self::json($this->api('GET', '/api/v1/users/' . $user->id->value . '/sessions')));
+        self::assertSame(
+            [],
+            self::json(
+                $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/users/' . $user->id->value . '/sessions'),
+            ),
+        );
         $sids = array_map(
             fn (string $token): mixed => $this->verifiedIdToken($token)['claims']['sid'] ?? null,
             $this->logoutTokens(),
@@ -427,7 +449,7 @@ final class BackChannelLogoutTest extends AcceptanceTestCase
         $this->adminToken();
         $path = '/api/v1/users/' . $user->id->value . '/sessions/' . $sid;
 
-        $response = $this->api('DELETE', $path);
+        $response = $this->api(RequestMethodInterface::METHOD_DELETE, $path);
 
         self::assertSame(
             StatusCodeInterface::STATUS_NO_CONTENT,
@@ -436,7 +458,10 @@ final class BackChannelLogoutTest extends AcceptanceTestCase
         );
         self::assertNull($this->session($cookie));
         self::assertCount(1, $this->logoutTokens());
-        self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $this->api('DELETE', $path)->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_NOT_FOUND,
+            $this->api(RequestMethodInterface::METHOD_DELETE, $path)->getStatusCode(),
+        );
     }
 
     public function testDeactivatingAUserSignsThemOutEverywhere(): void
@@ -448,7 +473,11 @@ final class BackChannelLogoutTest extends AcceptanceTestCase
         $cookie = $this->cookie(self::SESSION_COOKIE);
         $this->adminToken();
 
-        $response = $this->api('PATCH', '/api/v1/users/' . $user->id->value, ['is_active' => false]);
+        $response = $this->api(
+            RequestMethodInterface::METHOD_PATCH,
+            '/api/v1/users/' . $user->id->value,
+            ['is_active' => false],
+        );
 
         self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         self::assertNull($this->session($cookie));
@@ -464,7 +493,7 @@ final class BackChannelLogoutTest extends AcceptanceTestCase
         $tokens = $this->signInAndGetTokens();
         $cookie = $this->cookie(self::SESSION_COOKIE);
         $this->adminToken();
-        $issued = self::document($this->api('POST', '/api/v1/provisioning-tokens', [
+        $issued = self::document($this->api(RequestMethodInterface::METHOD_POST, '/api/v1/provisioning-tokens', [
             'connection' => 'password',
             'description' => 'Entra ID',
         ]));
@@ -479,10 +508,14 @@ final class BackChannelLogoutTest extends AcceptanceTestCase
         ));
 
         self::assertIsString($tokens['access_token']);
-        $before = $this->request('GET', '/oidc/userinfo', ['Authorization' => 'Bearer ' . $tokens['access_token']]);
+        $before = $this->request(
+            RequestMethodInterface::METHOD_GET,
+            '/oidc/userinfo',
+            ['Authorization' => 'Bearer ' . $tokens['access_token']],
+        );
         self::assertSame(StatusCodeInterface::STATUS_OK, $before->getStatusCode(), 'Working until then.');
 
-        $deactivated = $this->request('PATCH', '/scim/v2/Users/' . $user->id->value, [
+        $deactivated = $this->request(RequestMethodInterface::METHOD_PATCH, '/scim/v2/Users/' . $user->id->value, [
             'Authorization' => 'Bearer ' . $issued['token'],
             'Content-Type' => 'application/scim+json',
         ], self::MANAGEMENT_HOST, (string) json_encode([
@@ -497,7 +530,11 @@ final class BackChannelLogoutTest extends AcceptanceTestCase
         );
         self::assertNull($this->session($cookie), 'Every session ended.');
         self::assertCount(1, $this->logoutTokens(), 'Its application told.');
-        $userinfo = $this->request('GET', '/oidc/userinfo', ['Authorization' => 'Bearer ' . $tokens['access_token']]);
+        $userinfo = $this->request(
+            RequestMethodInterface::METHOD_GET,
+            '/oidc/userinfo',
+            ['Authorization' => 'Bearer ' . $tokens['access_token']],
+        );
         self::assertSame(
             StatusCodeInterface::STATUS_UNAUTHORIZED,
             $userinfo->getStatusCode(),
@@ -514,7 +551,7 @@ final class BackChannelLogoutTest extends AcceptanceTestCase
         $cookie = $this->cookie(self::SESSION_COOKIE);
         $this->adminToken();
 
-        $response = $this->api('DELETE', '/api/v1/users/' . $user->id->value);
+        $response = $this->api(RequestMethodInterface::METHOD_DELETE, '/api/v1/users/' . $user->id->value);
 
         self::assertSame(
             StatusCodeInterface::STATUS_NO_CONTENT,

@@ -42,6 +42,7 @@ use ClaviaTest\Support\LoginFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\SoftwareAuthenticator;
 use DateTimeImmutable;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -238,7 +239,7 @@ final class PasskeySignInTest extends AcceptanceTestCase
         self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $this->post('/auth/passkey', $form)->getStatusCode());
         $this->clearCookies();
 
-        $replayed = $this->request('POST', '/auth/passkey', [
+        $replayed = $this->request(RequestMethodInterface::METHOD_POST, '/auth/passkey', [
             'Content-Type' => 'application/x-www-form-urlencoded',
             'Cookie' => 'clavia_webauthn=' . ($ceremony ?? '') . '; clavia_csrf=' . $form['csrf_token'],
         ], body: http_build_query($form));

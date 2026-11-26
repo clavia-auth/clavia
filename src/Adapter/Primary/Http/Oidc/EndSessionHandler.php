@@ -20,6 +20,7 @@ use Clavia\Application\OAuth2\RequestParameters;
 use Clavia\Application\Oidc\Logout\EndSession;
 use Clavia\Application\Oidc\Logout\EndSessionRequest;
 use Clavia\Application\Oidc\Logout\SignOutConfirmationNeeded;
+use Fig\Http\Message\RequestMethodInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
@@ -51,7 +52,7 @@ final readonly class EndSessionHandler implements RequestHandlerInterface
     #[\Override]
     public function handle(ServerRequestInterface $request): ResponseInterface
     {
-        $parameters = $request->getMethod() === 'POST'
+        $parameters = $request->getMethod() === RequestMethodInterface::METHOD_POST
             ? RequestParameterReader::form($request)
             : RequestParameterReader::query($request);
         $one = static fn (string $name): ?string => self::once($parameters, $name);
@@ -61,7 +62,7 @@ final readonly class EndSessionHandler implements RequestHandlerInterface
             $one('client_id'),
             $one('post_logout_redirect_uri'),
             $one('state'),
-            $request->getMethod() === 'POST' && $one('confirmed') === 'yes',
+            $request->getMethod() === RequestMethodInterface::METHOD_POST && $one('confirmed') === 'yes',
             RequestCookies::first($request, $this->cookies->sessionCookieName),
         ));
 

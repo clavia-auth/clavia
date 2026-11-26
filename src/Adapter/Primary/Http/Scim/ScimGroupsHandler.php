@@ -20,6 +20,7 @@ use Clavia\Domain\Provisioning\ScimFilterAttribute;
 use Clavia\Domain\Provisioning\ScimGroup;
 use Clavia\Domain\Provisioning\ScimGroupResource;
 use Clavia\Domain\Shared\InvalidValue;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
@@ -49,8 +50,8 @@ final readonly class ScimGroupsHandler implements RequestHandlerInterface
     {
         try {
             return match ($request->getMethod()) {
-                'GET' => $this->list($request),
-                'POST' => $this->create($request),
+                RequestMethodInterface::METHOD_GET => $this->list($request),
+                RequestMethodInterface::METHOD_POST => $this->create($request),
                 default => throw new LogicException('Routed with a method the handler does not serve.'),
             };
         } catch (ScimRequestRejected $rejection) {

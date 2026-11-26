@@ -20,6 +20,7 @@ use Clavia\Application\Authentication\Passwordless\PasswordlessFailure;
 use Clavia\Application\Authentication\SignIn\SecondFactorRequired;
 use Clavia\Application\Authentication\SignIn\SignedIn;
 use Clavia\Domain\Authentication\PasswordlessMode;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -51,7 +52,7 @@ final readonly class PasswordlessCodeHandler implements RequestHandlerInterface
     {
         $handle = RequestCookies::first($request, AuthCookies::PASSWORDLESS);
 
-        if ($request->getMethod() !== 'POST') {
+        if ($request->getMethod() !== RequestMethodInterface::METHOD_POST) {
             $prompt = ($this->describe)($handle, PasswordlessMode::Code);
 
             return $prompt === null

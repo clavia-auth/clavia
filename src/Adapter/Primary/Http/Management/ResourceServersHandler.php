@@ -14,6 +14,7 @@ namespace Clavia\Adapter\Primary\Http\Management;
 use Clavia\Application\Management\ResourceServers\NewResourceServer;
 use Clavia\Application\Management\ResourceServers\ReadResourceServers;
 use Clavia\Application\Management\ResourceServers\RegisterResourceServer;
+use Fig\Http\Message\RequestMethodInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -38,11 +39,11 @@ final readonly class ResourceServersHandler implements RequestHandlerInterface
         $management = ManagementRequest::of($request);
 
         return match ($request->getMethod()) {
-            'GET' => $this->responder->json(ManagementViews::page(
+            RequestMethodInterface::METHOD_GET => $this->responder->json(ManagementViews::page(
                 $this->read->page(Paging::fromRequest($management)),
                 ManagementViews::resourceServer(...),
             )),
-            'POST' => $this->register($management->body),
+            RequestMethodInterface::METHOD_POST => $this->register($management->body),
             default => throw new LogicException('Routed with a method the handler does not serve.'),
         };
     }

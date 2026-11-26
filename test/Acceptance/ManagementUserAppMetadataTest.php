@@ -19,6 +19,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use stdClass;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -39,7 +40,7 @@ final class ManagementUserAppMetadataTest extends AcceptanceTestCase
         $this->adminToken(['read:users', 'update:users', 'update:users_app_metadata']);
         $path = '/api/v1/users/' . $this->user()->id->value;
 
-        $set = $this->api('PATCH', $path, [
+        $set = $this->api(RequestMethodInterface::METHOD_PATCH, $path, [
             'app_metadata' => ['tenant' => ['region' => 'eu', 'id' => 42], 'plan' => 'pro'],
         ]);
 
@@ -48,13 +49,16 @@ final class ManagementUserAppMetadataTest extends AcceptanceTestCase
         self::assertSame($sorted, self::document($set)['app_metadata']);
         self::assertStringContainsString(
             '"app_metadata":{"plan":"pro","tenant":{"id":42,"region":"eu"}}',
-            (string) $this->api('GET', $path)->getBody(),
+            (string) $this->api(RequestMethodInterface::METHOD_GET, $path)->getBody(),
         );
 
         // Replaced whole: a key left out is gone; an empty object clears it.
-        $this->api('PATCH', $path, ['app_metadata' => ['plan' => 'free']]);
-        self::assertSame(['plan' => 'free'], self::document($this->api('GET', $path))['app_metadata']);
-        $cleared = $this->api('PATCH', $path, ['app_metadata' => new stdClass()]);
+        $this->api(RequestMethodInterface::METHOD_PATCH, $path, ['app_metadata' => ['plan' => 'free']]);
+        self::assertSame(
+            ['plan' => 'free'],
+            self::document($this->api(RequestMethodInterface::METHOD_GET, $path))['app_metadata'],
+        );
+        $cleared = $this->api(RequestMethodInterface::METHOD_PATCH, $path, ['app_metadata' => new stdClass()]);
         self::assertStringContainsString('"app_metadata":{}', (string) $cleared->getBody());
 
         // The trail names the field, never a value.
@@ -71,7 +75,11 @@ final class ManagementUserAppMetadataTest extends AcceptanceTestCase
         $user = $this->user();
         $path = '/api/v1/users/' . $user->id->value;
 
-        $refused = $this->api('PATCH', $path, ['name' => 'Ada King', 'app_metadata' => ['plan' => 'pro']]);
+        $refused = $this->api(
+            RequestMethodInterface::METHOD_PATCH,
+            $path,
+            ['name' => 'Ada King', 'app_metadata' => ['plan' => 'pro']],
+        );
 
         self::assertSame(StatusCodeInterface::STATUS_FORBIDDEN, $refused->getStatusCode());
         self::assertStringContainsString('insufficient_scope', $refused->getHeaderLine('WWW-Authenticate'));
@@ -81,7 +89,7 @@ final class ManagementUserAppMetadataTest extends AcceptanceTestCase
         self::assertNull($stored->profile()->name, 'Nothing of the request was applied.');
 
         // The rest of the operation needs only its own scope.
-        $named = $this->api('PATCH', $path, ['name' => 'Ada King']);
+        $named = $this->api(RequestMethodInterface::METHOD_PATCH, $path, ['name' => 'Ada King']);
         self::assertSame(StatusCodeInterface::STATUS_OK, $named->getStatusCode());
     }
 
@@ -90,9 +98,13 @@ final class ManagementUserAppMetadataTest extends AcceptanceTestCase
         $this->adminToken(['read:users', 'update:users', 'update:users_app_metadata']);
         $path = '/api/v1/users/' . $this->user()->id->value;
 
-        $tooDeep = $this->api('PATCH', $path, ['app_metadata' => ['a' => ['b' => ['c' => ['d' => ['e' => [1]]]]]]]);
-        $badKey = $this->api('PATCH', $path, ['app_metadata' => ['the plan' => 'pro']]);
-        $notAnObject = $this->api('PATCH', $path, ['app_metadata' => ['pro']]);
+        $tooDeep = $this->api(
+            RequestMethodInterface::METHOD_PATCH,
+            $path,
+            ['app_metadata' => ['a' => ['b' => ['c' => ['d' => ['e' => [1]]]]]]],
+        );
+        $badKey = $this->api(RequestMethodInterface::METHOD_PATCH, $path, ['app_metadata' => ['the plan' => 'pro']]);
+        $notAnObject = $this->api(RequestMethodInterface::METHOD_PATCH, $path, ['app_metadata' => ['pro']]);
 
         foreach ([$tooDeep, $badKey, $notAnObject] as $response) {
             self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
@@ -105,7 +117,11 @@ final class ManagementUserAppMetadataTest extends AcceptanceTestCase
     {
         $this->adminToken(['read:users', 'create:users', 'update:users', 'update:users_app_metadata']);
         $user = $this->user();
-        $this->api('PATCH', '/api/v1/users/' . $user->id->value, ['app_metadata' => ['plan' => 'pro']]);
+        $this->api(
+            RequestMethodInterface::METHOD_PATCH,
+            '/api/v1/users/' . $user->id->value,
+            ['app_metadata' => ['plan' => 'pro']],
+        );
         $stored = $this->container()->get(UserRepository::class)->find($user->id);
         self::assertNotNull($stored);
 
@@ -113,13 +129,15 @@ final class ManagementUserAppMetadataTest extends AcceptanceTestCase
         self::assertStringContainsString('"app_metadata":{"plan":"pro"}', $line);
 
         $import = self::document($this->api(
-            'POST',
+            RequestMethodInterface::METHOD_POST,
             '/api/v1/jobs/users-imports',
             headers: ['Content-Type' => 'application/x-ndjson'],
             rawBody: str_replace(self::TEST_USER_EMAIL, 'grace@example.com', $line) . "\n",
         ));
         $this->runJobs();
-        $report = self::document($this->api('GET', '/api/v1/jobs/' . (string) $import['id']));
+        $report = self::document(
+            $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/jobs/' . (string) $import['id']),
+        );
         self::assertSame(['total' => 1, 'created' => 1, 'failed' => 0], $report['summary'], 'Ignored, not refused.');
     }
 

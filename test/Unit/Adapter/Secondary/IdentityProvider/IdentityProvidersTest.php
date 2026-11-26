@@ -35,6 +35,7 @@ use ClaviaTest\Support\Fake\InMemoryJwksCache;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use ClaviaTest\Support\RecordingLogger;
 use DateTimeImmutable;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use GuzzleHttp\Exception\ConnectException;
 use Laminas\Diactoros\RequestFactory;
@@ -103,7 +104,7 @@ final class IdentityProvidersTest extends TestCase
         self::assertSame('g-123', $identity->subject);
         self::assertSame('ada@example.com', $identity->verifiedEmail());
         $exchange = $this->http->requests[0];
-        self::assertSame('POST', $exchange->getMethod());
+        self::assertSame(RequestMethodInterface::METHOD_POST, $exchange->getMethod());
         self::assertSame('application/json', $exchange->getHeaderLine('Accept'));
         self::assertSame('application/x-www-form-urlencoded', $exchange->getHeaderLine('Content-Type'));
         self::assertSame([

@@ -13,6 +13,7 @@ namespace Clavia\Adapter\Primary\Http\Management;
 
 use Clavia\Application\Management\Users\UserSessions;
 use Clavia\Domain\Identity\UserId;
+use Fig\Http\Message\RequestMethodInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -37,12 +38,12 @@ final readonly class UserSessionsHandler implements RequestHandlerInterface
         $user = UserId::fromString($management->path('user_id'));
 
         switch ($request->getMethod()) {
-            case 'GET':
+            case RequestMethodInterface::METHOD_GET:
                 return $this->responder->jsonList(array_map(
                     ManagementViews::session(...),
                     $this->sessions->of($user),
                 ));
-            case 'DELETE':
+            case RequestMethodInterface::METHOD_DELETE:
                 if ($management->hasPath('sid')) {
                     $this->sessions->end($user, $management->path('sid'));
                 } else {

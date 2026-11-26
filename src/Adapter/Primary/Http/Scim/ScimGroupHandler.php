@@ -22,6 +22,7 @@ use Clavia\Domain\Provisioning\ScimGroupResource;
 use Clavia\Domain\Provisioning\ScimPatch;
 use Clavia\Domain\Provisioning\ScimPatchRefused;
 use Clavia\Domain\Shared\InvalidValue;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
@@ -61,15 +62,20 @@ final readonly class ScimGroupHandler implements RequestHandlerInterface
         try {
             $query = ScimQuery::of($request);
             $outcome = match ($request->getMethod()) {
-                'GET' => $this->read->find($caller, $id),
-                'PUT' => ($this->replace)(
+                RequestMethodInterface::METHOD_GET => $this->read->find($caller, $id),
+                RequestMethodInterface::METHOD_PUT => ($this->replace)(
                     $caller,
                     $id,
                     ScimGroupResource::fromJson(ScimBody::read($request)),
                     $ifMatch,
                 ),
-                'PATCH' => ($this->patch)($caller, $id, ScimPatch::fromJson(ScimBody::read($request)), $ifMatch),
-                'DELETE' => ($this->delete)($caller, $id, $ifMatch),
+                RequestMethodInterface::METHOD_PATCH => ($this->patch)(
+                    $caller,
+                    $id,
+                    ScimPatch::fromJson(ScimBody::read($request)),
+                    $ifMatch,
+                ),
+                RequestMethodInterface::METHOD_DELETE => ($this->delete)($caller, $id, $ifMatch),
                 default => throw new LogicException('Routed with a method the handler does not serve.'),
             };
         } catch (ScimRequestRejected $rejection) {
@@ -91,7 +97,7 @@ final readonly class ScimGroupHandler implements RequestHandlerInterface
                 sprintf("The '%s' is already another group's in this connection.", $outcome->attribute),
                 'uniqueness',
             ),
-            $request->getMethod() === 'DELETE' => $this->responder->noContent(),
+            $request->getMethod() === RequestMethodInterface::METHOD_DELETE => $this->responder->noContent(),
             default => $this->responder->json(
                 ScimGroupDocument::of($outcome, $this->baseUrl, ! $query->excludes('members')),
                 headers: ['ETag' => ScimGroupDocument::etag($outcome)],

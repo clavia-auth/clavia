@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Secondary\Signing\Remote;
 
 use Clavia\Application\Port\SigningFailed;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use JsonException;
 use Psr\Http\Client\ClientExceptionInterface;
@@ -50,7 +51,7 @@ final readonly class JsonApi
      */
     public function get(string $url, array $headers = []): array
     {
-        return $this->send($this->request('GET', $url, $headers));
+        return $this->send($this->request(RequestMethodInterface::METHOD_GET, $url, $headers));
     }
 
     /**
@@ -64,7 +65,7 @@ final readonly class JsonApi
     public function postJson(string $url, array $body, array $headers = []): array
     {
         return $this->send(
-            $this->request('POST', $url, $headers)
+            $this->request(RequestMethodInterface::METHOD_POST, $url, $headers)
                 ->withHeader('Content-Type', 'application/json')
                 ->withBody($this->streams->createStream(json_encode($body, JSON_THROW_ON_ERROR))),
         );
@@ -81,7 +82,7 @@ final readonly class JsonApi
     public function postForm(string $url, #[\SensitiveParameter] array $fields, array $headers = []): array
     {
         return $this->send(
-            $this->request('POST', $url, $headers)
+            $this->request(RequestMethodInterface::METHOD_POST, $url, $headers)
                 ->withHeader('Content-Type', 'application/x-www-form-urlencoded')
                 ->withBody($this->streams->createStream(http_build_query($fields, '', '&', PHP_QUERY_RFC3986))),
         );

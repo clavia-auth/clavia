@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace ClaviaTest\Support\Fake;
 
 use Clavia\Adapter\Secondary\Signing\Remote\Gcp\GcpKmsKey;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\RequestInterface;
@@ -52,9 +53,18 @@ final class FakeCloudKms
         }
 
         return match ([$request->getMethod(), (string) $request->getUri()]) {
-            ['POST', GcpKmsKey::API . $this->keyVersion . ':asymmetricSign'] => $this->sign($request),
-            ['POST', GcpKmsKey::API . $this->keyVersion . ':asymmetricDecrypt'] => $this->decrypt($request),
-            ['GET', GcpKmsKey::API . $this->keyVersion . '/publicKey'] => new JsonResponse([
+            [
+                RequestMethodInterface::METHOD_POST,
+                GcpKmsKey::API . $this->keyVersion . ':asymmetricSign',
+            ] => $this->sign($request),
+            [
+                RequestMethodInterface::METHOD_POST,
+                GcpKmsKey::API . $this->keyVersion . ':asymmetricDecrypt',
+            ] => $this->decrypt($request),
+            [
+                RequestMethodInterface::METHOD_GET,
+                GcpKmsKey::API . $this->keyVersion . '/publicKey',
+            ] => new JsonResponse([
                 'pem' => $this->hsm->publicPem(),
                 'algorithm' => $this->algorithm,
                 'pemCrc32c' => self::crc32c($this->hsm->publicPem()),

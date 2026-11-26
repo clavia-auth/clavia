@@ -16,6 +16,7 @@ use Clavia\Adapter\Secondary\Http\OutboundUrlRefused;
 use Clavia\Application\Port\DiscoveredProvider;
 use Clavia\Application\Port\DiscoveryFailed;
 use Clavia\Application\Port\OidcDiscovery;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use JsonException;
 use Psr\Http\Client\ClientExceptionInterface;
@@ -50,7 +51,7 @@ final readonly class HttpOidcDiscovery implements OidcDiscovery
 
         try {
             $response = $this->client->sendRequest(
-                $this->requests->createRequest('GET', $url)
+                $this->requests->createRequest(RequestMethodInterface::METHOD_GET, $url)
                     ->withHeader('Accept', 'application/json')
                     ->withHeader('User-Agent', ProviderHttp::USER_AGENT),
             );

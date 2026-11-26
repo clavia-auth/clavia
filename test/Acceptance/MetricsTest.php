@@ -15,6 +15,7 @@ use ClaviaTest\Support\AcceptanceTestCase;
 use ClaviaTest\Support\LoginFixtures;
 use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -31,7 +32,7 @@ final class MetricsTest extends AcceptanceTestCase
     public function testOnlyTheInternalListenerReadsTheMetrics(): void
     {
         $public = $this->get('/metrics');
-        $forged = $this->request('GET', '/metrics', ['CLAVIA_LISTENER' => 'internal']);
+        $forged = $this->request(RequestMethodInterface::METHOD_GET, '/metrics', ['CLAVIA_LISTENER' => 'internal']);
 
         self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $public->getStatusCode());
         self::assertSame(
@@ -92,6 +93,10 @@ final class MetricsTest extends AcceptanceTestCase
 
     private function metrics(): ResponseInterface
     {
-        return $this->request('GET', '/metrics', serverParams: ['CLAVIA_LISTENER' => 'internal']);
+        return $this->request(
+            RequestMethodInterface::METHOD_GET,
+            '/metrics',
+            serverParams: ['CLAVIA_LISTENER' => 'internal'],
+        );
     }
 }

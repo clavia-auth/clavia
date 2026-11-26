@@ -33,6 +33,7 @@ use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\OidcFixtures;
 use DateTimeImmutable;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -124,14 +125,14 @@ final class DeviceAuthorizationTest extends AcceptanceTestCase
     {
         $this->adminToken();
 
-        $refused = $this->api('POST', '/api/v1/clients', [
+        $refused = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/clients', [
             'client_type' => 'public',
             'grant_types' => [self::GRANT],
             'is_first_party' => false,
         ]);
         self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $refused->getStatusCode());
 
-        $allowed = $this->api('POST', '/api/v1/clients', [
+        $allowed = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/clients', [
             'client_type' => 'public',
             'grant_types' => [self::GRANT, 'refresh_token'],
         ]);

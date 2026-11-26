@@ -17,6 +17,7 @@ use Clavia\Application\OAuth2\ProtectedResource\TokenScheme;
 use Clavia\Domain\OAuth2\BearerErrorCode;
 use Clavia\Domain\OAuth2\BearerTokenError;
 use Clavia\Domain\Shared\ScopeSet;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\ServerRequest;
 use Laminas\Diactoros\StreamFactory;
@@ -174,7 +175,10 @@ final class BearerTest extends TestCase
 
     private function request(string ...$authorization): ServerRequest
     {
-        $request = new ServerRequest(method: 'POST', headers: ['Content-Type' => 'application/x-www-form-urlencoded']);
+        $request = new ServerRequest(
+            method: RequestMethodInterface::METHOD_POST,
+            headers: ['Content-Type' => 'application/x-www-form-urlencoded'],
+        );
 
         return $authorization === [] ? $request : $request->withHeader('Authorization', $authorization);
     }

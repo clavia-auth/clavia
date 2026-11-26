@@ -18,6 +18,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 
 /**
@@ -38,7 +39,7 @@ final class ManagementProvisioningTokensTest extends AcceptanceTestCase
         $this->freezeClock('2026-01-15T10:00:00Z');
         $this->adminToken();
 
-        $issued = $this->api('POST', self::TOKENS, [
+        $issued = $this->api(RequestMethodInterface::METHOD_POST, self::TOKENS, [
             'connection' => 'password',
             'description' => 'Entra ID',
             'subject_attribute' => 'userName',
@@ -79,7 +80,11 @@ final class ManagementProvisioningTokensTest extends AcceptanceTestCase
         $this->adminToken();
 
         foreach (['google', 'email', 'nowhere'] as $connection) {
-            $refused = $this->api('POST', self::TOKENS, ['connection' => $connection, 'description' => 'Entra ID']);
+            $refused = $this->api(
+                RequestMethodInterface::METHOD_POST,
+                self::TOKENS,
+                ['connection' => $connection, 'description' => 'Entra ID'],
+            );
 
             self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $refused->getStatusCode(), $connection);
             self::assertStringNotContainsString($connection, (string) $refused->getBody(), 'Never the value sent.');
@@ -91,7 +96,7 @@ final class ManagementProvisioningTokensTest extends AcceptanceTestCase
     {
         $clock = $this->freezeClock('2026-01-15T10:00:00Z');
         $this->adminToken();
-        $this->api('POST', self::TOKENS, [
+        $this->api(RequestMethodInterface::METHOD_POST, self::TOKENS, [
             'connection' => 'password',
             'description' => 'Okta',
             'expires_in' => 2_678_400,
@@ -99,8 +104,12 @@ final class ManagementProvisioningTokensTest extends AcceptanceTestCase
         $clock->advance(86_400 * 2);
         $this->adminToken();
 
-        $listed = self::document($this->api('GET', self::TOKENS, query: ['connection' => 'password']));
-        $elsewhere = self::document($this->api('GET', self::TOKENS, query: ['connection' => 'acme']));
+        $listed = self::document(
+            $this->api(RequestMethodInterface::METHOD_GET, self::TOKENS, query: ['connection' => 'password']),
+        );
+        $elsewhere = self::document(
+            $this->api(RequestMethodInterface::METHOD_GET, self::TOKENS, query: ['connection' => 'acme']),
+        );
 
         self::assertSame(1, $listed['total']);
         self::assertIsArray($listed['items']);
@@ -114,26 +123,36 @@ final class ManagementProvisioningTokensTest extends AcceptanceTestCase
     {
         $this->freezeClock('2026-01-15T10:00:00Z');
         $this->adminToken();
-        $issued = $this->api('POST', self::TOKENS, ['connection' => 'password', 'description' => 'Okta']);
+        $issued = $this->api(
+            RequestMethodInterface::METHOD_POST,
+            self::TOKENS,
+            ['connection' => 'password', 'description' => 'Okta'],
+        );
         $id = self::document($issued)['id'];
         self::assertIsString($id);
 
-        $read = $this->api('GET', self::TOKENS . '/' . $id);
-        $revoked = $this->api('DELETE', self::TOKENS . '/' . $id);
-        $again = $this->api('DELETE', self::TOKENS . '/' . $id);
+        $read = $this->api(RequestMethodInterface::METHOD_GET, self::TOKENS . '/' . $id);
+        $revoked = $this->api(RequestMethodInterface::METHOD_DELETE, self::TOKENS . '/' . $id);
+        $again = $this->api(RequestMethodInterface::METHOD_DELETE, self::TOKENS . '/' . $id);
 
         self::assertSame(StatusCodeInterface::STATUS_OK, $read->getStatusCode());
         self::assertArrayNotHasKey('token', self::document($read));
         self::assertSame(StatusCodeInterface::STATUS_NO_CONTENT, $revoked->getStatusCode());
         self::assertSame(StatusCodeInterface::STATUS_NO_CONTENT, $again->getStatusCode(), 'Changes nothing.');
-        self::assertSame('revoked', self::document($this->api('GET', self::TOKENS . '/' . $id))['state']);
+        self::assertSame(
+            'revoked',
+            self::document($this->api(RequestMethodInterface::METHOD_GET, self::TOKENS . '/' . $id))['state'],
+        );
         self::assertSame(1, (int) TestStorage::database()->fetchValue(
             'SELECT count(*) FROM audit_events WHERE type = :type',
             ['type' => AuditEventType::ProvisioningTokenRevoked->value],
         ));
         self::assertSame(
             StatusCodeInterface::STATUS_NOT_FOUND,
-            $this->api('GET', self::TOKENS . '/3e9a7c51-8b2d-4f6e-a0c4-d5b7e9f1a3c6')->getStatusCode(),
+            $this->api(
+                RequestMethodInterface::METHOD_GET,
+                self::TOKENS . '/3e9a7c51-8b2d-4f6e-a0c4-d5b7e9f1a3c6',
+            )->getStatusCode(),
         );
     }
 
@@ -141,33 +160,44 @@ final class ManagementProvisioningTokensTest extends AcceptanceTestCase
     {
         $this->adminToken(['read:provisioning_tokens']);
 
-        $refused = $this->api('POST', self::TOKENS, ['connection' => 'password', 'description' => 'Okta']);
+        $refused = $this->api(
+            RequestMethodInterface::METHOD_POST,
+            self::TOKENS,
+            ['connection' => 'password', 'description' => 'Okta'],
+        );
 
         self::assertSame(StatusCodeInterface::STATUS_FORBIDDEN, $refused->getStatusCode());
-        self::assertSame(StatusCodeInterface::STATUS_OK, $this->api('GET', self::TOKENS)->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_OK,
+            $this->api(RequestMethodInterface::METHOD_GET, self::TOKENS)->getStatusCode(),
+        );
     }
 
     public function testDeletingTheConnectionDeletesItsTokens(): void
     {
         $this->adminToken();
-        $created = $this->api('POST', '/api/v1/connections', [
+        $created = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/connections', [
             'name' => 'staff',
             'display_name' => 'Staff',
             'strategy' => 'database',
         ]);
         self::assertSame(StatusCodeInterface::STATUS_CREATED, $created->getStatusCode(), (string) $created->getBody());
-        $issued = $this->api('POST', self::TOKENS, ['connection' => 'staff', 'description' => 'Okta']);
+        $issued = $this->api(
+            RequestMethodInterface::METHOD_POST,
+            self::TOKENS,
+            ['connection' => 'staff', 'description' => 'Okta'],
+        );
         $id = self::document($issued)['id'];
         self::assertIsString($id);
 
-        $deleted = $this->api('DELETE', '/api/v1/connections/staff');
+        $deleted = $this->api(RequestMethodInterface::METHOD_DELETE, '/api/v1/connections/staff');
 
         self::assertSame(
             StatusCodeInterface::STATUS_NO_CONTENT,
             $deleted->getStatusCode(),
             (string) $deleted->getBody(),
         );
-        $gone = $this->api('GET', self::TOKENS . '/' . $id);
+        $gone = $this->api(RequestMethodInterface::METHOD_GET, self::TOKENS . '/' . $id);
         self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $gone->getStatusCode());
     }
 }

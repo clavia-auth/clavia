@@ -17,6 +17,7 @@ use Clavia\Application\Port\PasswordHasher;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Shared\Clock;
 use ClaviaTest\Support\Fake\FrozenClock;
+use Fig\Http\Message\RequestMethodInterface;
 use Laminas\Diactoros\ServerRequest;
 use Laminas\Diactoros\Stream;
 use Laminas\ServiceManager\ServiceManager;
@@ -301,7 +302,11 @@ abstract class AcceptanceTestCase extends TestCase
     {
         $queryString = http_build_query($query, '', '&', PHP_QUERY_RFC3986);
 
-        return $this->request('GET', $path . ($queryString === '' ? '' : '?' . $queryString), host: $host);
+        return $this->request(
+            RequestMethodInterface::METHOD_GET,
+            $path . ($queryString === '' ? '' : '?' . $queryString),
+            host: $host,
+        );
     }
 
     /**
@@ -323,7 +328,13 @@ abstract class AcceptanceTestCase extends TestCase
             $headers['Authorization'] = 'Basic ' . base64_encode($basicAuth[0] . ':' . $basicAuth[1]);
         }
 
-        return $this->request('POST', $path, $headers, $host, http_build_query($form, '', '&', PHP_QUERY_RFC3986));
+        return $this->request(
+            RequestMethodInterface::METHOD_POST,
+            $path,
+            $headers,
+            $host,
+            http_build_query($form, '', '&', PHP_QUERY_RFC3986),
+        );
     }
 
     /**

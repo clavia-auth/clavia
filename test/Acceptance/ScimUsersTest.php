@@ -20,6 +20,7 @@ use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\Saml\TestIdentityProvider as Idp;
 use ClaviaTest\Support\TestStorage;
 use DOMDocument;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -83,7 +84,7 @@ final class ScimUsersTest extends AcceptanceTestCase
         [$token, $tokenId] = $this->provisioningToken('password');
 
         $before = $this->filtered($token, 'userName eq "ada@contoso.com"');
-        $created = $this->scim('POST', self::USERS, $token, self::ENTRA_USER);
+        $created = $this->scim(RequestMethodInterface::METHOD_POST, self::USERS, $token, self::ENTRA_USER);
         $after = $this->filtered($token, 'userName eq "ADA@CONTOSO.COM"');
 
         self::assertSame(0, $before['totalResults']);
@@ -106,7 +107,10 @@ final class ScimUsersTest extends AcceptanceTestCase
         self::assertSame('User', $user['meta']['resourceType']);
         self::assertSame('2026-01-15T10:00:00Z', $user['meta']['created']);
         self::assertSame(1, $after['totalResults']);
-        self::assertSame($user, self::document($this->scim('GET', self::USERS . '/' . $user['id'], $token)));
+        self::assertSame(
+            $user,
+            self::document($this->scim(RequestMethodInterface::METHOD_GET, self::USERS . '/' . $user['id'], $token)),
+        );
         $account = TestStorage::database()->fetchOne(
             'SELECT connection, email_verified, password_hash FROM users WHERE id = :id',
             ['id' => $user['id']],
@@ -125,9 +129,9 @@ final class ScimUsersTest extends AcceptanceTestCase
         $okta = json_decode(self::OKTA_USER, false, 8, JSON_THROW_ON_ERROR);
         self::assertInstanceOf(\stdClass::class, $okta);
 
-        $withPassword = $this->scim('POST', self::USERS, $token, self::OKTA_USER);
+        $withPassword = $this->scim(RequestMethodInterface::METHOD_POST, self::USERS, $token, self::OKTA_USER);
         unset($okta->password);
-        $created = $this->scim('POST', self::USERS, $token, (string) json_encode($okta));
+        $created = $this->scim(RequestMethodInterface::METHOD_POST, self::USERS, $token, (string) json_encode($okta));
 
         self::assertScimError(self::BAD, $withPassword, 'invalidValue');
         self::assertStringNotContainsString('1mPassword', (string) $withPassword->getBody());
@@ -142,7 +146,7 @@ final class ScimUsersTest extends AcceptanceTestCase
     public function testATakenUserNameExternalIdOrAddressIsAConflict(): void
     {
         [$token] = $this->provisioningToken('password');
-        $this->scim('POST', self::USERS, $token, self::resource('ada', '1', 'ada@x.test'));
+        $this->scim(RequestMethodInterface::METHOD_POST, self::USERS, $token, self::resource('ada', '1', 'ada@x.test'));
         $taken = [
             self::resource('ADA', '2', 'a2@x.test'),
             self::resource('other', '1', 'a3@x.test'),
@@ -150,7 +154,7 @@ final class ScimUsersTest extends AcceptanceTestCase
         ];
 
         foreach ($taken as $resource) {
-            $conflict = $this->scim('POST', self::USERS, $token, $resource);
+            $conflict = $this->scim(RequestMethodInterface::METHOD_POST, self::USERS, $token, $resource);
 
             self::assertScimError(StatusCodeInterface::STATUS_CONFLICT, $conflict, 'uniqueness');
             self::assertStringNotContainsString('@x.test', (string) $conflict->getBody(), 'Never the value.');
@@ -167,7 +171,12 @@ final class ScimUsersTest extends AcceptanceTestCase
     {
         [$token] = $this->provisioningToken('password');
 
-        $post = fn (string $body): ResponseInterface => $this->scim('POST', self::USERS, $token, $body);
+        $post = fn (string $body): ResponseInterface => $this->scim(
+            RequestMethodInterface::METHOD_POST,
+            self::USERS,
+            $token,
+            $body,
+        );
         $plain = ['Authorization' => 'Bearer ' . $token, 'Content-Type' => 'text/plain'];
         $tooLarge = '{"userName": "' . str_repeat('a', 1_048_577) . '"}';
 
@@ -175,35 +184,54 @@ final class ScimUsersTest extends AcceptanceTestCase
         self::assertScimError(self::BAD, $post('["a"]'), 'invalidSyntax');
         self::assertScimError(
             self::BAD,
-            $this->request('POST', self::USERS, $plain, self::MANAGEMENT_HOST, '{}'),
+            $this->request(RequestMethodInterface::METHOD_POST, self::USERS, $plain, self::MANAGEMENT_HOST, '{}'),
             'invalidSyntax',
         );
         self::assertScimError(StatusCodeInterface::STATUS_PAYLOAD_TOO_LARGE, $post($tooLarge));
         self::assertScimError(self::BAD, $post('{"userName": "no-address"}'), 'invalidValue');
-        $filtered = $this->scim('GET', self::USERS . '?filter=' . rawurlencode('title co "x"'), $token);
+        $filtered = $this->scim(
+            RequestMethodInterface::METHOD_GET,
+            self::USERS . '?filter=' . rawurlencode('title co "x"'),
+            $token,
+        );
         self::assertScimError(self::BAD, $filtered, 'invalidFilter');
-        self::assertScimError(self::BAD, $this->scim('GET', self::USERS . '?count=many', $token), 'invalidValue');
+        self::assertScimError(
+            self::BAD,
+            $this->scim(RequestMethodInterface::METHOD_GET, self::USERS . '?count=many', $token),
+            'invalidValue',
+        );
         self::assertSame(0, self::rows('SELECT count(*) FROM provisioned_accounts'));
     }
 
     public function testATokenSeesItsConnectionsAccountsOnly(): void
     {
         $this->adminToken();
-        $this->api('POST', '/api/v1/connections', [
+        $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/connections', [
             'name' => 'staff',
             'display_name' => 'Staff',
             'strategy' => 'database',
         ]);
         [$ours] = $this->provisioningToken('password');
         [$theirs] = $this->provisioningToken('staff');
-        $ada = self::document($this->scim('POST', self::USERS, $ours, '{"userName": "ada@x.test"}'));
+        $ada = self::document(
+            $this->scim(RequestMethodInterface::METHOD_POST, self::USERS, $ours, '{"userName": "ada@x.test"}'),
+        );
         self::assertIsString($ada['id']);
 
         $notFound = StatusCodeInterface::STATUS_NOT_FOUND;
-        self::assertScimError($notFound, $this->scim('GET', self::USERS . '/' . $ada['id'], $theirs));
-        self::assertSame(0, self::document($this->scim('GET', self::USERS, $theirs))['totalResults']);
-        self::assertScimError($notFound, $this->scim('GET', self::USERS . '/not-an-id', $ours));
-        $second = $this->scim('POST', self::USERS, $theirs, '{"userName": "ada@x.test"}');
+        self::assertScimError(
+            $notFound,
+            $this->scim(RequestMethodInterface::METHOD_GET, self::USERS . '/' . $ada['id'], $theirs),
+        );
+        self::assertSame(
+            0,
+            self::document($this->scim(RequestMethodInterface::METHOD_GET, self::USERS, $theirs))['totalResults'],
+        );
+        self::assertScimError(
+            $notFound,
+            $this->scim(RequestMethodInterface::METHOD_GET, self::USERS . '/not-an-id', $ours),
+        );
+        $second = $this->scim(RequestMethodInterface::METHOD_POST, self::USERS, $theirs, '{"userName": "ada@x.test"}');
         self::assertSame(
             StatusCodeInterface::STATUS_CREATED,
             $second->getStatusCode(),
@@ -216,12 +244,19 @@ final class ScimUsersTest extends AcceptanceTestCase
         $clock = $this->freezeClock('2026-01-15T10:00:00Z');
         [$token] = $this->provisioningToken('password');
         foreach (['a', 'b', 'c'] as $name) {
-            $this->scim('POST', self::USERS, $token, sprintf('{"userName": "%s@x.test"}', $name));
+            $this->scim(
+                RequestMethodInterface::METHOD_POST,
+                self::USERS,
+                $token,
+                sprintf('{"userName": "%s@x.test"}', $name),
+            );
             $clock->advance(1);
         }
 
-        $page = self::document($this->scim('GET', self::USERS . '?startIndex=2&count=1', $token));
-        $counted = self::document($this->scim('GET', self::USERS . '?count=0', $token));
+        $page = self::document(
+            $this->scim(RequestMethodInterface::METHOD_GET, self::USERS . '?startIndex=2&count=1', $token),
+        );
+        $counted = self::document($this->scim(RequestMethodInterface::METHOD_GET, self::USERS . '?count=0', $token));
 
         self::assertSame(3, $page['totalResults']);
         self::assertSame(2, $page['startIndex']);
@@ -238,13 +273,18 @@ final class ScimUsersTest extends AcceptanceTestCase
         $this->freezeClock(Idp::NOW);
         $this->registerSaml();
         [$token] = $this->provisioningToken('acme');
-        $provisioned = $this->scim('POST', self::USERS, $token, json_encode([
+        $provisioned = $this->scim(RequestMethodInterface::METHOD_POST, self::USERS, $token, json_encode([
             'userName' => 'ada@acme.example',
             'externalId' => self::SUBJECT,
             'emails' => [['value' => 'ada@acme.example', 'primary' => true]],
         ], JSON_THROW_ON_ERROR));
         self::assertCreated($provisioned);
-        $missing = $this->scim('POST', self::USERS, $token, '{"userName": "grace@acme.example"}');
+        $missing = $this->scim(
+            RequestMethodInterface::METHOD_POST,
+            self::USERS,
+            $token,
+            '{"userName": "grace@acme.example"}',
+        );
 
         $signedIn = $this->signInThroughSaml();
 
@@ -268,7 +308,11 @@ final class ScimUsersTest extends AcceptanceTestCase
         $this->freezeClock(Idp::NOW);
         $this->registerSaml();
         $this->adminToken();
-        $switched = $this->api('PATCH', '/api/v1/connections/acme', ['require_provisioning' => true]);
+        $switched = $this->api(
+            RequestMethodInterface::METHOD_PATCH,
+            '/api/v1/connections/acme',
+            ['require_provisioning' => true],
+        );
         self::assertTrue(self::document($switched)['require_provisioning']);
 
         $refused = $this->signInThroughSaml();
@@ -281,7 +325,12 @@ final class ScimUsersTest extends AcceptanceTestCase
         ));
         $this->clearCookies();
         [$token] = $this->provisioningToken('acme');
-        $this->scim('POST', self::USERS, $token, self::resource('ada@acme.example', self::SUBJECT));
+        $this->scim(
+            RequestMethodInterface::METHOD_POST,
+            self::USERS,
+            $token,
+            self::resource('ada@acme.example', self::SUBJECT),
+        );
         self::assertSame(
             StatusCodeInterface::STATUS_SEE_OTHER,
             $this->signInThroughSaml()->getStatusCode(),
@@ -289,7 +338,11 @@ final class ScimUsersTest extends AcceptanceTestCase
         );
         self::assertSame(
             StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
-            $this->api('PATCH', '/api/v1/connections/password', ['require_provisioning' => true])->getStatusCode(),
+            $this->api(
+                RequestMethodInterface::METHOD_PATCH,
+                '/api/v1/connections/password',
+                ['require_provisioning' => true],
+            )->getStatusCode(),
             'A pool does not require provisioning.',
         );
     }
@@ -298,12 +351,12 @@ final class ScimUsersTest extends AcceptanceTestCase
     {
         $clock = $this->freezeClock('2026-01-15T10:00:00Z');
         [$token, $tokenId] = $this->provisioningToken('password');
-        $created = $this->scim('POST', self::USERS, $token, self::ENTRA_USER);
+        $created = $this->scim(RequestMethodInterface::METHOD_POST, self::USERS, $token, self::ENTRA_USER);
         $id = self::document($created)['id'];
         self::assertIsString($id);
         $clock->advance(60);
 
-        $patched = $this->scim('PATCH', self::USERS . '/' . $id, $token, self::patch(
+        $patched = $this->scim(RequestMethodInterface::METHOD_PATCH, self::USERS . '/' . $id, $token, self::patch(
             ['op' => 'Replace', 'path' => 'emails[type eq "work"].value', 'value' => 'ada.l@contoso.com'],
             ['op' => 'Replace', 'path' => 'name.familyName', 'value' => 'King'],
             ['op' => 'Add', 'path' => 'nickName', 'value' => 'Ada'],
@@ -333,18 +386,20 @@ final class ScimUsersTest extends AcceptanceTestCase
     public function testAPutReplacesTheWholeResource(): void
     {
         [$token] = $this->provisioningToken('password');
-        $id = self::document($this->scim('POST', self::USERS, $token, (string) json_encode([
+        $grace = (string) json_encode([
             'userName' => 'grace@example.com',
             'displayName' => 'Grace Hopper',
             'nickName' => 'Amazing',
-        ])))['id'];
+        ]);
+        $id = self::document($this->scim(RequestMethodInterface::METHOD_POST, self::USERS, $token, $grace))['id'];
         self::assertIsString($id);
 
-        $replaced = $this->scim('PUT', self::USERS . '/' . $id, $token, (string) json_encode([
+        $replacement = (string) json_encode([
             'userName' => 'g.hopper@example.com',
             'externalId' => 'g1',
             'name' => ['givenName' => 'Grace'],
-        ]));
+        ]);
+        $replaced = $this->scim(RequestMethodInterface::METHOD_PUT, self::USERS . '/' . $id, $token, $replacement);
 
         self::assertSame(StatusCodeInterface::STATUS_OK, $replaced->getStatusCode(), (string) $replaced->getBody());
         $user = self::document($replaced);
@@ -360,20 +415,42 @@ final class ScimUsersTest extends AcceptanceTestCase
     {
         $clock = $this->freezeClock('2026-01-15T10:00:00Z');
         [$token] = $this->provisioningToken('password');
-        $created = $this->scim('POST', self::USERS, $token, '{"userName": "ada@x.test"}');
+        $created = $this->scim(RequestMethodInterface::METHOD_POST, self::USERS, $token, '{"userName": "ada@x.test"}');
         $id = self::document($created)['id'];
         self::assertIsString($id);
         $first = $created->getHeaderLine('ETag');
         $clock->advance(1);
-        $this->scim('PATCH', self::USERS . '/' . $id, $token, self::patch(
+        $this->scim(RequestMethodInterface::METHOD_PATCH, self::USERS . '/' . $id, $token, self::patch(
             ['op' => 'add', 'path' => 'nickName', 'value' => 'Ada'],
         ));
         $nickName = self::patch(['op' => 'replace', 'path' => 'nickName', 'value' => 'Countess']);
 
-        $stale = $this->scim('PATCH', self::USERS . '/' . $id, $token, $nickName, ['If-Match' => $first]);
-        $current = $this->scim('GET', self::USERS . '/' . $id, $token)->getHeaderLine('ETag');
-        $fresh = $this->scim('PATCH', self::USERS . '/' . $id, $token, $nickName, ['If-Match' => $current]);
-        $any = $this->scim('DELETE', self::USERS . '/' . $id, $token, null, ['If-Match' => '*']);
+        $stale = $this->scim(
+            RequestMethodInterface::METHOD_PATCH,
+            self::USERS . '/' . $id,
+            $token,
+            $nickName,
+            ['If-Match' => $first],
+        );
+        $current = $this->scim(
+            RequestMethodInterface::METHOD_GET,
+            self::USERS . '/' . $id,
+            $token,
+        )->getHeaderLine('ETag');
+        $fresh = $this->scim(
+            RequestMethodInterface::METHOD_PATCH,
+            self::USERS . '/' . $id,
+            $token,
+            $nickName,
+            ['If-Match' => $current],
+        );
+        $any = $this->scim(
+            RequestMethodInterface::METHOD_DELETE,
+            self::USERS . '/' . $id,
+            $token,
+            null,
+            ['If-Match' => '*'],
+        );
 
         self::assertScimError(StatusCodeInterface::STATUS_PRECONDITION_FAILED, $stale);
         self::assertSame(StatusCodeInterface::STATUS_OK, $fresh->getStatusCode(), (string) $fresh->getBody());
@@ -385,13 +462,17 @@ final class ScimUsersTest extends AcceptanceTestCase
     {
         [$deleting, $tokenId] = $this->provisioningToken('password');
         [$keeping] = $this->provisioningToken('password', ['delete_deactivates' => true]);
-        $gone = self::document($this->scim('POST', self::USERS, $deleting, '{"userName": "gone@x.test"}'))['id'];
-        $kept = self::document($this->scim('POST', self::USERS, $keeping, '{"userName": "kept@x.test"}'))['id'];
+        $gone = self::document(
+            $this->scim(RequestMethodInterface::METHOD_POST, self::USERS, $deleting, '{"userName": "gone@x.test"}'),
+        )['id'];
+        $kept = self::document(
+            $this->scim(RequestMethodInterface::METHOD_POST, self::USERS, $keeping, '{"userName": "kept@x.test"}'),
+        )['id'];
         self::assertIsString($gone);
         self::assertIsString($kept);
 
-        $deleted = $this->scim('DELETE', self::USERS . '/' . $gone, $deleting);
-        $deactivated = $this->scim('DELETE', self::USERS . '/' . $kept, $keeping);
+        $deleted = $this->scim(RequestMethodInterface::METHOD_DELETE, self::USERS . '/' . $gone, $deleting);
+        $deactivated = $this->scim(RequestMethodInterface::METHOD_DELETE, self::USERS . '/' . $kept, $keeping);
 
         self::assertSame(
             StatusCodeInterface::STATUS_NO_CONTENT,
@@ -399,37 +480,63 @@ final class ScimUsersTest extends AcceptanceTestCase
             (string) $deleted->getBody(),
         );
         $notFound = StatusCodeInterface::STATUS_NOT_FOUND;
-        self::assertScimError($notFound, $this->scim('GET', self::USERS . '/' . $gone, $deleting));
+        self::assertScimError(
+            $notFound,
+            $this->scim(RequestMethodInterface::METHOD_GET, self::USERS . '/' . $gone, $deleting),
+        );
         self::assertSame(0, self::rows("SELECT count(*) FROM users WHERE email = 'gone@x.test'"));
         self::assertSame($tokenId, TestStorage::database()->fetchValue(
             'SELECT actor_provisioning_token_id FROM audit_events WHERE type = :type',
             ['type' => AuditEventType::UserDeleted->value],
         ));
         self::assertSame(StatusCodeInterface::STATUS_NO_CONTENT, $deactivated->getStatusCode());
-        self::assertFalse(self::document($this->scim('GET', self::USERS . '/' . $kept, $keeping))['active']);
-        self::assertScimError($notFound, $this->scim('DELETE', self::USERS . '/' . $gone, $deleting));
+        self::assertFalse(
+            self::document(
+                $this->scim(RequestMethodInterface::METHOD_GET, self::USERS . '/' . $kept, $keeping),
+            )['active'],
+        );
+        self::assertScimError(
+            $notFound,
+            $this->scim(RequestMethodInterface::METHOD_DELETE, self::USERS . '/' . $gone, $deleting),
+        );
     }
 
     public function testAChangeIsHeldToTheRulesOfACreation(): void
     {
         [$token] = $this->provisioningToken('password');
-        $this->scim('POST', self::USERS, $token, '{"userName": "grace@x.test"}');
-        $id = self::document($this->scim('POST', self::USERS, $token, '{"userName": "ada@x.test"}'))['id'];
+        $this->scim(RequestMethodInterface::METHOD_POST, self::USERS, $token, '{"userName": "grace@x.test"}');
+        $id = self::document(
+            $this->scim(RequestMethodInterface::METHOD_POST, self::USERS, $token, '{"userName": "ada@x.test"}'),
+        )['id'];
         self::assertIsString($id);
         $path = self::USERS . '/' . $id;
 
         $rename = self::patch(['op' => 'replace', 'path' => 'userName', 'value' => 'GRACE@x.test']);
-        $taken = $this->scim('PATCH', $path, $token, $rename);
-        $password = $this->scim('PUT', $path, $token, '{"userName": "ada@x.test", "password": "secret"}');
+        $taken = $this->scim(RequestMethodInterface::METHOD_PATCH, $path, $token, $rename);
+        $password = $this->scim(
+            RequestMethodInterface::METHOD_PUT,
+            $path,
+            $token,
+            '{"userName": "ada@x.test", "password": "secret"}',
+        );
         $unreadable = self::patch(['op' => 'replace', 'path' => 'emails[', 'value' => 'x']);
-        $badPath = $this->scim('PATCH', $path, $token, $unreadable);
-        $noTarget = $this->scim('PATCH', $path, $token, (string) json_encode(['Operations' => [['op' => 'remove']]]));
+        $badPath = $this->scim(RequestMethodInterface::METHOD_PATCH, $path, $token, $unreadable);
+        $noTarget = $this->scim(
+            RequestMethodInterface::METHOD_PATCH,
+            $path,
+            $token,
+            (string) json_encode(['Operations' => [['op' => 'remove']]]),
+        );
 
         self::assertScimError(StatusCodeInterface::STATUS_CONFLICT, $taken, 'uniqueness');
         self::assertScimError(self::BAD, $password, 'invalidValue');
         self::assertScimError(self::BAD, $badPath, 'invalidPath');
         self::assertScimError(self::BAD, $noTarget, 'noTarget');
-        self::assertSame('ada@x.test', self::document($this->scim('GET', $path, $token))['userName'], 'Unchanged.');
+        self::assertSame(
+            'ada@x.test',
+            self::document($this->scim(RequestMethodInterface::METHOD_GET, $path, $token))['userName'],
+            'Unchanged.',
+        );
     }
 
     public function testAnEnterpriseConnectionsIdentityFollowsItsSubject(): void
@@ -437,14 +544,19 @@ final class ScimUsersTest extends AcceptanceTestCase
         $this->freezeClock(Idp::NOW);
         $this->registerSaml();
         [$token] = $this->provisioningToken('acme');
-        $created = $this->scim('POST', self::USERS, $token, self::resource('ada@acme.example', 'old-subject'));
+        $created = $this->scim(
+            RequestMethodInterface::METHOD_POST,
+            self::USERS,
+            $token,
+            self::resource('ada@acme.example', 'old-subject'),
+        );
         $id = self::document($created)['id'];
         self::assertIsString($id);
 
-        $moved = $this->scim('PATCH', self::USERS . '/' . $id, $token, self::patch(
+        $moved = $this->scim(RequestMethodInterface::METHOD_PATCH, self::USERS . '/' . $id, $token, self::patch(
             ['op' => 'replace', 'path' => 'externalId', 'value' => self::SUBJECT],
         ));
-        $removed = $this->scim('PATCH', self::USERS . '/' . $id, $token, self::patch(
+        $removed = $this->scim(RequestMethodInterface::METHOD_PATCH, self::USERS . '/' . $id, $token, self::patch(
             ['op' => 'remove', 'path' => 'externalId'],
         ));
 
@@ -481,7 +593,7 @@ final class ScimUsersTest extends AcceptanceTestCase
     private function provisioningToken(string $connection, array $options = []): array
     {
         $this->adminToken();
-        $issued = $this->api('POST', '/api/v1/provisioning-tokens', $options + [
+        $issued = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/provisioning-tokens', $options + [
             'connection' => $connection,
             'description' => 'Directory',
         ]);
@@ -496,7 +608,9 @@ final class ScimUsersTest extends AcceptanceTestCase
     /** @return array<array-key, mixed> */
     private function filtered(string $token, string $filter): array
     {
-        return self::document($this->scim('GET', self::USERS . '?filter=' . rawurlencode($filter), $token));
+        return self::document(
+            $this->scim(RequestMethodInterface::METHOD_GET, self::USERS . '?filter=' . rawurlencode($filter), $token),
+        );
     }
 
     private static function resource(string $userName, ?string $externalId = null, ?string $email = null): string
@@ -550,7 +664,7 @@ final class ScimUsersTest extends AcceptanceTestCase
     private function registerSaml(): void
     {
         $this->adminToken();
-        $created = $this->api('POST', '/api/v1/connections', [
+        $created = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/connections', [
             'name' => 'acme',
             'display_name' => 'Acme staff',
             'strategy' => 'saml',

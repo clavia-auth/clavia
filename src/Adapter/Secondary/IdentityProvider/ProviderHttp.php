@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Secondary\IdentityProvider;
 
 use Clavia\Application\Port\IdentityProviderFailed;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use JsonException;
 use Psr\Http\Client\ClientExceptionInterface;
@@ -55,7 +56,7 @@ final readonly class ProviderHttp
      */
     public function postForm(string $provider, string $url, array $form): array
     {
-        $request = $this->requests->createRequest('POST', $url)
+        $request = $this->requests->createRequest(RequestMethodInterface::METHOD_POST, $url)
             ->withHeader('User-Agent', self::USER_AGENT)
             ->withHeader('Accept', 'application/json')
             ->withHeader('Content-Type', 'application/x-www-form-urlencoded')
@@ -73,7 +74,7 @@ final readonly class ProviderHttp
      */
     public function get(string $provider, string $url): array
     {
-        $request = $this->requests->createRequest('GET', $url)
+        $request = $this->requests->createRequest(RequestMethodInterface::METHOD_GET, $url)
             ->withHeader('User-Agent', self::USER_AGENT)
             ->withHeader('Accept', 'application/json');
 
@@ -93,7 +94,7 @@ final readonly class ProviderHttp
         #[\SensitiveParameter] string $accessToken,
         string $accept = 'application/json',
     ): array {
-        $request = $this->requests->createRequest('GET', $url)
+        $request = $this->requests->createRequest(RequestMethodInterface::METHOD_GET, $url)
             ->withHeader('User-Agent', self::USER_AGENT)
             ->withHeader('Accept', $accept)
             ->withHeader('Authorization', 'Bearer ' . $accessToken);

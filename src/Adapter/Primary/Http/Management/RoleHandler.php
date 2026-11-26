@@ -16,6 +16,7 @@ use Clavia\Application\Management\Roles\ReadRoles;
 use Clavia\Application\Management\Roles\RoleChanges;
 use Clavia\Application\Management\Roles\UpdateRole;
 use Clavia\Domain\Rbac\RoleId;
+use Fig\Http\Message\RequestMethodInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -42,9 +43,9 @@ final readonly class RoleHandler implements RequestHandlerInterface
         $id = RoleId::fromString($management->path('role_id'));
 
         switch ($request->getMethod()) {
-            case 'GET':
+            case RequestMethodInterface::METHOD_GET:
                 return $this->responder->json(ManagementViews::roleWithPermissions($this->read->one($id)));
-            case 'PATCH':
+            case RequestMethodInterface::METHOD_PATCH:
                 $role = ($this->update)($id, new RoleChanges(
                     $management->body->string('name'),
                     $management->body->string('description'),
@@ -53,7 +54,7 @@ final readonly class RoleHandler implements RequestHandlerInterface
                 ));
 
                 return $this->responder->json(ManagementViews::roleWithPermissions($this->read->describe($role)));
-            case 'DELETE':
+            case RequestMethodInterface::METHOD_DELETE:
                 ($this->delete)($id);
 
                 return $this->responder->noContent();

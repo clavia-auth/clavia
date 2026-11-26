@@ -16,6 +16,7 @@ use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\Authentication\Account\CheckYourInbox;
 use Clavia\Application\Authentication\Account\RequestPasswordReset;
 use Clavia\Application\Authentication\Account\ResetUnavailable;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -39,7 +40,7 @@ final readonly class PasswordForgotHandler implements RequestHandlerInterface
     #[\Override]
     public function handle(ServerRequestInterface $request): ResponseInterface
     {
-        if ($request->getMethod() !== 'POST') {
+        if ($request->getMethod() !== RequestMethodInterface::METHOD_POST) {
             return $this->responder->page(
                 $request,
                 AccountPages::forgot(RequestParameterReader::query($request)->get('state')),

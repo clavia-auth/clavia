@@ -15,6 +15,7 @@ use Clavia\Application\Management\Users\ReadConsents;
 use Clavia\Application\Management\Users\WithdrawConsent;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\UserId;
+use Fig\Http\Message\RequestMethodInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -40,9 +41,9 @@ final readonly class UserConsentsHandler implements RequestHandlerInterface
         $user = UserId::fromString($management->path('user_id'));
 
         switch ($request->getMethod()) {
-            case 'GET':
+            case RequestMethodInterface::METHOD_GET:
                 return $this->responder->jsonList(array_map(ManagementViews::consent(...), ($this->read)($user)));
-            case 'DELETE':
+            case RequestMethodInterface::METHOD_DELETE:
                 ($this->withdraw)($user, ClientId::fromString($management->path('client_id')));
 
                 return $this->responder->noContent();

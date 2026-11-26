@@ -14,6 +14,7 @@ namespace Clavia\Adapter\Secondary\Http;
 use Clavia\Application\Port\BackChannelLogoutDelivery;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Shared\Url;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
@@ -53,7 +54,7 @@ final readonly class HttpBackChannelLogoutDelivery implements BackChannelLogoutD
             return;
         }
 
-        $request = $this->requests->createRequest('POST', $uri->value)
+        $request = $this->requests->createRequest(RequestMethodInterface::METHOD_POST, $uri->value)
             ->withHeader('Content-Type', 'application/x-www-form-urlencoded')
             ->withHeader('User-Agent', 'Clavia')
             ->withBody($this->streams->createStream(

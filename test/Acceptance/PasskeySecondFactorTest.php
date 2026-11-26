@@ -37,6 +37,7 @@ use ClaviaTest\Support\LoginFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\SoftwareAuthenticator;
 use DateTimeImmutable;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -219,7 +220,7 @@ final class PasskeySecondFactorTest extends AcceptanceTestCase
             'csrf_token' => self::csrfTokenFrom($page),
         ]);
 
-        $replayed = $this->request('POST', '/auth/mfa/passkey', [
+        $replayed = $this->request(RequestMethodInterface::METHOD_POST, '/auth/mfa/passkey', [
             'Content-Type' => 'application/x-www-form-urlencoded',
             'Cookie' => implode('; ', [
                 self::MFA_COOKIE . '=' . ($this->cookie(self::MFA_COOKIE) ?? ''),

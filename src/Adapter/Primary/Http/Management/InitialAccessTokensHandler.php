@@ -15,6 +15,7 @@ use Clavia\Application\Management\InitialAccessTokens\IssueInitialAccessToken;
 use Clavia\Application\Management\InitialAccessTokens\NewInitialAccessToken;
 use Clavia\Application\Management\InitialAccessTokens\ReadInitialAccessTokens;
 use Clavia\Domain\Client\Registration\InitialAccessToken;
+use Fig\Http\Message\RequestMethodInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -39,8 +40,8 @@ final readonly class InitialAccessTokensHandler implements RequestHandlerInterfa
         $management = ManagementRequest::of($request);
 
         return match ($request->getMethod()) {
-            'GET' => $this->list($management),
-            'POST' => $this->issue($management->body),
+            RequestMethodInterface::METHOD_GET => $this->list($management),
+            RequestMethodInterface::METHOD_POST => $this->issue($management->body),
             default => throw new LogicException('Routed with a method the handler does not serve.'),
         };
     }

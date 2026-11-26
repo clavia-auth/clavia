@@ -14,6 +14,7 @@ namespace Clavia\Adapter\Primary\Http\Management;
 use Clavia\Application\Management\Connections\DeleteConnection;
 use Clavia\Application\Management\Connections\ReadConnections;
 use Clavia\Application\Management\Connections\UpdateConnection;
+use Fig\Http\Message\RequestMethodInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -47,9 +48,9 @@ final readonly class ConnectionHandler implements RequestHandlerInterface
         $name = $management->path('name');
 
         switch ($request->getMethod()) {
-            case 'GET':
+            case RequestMethodInterface::METHOD_GET:
                 return $this->responder->json(ManagementViews::connection($this->read->one($name)));
-            case 'PATCH':
+            case RequestMethodInterface::METHOD_PATCH:
                 $body = $management->body;
                 $oidc = [];
                 foreach (self::OIDC_FIELDS as $field => $setting) {
@@ -71,7 +72,7 @@ final readonly class ConnectionHandler implements RequestHandlerInterface
                 );
 
                 return $this->responder->json(ManagementViews::connection($this->read->describe($connection)));
-            case 'DELETE':
+            case RequestMethodInterface::METHOD_DELETE:
                 ($this->delete)($name);
 
                 return $this->responder->noContent();

@@ -15,6 +15,7 @@ use Clavia\Adapter\Secondary\Http\OutboundUrlPolicy;
 use Clavia\Adapter\Secondary\Http\OutboundUrlRefused;
 use Clavia\Application\Port\BreachCheckUnavailable;
 use Clavia\Application\Port\BreachedPasswords;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
@@ -61,7 +62,7 @@ final readonly class PwnedPasswordsRange implements BreachedPasswords
             throw $this->unavailable($refused->getMessage());
         }
 
-        $request = $this->requests->createRequest('GET', $url)
+        $request = $this->requests->createRequest(RequestMethodInterface::METHOD_GET, $url)
             ->withHeader('Add-Padding', 'true')
             ->withHeader('User-Agent', 'Clavia');
 

@@ -30,6 +30,7 @@ use Clavia\Application\Authentication\RequireSignIn;
 use Clavia\Application\Authentication\ResolveEndUser;
 use Clavia\Domain\Authentication\LocalPath;
 use Clavia\Domain\Authentication\Session;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
@@ -81,7 +82,7 @@ final readonly class PasskeysHandler implements RequestHandlerInterface
             return $this->signInFirst();
         }
 
-        if ($request->getMethod() !== 'POST') {
+        if ($request->getMethod() !== RequestMethodInterface::METHOD_POST) {
             return $this->list($request, $session);
         }
         $form = RequestParameterReader::form($request);

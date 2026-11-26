@@ -17,6 +17,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -43,7 +44,7 @@ final class ScimGroupsTest extends AcceptanceTestCase
         parent::setUp();
         $this->freezeClock('2026-01-15T10:00:00Z');
         $this->adminToken();
-        $issued = self::document($this->api('POST', '/api/v1/provisioning-tokens', [
+        $issued = self::document($this->api(RequestMethodInterface::METHOD_POST, '/api/v1/provisioning-tokens', [
             'connection' => 'password',
             'description' => 'Entra ID',
         ]));
@@ -58,7 +59,7 @@ final class ScimGroupsTest extends AcceptanceTestCase
         $role = $this->role('Engineers', provisionable: true);
         [$ada, $grace] = [$this->account('ada@x.test'), $this->account('grace@x.test')];
 
-        $created = $this->scim('POST', self::GROUPS, [
+        $created = $this->scim(RequestMethodInterface::METHOD_POST, self::GROUPS, [
             'schemas' => ['urn:ietf:params:scim:schemas:core:2.0:Group'],
             'displayName' => 'Engineers',
             'externalId' => 'eng',
@@ -81,12 +82,12 @@ final class ScimGroupsTest extends AcceptanceTestCase
 
         self::assertSame([], $this->rolesOf($ada));
         self::assertSame(['Engineers'], $this->rolesOf($grace));
-        $read = self::document($this->scim('GET', $path));
+        $read = self::document($this->scim(RequestMethodInterface::METHOD_GET, $path));
         self::assertSame([$grace], array_column((array) $read['members'], 'value'));
-        $slim = self::document($this->scim('GET', $path . '?excludedAttributes=members'));
+        $slim = self::document($this->scim(RequestMethodInterface::METHOD_GET, $path . '?excludedAttributes=members'));
         self::assertArrayNotHasKey('members', $slim);
 
-        $deleted = $this->scim('DELETE', $path);
+        $deleted = $this->scim(RequestMethodInterface::METHOD_DELETE, $path);
 
         self::assertSame(StatusCodeInterface::STATUS_NO_CONTENT, $deleted->getStatusCode());
         self::assertSame([], $this->rolesOf($grace), 'Taken back with the group.');
@@ -97,7 +98,11 @@ final class ScimGroupsTest extends AcceptanceTestCase
     {
         $role = $this->role('Engineers', provisionable: true);
         $ada = $this->account('ada@x.test');
-        $assigned = $this->api('PUT', '/api/v1/users/' . $ada . '/roles', ['role_ids' => [$role]]);
+        $assigned = $this->api(
+            RequestMethodInterface::METHOD_PUT,
+            '/api/v1/users/' . $ada . '/roles',
+            ['role_ids' => [$role]],
+        );
         self::assertStatus(StatusCodeInterface::STATUS_OK, $assigned);
         $group = $this->group('Engineers', [$ada]);
 
@@ -126,26 +131,30 @@ final class ScimGroupsTest extends AcceptanceTestCase
         $this->group('Engineers', [$ada]);
         self::assertSame([], $this->rolesOf($ada));
 
-        $this->api('PATCH', '/api/v1/roles/' . $role, ['provisionable' => true]);
+        $this->api(RequestMethodInterface::METHOD_PATCH, '/api/v1/roles/' . $role, ['provisionable' => true]);
         self::assertSame(['Engineers'], $this->rolesOf($ada), 'Granted as the flag turns on.');
-        $this->api('PATCH', '/api/v1/roles/' . $role, ['provisionable' => false]);
+        $this->api(RequestMethodInterface::METHOD_PATCH, '/api/v1/roles/' . $role, ['provisionable' => false]);
         self::assertSame([], $this->rolesOf($ada), 'Taken back as it turns off.');
     }
 
     public function testNoGroupCanGiveAManagementApiRole(): void
     {
         $api = $this->managementApi();
-        $created = $this->api('POST', '/api/v1/roles', [
+        $created = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/roles', [
             'name' => 'Administrators',
             'provisionable' => true,
             'permissions' => [['resource_server_id' => $api->id->value, 'value' => 'read:users']],
         ]);
-        $plain = self::document($this->api('POST', '/api/v1/roles', [
+        $plain = self::document($this->api(RequestMethodInterface::METHOD_POST, '/api/v1/roles', [
             'name' => 'Administrators',
             'permissions' => [['resource_server_id' => $api->id->value, 'value' => 'read:users']],
         ]));
         self::assertIsString($plain['id']);
-        $flagged = $this->api('PATCH', '/api/v1/roles/' . $plain['id'], ['provisionable' => true]);
+        $flagged = $this->api(
+            RequestMethodInterface::METHOD_PATCH,
+            '/api/v1/roles/' . $plain['id'],
+            ['provisionable' => true],
+        );
         $ada = $this->account('ada@x.test');
         $this->group('Administrators', [$ada]);
 
@@ -156,12 +165,12 @@ final class ScimGroupsTest extends AcceptanceTestCase
 
     public function testAGroupIsHeldToItsConnection(): void
     {
-        $this->api('POST', '/api/v1/connections', [
+        $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/connections', [
             'name' => 'staff',
             'display_name' => 'Staff',
             'strategy' => 'database',
         ]);
-        $theirs = self::document($this->api('POST', '/api/v1/provisioning-tokens', [
+        $theirs = self::document($this->api(RequestMethodInterface::METHOD_POST, '/api/v1/provisioning-tokens', [
             'connection' => 'staff',
             'description' => 'Okta',
         ]))['token'];
@@ -170,12 +179,15 @@ final class ScimGroupsTest extends AcceptanceTestCase
         $group = $this->group('Engineers', []);
 
         $ops = ['displayName' => 'Ops', 'members' => [['value' => $ada]]];
-        $stranger = $this->scim('POST', self::GROUPS, $ops, $theirs);
-        $elsewhere = $this->scim('GET', self::GROUPS . '/' . $group, null, $theirs);
-        $twice = $this->scim('POST', self::GROUPS, ['displayName' => 'ENGINEERS']);
+        $stranger = $this->scim(RequestMethodInterface::METHOD_POST, self::GROUPS, $ops, $theirs);
+        $elsewhere = $this->scim(RequestMethodInterface::METHOD_GET, self::GROUPS . '/' . $group, null, $theirs);
+        $twice = $this->scim(RequestMethodInterface::METHOD_POST, self::GROUPS, ['displayName' => 'ENGINEERS']);
         $filter = rawurlencode('displayName eq "engineers"');
-        $found = self::document($this->scim('GET', self::GROUPS . '?filter=' . $filter));
-        $noUserName = $this->scim('GET', self::GROUPS . '?filter=' . rawurlencode('userName eq "x"'));
+        $found = self::document($this->scim(RequestMethodInterface::METHOD_GET, self::GROUPS . '?filter=' . $filter));
+        $noUserName = $this->scim(
+            RequestMethodInterface::METHOD_GET,
+            self::GROUPS . '?filter=' . rawurlencode('userName eq "x"'),
+        );
 
         self::assertStatus(StatusCodeInterface::STATUS_BAD_REQUEST, $stranger, "Another connection's account.");
         self::assertStatus(StatusCodeInterface::STATUS_NOT_FOUND, $elsewhere);
@@ -186,7 +198,11 @@ final class ScimGroupsTest extends AcceptanceTestCase
 
     private function role(string $name, bool $provisionable): string
     {
-        $created = $this->api('POST', '/api/v1/roles', ['name' => $name, 'provisionable' => $provisionable]);
+        $created = $this->api(
+            RequestMethodInterface::METHOD_POST,
+            '/api/v1/roles',
+            ['name' => $name, 'provisionable' => $provisionable],
+        );
         self::assertStatus(StatusCodeInterface::STATUS_CREATED, $created);
         $id = self::document($created)['id'];
         self::assertIsString($id);
@@ -197,7 +213,7 @@ final class ScimGroupsTest extends AcceptanceTestCase
     /** @param list<string> $members */
     private function group(string $name, array $members): string
     {
-        $created = $this->scim('POST', self::GROUPS, [
+        $created = $this->scim(RequestMethodInterface::METHOD_POST, self::GROUPS, [
             'displayName' => $name,
             'members' => array_map(static fn (string $id): array => ['value' => $id], $members),
         ]);
@@ -211,7 +227,7 @@ final class ScimGroupsTest extends AcceptanceTestCase
     /** @param array<string, mixed> $operation */
     private function patchGroup(string $id, array $operation): void
     {
-        $patched = $this->scim('PATCH', self::GROUPS . '/' . $id, self::patch($operation));
+        $patched = $this->scim(RequestMethodInterface::METHOD_PATCH, self::GROUPS . '/' . $id, self::patch($operation));
         self::assertStatus(StatusCodeInterface::STATUS_OK, $patched);
     }
 
@@ -222,7 +238,7 @@ final class ScimGroupsTest extends AcceptanceTestCase
 
     private function account(string $email): string
     {
-        $created = $this->scim('POST', '/scim/v2/Users', ['userName' => $email]);
+        $created = $this->scim(RequestMethodInterface::METHOD_POST, '/scim/v2/Users', ['userName' => $email]);
         self::assertStatus(StatusCodeInterface::STATUS_CREATED, $created);
         $id = self::document($created)['id'];
         self::assertIsString($id);

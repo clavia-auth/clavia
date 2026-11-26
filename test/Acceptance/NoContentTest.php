@@ -17,6 +17,7 @@ use ClaviaTest\Support\Fake\FakeWebhookSender;
 use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -34,9 +35,16 @@ final class NoContentTest extends AcceptanceTestCase
     public function testADeletionSaysNoContentType(): void
     {
         $this->adminToken();
-        $role = $this->api('POST', '/api/v1/roles', ['name' => 'Auditors', 'description' => 'Reads the trail.']);
+        $role = $this->api(
+            RequestMethodInterface::METHOD_POST,
+            '/api/v1/roles',
+            ['name' => 'Auditors', 'description' => 'Reads the trail.'],
+        );
 
-        $deleted = $this->api('DELETE', '/api/v1/roles/' . (string) self::document($role)['id']);
+        $deleted = $this->api(
+            RequestMethodInterface::METHOD_DELETE,
+            '/api/v1/roles/' . (string) self::document($role)['id'],
+        );
 
         self::assertEmptyAndUntyped(StatusCodeInterface::STATUS_NO_CONTENT, $deleted);
     }
@@ -45,12 +53,15 @@ final class NoContentTest extends AcceptanceTestCase
     {
         $this->container()->setService(WebhookSender::class, new FakeWebhookSender());
         $this->adminToken();
-        $created = $this->api('POST', '/api/v1/webhooks', [
+        $created = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/webhooks', [
             'url' => 'https://siem.acme.example/hooks',
             'events' => ['user.updated'],
         ]);
 
-        $queued = $this->api('POST', '/api/v1/webhooks/' . (string) self::document($created)['id'] . '/test');
+        $queued = $this->api(
+            RequestMethodInterface::METHOD_POST,
+            '/api/v1/webhooks/' . (string) self::document($created)['id'] . '/test',
+        );
 
         self::assertEmptyAndUntyped(StatusCodeInterface::STATUS_ACCEPTED, $queued);
     }

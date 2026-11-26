@@ -25,6 +25,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -84,19 +85,19 @@ final class ManagementSamlKeysTest extends AcceptanceTestCase
         $clock = $this->freezeClock('2026-03-01T09:00:00Z');
         $this->adminToken();
 
-        self::assertSame([], self::document($this->api('GET', '/api/v1/saml-keys')));
-        $generated = self::document($this->api('POST', '/api/v1/saml-keys/rotate'));
+        self::assertSame([], self::document($this->api(RequestMethodInterface::METHOD_GET, '/api/v1/saml-keys')));
+        $generated = self::document($this->api(RequestMethodInterface::METHOD_POST, '/api/v1/saml-keys/rotate'));
         self::assertSame('generated', $generated['step']);
-        $introduced = self::document($this->api('POST', '/api/v1/saml-keys/rotate'));
+        $introduced = self::document($this->api(RequestMethodInterface::METHOD_POST, '/api/v1/saml-keys/rotate'));
         self::assertSame(['introduced', '2026-03-15T09:00:00Z'], [$introduced['step'], $introduced['promotes_at']]);
 
         $clock->advance(14 * self::DAY);
         $this->adminToken();
-        $promoted = $this->api('POST', '/api/v1/saml-keys/rotate');
+        $promoted = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/saml-keys/rotate');
         self::assertSame(StatusCodeInterface::STATUS_OK, $promoted->getStatusCode(), (string) $promoted->getBody());
         self::assertSame('promoted', self::document($promoted)['step']);
 
-        $listed = $this->api('GET', '/api/v1/saml-keys');
+        $listed = $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/saml-keys');
         /** @var list<array{usage: string, status: string, certificate: string, certificate_sha256: string}> $keys */
         $keys = self::document($listed);
         self::assertSame(
@@ -135,7 +136,7 @@ final class ManagementSamlKeysTest extends AcceptanceTestCase
         ]);
         $this->adminToken();
 
-        $refused = $this->api('POST', '/api/v1/saml-keys/rotate');
+        $refused = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/saml-keys/rotate');
 
         self::assertSame(StatusCodeInterface::STATUS_CONFLICT, $refused->getStatusCode());
         self::assertStringContainsString('KMS', (string) $refused->getBody());
@@ -150,10 +151,13 @@ final class ManagementSamlKeysTest extends AcceptanceTestCase
     {
         $this->adminToken(['read:signing_keys']);
 
-        self::assertSame(StatusCodeInterface::STATUS_OK, $this->api('GET', '/api/v1/saml-keys')->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_OK,
+            $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/saml-keys')->getStatusCode(),
+        );
         self::assertSame(
             StatusCodeInterface::STATUS_FORBIDDEN,
-            $this->api('POST', '/api/v1/saml-keys/rotate')->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/saml-keys/rotate')->getStatusCode(),
         );
     }
 

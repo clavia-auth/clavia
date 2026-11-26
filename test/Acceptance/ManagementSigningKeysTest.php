@@ -17,6 +17,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 
 /**
@@ -33,7 +34,7 @@ final class ManagementSigningKeysTest extends AcceptanceTestCase
     {
         $this->adminToken();
 
-        $response = $this->api('GET', '/api/v1/signing-keys');
+        $response = $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/signing-keys');
 
         self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         $keys = self::document($response);
@@ -50,10 +51,10 @@ final class ManagementSigningKeysTest extends AcceptanceTestCase
     public function testARotationRetiresTheActiveKeyAndKeepsItPublished(): void
     {
         $this->adminToken();
-        $before = self::document($this->api('GET', '/api/v1/signing-keys'));
+        $before = self::document($this->api(RequestMethodInterface::METHOD_GET, '/api/v1/signing-keys'));
         self::assertIsArray($before[0]);
 
-        $rotated = $this->api('POST', '/api/v1/signing-keys/rotate');
+        $rotated = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/signing-keys/rotate');
 
         self::assertSame(StatusCodeInterface::STATUS_OK, $rotated->getStatusCode(), (string) $rotated->getBody());
         $rotation = self::document($rotated);
@@ -79,10 +80,13 @@ final class ManagementSigningKeysTest extends AcceptanceTestCase
     {
         $this->adminToken(['read:signing_keys']);
 
-        self::assertSame(StatusCodeInterface::STATUS_OK, $this->api('GET', '/api/v1/signing-keys')->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_OK,
+            $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/signing-keys')->getStatusCode(),
+        );
         self::assertSame(
             StatusCodeInterface::STATUS_FORBIDDEN,
-            $this->api('POST', '/api/v1/signing-keys/rotate')->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/signing-keys/rotate')->getStatusCode(),
         );
     }
 
@@ -96,11 +100,11 @@ final class ManagementSigningKeysTest extends AcceptanceTestCase
 
         self::assertSame(
             StatusCodeInterface::STATUS_CONFLICT,
-            $this->api('GET', '/api/v1/signing-keys')->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/signing-keys')->getStatusCode(),
         );
         self::assertSame(
             StatusCodeInterface::STATUS_CONFLICT,
-            $this->api('POST', '/api/v1/signing-keys/rotate')->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/signing-keys/rotate')->getStatusCode(),
         );
     }
 

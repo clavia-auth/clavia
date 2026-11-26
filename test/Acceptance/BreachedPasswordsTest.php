@@ -25,6 +25,7 @@ use ClaviaTest\Support\LoginFixtures;
 use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\Response\TextResponse;
 use Psr\Http\Client\ClientInterface;
@@ -153,16 +154,28 @@ final class BreachedPasswordsTest extends AcceptanceTestCase
         $this->checkOn();
         $this->adminToken();
 
-        $created = $this->api('POST', '/api/v1/users', ['email' => self::EMAIL, 'password' => self::BREACHED]);
+        $created = $this->api(
+            RequestMethodInterface::METHOD_POST,
+            '/api/v1/users',
+            ['email' => self::EMAIL, 'password' => self::BREACHED],
+        );
         self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $created->getStatusCode());
         self::assertNull($this->account());
 
-        $created = $this->api('POST', '/api/v1/users', ['email' => self::EMAIL, 'password' => self::GOOD]);
+        $created = $this->api(
+            RequestMethodInterface::METHOD_POST,
+            '/api/v1/users',
+            ['email' => self::EMAIL, 'password' => self::GOOD],
+        );
         self::assertSame(StatusCodeInterface::STATUS_CREATED, $created->getStatusCode(), (string) $created->getBody());
         $id = self::document($created)['id'];
         self::assertIsString($id);
 
-        $patched = $this->api('PATCH', '/api/v1/users/' . $id, ['password' => self::BREACHED]);
+        $patched = $this->api(
+            RequestMethodInterface::METHOD_PATCH,
+            '/api/v1/users/' . $id,
+            ['password' => self::BREACHED],
+        );
         self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $patched->getStatusCode());
         // The refusal does not repeat the value at fault.
         self::assertStringNotContainsString(self::BREACHED, (string) $patched->getBody());

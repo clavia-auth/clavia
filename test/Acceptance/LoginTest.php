@@ -20,6 +20,7 @@ use ClaviaTest\Support\LoginFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
 use DateTimeImmutable;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 
 /**
@@ -203,7 +204,7 @@ final class LoginTest extends AcceptanceTestCase
         $response = $this->get('/auth/logout');
 
         self::assertSame(StatusCodeInterface::STATUS_METHOD_NOT_ALLOWED, $response->getStatusCode());
-        self::assertSame('POST', $response->getHeaderLine('Allow'));
+        self::assertSame(RequestMethodInterface::METHOD_POST, $response->getHeaderLine('Allow'));
         self::assertNotNull($this->session($sessionId));
     }
 
@@ -214,7 +215,7 @@ final class LoginTest extends AcceptanceTestCase
         $this->submitLogin();
 
         $response = $this->request(
-            'POST',
+            RequestMethodInterface::METHOD_POST,
             '/auth/logout?' . http_build_query(['next' => 'https://client.test/signed-out']),
         );
 
@@ -230,7 +231,10 @@ final class LoginTest extends AcceptanceTestCase
 
         $untrusted = ['https://evil.test/phish', 'http://client.test/plain-http', 'https://client.test.evil.test/'];
         foreach ($untrusted as $next) {
-            $response = $this->request('POST', '/auth/logout?' . http_build_query(['next' => $next]));
+            $response = $this->request(
+                RequestMethodInterface::METHOD_POST,
+                '/auth/logout?' . http_build_query(['next' => $next]),
+            );
 
             self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
             self::assertSame('/auth/login', $response->getHeaderLine('Location'), $next);
@@ -359,7 +363,7 @@ final class LoginTest extends AcceptanceTestCase
         $token = self::csrfTokenFrom($this->get('/auth/login'));
 
         $response = $this->request(
-            'POST',
+            RequestMethodInterface::METHOD_POST,
             '/auth/login',
             ['Content-Type' => 'application/json'],
             body: (string) json_encode([
@@ -632,7 +636,7 @@ final class LoginTest extends AcceptanceTestCase
         self::assertSame($nextUrl, $login->getHeaderLine('Location'));
 
         // 3. Follow it, now carrying the session cookie: a code is issued.
-        $code = $this->extractCode($this->request('GET', $nextUrl));
+        $code = $this->extractCode($this->request(RequestMethodInterface::METHOD_GET, $nextUrl));
 
         // 4. Exchange it.
         $token = $this->post('/oauth2/token', $this->tokenRequest($code, $verifier));
@@ -679,7 +683,7 @@ final class LoginTest extends AcceptanceTestCase
         self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
 
         // A render that sees both keeps the current one and clears the other.
-        $rendered = $this->request('GET', '/auth/login', ['Cookie' => $both]);
+        $rendered = $this->request(RequestMethodInterface::METHOD_GET, '/auth/login', ['Cookie' => $both]);
         self::assertSame($current, self::csrfTokenFrom($rendered));
         $deletions = array_filter(
             self::setCookieHeaders($rendered, 'clavia_csrf'),

@@ -18,6 +18,7 @@ use ClaviaTest\Support\DpopClient;
 use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\OidcFixtures;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -46,7 +47,9 @@ final class DpopTest extends AcceptanceTestCase
     {
         $this->machineApi();
 
-        $response = $this->machineToken(DpopClient::es256()->proof('POST', self::TOKEN_ENDPOINT));
+        $response = $this->machineToken(
+            DpopClient::es256()->proof(RequestMethodInterface::METHOD_POST, self::TOKEN_ENDPOINT),
+        );
 
         self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('use_dpop_nonce', self::json($response)['error']);
@@ -100,8 +103,10 @@ final class DpopTest extends AcceptanceTestCase
     {
         $this->machineApi();
         $client = DpopClient::es256();
-        $nonce = $this->machineToken($client->proof('POST', self::TOKEN_ENDPOINT))->getHeaderLine('DPoP-Nonce');
-        $proof = $client->proof('POST', self::TOKEN_ENDPOINT, $nonce);
+        $nonce = $this->machineToken(
+            $client->proof(RequestMethodInterface::METHOD_POST, self::TOKEN_ENDPOINT),
+        )->getHeaderLine('DPoP-Nonce');
+        $proof = $client->proof(RequestMethodInterface::METHOD_POST, self::TOKEN_ENDPOINT, $nonce);
 
         self::assertSame(StatusCodeInterface::STATUS_OK, $this->machineToken($proof)->getStatusCode());
         $again = $this->machineToken($proof);
@@ -115,11 +120,22 @@ final class DpopTest extends AcceptanceTestCase
     {
         $this->machineApi();
         $client = DpopClient::es256();
-        $nonce = $this->machineToken($client->proof('POST', self::TOKEN_ENDPOINT))->getHeaderLine('DPoP-Nonce');
+        $nonce = $this->machineToken(
+            $client->proof(RequestMethodInterface::METHOD_POST, self::TOKEN_ENDPOINT),
+        )->getHeaderLine('DPoP-Nonce');
 
-        $forTheWrongUrl = $client->proof('POST', 'https://auth.clavia.test/oauth2/par', $nonce);
-        $forTheWrongMethod = $client->proof('GET', self::TOKEN_ENDPOINT, $nonce);
-        $tooOld = $client->proof('POST', self::TOKEN_ENDPOINT, $nonce, issuedAt: time() - 120);
+        $forTheWrongUrl = $client->proof(
+            RequestMethodInterface::METHOD_POST,
+            'https://auth.clavia.test/oauth2/par',
+            $nonce,
+        );
+        $forTheWrongMethod = $client->proof(RequestMethodInterface::METHOD_GET, self::TOKEN_ENDPOINT, $nonce);
+        $tooOld = $client->proof(
+            RequestMethodInterface::METHOD_POST,
+            self::TOKEN_ENDPOINT,
+            $nonce,
+            issuedAt: time() - 120,
+        );
 
         foreach ([$forTheWrongUrl, $forTheWrongMethod, $tooOld] as $proof) {
             $response = $this->machineToken($proof);
@@ -142,8 +158,8 @@ final class DpopTest extends AcceptanceTestCase
             ['grant_type' => 'client_credentials', 'audience' => self::TEST_M2M_AUDIENCE],
             basicAuth: [self::TEST_M2M_CLIENT_ID, self::TEST_M2M_SECRET],
             // Two proofs, as one header joined by a comma, the way a proxy would join two headers.
-            headers: ['DPoP' => $client->proof('POST', self::TOKEN_ENDPOINT)
-                . ', ' . $client->proof('POST', self::TOKEN_ENDPOINT)],
+            headers: ['DPoP' => $client->proof(RequestMethodInterface::METHOD_POST, self::TOKEN_ENDPOINT)
+                . ', ' . $client->proof(RequestMethodInterface::METHOD_POST, self::TOKEN_ENDPOINT)],
         );
 
         self::assertSame('invalid_dpop_proof', self::json($response)['error']);
@@ -188,11 +204,17 @@ final class DpopTest extends AcceptanceTestCase
      */
     private function withNonce(DpopClient $client, callable $send): ResponseInterface
     {
-        $first = $send($client->proof('POST', self::TOKEN_ENDPOINT));
+        $first = $send($client->proof(RequestMethodInterface::METHOD_POST, self::TOKEN_ENDPOINT));
         if ((self::json($first)['error'] ?? null) !== 'use_dpop_nonce') {
             return $first;
         }
 
-        return $send($client->proof('POST', self::TOKEN_ENDPOINT, $first->getHeaderLine('DPoP-Nonce')));
+        return $send(
+            $client->proof(
+                RequestMethodInterface::METHOD_POST,
+                self::TOKEN_ENDPOINT,
+                $first->getHeaderLine('DPoP-Nonce'),
+            ),
+        );
     }
 }

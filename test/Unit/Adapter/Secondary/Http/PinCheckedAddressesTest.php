@@ -13,6 +13,7 @@ namespace ClaviaTest\Unit\Adapter\Secondary\Http;
 
 use Clavia\Adapter\Secondary\Http\OutboundUrlPolicy;
 use Clavia\Adapter\Secondary\Http\PinCheckedAddresses;
+use Fig\Http\Message\RequestMethodInterface;
 use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Promise\FulfilledPromise;
 use GuzzleHttp\Promise\PromiseInterface;
@@ -103,7 +104,7 @@ final class PinCheckedAddressesTest extends TestCase
             },
         );
 
-        $promise = $handler(new Request($url, 'POST'), []);
+        $promise = $handler(new Request($url, RequestMethodInterface::METHOD_POST), []);
         self::assertInstanceOf(PromiseInterface::class, $promise);
 
         return $promise;

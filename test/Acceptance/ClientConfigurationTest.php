@@ -21,6 +21,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -45,7 +46,7 @@ final class ClientConfigurationTest extends AcceptanceTestCase
         $this->boot(['CLAVIA_CLIENT_REGISTRATION' => 'token']);
         $registered = $this->registered();
 
-        $response = $this->configuration('GET', $registered);
+        $response = $this->configuration(RequestMethodInterface::METHOD_GET, $registered);
 
         self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
@@ -57,7 +58,7 @@ final class ClientConfigurationTest extends AcceptanceTestCase
         self::assertArrayNotHasKey('registration_access_token', $document, 'Not rotated by a read.');
         self::assertSame(
             StatusCodeInterface::STATUS_OK,
-            $this->configuration('GET', $registered)->getStatusCode(),
+            $this->configuration(RequestMethodInterface::METHOD_GET, $registered)->getStatusCode(),
             'The token still works.',
         );
     }
@@ -67,7 +68,7 @@ final class ClientConfigurationTest extends AcceptanceTestCase
         $this->boot(['CLAVIA_CLIENT_REGISTRATION' => 'token']);
         $registered = $this->registered();
 
-        $updated = $this->configuration('PUT', $registered, [
+        $updated = $this->configuration(RequestMethodInterface::METHOD_PUT, $registered, [
             'client_id' => $registered['client_id'],
             'client_secret' => $registered['client_secret'],
             'client_name' => 'Acme Reports 2',
@@ -84,10 +85,10 @@ final class ClientConfigurationTest extends AcceptanceTestCase
         self::assertNotSame($registered['registration_access_token'], $document['registration_access_token']);
         self::assertSame(
             StatusCodeInterface::STATUS_UNAUTHORIZED,
-            $this->configuration('GET', $registered)->getStatusCode(),
+            $this->configuration(RequestMethodInterface::METHOD_GET, $registered)->getStatusCode(),
             'The old token is spent.',
         );
-        self::assertSame(StatusCodeInterface::STATUS_OK, $this->configuration('GET', [
+        self::assertSame(StatusCodeInterface::STATUS_OK, $this->configuration(RequestMethodInterface::METHOD_GET, [
             'registration_access_token' => $document['registration_access_token'],
         ] + $registered)->getStatusCode());
         $client = $this->clientOf($registered);
@@ -107,7 +108,7 @@ final class ClientConfigurationTest extends AcceptanceTestCase
         $this->boot(['CLAVIA_CLIENT_REGISTRATION' => 'token']);
         $registered = $this->registered(['dpop_bound_access_tokens' => true]);
 
-        $document = self::json($this->configuration('PUT', $registered, [
+        $document = self::json($this->configuration(RequestMethodInterface::METHOD_PUT, $registered, [
             'client_id' => $registered['client_id'],
         ] + self::WEB_APP));
 
@@ -123,7 +124,7 @@ final class ClientConfigurationTest extends AcceptanceTestCase
         $this->boot(['CLAVIA_CLIENT_REGISTRATION' => 'token']);
         $registered = $this->registered();
 
-        $response = $this->configuration('PUT', $registered, $change + [
+        $response = $this->configuration(RequestMethodInterface::METHOD_PUT, $registered, $change + [
             'client_id' => $registered['client_id'],
         ] + self::WEB_APP);
 
@@ -133,7 +134,10 @@ final class ClientConfigurationTest extends AcceptanceTestCase
             (string) $response->getBody(),
         );
         self::assertSame('invalid_client_metadata', self::json($response)['error']);
-        self::assertSame(StatusCodeInterface::STATUS_OK, $this->configuration('GET', $registered)->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_OK,
+            $this->configuration(RequestMethodInterface::METHOD_GET, $registered)->getStatusCode(),
+        );
     }
 
     /** @return iterable<string, array{array<string, mixed>}> */
@@ -153,7 +157,7 @@ final class ClientConfigurationTest extends AcceptanceTestCase
         $this->boot(['CLAVIA_CLIENT_REGISTRATION' => 'token']);
         $registered = $this->registered();
 
-        $deleted = $this->configuration('DELETE', $registered);
+        $deleted = $this->configuration(RequestMethodInterface::METHOD_DELETE, $registered);
 
         self::assertSame(StatusCodeInterface::STATUS_NO_CONTENT, $deleted->getStatusCode());
         self::assertNull($this->container()->get(ClientRepository::class)->find(
@@ -161,7 +165,7 @@ final class ClientConfigurationTest extends AcceptanceTestCase
         ));
         self::assertSame(
             StatusCodeInterface::STATUS_UNAUTHORIZED,
-            $this->configuration('GET', $registered)->getStatusCode(),
+            $this->configuration(RequestMethodInterface::METHOD_GET, $registered)->getStatusCode(),
             'Its token went with it.',
         );
         self::assertSame(1, (int) TestStorage::database()->fetchValue(
@@ -177,10 +181,22 @@ final class ClientConfigurationTest extends AcceptanceTestCase
         $first = $this->registered();
         $second = $this->registered();
 
-        $another = $this->configuration('GET', ['client_id' => $second['client_id']] + $first);
-        $operators = $this->configuration('GET', ['client_id' => self::TEST_CLIENT_ID] + $first);
-        $unknown = $this->configuration('GET', ['registration_access_token' => 'nope'] + $first);
-        $none = $this->configuration('DELETE', ['registration_access_token' => null] + $first);
+        $another = $this->configuration(
+            RequestMethodInterface::METHOD_GET,
+            ['client_id' => $second['client_id']] + $first,
+        );
+        $operators = $this->configuration(
+            RequestMethodInterface::METHOD_GET,
+            ['client_id' => self::TEST_CLIENT_ID] + $first,
+        );
+        $unknown = $this->configuration(
+            RequestMethodInterface::METHOD_GET,
+            ['registration_access_token' => 'nope'] + $first,
+        );
+        $none = $this->configuration(
+            RequestMethodInterface::METHOD_DELETE,
+            ['registration_access_token' => null] + $first,
+        );
 
         foreach ([$another, $operators, $unknown] as $response) {
             self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
@@ -199,7 +215,7 @@ final class ClientConfigurationTest extends AcceptanceTestCase
 
         self::assertSame(
             StatusCodeInterface::STATUS_NOT_FOUND,
-            $this->request('GET', '/oauth2/register/tpc_anything')->getStatusCode(),
+            $this->request(RequestMethodInterface::METHOD_GET, '/oauth2/register/tpc_anything')->getStatusCode(),
         );
     }
 
@@ -210,10 +226,12 @@ final class ClientConfigurationTest extends AcceptanceTestCase
         $this->adminToken();
         $path = '/api/v1/clients/' . rawurlencode((string) $registered['client_id']);
 
-        $self = self::document($this->api('GET', $path));
-        $listed = self::document($this->api('GET', '/api/v1/clients'))['items'];
-        $rotated = self::document($this->api('POST', $path . '/rotate-secret'));
-        $operators = self::document($this->api('GET', '/api/v1/clients/' . self::TEST_M2M_CLIENT_ID));
+        $self = self::document($this->api(RequestMethodInterface::METHOD_GET, $path));
+        $listed = self::document($this->api(RequestMethodInterface::METHOD_GET, '/api/v1/clients'))['items'];
+        $rotated = self::document($this->api(RequestMethodInterface::METHOD_POST, $path . '/rotate-secret'));
+        $operators = self::document(
+            $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/clients/' . self::TEST_M2M_CLIENT_ID),
+        );
 
         self::assertIsArray($self['registration']);
         self::assertIsString($self['registration']['initial_access_token_id']);
@@ -243,7 +261,7 @@ final class ClientConfigurationTest extends AcceptanceTestCase
     private function registered(array $extra = []): array
     {
         $token = $this->container()->get(IssueInitialAccessToken::class)(new NewInitialAccessToken('Acme'))->secret;
-        $response = $this->request('POST', '/oauth2/register', [
+        $response = $this->request(RequestMethodInterface::METHOD_POST, '/oauth2/register', [
             'Authorization' => 'Bearer ' . $token,
             'Content-Type' => 'application/json',
         ], body: (string) json_encode(self::WEB_APP + $extra));

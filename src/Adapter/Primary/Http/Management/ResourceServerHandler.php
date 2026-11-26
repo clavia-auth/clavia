@@ -20,6 +20,7 @@ use Clavia\Domain\Claims\ClaimName;
 use Clavia\Domain\Claims\ClaimSource;
 use Clavia\Domain\ResourceServer\ResourceServerId;
 use Clavia\Domain\Shared\InvalidValue;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
@@ -47,9 +48,9 @@ final readonly class ResourceServerHandler implements RequestHandlerInterface
         $id = ResourceServerId::fromString($management->path('resource_server_id'));
 
         switch ($request->getMethod()) {
-            case 'GET':
+            case RequestMethodInterface::METHOD_GET:
                 return $this->responder->json(ManagementViews::resourceServer($this->read->one($id)));
-            case 'PATCH':
+            case RequestMethodInterface::METHOD_PATCH:
                 $claims = self::claims($management->body);
                 if ($claims instanceof Problem) {
                     return $this->responder->problem($claims);
@@ -66,7 +67,7 @@ final readonly class ResourceServerHandler implements RequestHandlerInterface
                 );
 
                 return $this->responder->json(ManagementViews::resourceServer($api));
-            case 'DELETE':
+            case RequestMethodInterface::METHOD_DELETE:
                 ($this->delete)($id);
 
                 return $this->responder->noContent();

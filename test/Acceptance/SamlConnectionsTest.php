@@ -29,6 +29,7 @@ use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\Saml\TestIdentityProvider as Idp;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\RequestFactory;
 use Psr\Http\Message\ResponseInterface;
@@ -113,7 +114,7 @@ final class SamlConnectionsTest extends AcceptanceTestCase
         }
         self::assertSame(
             StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
-            $this->api('POST', '/api/v1/connections', [
+            $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/connections', [
                 'name' => 'pool',
                 'display_name' => 'Pool',
                 'strategy' => 'database',
@@ -145,7 +146,7 @@ final class SamlConnectionsTest extends AcceptanceTestCase
         $rolledOver = [Idp::attacker()['certificate'], Idp::rsa()['certificate']];
         $this->source->documents[self::METADATA_URL] = Idp::metadata($rolledOver);
 
-        $refreshed = $this->api('POST', '/api/v1/connections/acme/refresh-metadata');
+        $refreshed = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/connections/acme/refresh-metadata');
 
         self::assertSame(StatusCodeInterface::STATUS_OK, $refreshed->getStatusCode(), (string) $refreshed->getBody());
         /** @var array{saml: array{certificates: list<array{sha256: string}>}} $connection */
@@ -166,7 +167,10 @@ final class SamlConnectionsTest extends AcceptanceTestCase
         $this->registerSaml(['metadata' => Idp::metadata([Idp::rsa()['certificate']])]);
 
         $refresh = fn (string $name): int
-            => $this->api('POST', '/api/v1/connections/' . $name . '/refresh-metadata')->getStatusCode();
+            => $this->api(
+                RequestMethodInterface::METHOD_POST,
+                '/api/v1/connections/' . $name . '/refresh-metadata',
+            )->getStatusCode();
         self::assertSame(StatusCodeInterface::STATUS_CONFLICT, $refresh('acme'), 'From a document.');
         self::assertSame(StatusCodeInterface::STATUS_CONFLICT, $refresh('password'), 'Not SAML.');
         self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $refresh('nobody'));
@@ -194,7 +198,7 @@ final class SamlConnectionsTest extends AcceptanceTestCase
         $withNext = (string) $this->get('/auth/saml/acme/metadata')->getBody();
         self::assertSame(4, substr_count($withNext, '<md:KeyDescriptor'), 'And the next one.');
 
-        $this->api('PATCH', '/api/v1/connections/acme', ['is_enabled' => false]);
+        $this->api(RequestMethodInterface::METHOD_PATCH, '/api/v1/connections/acme', ['is_enabled' => false]);
         foreach (['acme', 'password', 'nobody'] as $name) {
             self::assertSame(
                 StatusCodeInterface::STATUS_NOT_FOUND,
@@ -207,7 +211,7 @@ final class SamlConnectionsTest extends AcceptanceTestCase
     /** @param array<string, mixed> $saml */
     private function registerSaml(array $saml): ResponseInterface
     {
-        return $this->api('POST', '/api/v1/connections', [
+        return $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/connections', [
             'name' => 'acme',
             'display_name' => 'Acme staff',
             'strategy' => 'saml',

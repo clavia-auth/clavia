@@ -23,6 +23,7 @@ use Clavia\Domain\Shared\ScopeSet;
 use ClaviaTest\Support\AcceptanceTestCase;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Symfony\Component\Console\Tester\CommandTester;
 
@@ -74,7 +75,7 @@ final class PurgeUnusedClientsTest extends AcceptanceTestCase
     private function registered(string $name): ClientId
     {
         $token = $this->container()->get(IssueInitialAccessToken::class)(new NewInitialAccessToken($name))->secret;
-        $response = $this->request('POST', '/oauth2/register', [
+        $response = $this->request(RequestMethodInterface::METHOD_POST, '/oauth2/register', [
             'Authorization' => 'Bearer ' . $token,
             'Content-Type' => 'application/json',
         ], body: (string) json_encode([

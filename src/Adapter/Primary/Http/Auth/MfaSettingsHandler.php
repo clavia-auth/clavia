@@ -28,6 +28,7 @@ use Clavia\Application\Authentication\ResolveEndUser;
 use Clavia\Application\Port\EncryptionUnavailable;
 use Clavia\Domain\Authentication\LocalPath;
 use Clavia\Domain\Authentication\Mfa\FactorAlreadyConfirmed;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
@@ -86,7 +87,7 @@ final readonly class MfaSettingsHandler implements RequestHandlerInterface
         }
 
         $path = $request->getUri()->getPath();
-        if ($request->getMethod() !== 'POST') {
+        if ($request->getMethod() !== RequestMethodInterface::METHOD_POST) {
             $onTheWay = ($this->onTheWay)(RequestParameterReader::query($request)->get('state'));
 
             return $this->settings($request, $endUser, $onTheWay);

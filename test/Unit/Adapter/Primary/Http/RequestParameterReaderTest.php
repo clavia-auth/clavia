@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace ClaviaTest\Unit\Adapter\Primary\Http;
 
 use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
+use Fig\Http\Message\RequestMethodInterface;
 use Laminas\Diactoros\ServerRequest;
 use Laminas\Diactoros\StreamFactory;
 use Laminas\Diactoros\Uri;
@@ -131,7 +132,7 @@ final class RequestParameterReaderTest extends TestCase
     {
         $request = new ServerRequest(
             uri: new Uri('https://auth.clavia.test/oauth2/authorize')->withQuery($query),
-            method: $body === '' ? 'GET' : 'POST',
+            method: $body === '' ? RequestMethodInterface::METHOD_GET : RequestMethodInterface::METHOD_POST,
             body: new StreamFactory()->createStream($body),
         );
 

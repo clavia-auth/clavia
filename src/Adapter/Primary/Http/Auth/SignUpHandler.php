@@ -20,6 +20,7 @@ use Clavia\Application\Authentication\Account\SignUp;
 use Clavia\Application\Authentication\Account\SignUpRefused;
 use Clavia\Application\Authentication\Account\SignUpRequest;
 use Clavia\Application\Authentication\SignIn\SecondFactorRequired;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -47,7 +48,7 @@ final readonly class SignUpHandler implements RequestHandlerInterface
     #[\Override]
     public function handle(ServerRequestInterface $request): ResponseInterface
     {
-        if ($request->getMethod() !== 'POST') {
+        if ($request->getMethod() !== RequestMethodInterface::METHOD_POST) {
             $loginState = RequestParameterReader::query($request)->get('state');
 
             return $this->form($request, $loginState);

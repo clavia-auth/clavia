@@ -13,6 +13,7 @@ namespace Clavia\Adapter\Primary\Http\Management;
 
 use Clavia\Application\Management\InitialAccessTokens\RevokeInitialAccessToken;
 use Clavia\Domain\Client\Registration\InitialAccessTokenId;
+use Fig\Http\Message\RequestMethodInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -33,7 +34,7 @@ final readonly class InitialAccessTokenHandler implements RequestHandlerInterfac
     #[\Override]
     public function handle(ServerRequestInterface $request): ResponseInterface
     {
-        if ($request->getMethod() !== 'DELETE') {
+        if ($request->getMethod() !== RequestMethodInterface::METHOD_DELETE) {
             throw new LogicException('Routed with a method the handler does not serve.');
         }
         $management = ManagementRequest::of($request);

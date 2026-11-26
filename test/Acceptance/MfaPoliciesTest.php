@@ -39,6 +39,7 @@ use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\OidcFixtures;
 use ClaviaTest\Support\SoftwareAuthenticator;
 use DateTimeImmutable;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -74,7 +75,7 @@ final class MfaPoliciesTest extends AcceptanceTestCase
     {
         $this->adminToken();
 
-        $client = $this->api('POST', '/api/v1/clients', [
+        $client = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/clients', [
             'name' => 'Payroll',
             'redirect_uris' => ['https://payroll.test/cb'],
             'grant_types' => ['authorization_code'],
@@ -84,17 +85,21 @@ final class MfaPoliciesTest extends AcceptanceTestCase
         self::assertSame(StatusCodeInterface::STATUS_CREATED, $client->getStatusCode(), (string) $client->getBody());
         self::assertSame('required', self::document($client)['mfa_policy']);
         $path = '/api/v1/clients/' . rawurlencode((string) self::document($client)['client_id']);
-        $patched = $this->api('PATCH', $path, ['mfa_policy' => 'optional']);
+        $patched = $this->api(RequestMethodInterface::METHOD_PATCH, $path, ['mfa_policy' => 'optional']);
         self::assertSame('optional', self::document($patched)['mfa_policy']);
         self::assertSame(
             StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
-            $this->api('PATCH', $path, ['mfa_policy' => 'sometimes'])->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_PATCH, $path, ['mfa_policy' => 'sometimes'])->getStatusCode(),
         );
 
-        $api = $this->api('POST', '/api/v1/resource-servers', ['identifier' => 'https://payroll.test/api/']);
+        $api = $this->api(
+            RequestMethodInterface::METHOD_POST,
+            '/api/v1/resource-servers',
+            ['identifier' => 'https://payroll.test/api/'],
+        );
         self::assertSame('optional', self::document($api)['mfa_policy']);
         $apiPath = '/api/v1/resource-servers/' . (string) self::document($api)['id'];
-        $patchedApi = $this->api('PATCH', $apiPath, ['mfa_policy' => 'required']);
+        $patchedApi = $this->api(RequestMethodInterface::METHOD_PATCH, $apiPath, ['mfa_policy' => 'required']);
         self::assertSame('required', self::document($patchedApi)['mfa_policy']);
     }
 
