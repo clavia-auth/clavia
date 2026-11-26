@@ -90,7 +90,8 @@ final class DeploymentKitTest extends TestCase
     {
         $dockerfile = self::read('docker/php/Dockerfile');
 
-        foreach (['bin', 'config', 'migrations', 'public', 'src', 'templates', 'translations', 'docs/openapi'] as $path) {
+        $read = ['bin', 'config', 'migrations', 'public', 'src', 'templates', 'translations', 'docs/openapi'];
+        foreach ($read as $path) {
             self::assertStringContainsString(sprintf('COPY --from=app %s ./%s', $path, $path), $dockerfile, $path);
         }
     }
