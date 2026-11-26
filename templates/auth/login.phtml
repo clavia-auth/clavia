@@ -18,67 +18,67 @@
 ?>
 <?php $this->placeholder('subtitle')->captureStart() ?>
 <?php if ($signedInAs !== null): ?>
-      <p class="subtitle">as <strong><?= $this->escapeHtml($signedInAs) ?></strong>. Go back to the application that sent you here — it will pick this sign-in up.</p>
+      <p class="subtitle"><?= $this->escapeHtml($this->t('login.signed_in.as')) ?> <strong><?= $this->escapeHtml($signedInAs) ?></strong>. <?= $this->escapeHtml($this->t('login.signed_in.go_back')) ?></p>
 <?php else: ?>
-      <p class="subtitle">Continue to the application that sent you here.</p>
+      <p class="subtitle"><?= $this->escapeHtml($this->t('login.subtitle')) ?></p>
 <?php endif ?>
 <?php $this->placeholder('subtitle')->captureEnd() ?>
 <?php if ($signedInAs !== null): ?>
 
     <form method="post" action="/auth/logout">
-      <button type="submit" class="secondary">Sign out</button>
+      <button type="submit" class="secondary"><?= $this->escapeHtml($this->t('login.sign_out')) ?></button>
     </form>
 <?php elseif (! $password && ! $emailSignIn && $providers === []): ?>
-    <p class="hint">No sign-in method is available for this application. Go back to it and contact its administrator.</p>
+    <p class="hint"><?= $this->escapeHtml($this->t('login.no_method')) ?></p>
 <?php else: ?>
 <?php if ($passkeyOptions !== null): ?>
     <form method="post" action="/auth/passkey" data-webauthn-get="<?= $this->escapeHtmlAttr($passkeyOptions) ?>" data-webauthn-conditional>
 <?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => $loginState]) ?>
       <input type="hidden" name="credential" value="">
-      <p class="hint" data-webauthn-failed hidden>Your browser did not use the passkey. Try again, or sign in another way.</p>
-      <button type="submit" data-webauthn-start hidden>Sign in with a passkey</button>
+      <p class="hint" data-webauthn-failed hidden><?= $this->escapeHtml($this->t('login.passkey.failed')) ?></p>
+      <button type="submit" data-webauthn-start hidden><?= $this->escapeHtml($this->t('login.passkey.submit')) ?></button>
     </form>
 <?php endif ?>
 <?php if ($password): ?>
     <form method="post" action="/auth/login" autocomplete="on" novalidate>
 <?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => $loginState]) ?>
-<?= $this->partial('partial::field', ['name' => 'email', 'label' => 'Email', 'type' => 'email', 'autocomplete' => $passkeyOptions !== null ? 'username webauthn' : 'username', 'value' => $email, 'autofocus' => true]) ?>
-<?= $this->partial('partial::field', ['name' => 'password', 'label' => 'Password', 'type' => 'password', 'autocomplete' => 'current-password', 'value' => '', 'autofocus' => false]) ?>
+<?= $this->partial('partial::field', ['name' => 'email', 'label' => $this->t('login.email'), 'type' => 'email', 'autocomplete' => $passkeyOptions !== null ? 'username webauthn' : 'username', 'value' => $email, 'autofocus' => true]) ?>
+<?= $this->partial('partial::field', ['name' => 'password', 'label' => $this->t('login.password'), 'type' => 'password', 'autocomplete' => 'current-password', 'value' => '', 'autofocus' => false]) ?>
 
-      <button type="submit">Sign in</button>
+      <button type="submit"><?= $this->escapeHtml($this->t('login.submit')) ?></button>
     </form>
 <?php if ($forgotHref !== ''): ?>
-    <p class="hint"><a href="<?= $this->escapeHtmlAttr($forgotHref) ?>">Forgot your password?</a></p>
+    <p class="hint"><a href="<?= $this->escapeHtmlAttr($forgotHref) ?>"><?= $this->escapeHtml($this->t('login.forgot_password')) ?></a></p>
 <?php endif ?>
 <?php endif ?>
 <?php if ($emailSignIn): ?>
 <?php if ($password): ?>
 
-    <div class="divider"><span>or</span></div>
+    <div class="divider"><span><?= $this->escapeHtml($this->t('login.or')) ?></span></div>
 <?php endif ?>
     <!-- One field, two buttons: the mode is the value of the one pressed, with no script. -->
     <form method="post" action="/auth/passwordless/start" autocomplete="on" novalidate>
 <?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => $loginState]) ?>
-<?= $this->partial('partial::field', ['name' => 'email', 'id' => 'passwordless-email', 'label' => 'Email', 'type' => 'email', 'autocomplete' => 'email', 'value' => $email, 'autofocus' => ! $password]) ?>
+<?= $this->partial('partial::field', ['name' => 'email', 'id' => 'passwordless-email', 'label' => $this->t('login.email'), 'type' => 'email', 'autocomplete' => 'email', 'value' => $email, 'autofocus' => ! $password]) ?>
 
-      <button type="submit" name="mode" value="code"<?php if ($password): ?> class="secondary"<?php endif ?>>Email me a code</button>
-      <button type="submit" name="mode" value="link" class="secondary">Email me a sign-in link</button>
+      <button type="submit" name="mode" value="code"<?php if ($password): ?> class="secondary"<?php endif ?>><?= $this->escapeHtml($this->t('login.email_code')) ?></button>
+      <button type="submit" name="mode" value="link" class="secondary"><?= $this->escapeHtml($this->t('login.email_link')) ?></button>
     </form>
 <?php endif ?>
 <?php if ($providers !== []): ?>
 <?php if ($password || $emailSignIn): ?>
 
-    <div class="divider"><span>or</span></div>
+    <div class="divider"><span><?= $this->escapeHtml($this->t('login.or')) ?></span></div>
 <?php endif ?>
     <!-- Links, not a form: starting an external sign-in is a navigation. The login
          page's handle rides along, so the sign-in comes back to the same request. -->
     <ul class="providers">
 <?php foreach ($providers as $provider): ?>
-      <li><a class="provider" href="<?= $this->escapeHtmlAttr($provider['href']) ?>">Continue with <?= $this->escapeHtml($provider['label']) ?></a></li>
+      <li><a class="provider" href="<?= $this->escapeHtmlAttr($provider['href']) ?>"><?= $this->escapeHtml($this->t('login.continue_with', ['provider' => $provider['label']])) ?></a></li>
 <?php endforeach ?>
     </ul>
 <?php endif ?>
 <?php if ($signUpHref !== ''): ?>
-    <p class="hint">New here? <a href="<?= $this->escapeHtmlAttr($signUpHref) ?>">Create an account</a></p>
+    <p class="hint"><?= $this->escapeHtml($this->t('login.new_here')) ?> <a href="<?= $this->escapeHtmlAttr($signUpHref) ?>"><?= $this->escapeHtml($this->t('login.sign_up')) ?></a></p>
 <?php endif ?>
 <?php endif ?>

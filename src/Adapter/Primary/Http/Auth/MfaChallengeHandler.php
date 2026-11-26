@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\Shared\ClientAddress;
+use Clavia\Adapter\Primary\Http\Shared\Message;
 use Clavia\Adapter\Primary\Http\Shared\RequestCookies;
 use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\Authentication\Mfa\BeginPasskeySecondFactor;
@@ -74,7 +75,7 @@ final readonly class MfaChallengeHandler implements RequestHandlerInterface
                 $request,
                 $challenge,
                 $page,
-                LoginPages::EXPIRED_FORM,
+                Message::of(LoginPages::EXPIRED_FORM),
                 StatusCodeInterface::STATUS_BAD_REQUEST,
             );
         }
@@ -127,7 +128,7 @@ final readonly class MfaChallengeHandler implements RequestHandlerInterface
         ServerRequestInterface $request,
         string $challenge,
         SecondFactorPage $page,
-        ?string $error = null,
+        Message|string|null $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): ResponseInterface {
         $options = $page->passkey ? ($this->beginPasskey)($challenge) : null;

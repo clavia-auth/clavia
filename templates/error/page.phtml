@@ -1,12 +1,14 @@
 <?php
 /**
- * An error, explained to the person who met it.
+ * An error, explained to the person who met it, in the page's language.
  *
  * Variables (set by Clavia\Adapter\Primary\Http\Shared\ErrorResponder):
  * @var Laminas\View\Renderer\PhpRenderer $this
- * @var string      $message What happened.
+ * @var string      $message What happened, worded in the page's language.
  * @var string      $advice  What to do now.
- * @var string|null $code    A reference to quote to whoever can help.
+ * @var string|null $code    A reference to quote, or null.
+ * @var string|null $detail  The server's technical description, for an application's developer, or null:
+ *                           English, as an OAuth error_description is, and marked so (lang="en").
  *
  * Deliberately no link onwards: the only addresses the request offered are the ones that
  * could not be trusted.
@@ -16,7 +18,11 @@
       <p class="subtitle"><?= $this->escapeHtml($message) ?></p>
 <?php $this->placeholder('subtitle')->captureEnd() ?>
     <p class="advice"><?= $this->escapeHtml($advice) ?></p>
+<?php if ($detail !== null): ?>
+    <p class="hint"><?= $this->escapeHtml($this->t('error.detail_label')) ?></p>
+    <p class="hint" lang="en"><?= $this->escapeHtml($detail) ?></p>
+<?php endif ?>
 <?php if ($code !== null): ?>
-    <p class="hint">Reference</p>
+    <p class="hint"><?= $this->escapeHtml($this->t('error.reference_label')) ?></p>
     <p class="secret"><?= $this->escapeHtml($code) ?></p>
 <?php endif ?>

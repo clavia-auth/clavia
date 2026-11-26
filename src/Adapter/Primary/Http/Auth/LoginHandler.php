@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\Shared\ClientAddress;
+use Clavia\Adapter\Primary\Http\Shared\Message;
 use Clavia\Adapter\Primary\Http\Shared\RequestCookies;
 use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\Authentication\SignIn\EmailVerificationRequired;
@@ -64,7 +65,7 @@ final readonly class LoginHandler implements RequestHandlerInterface
                 $request,
                 $loginState,
                 $email,
-                LoginPages::EXPIRED_FORM,
+                Message::of(LoginPages::EXPIRED_FORM),
                 StatusCodeInterface::STATUS_BAD_REQUEST,
             );
         }
@@ -97,7 +98,7 @@ final readonly class LoginHandler implements RequestHandlerInterface
                 $request,
                 $loginState,
                 $email,
-                LoginPages::PASSWORD_UNAVAILABLE,
+                Message::of(LoginPages::PASSWORD_UNAVAILABLE),
                 StatusCodeInterface::STATUS_BAD_REQUEST,
             );
         }
@@ -106,7 +107,7 @@ final readonly class LoginHandler implements RequestHandlerInterface
                 $request,
                 $loginState,
                 $email,
-                LoginPages::INVALID_CREDENTIALS,
+                Message::of(LoginPages::INVALID_CREDENTIALS),
                 StatusCodeInterface::STATUS_UNAUTHORIZED,
             );
         }
@@ -122,7 +123,7 @@ final readonly class LoginHandler implements RequestHandlerInterface
         ServerRequestInterface $request,
         ?string $loginState,
         string $email,
-        string $error,
+        Message|string $error,
         int $status,
     ): ResponseInterface {
         return $this->loginForm->render($request, $loginState, $email, $error, $status);

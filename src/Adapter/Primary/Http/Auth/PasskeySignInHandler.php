@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\Shared\ClientAddress;
+use Clavia\Adapter\Primary\Http\Shared\Message;
 use Clavia\Adapter\Primary\Http\Shared\RequestCookies;
 use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\Authentication\SignIn\PasskeySignIn;
@@ -52,7 +53,7 @@ final readonly class PasskeySignInHandler implements RequestHandlerInterface
                 $request,
                 $loginState,
                 null,
-                LoginPages::EXPIRED_FORM,
+                Message::of(LoginPages::EXPIRED_FORM),
                 StatusCodeInterface::STATUS_BAD_REQUEST,
             );
         }
@@ -83,7 +84,7 @@ final readonly class PasskeySignInHandler implements RequestHandlerInterface
             $request,
             $loginState,
             null,
-            LoginPages::INVALID_CREDENTIALS,
+            Message::of(LoginPages::INVALID_CREDENTIALS),
             StatusCodeInterface::STATUS_UNAUTHORIZED,
         );
     }

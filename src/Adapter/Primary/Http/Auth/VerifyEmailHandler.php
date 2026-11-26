@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Auth;
 
+use Clavia\Adapter\Primary\Http\Shared\Message;
 use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\Authentication\Account\ConfirmEmail;
 use Clavia\Application\Authentication\Account\DescribeAccountLink;
@@ -64,7 +65,7 @@ final readonly class VerifyEmailHandler implements RequestHandlerInterface
                     : AccountPages::confirmEmail(
                         $email,
                         $token,
-                        LoginPages::EXPIRED_FORM,
+                        Message::of(LoginPages::EXPIRED_FORM),
                         StatusCodeInterface::STATUS_BAD_REQUEST,
                     ),
             );

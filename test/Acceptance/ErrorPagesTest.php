@@ -14,6 +14,7 @@ namespace ClaviaTest\Acceptance;
 use Clavia\Adapter\Primary\Http\Shared\PageRenderer;
 use ClaviaTest\Support\AcceptanceTestCase;
 use ClaviaTest\Support\OAuth2Fixtures;
+use ClaviaTest\Support\TestPages;
 use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Mezzio\Template\TemplateRendererInterface;
@@ -188,7 +189,7 @@ final class ErrorPagesTest extends AcceptanceTestCase
             {
             }
         };
-        $this->container()->setService(PageRenderer::class, new PageRenderer($broken));
+        $this->container()->setService(PageRenderer::class, TestPages::renderer($broken));
         $this->failingRoute();
 
         $response = $this->browse(RequestMethodInterface::METHOD_GET, '/boom');

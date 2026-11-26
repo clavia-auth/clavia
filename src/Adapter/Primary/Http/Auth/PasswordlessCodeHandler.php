@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Auth;
 
+use Clavia\Adapter\Primary\Http\Shared\Message;
 use Clavia\Adapter\Primary\Http\Shared\RequestCookies;
 use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\Authentication\Passwordless\AnswerPasswordlessCode;
@@ -68,7 +69,11 @@ final readonly class PasswordlessCodeHandler implements RequestHandlerInterface
                 ? $this->backToLogin()
                 : $this->responder->page(
                     $request,
-                    PasswordlessPages::code($prompt, LoginPages::EXPIRED_FORM, StatusCodeInterface::STATUS_BAD_REQUEST),
+                    PasswordlessPages::code(
+                        $prompt,
+                        Message::of(LoginPages::EXPIRED_FORM),
+                        StatusCodeInterface::STATUS_BAD_REQUEST,
+                    ),
                 );
         }
 

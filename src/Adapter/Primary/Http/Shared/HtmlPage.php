@@ -23,12 +23,14 @@ final readonly class HtmlPage
 {
     /**
      * @param non-empty-string               $template    A namespaced template name, `auth::login`.
-     * @param string                         $title       The document title, before " · Clavia".
-     * @param string                         $heading     The page's `<h1>`.
+     * @param Message|string                 $title       The document title, before " · Clavia": a message
+     *                                                    of the catalogue, or (until every page is
+     *                                                    worded through it) text.
+     * @param Message|string                 $heading     The page's `<h1>`.
      * @param string|null                    $returnTo    Where the colour-scheme toggle comes back to: a
      *                                                    local path. Null leaves the toggle out.
      * @param array<non-empty-string, mixed> $variables   What the page template prints.
-     * @param string|null                    $error       A message shown above the content.
+     * @param Message|string|null            $error       A message shown above the content.
      * @param int                            $status      The HTTP status.
      * @param list<string>                   $formOrigins Origins a form submission on this page may end
      *                                                    at, besides this server; see {@see PageRenderer}.
@@ -39,11 +41,11 @@ final readonly class HtmlPage
      */
     public function __construct(
         public string $template,
-        public string $title,
-        public string $heading,
+        public Message|string $title,
+        public Message|string $heading,
         public ?string $returnTo = null,
         public array $variables = [],
-        public ?string $error = null,
+        public Message|string|null $error = null,
         public int $status = StatusCodeInterface::STATUS_OK,
         public array $formOrigins = [],
         public bool $wide = false,

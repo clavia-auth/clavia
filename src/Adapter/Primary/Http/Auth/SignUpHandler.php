@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\Shared\ClientAddress;
+use Clavia\Adapter\Primary\Http\Shared\Message;
 use Clavia\Adapter\Primary\Http\Shared\RequestCookies;
 use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\Authentication\Account\CheckYourInbox;
@@ -62,7 +63,7 @@ final readonly class SignUpHandler implements RequestHandlerInterface
                 $request,
                 $loginState,
                 $email,
-                LoginPages::EXPIRED_FORM,
+                Message::of(LoginPages::EXPIRED_FORM),
                 StatusCodeInterface::STATUS_BAD_REQUEST,
             );
         }
@@ -103,7 +104,7 @@ final readonly class SignUpHandler implements RequestHandlerInterface
         ServerRequestInterface $request,
         ?string $loginState,
         string $email = '',
-        ?string $error = null,
+        Message|string|null $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): ResponseInterface {
         $page = ($this->describe)($loginState);

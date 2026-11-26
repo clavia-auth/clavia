@@ -4,6 +4,7 @@
  *
  * Variables (set by Clavia\Adapter\Primary\Http\Shared\PageRenderer):
  * @var Laminas\View\Renderer\PhpRenderer $this
+ * @var string      $language The page's language, a BCP 47 tag: what <html lang> says.
  * @var string      $title
  * @var string      $heading
  * @var string|null $error
@@ -22,7 +23,7 @@
  */
 ?>
 <!DOCTYPE html>
-<html lang="en"<?php if ($theme !== null): ?> data-theme="<?= $this->escapeHtmlAttr($theme) ?>"<?php endif ?>>
+<html lang="<?= $this->escapeHtmlAttr($language) ?>"<?php if ($theme !== null): ?> data-theme="<?= $this->escapeHtmlAttr($theme) ?>"<?php endif ?>>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -48,16 +49,16 @@
 
 <?= $content ?>
 
-    <footer class="footer">Secured by <span class="wordmark">Clavia</span></footer>
+    <footer class="footer"><?= $this->escapeHtml($this->t('layout.secured_by')) ?> <span class="wordmark">Clavia</span></footer>
   </main>
 
 <?php if ($returnTo !== null): ?>
   <!-- The colour scheme is a cookie set by a form post: three buttons on one form, the
        pressed one's value is the choice, and `next` brings the browser back here. -->
-  <form class="theme" method="post" action="/auth/theme" aria-label="Colour scheme">
+  <form class="theme" method="post" action="/auth/theme" aria-label="<?= $this->escapeHtmlAttr($this->t('layout.theme.label')) ?>">
     <input type="hidden" name="next" value="<?= $this->escapeHtmlAttr($returnTo) ?>">
-<?php foreach (['auto' => 'Auto', 'light' => 'Light', 'dark' => 'Dark'] as $value => $label): ?>
-    <button type="submit" name="theme" value="<?= $value ?>"<?php if (($theme ?? 'auto') === $value): ?> aria-pressed="true"<?php endif ?>><?= $label ?></button>
+<?php foreach (['auto' => 'layout.theme.auto', 'light' => 'layout.theme.light', 'dark' => 'layout.theme.dark'] as $value => $label): ?>
+    <button type="submit" name="theme" value="<?= $value ?>"<?php if (($theme ?? 'auto') === $value): ?> aria-pressed="true"<?php endif ?>><?= $this->escapeHtml($this->t($label)) ?></button>
 <?php endforeach ?>
   </form>
 <?php endif ?>

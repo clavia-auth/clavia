@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
+use Clavia\Adapter\Primary\Http\Shared\Message;
 use Clavia\Application\Authentication\External\ExternalProviderOption;
 use Clavia\Application\Authentication\LoginPage\SignInMethods;
 use Clavia\Application\Authentication\Passkey\AssertionOptions;
@@ -23,19 +24,21 @@ use Fig\Http\Message\StatusCodeInterface;
  */
 final class LoginPages
 {
-    public const string INVALID_CREDENTIALS = 'Incorrect email or password.';
+    // Refusals other pages show too: keys of the catalogue, worded in the page's language through
+    // Message::of() (docs/design/translated-sign-in-pages.md).
+    public const string INVALID_CREDENTIALS = 'login.error.invalid_credentials';
 
-    public const string EXPIRED_FORM = 'Your session expired. Please try again.';
+    public const string EXPIRED_FORM = 'login.error.expired_form';
 
-    public const string PASSWORD_UNAVAILABLE = 'Password sign-in is not available for this application.';
+    public const string PASSWORD_UNAVAILABLE = 'login.error.password_unavailable';
 
-    public const string INVALID_EMAIL = 'Enter the email address to sign in with.';
+    public const string INVALID_EMAIL = 'login.error.invalid_email';
 
-    public const string EMAIL_UNAVAILABLE = 'Email sign-in is not available for this application.';
+    public const string EMAIL_UNAVAILABLE = 'login.error.email_unavailable';
 
-    public const string TOO_MANY_EMAILS = 'Too many sign-in emails were sent. Try again in an hour.';
+    public const string TOO_MANY_EMAILS = 'login.error.too_many_emails';
 
-    public const string MAIL_UNAVAILABLE = 'Email sign-in is not available right now. Try again later.';
+    public const string MAIL_UNAVAILABLE = 'login.error.mail_unavailable';
 
     private function __construct()
     {
@@ -56,14 +59,14 @@ final class LoginPages
         array $formOrigins,
         SignInMethods $methods,
         ?string $email = null,
-        ?string $error = null,
+        Message|string|null $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
         ?AssertionOptions $passkey = null,
     ): HtmlPage {
         return new HtmlPage(
             template: 'auth::login',
-            title: 'Sign in',
-            heading: 'Sign in',
+            title: Message::of('login.title'),
+            heading: Message::of('login.title'),
             returnTo: self::address($loginState),
             variables: [
                 'loginState' => $loginState ?? '',
@@ -107,8 +110,8 @@ final class LoginPages
     {
         return new HtmlPage(
             template: 'auth::login',
-            title: 'Signed in',
-            heading: 'You are signed in',
+            title: Message::of('login.signed_in.title'),
+            heading: Message::of('login.signed_in.heading'),
             returnTo: self::address(null),
             variables: [
                 'loginState' => '',

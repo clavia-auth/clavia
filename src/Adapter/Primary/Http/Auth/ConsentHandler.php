@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\OAuth2\OAuth2Responder;
+use Clavia\Adapter\Primary\Http\Shared\Message;
 use Clavia\Adapter\Primary\Http\Shared\RequestCookies;
 use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\Authentication\EndUser;
@@ -73,7 +74,7 @@ final readonly class ConsentHandler implements RequestHandlerInterface
                 $request,
                 $handle,
                 $endUser,
-                LoginPages::EXPIRED_FORM,
+                Message::of(LoginPages::EXPIRED_FORM),
                 StatusCodeInterface::STATUS_BAD_REQUEST,
             );
         }
@@ -97,7 +98,7 @@ final readonly class ConsentHandler implements RequestHandlerInterface
         ServerRequestInterface $request,
         string $handle,
         EndUser $endUser,
-        ?string $error = null,
+        Message|string|null $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): ResponseInterface {
         $screen = $handle === '' ? null : ($this->describe)($handle, $endUser);

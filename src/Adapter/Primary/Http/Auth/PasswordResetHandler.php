@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Auth;
 
+use Clavia\Adapter\Primary\Http\Shared\Message;
 use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\Authentication\Account\DescribeAccountLink;
 use Clavia\Application\Authentication\Account\PasswordChanged;
@@ -57,7 +58,7 @@ final readonly class PasswordResetHandler implements RequestHandlerInterface
         $form = RequestParameterReader::form($request);
         $token = $form->get('token') ?? '';
         if (! CsrfToken::isValid($request, $form->get('csrf_token'))) {
-            return $this->again($request, $token, LoginPages::EXPIRED_FORM);
+            return $this->again($request, $token, Message::of(LoginPages::EXPIRED_FORM));
         }
 
         $outcome = ($this->reset)($token, $form->get('password') ?? '');
@@ -78,7 +79,7 @@ final readonly class PasswordResetHandler implements RequestHandlerInterface
     private function again(
         ServerRequestInterface $request,
         #[\SensitiveParameter] string $token,
-        string $error,
+        Message|string $error,
     ): ResponseInterface {
         $email = ($this->describe)($token, AccountLinkPurpose::ResetPassword);
 

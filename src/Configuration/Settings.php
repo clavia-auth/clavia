@@ -48,6 +48,7 @@ final readonly class Settings
      * @param list<string> $signingRetiredKeyRefs
      * @param list<string> $samlRetiredEncryptionKeyRefs
      * @param list<string> $scopesSupported
+     * @param list<non-empty-string> $languages
      */
     public function __construct(
         /**
@@ -236,6 +237,17 @@ final readonly class Settings
          * after its response is out. Off, nothing is recorded and `/metrics` is `404`.
          */
         public bool $metricsEnabled = true,
+        // ------------------------------------------------------------------
+        // Languages (docs/design/translated-sign-in-pages.md)
+        // ------------------------------------------------------------------
+        /**
+         * The languages the sign-in pages and mail are offered in: BCP 47 tags (`en`, `fr`, `pt-BR`),
+         * space- or comma-separated, each with a catalogue in `translations/`. Every shipped catalogue by
+         * default; fewer to offer fewer.
+         */
+        public array $languages = ['en', 'fr'],
+        /** The language when nothing a person, an application or a browser asks for is offered. */
+        public string $defaultLanguage = 'en',
         // ------------------------------------------------------------------
         // Multi-factor authentication
         // ------------------------------------------------------------------
