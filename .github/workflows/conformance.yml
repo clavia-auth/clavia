@@ -1,0 +1,116 @@
+name: Conformance
+
+# The OpenID Foundation conformance plans of conformance/README.md, nightly, against the end-to-end stack,
+# compared module by module with conformance/baseline.json (docs/design/end-to-end-scenarios.md §2, slice 8).
+# The results vary by what a person must review, so "all green" cannot be the test: a change from the
+# baseline, in either direction, is the signal. A scheduled or dispatched run that finds one opens or
+# updates one issue labelled `conformance`; a pull request touching the run itself runs it too, and only
+# fails.
+on:
+  schedule:
+    - cron: '23 3 * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'conformance/**'
+      - '.github/workflows/conformance.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: conformance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plans:
+    name: The plans have their baseline outcomes
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v7
+
+      # A certificate for *.clavia.test from a CA made on this runner and trusted nowhere else.
+      - name: Install mkcert
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq mkcert
+
+      - name: Resolve the stack's names
+        run: echo '127.0.0.1 clavia.test auth.clavia.test management.clavia.test suite.clavia.test' | sudo tee -a /etc/hosts
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      # The suite's jar, built once per release of it (conformance/run.sh skips the build when it is there).
+      - name: The suite, as built before
+        uses: actions/cache@v4
+        with:
+          path: conformance/.work/suite
+          key: conformance-suite-5.1.36
+
+      - name: Run the plans and compare
+        run: conformance/run.sh
+
+      - name: What the run found
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance
+          path: conformance/.work/report
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Server logs
+        if: failure()
+        run: docker compose -f test/e2e/compose.yaml -f conformance/compose.yaml logs --no-color php caddy oidf-server
+
+      - name: Stop the stack
+        if: always()
+        env:
+          CLAVIA_E2E_COMPOSE_OVERRIDE: conformance/compose.yaml
+        run: test/e2e/down.sh
+
+  # Only a scheduled or dispatched run reports, and only this job may write issues: a pull request never
+  # holds that permission, as the design's security rules ask.
+  report:
+    name: Report a difference
+    needs: plans
+    if: failure() && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: conformance
+          path: report
+        continue-on-error: true
+
+      - name: Open or update the conformance issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "The nightly conformance run of $(date -u +%F) differs from the baseline: ${RUN_URL}"
+            echo
+            if [ -s report/report.md ]; then cat report/report.md; else echo "The run stopped before comparing: see its log."; fi
+            echo
+            echo "The suite's HTML export of each plan is in the run's \`conformance\` artifact."
+          } > body.md
+          gh label create conformance --repo "${GITHUB_REPOSITORY}" --color B60205 \
+            --description "The nightly OpenID Foundation conformance run differs from its baseline" 2>/dev/null || true
+          issue=$(gh issue list --repo "${GITHUB_REPOSITORY}" --label conformance --state open --json number --jq '.[0].number // empty')
+          if [ -n "${issue}" ]; then
+            gh issue comment "${issue}" --repo "${GITHUB_REPOSITORY}" --body-file body.md
+          else
+            gh issue create --repo "${GITHUB_REPOSITORY}" --label conformance \
+              --title "Conformance differs from its baseline" --body-file body.md
+          fi

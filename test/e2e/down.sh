@@ -3,5 +3,10 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-docker compose -f "${here}/compose.yaml" --profile dashboard down --volumes --remove-orphans
+compose=(docker compose -f "${here}/compose.yaml")
+# The compose file up.sh merged in, if any, so its services go too.
+if [[ -n "${CLAVIA_E2E_COMPOSE_OVERRIDE:-}" ]]; then
+  compose+=(-f "${CLAVIA_E2E_COMPOSE_OVERRIDE}")
+fi
+"${compose[@]}" --profile dashboard down --volumes --remove-orphans
 rm -rf "${here}/.work"

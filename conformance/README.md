@@ -39,7 +39,29 @@ Two more warnings of that run — `oidcc-scope-email` and `oidcc-ensure-other-sc
 "`email` in the ID token" — are gone since: the ID token now carries `sub` and the protocol
 claims only, and scope claims come from userinfo (OIDC Core §5.4).
 
-## Running it
+## Nightly, against the baseline
+
+`.github/workflows/conformance.yml` runs both plans every night (and on manual dispatch) against the
+end-to-end stack, and compares each module's outcome with `baseline.json`. The baseline holds every
+module, the deliberate failure and the modules for review included: a module whose outcome changes, in
+either direction, fails the run. A scheduled or dispatched run that fails opens one issue labelled
+`conformance`, or comments on the one already open; the suite's HTML export of each plan is in the run's
+`conformance` artifact. A module that now does better means the baseline is stale: update it in the
+change that improved it (`compare.py --write-baseline`, or by hand).
+
+The same on one machine (Docker, mkcert, Java 17 with Maven, Python 3, and `auth.`, `management.` and
+`suite.clavia.test` resolving to `127.0.0.1`):
+
+```sh
+conformance/run.sh        # the outcomes and the differences are in conformance/.work/report
+CLAVIA_E2E_COMPOSE_OVERRIDE=conformance/compose.yaml test/e2e/down.sh
+```
+
+`run.sh` builds the suite at the release above, starts the stack of `test/e2e` with the suite beside it
+(`compose.yaml`: on the stack's `edge` network, behind a TLS front at `suite.clavia.test:8443`, and with
+the production failure limits back), then runs the steps below.
+
+## Running it by hand
 
 The suite needs Java 17, Maven, Docker and Python 3. Everything below runs on one machine.
 

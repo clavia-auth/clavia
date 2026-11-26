@@ -1,0 +1,45 @@
+# The OpenID Foundation conformance suite, merged into the end-to-end stack (test/e2e/compose.yaml) by
+# conformance/run.sh. Paths are relative to test/e2e, the stack's own directory.
+#
+# The suite joins the `edge` network, where Caddy answers as auth.clavia.test and management.clavia.test,
+# as a relying party on the internet would reach Clavia; its browser comes back to the suite itself at
+# suite.clavia.test, the TLS front below, with the stack's test certificate (*.clavia.test).
+services:
+  # The production failure limits back: the suite's modules make failures of their own (a code reused,
+  # a wrong redirect), and the end-to-end settings' five in five seconds were sized for the Behat run.
+  php:
+    environment:
+      CLAVIA_TOKEN_MAX_FAILURES: "20"
+      CLAVIA_TOKEN_FAILURE_WINDOW: "300"
+
+  oidf-mongo:
+    image: mongo:6.0.13
+    networks: [edge]
+
+  # The suite's server, the jar run.sh built at the release conformance/README.md names.
+  oidf-server:
+    image: eclipse-temurin:17
+    command:
+      - java
+      - -jar
+      - /server/fapi-test-suite.jar
+      - --fintechlabs.base_url=https://suite.clavia.test:8443
+      - --fintechlabs.devmode=true
+      - --spring.data.mongodb.uri=mongodb://oidf-mongo:27017/test_suite
+    volumes:
+      - ../../conformance/.work/suite/target:/server:ro
+    depends_on: [oidf-mongo]
+    networks: [edge]
+
+  oidf-front:
+    image: caddy:2-alpine
+    ports:
+      - "127.0.0.1:${CLAVIA_CONFORMANCE_PORT:-8443}:8443"
+    volumes:
+      - ../../conformance/.work/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./.work/certs:/etc/caddy/certs:ro
+    depends_on: [oidf-server]
+    networks:
+      edge:
+        aliases:
+          - suite.clavia.test
