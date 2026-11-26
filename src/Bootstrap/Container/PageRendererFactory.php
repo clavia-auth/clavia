@@ -11,9 +11,11 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
+use Clavia\Adapter\Primary\Http\Shared\BrandingChoice;
 use Clavia\Adapter\Primary\Http\Shared\LanguageChoice;
 use Clavia\Adapter\Primary\Http\Shared\PageLanguage;
 use Clavia\Adapter\Primary\Http\Shared\PageRenderer;
+use Clavia\Adapter\Primary\Http\Shared\StaticAssets;
 use Clavia\Application\Port\Messages;
 use Mezzio\Template\TemplateRendererInterface;
 use Psr\Container\ContainerInterface;
@@ -32,6 +34,9 @@ final class PageRendererFactory
         /** @var Messages $messages */
         $messages = $container->get(Messages::class);
 
-        return new PageRenderer($templates, $choice, $language, $messages);
+        /** @var BrandingChoice $branding */
+        $branding = $container->get(BrandingChoice::class);
+
+        return new PageRenderer($templates, $choice, $language, $messages, new StaticAssets(), $branding);
     }
 }

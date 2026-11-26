@@ -65,6 +65,7 @@ final readonly class PageRenderer
         private PageLanguage $language,
         private Messages $messages,
         private StaticAssets $assets = new StaticAssets(),
+        private ?BrandingChoice $branding = null,
     ) {
     }
 
@@ -90,6 +91,7 @@ final readonly class PageRenderer
                 'script' => $page->script === null ? null : $this->assets->url($page->script),
                 'stylesheet' => $this->assets->url('/auth/static/auth.css'),
                 'icon' => $this->assets->url('/auth/static/clavia-icon.svg'),
+                'brand' => self::brand($this->branding, $request),
             ], 'layout::page'),
             // A variable that is a message reaches its template worded.
             ...array_map(
@@ -137,6 +139,18 @@ final readonly class PageRenderer
         }
 
         return $names;
+    }
+
+    /**
+     * The look of the application the page serves, for the layout; null for this server's own.
+     *
+     * @return array{name: string, logo: string|null, style: string|null}|null
+     */
+    private static function brand(?BrandingChoice $choice, ServerRequestInterface $request): ?array
+    {
+        $branding = $choice === null ? null : $choice($request);
+
+        return $branding === null ? null : BrandingChoice::view($branding);
     }
 
     /** A page's message in its language. */

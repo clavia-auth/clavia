@@ -11,15 +11,15 @@ declare(strict_types=1);
 
 namespace Clavia\Bootstrap\Container;
 
-use Clavia\Application\Authentication\HeldLanguages;
+use Clavia\Application\Authentication\HeldRequests;
 use Clavia\Application\Port\ConsentStateStore;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Application\Port\MfaChallengeStore;
 use Psr\Container\ContainerInterface;
 
-final class HeldLanguagesFactory
+final class HeldRequestsFactory
 {
-    public function __invoke(ContainerInterface $container): HeldLanguages
+    public function __invoke(ContainerInterface $container): HeldRequests
     {
         /** @var LoginStateStore $loginStates */
         $loginStates = $container->get(LoginStateStore::class);
@@ -28,6 +28,6 @@ final class HeldLanguagesFactory
         /** @var MfaChallengeStore $challenges */
         $challenges = $container->get(MfaChallengeStore::class);
 
-        return new HeldLanguages($loginStates, $consentStates, $challenges);
+        return new HeldRequests($loginStates, $consentStates, $challenges);
     }
 }

@@ -80,6 +80,24 @@ body {
   border-radius: 11px; /* matches the icon's own corner radius */
 }
 
+/* An application's own logo (#25): any shape, fitted into the mark's height. */
+.brand-logo {
+  display: block;
+  max-width: 12rem;
+  max-height: 48px;
+  margin-bottom: 1rem;
+  object-fit: contain;
+}
+
+/* The application a sign-in is for, named above what the page asks. */
+.brand-name {
+  margin: -.5rem 0 .75rem;
+  color: var(--muted);
+  font-size: .8125rem;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+
 h1 {
   margin: 0 0 .25rem;
   font-size: 1.35rem;

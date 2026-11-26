@@ -38,6 +38,8 @@ final readonly class NewClient
      *                                    pushed first (RFC 9126 §6).
      * @param bool         $requireDpop   Whether every token it is issued must be bound to a DPoP key
      *                                    (`dpop_bound_access_tokens`, RFC 9449 §5.2).
+     * @param string|null  $accentColor   Its colour on the sign-in pages, `#` and six hexadecimal digits;
+     *                                    null for this server's.
      */
     public function __construct(
         public string $name = '',
@@ -55,6 +57,7 @@ final readonly class NewClient
         public string $mfaPolicy = 'optional',
         public bool $requirePushedAuthorizationRequests = false,
         public bool $requireDpop = false,
+        public ?string $accentColor = null,
     ) {
     }
 }

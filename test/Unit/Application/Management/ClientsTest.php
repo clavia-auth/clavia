@@ -35,6 +35,7 @@ use Clavia\Domain\Shared\ScopeSet;
 use Clavia\Domain\Shared\SecretGenerator;
 use ClaviaTest\Support\Fake\FakePasswordHasher;
 use ClaviaTest\Support\Fake\FrozenClock;
+use ClaviaTest\Support\Fake\InMemoryClientLogoRepository;
 use ClaviaTest\Support\Fake\InMemoryClientRegistrationRepository;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
 use ClaviaTest\Support\Fake\InMemoryConnectionRepository;
@@ -190,7 +191,11 @@ final class ClientsTest extends TestCase
     {
         $this->expectException(NotFound::class);
 
-        $read = new ReadClients($this->clients, new InMemoryClientRegistrationRepository());
+        $read = new ReadClients(
+            $this->clients,
+            new InMemoryClientRegistrationRepository(),
+            new InMemoryClientLogoRepository(),
+        );
 
         $read->one(ClientId::fromString('nobody'));
     }

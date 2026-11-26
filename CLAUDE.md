@@ -304,7 +304,7 @@ objects, repository interfaces, and an `Event` namespace for its domain events.
 |---|---|---|
 | `Shared` | `Clock`, `RandomSource`, `SecretGenerator`, `Digest`, `Scope`/`ScopeSet`, `Audience`, `Url`, `UuidId`, `Base64Url`, `PageRequest`/`Page`, `InvalidValue`, `AlreadyExists`, `DomainEvent` | Secrets are 43-character tokens; codes and tokens are stored as their SHA-256 `Digest`; URLs are kept byte for byte and compared exactly |
 | `Identity` | `User`, `Profile`, `AppMetadata`, `PasswordPolicy`, `ExternalIdentity`, `AssertedIdentity`, `AccountLink` | Every account belongs to one connection; an address is unique within it; a changed address is unverified; an emailed link dies with the address or password it was issued against; application metadata is a JSON object only operators write (16 KiB, five levels, keys sorted), replaced whole |
-| `Client` | `Client`, `ClientId`, `ClientType`, `ClientAuthMethod`, `GrantType`, `ResponseType`, `Ownership`, `BackChannelLogout`, `Registration\InitialAccessToken` | Type, auth method and secret agree; the code flow needs a redirect URI; `client_credentials` needs a confidential client; `tpc_…` ids are third-party |
+| `Client` | `Client`, `ClientId`, `ClientType`, `ClientAuthMethod`, `GrantType`, `ResponseType`, `Ownership`, `BackChannelLogout`, `AccentColor`, `ClientLogo`, `Registration\InitialAccessToken` | Type, auth method and secret agree; the code flow needs a redirect URI; `client_credentials` needs a confidential client; `tpc_…` ids are third-party; an accent colour is `#` and six hex digits, its text colour worked out by WCAG contrast; a logo is PNG, JPEG or WebP by its content (never SVG), 16–1024 px a side, 256 KiB |
 | `Connection` | `Connection`, `ConnectionName`, `ConnectionStrategy` (database, social, OIDC, passwordless, SAML), `OidcSettings`, `BuiltInConnection`, `Saml\*` (`SamlSettings`, `SamlCertificate`, `SamlOptions`, `SamlRequestId`, `ServiceProviderKey[Set]`) | The default pool, social providers and `email` are switched, never created or deleted; only a pool takes sign-ups or requires a verified address; only an OIDC or SAML connection requires provisioning; a SAML connection, and only one, has SAML settings: 1 to 3 pinned RSA certificates, https endpoints |
 | `ResourceServer` | `ResourceServer` (an API: `rs_…` id, audience, permissions, `AccessTokenFormat`), `Permission`, `ClientGrant` | A system API (the Management API) can be renamed, never deleted, always enforces roles; tokens are opaque unless the API takes JWTs |
 | `Rbac` | `Role`, `GrantedPermission`, `RoleRepository` (also the assignments) | A person holds a permission only through a role; `permissionsHeld(user, API)` is the question issuance asks; a **provisionable** role (one a SCIM group may grant) never holds a system API's permission, refused by the role and by a database trigger; an assignment is `by_hand` or a group's, and a group takes back only its own |
@@ -1310,7 +1310,15 @@ someone else's or names something deleted gives the same "expired" page.
   `Referrer-Policy: same-origin`, `Permissions-Policy`, the per-page CSP); `AuthPageResponder` adds
   the CSRF token.
   One stylesheet (`public/auth/static/auth.css`), light and dark through custom properties; the
-  theme toggle is a POST setting a cookie.
+  theme toggle is a POST setting a cookie. Static files are named with a digest of their content
+  (`StaticAssets`, `auth.css?v=…`), so new markup never meets a stylesheet cached before it.
+- **Branding per application** (#25): a page serving an authorization request wears its application's
+  look, found as its language is (`HeldRequests`, then `BrandingChoice`): its name above the heading,
+  its logo for this server's, and its colour, through two files of the sign-in origin,
+  `GET /auth/branding/{client_id}/logo` (`nosniff`, a policy allowing nothing) and `…/style.css` (three
+  custom properties), each named by a version. The pages' policy is unchanged: no inline style, no image
+  from anywhere else. Operators set them (`accent_color`, `PUT|DELETE /api/v1/clients/{id}/logo`,
+  `update:clients`); dynamic registration never does.
 - **Words come from the catalogue** (`translations/*.arb`, docs/design/translated-sign-in-pages.md):
   `$this->t('login.submit')` in a template, `$this->emphasised('key', $values, 'email')` for a sentence
   with one value in bold, `Message::of('key', $values)` in a page class (an `HtmlPage`'s title, heading,
@@ -1319,7 +1327,7 @@ someone else's or names something deleted gives the same "expired" page.
   /auth/language`, `Path=/` so the pages outside `/auth` follow it; then the held request's `ui_locales`;
   then `Accept-Language`; each among `CLAVIA_LANGUAGES`,
   else `CLAVIA_DEFAULT_LANGUAGE`; `UiLocales`, recorded on the `LoginState`, `PendingConsent` or
-  `MfaChallenge` that holds the request, pushed or not, and read back by `HeldLanguages` from the page's
+  `MfaChallenge` that holds the request, pushed or not, and read back by `HeldRequests` from the page's
   `state` or the `clavia_mfa` cookie; a malformed tag is dropped, never refused), which
   `<html lang>` and `Content-Language` state. Messages are ICU MessageFormat, read through the
   `Messages` port (`IcuMessages`); a value is an argument, never part of a pattern, and a message holds

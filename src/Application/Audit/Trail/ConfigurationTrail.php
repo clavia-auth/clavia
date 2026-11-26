@@ -18,6 +18,8 @@ use Clavia\Domain\Audit\AuditTarget;
 use Clavia\Domain\Client\Event\ClientChanged;
 use Clavia\Domain\Client\Event\ClientConnectionsChanged;
 use Clavia\Domain\Client\Event\ClientDeleted;
+use Clavia\Domain\Client\Event\ClientLogoChanged;
+use Clavia\Domain\Client\Event\ClientLogoRemoved;
 use Clavia\Domain\Client\Event\ClientRegistered;
 use Clavia\Domain\Client\Event\ClientSecretRotated;
 use Clavia\Domain\Client\GrantType;
@@ -68,6 +70,8 @@ final readonly class ConfigurationTrail implements EventSubscriber
             ClientChanged::class => $this->clientChanged(...),
             ClientConnectionsChanged::class => $this->clientConnectionsChanged(...),
             ClientSecretRotated::class => $this->clientSecretRotated(...),
+            ClientLogoChanged::class => $this->clientLogoChanged(...),
+            ClientLogoRemoved::class => $this->clientLogoRemoved(...),
             ClientDeleted::class => $this->clientDeleted(...),
             ResourceServerRegistered::class => $this->resourceServerRegistered(...),
             ResourceServerChanged::class => $this->resourceServerChanged(...),
@@ -121,6 +125,22 @@ final readonly class ConfigurationTrail implements EventSubscriber
         $this->audit->record(AuditEventType::ClientUpdated, AuditTarget::client($event->clientId), [
             'fields' => ['connections'],
             'connections' => array_map(static fn (ConnectionName $name): string => $name->value, $event->connections),
+        ]);
+    }
+
+    /** A logo is a change to the application like any other: the field, never the image. */
+    private function clientLogoChanged(ClientLogoChanged $event): void
+    {
+        $this->audit->record(AuditEventType::ClientUpdated, AuditTarget::client($event->clientId), [
+            'fields' => ['logo'],
+        ]);
+    }
+
+    private function clientLogoRemoved(ClientLogoRemoved $event): void
+    {
+        $this->audit->record(AuditEventType::ClientUpdated, AuditTarget::client($event->clientId), [
+            'fields' => ['logo'],
+            'removed' => true,
         ]);
     }
 

@@ -67,6 +67,7 @@ final readonly class Client
         public bool $requiresPushedAuthorizationRequests,
         public bool $requiresDpop,
         public ClaimMappings $claims,
+        public ?AccentColor $accentColor,
     ) {
     }
 
@@ -90,6 +91,7 @@ final readonly class Client
      *                                          be pushed first (RFC 9126 §6), and arrive by reference.
      * @param bool               $requiresDpop  Whether every token it is issued must be bound to a DPoP
      *                                          key (`dpop_bound_access_tokens`, RFC 9449 §5.2).
+     * @param AccentColor|null   $accentColor   Its colour on the sign-in pages; null for this server's.
      *
      * @throws InvalidValue When the registration contradicts itself, or a third-party client would
      *                      list connections.
@@ -112,6 +114,7 @@ final readonly class Client
         bool $requiresPushedAuthorizationRequests = false,
         bool $requiresDpop = false,
         ?ClaimMappings $claims = null,
+        ?AccentColor $accentColor = null,
     ): self {
         $secretHash = $secretHash === '' ? null : $secretHash;
 
@@ -214,6 +217,7 @@ final readonly class Client
             $requiresPushedAuthorizationRequests,
             $requiresDpop,
             $claims ?? ClaimMappings::none(),
+            $accentColor,
         );
     }
 
@@ -244,7 +248,14 @@ final readonly class Client
             $this->requiresPushedAuthorizationRequests,
             $this->requiresDpop,
             $this->claims,
+            $this->accentColor,
         );
+    }
+
+    /** The same client, in this colour on the sign-in pages, or in this server's own (null). */
+    public function withAccentColor(?AccentColor $accentColor): self
+    {
+        return clone($this, ['accentColor' => $accentColor]);
     }
 
     /**
@@ -312,6 +323,7 @@ final readonly class Client
             $this->requiresPushedAuthorizationRequests,
             $this->requiresDpop,
             $this->claims,
+            $this->accentColor,
         );
     }
 
@@ -338,6 +350,7 @@ final readonly class Client
             $this->requiresPushedAuthorizationRequests,
             $this->requiresDpop,
             $this->claims,
+            $this->accentColor,
         );
     }
 
@@ -366,6 +379,7 @@ final readonly class Client
             $this->requiresPushedAuthorizationRequests,
             $this->requiresDpop,
             $this->claims,
+            $this->accentColor,
         );
     }
 
@@ -392,6 +406,7 @@ final readonly class Client
             $this->requiresPushedAuthorizationRequests,
             $this->requiresDpop,
             $this->claims,
+            $this->accentColor,
         );
     }
 
@@ -418,6 +433,7 @@ final readonly class Client
             $required,
             $this->requiresDpop,
             $this->claims,
+            $this->accentColor,
         );
     }
 
@@ -445,6 +461,7 @@ final readonly class Client
             $this->requiresPushedAuthorizationRequests,
             $required,
             $this->claims,
+            $this->accentColor,
         );
     }
 
@@ -479,6 +496,7 @@ final readonly class Client
             $this->requiresPushedAuthorizationRequests,
             $this->requiresDpop,
             $this->claims,
+            $this->accentColor,
         );
     }
 

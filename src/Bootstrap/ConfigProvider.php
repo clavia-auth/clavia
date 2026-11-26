@@ -40,6 +40,7 @@ use Clavia\Adapter\Primary\Cli\ShowConfigCommand;
 use Clavia\Adapter\Primary\Cli\Sqs\QueueMessagesFactory;
 use Clavia\Adapter\Primary\Http\Auth\AuthCookies;
 use Clavia\Adapter\Primary\Http\Auth\AuthPageResponder;
+use Clavia\Adapter\Primary\Http\Auth\BrandingHandler;
 use Clavia\Adapter\Primary\Http\Auth\ConsentHandler;
 use Clavia\Adapter\Primary\Http\Auth\DeviceHandler;
 use Clavia\Adapter\Primary\Http\Auth\ExternalSignInCallbackHandler;
@@ -68,6 +69,7 @@ use Clavia\Adapter\Primary\Http\Auth\VerifyEmailHandler;
 use Clavia\Adapter\Primary\Http\Management\AuditEventsHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientConnectionsHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientHandler;
+use Clavia\Adapter\Primary\Http\Management\ClientLogoHandler;
 use Clavia\Adapter\Primary\Http\Management\ClientsHandler;
 use Clavia\Adapter\Primary\Http\Management\ConnectionHandler;
 use Clavia\Adapter\Primary\Http\Management\ConnectionMetadataRefreshHandler;
@@ -131,6 +133,7 @@ use Clavia\Adapter\Primary\Http\Scim\ScimUsersHandler;
 use Clavia\Adapter\Primary\Http\Scim\ServiceProviderConfigHandler;
 use Clavia\Adapter\Primary\Http\Shared\AuditContextMiddleware;
 use Clavia\Adapter\Primary\Http\Shared\BearerChallenger;
+use Clavia\Adapter\Primary\Http\Shared\BrandingChoice;
 use Clavia\Adapter\Primary\Http\Shared\ErrorResponder;
 use Clavia\Adapter\Primary\Http\Shared\Emphasise;
 use Clavia\Adapter\Primary\Http\Shared\HealthHandler;
@@ -173,6 +176,7 @@ use Clavia\Application\Authentication\Account\RequestPasswordReset;
 use Clavia\Application\Authentication\Account\ResetPassword;
 use Clavia\Application\Authentication\Account\SendAccountLink;
 use Clavia\Application\Authentication\Account\SignUp;
+use Clavia\Application\Authentication\Branding\DescribeBranding;
 use Clavia\Application\Authentication\DevelopmentAutoLogin;
 use Clavia\Application\Authentication\External\BeginExternalSignIn;
 use Clavia\Application\Authentication\External\CompleteExternalSignIn;
@@ -180,7 +184,7 @@ use Clavia\Application\Authentication\External\ResolveExternalAccount;
 use Clavia\Application\Authentication\External\Saml\BeginSamlSignIn;
 use Clavia\Application\Authentication\External\Saml\CompleteSamlSignIn;
 use Clavia\Application\Authentication\External\Saml\ReceiveSamlResponse;
-use Clavia\Application\Authentication\HeldLanguages;
+use Clavia\Application\Authentication\HeldRequests;
 use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
 use Clavia\Application\Authentication\LoginThrottle;
 use Clavia\Application\Authentication\Mfa\BeginEnrolmentOnTheWay;
@@ -244,9 +248,12 @@ use Clavia\Application\Management\Caller\AuthenticateManagementCaller;
 use Clavia\Application\Management\Clients\BackChannelLogoutRegistration;
 use Clavia\Application\Management\Clients\ClientConnections;
 use Clavia\Application\Management\Clients\DeleteClient;
+use Clavia\Application\Management\Clients\ReadClientLogo;
 use Clavia\Application\Management\Clients\ReadClients;
 use Clavia\Application\Management\Clients\RegisterClient;
+use Clavia\Application\Management\Clients\RemoveClientLogo;
 use Clavia\Application\Management\Clients\RotateClientSecret;
+use Clavia\Application\Management\Clients\SetClientLogo;
 use Clavia\Application\Management\Clients\UpdateClient;
 use Clavia\Application\Management\Connections\CreateConnection;
 use Clavia\Application\Management\Connections\DeleteConnection;
@@ -404,6 +411,7 @@ use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
 use Clavia\Domain\Authentication\Passkey\RelyingParty;
+use Clavia\Domain\Client\ClientLogoRepository;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\Registration\ClientRegistrationRepository;
 use Clavia\Domain\Client\Registration\InitialAccessTokenRepository;
@@ -746,6 +754,10 @@ final class ConfigProvider
                     DeleteConnection::class => Container\DeleteConnectionFactory::class,
                     UpdateClient::class => Container\UpdateClientFactory::class,
                     RotateClientSecret::class => Container\RotateClientSecretFactory::class,
+                    SetClientLogo::class => Container\SetClientLogoFactory::class,
+                    RemoveClientLogo::class => Container\RemoveClientLogoFactory::class,
+                    ReadClientLogo::class => Container\ReadClientLogoFactory::class,
+                    DescribeBranding::class => Container\DescribeBrandingFactory::class,
                     DeleteClient::class => Container\DeleteClientFactory::class,
                     ReadResourceServers::class => Container\ReadResourceServersFactory::class,
                     RegisterResourceServer::class => Container\RegisterResourceServerFactory::class,
@@ -820,6 +832,7 @@ final class ConfigProvider
                     SecretCipher::class => Container\SecretCipherFactory::class,
                     UserRepository::class => Container\UserRepositoryFactory::class,
                     ClientRepository::class => Container\ClientRepositoryFactory::class,
+                    ClientLogoRepository::class => Container\ClientLogoRepositoryFactory::class,
                     ConnectionRepository::class => Container\ConnectionRepositoryFactory::class,
                     AuthorizationCodeRepository::class => Container\AuthorizationCodeRepositoryFactory::class,
                     AccessTokenRepository::class => Container\AccessTokenRepositoryFactory::class,
@@ -874,7 +887,7 @@ final class ConfigProvider
                     // Primary adapter: HTTP
                     HealthHandler::class => Container\HealthHandlerFactory::class,
                     LanguageChoice::class => Container\LanguageChoiceFactory::class,
-                    HeldLanguages::class => Container\HeldLanguagesFactory::class,
+                    HeldRequests::class => Container\HeldRequestsFactory::class,
                     Languages::class => Container\LanguagesFactory::class,
                     IcuMessages::class => Container\IcuMessagesFactory::class,
                     MetricsHandler::class => Container\MetricsHandlerFactory::class,
@@ -909,6 +922,9 @@ final class ConfigProvider
                     UserHandler::class => Container\UserHandlerFactory::class,
                     ClientsHandler::class => Container\ClientsHandlerFactory::class,
                     ClientHandler::class => Container\ClientHandlerFactory::class,
+                    ClientLogoHandler::class => Container\ClientLogoHandlerFactory::class,
+                    BrandingHandler::class => Container\BrandingHandlerFactory::class,
+                    BrandingChoice::class => Container\BrandingChoiceFactory::class,
                     RotateClientSecretHandler::class => Container\RotateClientSecretHandlerFactory::class,
                     ResourceServersHandler::class => Container\ResourceServersHandlerFactory::class,
                     ResourceServerHandler::class => Container\ResourceServerHandlerFactory::class,

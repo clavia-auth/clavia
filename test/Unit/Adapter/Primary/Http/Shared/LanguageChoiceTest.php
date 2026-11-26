@@ -12,7 +12,7 @@ declare(strict_types=1);
 namespace ClaviaTest\Unit\Adapter\Primary\Http\Shared;
 
 use Clavia\Adapter\Primary\Http\Shared\LanguageChoice;
-use Clavia\Application\Authentication\HeldLanguages;
+use Clavia\Application\Authentication\HeldRequests;
 use Clavia\Domain\Authentication\LoginState;
 use Clavia\Domain\OAuth2\UiLocales;
 use Clavia\Domain\Shared\Language;
@@ -68,7 +68,7 @@ final class LanguageChoiceTest extends TestCase
         $loginStates->put('unasked', new LoginState('/oauth2/authorize'));
         $choice = new LanguageChoice(
             Languages::of([Language::fromString('en'), Language::fromString('fr')], Language::fromString('en')),
-            new HeldLanguages($loginStates, new InMemoryConsentStateStore($clock), $challenges),
+            new HeldRequests($loginStates, new InMemoryConsentStateStore($clock), $challenges),
         );
         $english = ['Accept-Language' => 'en'];
 
@@ -85,7 +85,7 @@ final class LanguageChoiceTest extends TestCase
         $loginStates->put('held', new LoginState('/oauth2/authorize', null, UiLocales::fromString('fr')));
         $choice = new LanguageChoice(
             Languages::of([Language::fromString('en'), Language::fromString('fr')], Language::fromString('en')),
-            new HeldLanguages(
+            new HeldRequests(
                 $loginStates,
                 new InMemoryConsentStateStore($clock),
                 new InMemoryMfaChallengeStore($clock),

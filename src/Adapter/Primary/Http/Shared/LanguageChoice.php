@@ -12,7 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Shared;
 
 use Clavia\Adapter\Primary\Http\Auth\AuthCookies;
-use Clavia\Application\Authentication\HeldLanguages;
+use Clavia\Application\Authentication\HeldRequests;
 use Clavia\Domain\Shared\Language;
 use Clavia\Domain\Shared\Languages;
 use Psr\Http\Message\ServerRequestInterface;
@@ -23,7 +23,7 @@ use Psr\Http\Message\ServerRequestInterface;
  *  0. what the person chose with the switcher (`clavia_language`, set by `POST /auth/language`):
  *     the person outranks the application, which knows them better than a shared browser does;
  *  1. what the request the page serves asked for, `ui_locales` (OpenID Connect Core §3.1.2.1), recorded
- *     where it is held ({@see HeldLanguages}): the login state or pending consent the page's `state`
+ *     where it is held ({@see HeldRequests}): the login state or pending consent the page's `state`
  *     names, or the second-factor challenge of its cookie;
  *  2. what the browser asks for in `Accept-Language` (RFC 9110 §12.5.4), by preference;
  *  3. the default.
@@ -37,7 +37,7 @@ final readonly class LanguageChoice
 
     public function __construct(
         private Languages $languages,
-        private ?HeldLanguages $held = null,
+        private ?HeldRequests $held = null,
     ) {
     }
 
@@ -50,7 +50,7 @@ final readonly class LanguageChoice
         $asked = $this->held === null ? [] : ($this->held)(
             RequestParameterReader::queryAndForm($request)->get('state'),
             RequestCookies::first($request, AuthCookies::MFA_CHALLENGE),
-        )->tags;
+        )->uiLocales->tags;
         foreach ([...$asked, ...self::ranges($request->getHeaderLine('Accept-Language'))] as $range) {
             $language = $this->languages->lookup($range);
             if ($language !== null) {

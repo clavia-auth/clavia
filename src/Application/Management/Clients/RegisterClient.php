@@ -15,6 +15,7 @@ use Clavia\Application\Management\NotFound;
 use Clavia\Application\Port\DomainEvents;
 use Clavia\Application\Port\PasswordHasher;
 use Clavia\Domain\Authentication\MfaPolicy;
+use Clavia\Domain\Client\AccentColor;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\ClientId;
@@ -85,6 +86,8 @@ final readonly class RegisterClient
             MfaPolicy::fromString($new->mfaPolicy),
             $new->requirePushedAuthorizationRequests,
             $new->requireDpop,
+            null,
+            $new->accentColor === null ? null : AccentColor::fromString($new->accentColor),
         );
         $this->clients->save($client);
         $this->events->dispatch(new ClientRegistered($client));

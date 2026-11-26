@@ -12,7 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Adapter\Primary\Http\Shared\LanguageChoice;
-use Clavia\Application\Authentication\HeldLanguages;
+use Clavia\Application\Authentication\HeldRequests;
 use Clavia\Domain\Shared\Languages;
 use Psr\Container\ContainerInterface;
 
@@ -23,8 +23,8 @@ final class LanguageChoiceFactory
         /** @var Languages $languages */
         $languages = $container->get(Languages::class);
 
-        /** @var HeldLanguages $held */
-        $held = $container->get(HeldLanguages::class);
+        /** @var HeldRequests $held */
+        $held = $container->get(HeldRequests::class);
 
         return new LanguageChoice($languages, $held);
     }
