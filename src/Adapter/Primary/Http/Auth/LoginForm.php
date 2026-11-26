@@ -37,7 +37,7 @@ final readonly class LoginForm
         ServerRequestInterface $request,
         #[\SensitiveParameter] ?string $loginState,
         ?string $email = null,
-        Message|string|null $error = null,
+        ?Message $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): ResponseInterface {
         $methods = $this->describe->methods($loginState);

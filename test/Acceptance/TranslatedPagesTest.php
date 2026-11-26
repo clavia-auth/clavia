@@ -98,6 +98,30 @@ final class TranslatedPagesTest extends AcceptanceTestCase
         self::assertStringContainsString('<p class="hint" lang="en">', $body);
     }
 
+    /**
+     * Every page now (#182): the forgot-password form, and its answer, a whole sentence whose address is in
+     * bold where the language puts it (emphasised()).
+     */
+    public function testTheAccountPagesAreInTheBrowsersLanguage(): void
+    {
+        $form = $this->page('/auth/password/forgot', 'fr');
+        self::assertSame(StatusCodeInterface::STATUS_OK, $form->getStatusCode());
+        $title = 'Réinitialiser votre mot de passe';
+        self::assertStringContainsString($title, html_entity_decode((string) $form->getBody()));
+
+        $sent = $this->post('/auth/password/forgot', [
+            'email' => 'grace@example.com',
+            'csrf_token' => self::csrfTokenFrom($form),
+            'state' => '',
+        ], headers: ['Accept-Language' => 'fr']);
+
+        self::assertSame(StatusCodeInterface::STATUS_OK, $sent->getStatusCode());
+        self::assertStringContainsString(
+            'Si <strong>grace@example.com</strong> a un compte ici, nous lui avons envoyé un lien',
+            html_entity_decode((string) $sent->getBody()),
+        );
+    }
+
     private function page(string $path, string $acceptLanguage): ResponseInterface
     {
         $headers = ['Accept' => 'text/html'];

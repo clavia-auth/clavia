@@ -14,6 +14,7 @@ namespace Clavia\Adapter\Primary\Http\Auth\Saml;
 use Clavia\Adapter\Primary\Http\Auth\AuthPageResponder;
 use Clavia\Adapter\Primary\Http\Shared\ErrorPage;
 use Clavia\Adapter\Primary\Http\Shared\ErrorResponder;
+use Clavia\Adapter\Primary\Http\Shared\Message;
 use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\Authentication\External\Saml\ReceiveSamlResponse;
 use Fig\Http\Message\StatusCodeInterface;
@@ -51,9 +52,9 @@ final readonly class SamlAcsHandler implements RequestHandlerInterface
                 $request,
                 StatusCodeInterface::STATUS_BAD_REQUEST,
                 new ErrorPage(
-                    'This sign-in could not be read',
-                    'Your identity provider sent something that is not a sign-in response.',
-                    'Go back to the application and sign in again.',
+                    Message::of('saml.unreadable.title'),
+                    Message::of('saml.unreadable.message'),
+                    Message::of('saml.unreadable.advice'),
                 ),
                 ['error' => 'invalid_request'],
                 ['Cache-Control' => 'no-store'],

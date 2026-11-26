@@ -82,7 +82,11 @@ final readonly class DeviceHandler implements RequestHandlerInterface
         if ($this->throttle->isThrottled($endUser->userId, ClientAddress::of($request))) {
             return $this->responder->page(
                 $request,
-                DevicePages::entry($typed, DevicePages::TOO_MANY_CODES, StatusCodeInterface::STATUS_TOO_MANY_REQUESTS),
+                DevicePages::entry(
+                    $typed,
+                    Message::of(DevicePages::TOO_MANY_CODES),
+                    StatusCodeInterface::STATUS_TOO_MANY_REQUESTS,
+                ),
             );
         }
 
@@ -121,7 +125,7 @@ final readonly class DeviceHandler implements RequestHandlerInterface
 
         return $this->responder->page(
             $request,
-            DevicePages::entry($typed, DevicePages::INVALID_CODE, StatusCodeInterface::STATUS_BAD_REQUEST),
+            DevicePages::entry($typed, Message::of(DevicePages::INVALID_CODE), StatusCodeInterface::STATUS_BAD_REQUEST),
         );
     }
 
@@ -149,7 +153,11 @@ final readonly class DeviceHandler implements RequestHandlerInterface
 
         return $this->responder->page(
             $request,
-            DevicePages::entry($typed, DevicePages::STRONGER_SIGN_IN, StatusCodeInterface::STATUS_FORBIDDEN),
+            DevicePages::entry(
+                $typed,
+                Message::of(DevicePages::STRONGER_SIGN_IN),
+                StatusCodeInterface::STATUS_FORBIDDEN,
+            ),
         );
     }
 

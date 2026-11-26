@@ -20,18 +20,18 @@ namespace Clavia\Adapter\Primary\Http\Shared;
 final readonly class ErrorPage
 {
     /**
-     * @param Message|string $title   The heading: what happened, in a few words.
-     * @param Message|string $message What happened, in a sentence.
-     * @param Message|string $advice  What to do now.
+     * @param Message     $title   The heading: what happened, in a few words.
+     * @param Message     $message What happened, in a sentence.
+     * @param Message     $advice  What to do now.
      * @param string|null    $code    A reference to quote to whoever can help: an OAuth2 error code,
      *                                a log reference. Null when there is nothing worth quoting.
      * @param string|null    $detail  The server's own technical description, for an application's
      *                                developer: English, as every OAuth `error_description` is.
      */
     public function __construct(
-        public Message|string $title,
-        public Message|string $message,
-        public Message|string $advice,
+        public Message $title,
+        public Message $message,
+        public Message $advice,
         public ?string $code = null,
         public ?string $detail = null,
     ) {

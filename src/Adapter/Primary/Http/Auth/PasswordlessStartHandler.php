@@ -91,7 +91,7 @@ final readonly class PasswordlessStartHandler implements RequestHandlerInterface
         ServerRequestInterface $request,
         ?string $loginState,
         string $email,
-        Message|string $error,
+        Message $error,
         int $status,
     ): ResponseInterface {
         return $this->responder->page(

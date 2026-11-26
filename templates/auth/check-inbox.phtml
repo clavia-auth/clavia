@@ -13,11 +13,11 @@
 ?>
 <?php $this->placeholder('subtitle')->captureStart() ?>
 <?php if ($why === 'reset'): ?>
-      <p class="subtitle">If <strong><?= $this->escapeHtml($email) ?></strong> has an account here, we sent it a link to choose a new password.</p>
+      <p class="subtitle"><?= $this->emphasised('account.check_inbox.reset', ['email' => $email], 'email') ?></p>
 <?php elseif ($why === 'unverified'): ?>
-      <p class="subtitle">Confirm <strong><?= $this->escapeHtml($email) ?></strong> before signing in: we sent it a new link.</p>
+      <p class="subtitle"><?= $this->emphasised('account.check_inbox.unverified', ['email' => $email], 'email') ?></p>
 <?php else: ?>
-      <p class="subtitle">We sent a link to <strong><?= $this->escapeHtml($email) ?></strong>. Open it to confirm your address, then sign in.</p>
+      <p class="subtitle"><?= $this->emphasised('account.check_inbox.sign_up', ['email' => $email], 'email') ?></p>
 <?php endif ?>
 <?php $this->placeholder('subtitle')->captureEnd() ?>
-    <p class="hint">Nothing arrived? Check your spam folder, or <a href="<?= $this->escapeHtmlAttr($loginHref) ?>">go back to sign in</a>.</p>
+    <p class="hint"><?= $this->escapeHtml($this->t('account.check_inbox.nothing_arrived')) ?> <a href="<?= $this->escapeHtmlAttr($loginHref) ?>"><?= $this->escapeHtml($this->t('account.back_to_sign_in')) ?></a></p>

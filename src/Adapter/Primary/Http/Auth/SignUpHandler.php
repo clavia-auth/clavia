@@ -83,7 +83,7 @@ final readonly class SignUpHandler implements RequestHandlerInterface
                 $request,
                 $loginState,
                 $outcome->email,
-                AccountPages::signUpMessage($outcome->reason, $outcome->detail),
+                AccountPages::signUpMessage($outcome->reason, $outcome->password),
                 AccountPages::signUpStatus($outcome->reason),
             );
         }
@@ -104,7 +104,7 @@ final readonly class SignUpHandler implements RequestHandlerInterface
         ServerRequestInterface $request,
         ?string $loginState,
         string $email = '',
-        Message|string|null $error = null,
+        ?Message $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): ResponseInterface {
         $page = ($this->describe)($loginState);
@@ -116,7 +116,7 @@ final readonly class SignUpHandler implements RequestHandlerInterface
                     [],
                     false,
                     $email,
-                    AccountPages::SIGN_UP_UNAVAILABLE,
+                    Message::of(AccountPages::SIGN_UP_UNAVAILABLE),
                     StatusCodeInterface::STATUS_NOT_FOUND,
                 ),
             );

@@ -98,7 +98,7 @@ final readonly class ConsentHandler implements RequestHandlerInterface
         ServerRequestInterface $request,
         string $handle,
         EndUser $endUser,
-        Message|string|null $error = null,
+        ?Message $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): ResponseInterface {
         $screen = $handle === '' ? null : ($this->describe)($handle, $endUser);

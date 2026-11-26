@@ -14,6 +14,7 @@ namespace Clavia\Adapter\Primary\Http\Oidc;
 use Clavia\Adapter\Primary\Http\Auth\AuthCookies;
 use Clavia\Adapter\Primary\Http\Auth\AuthPageResponder;
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
+use Clavia\Adapter\Primary\Http\Shared\Message;
 use Clavia\Adapter\Primary\Http\Shared\RequestCookies;
 use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\OAuth2\RequestParameters;
@@ -82,8 +83,8 @@ final readonly class EndSessionHandler implements RequestHandlerInterface
 
         return new HtmlPage(
             template: self::CONFIRMATION_TEMPLATE,
-            title: 'Sign out',
-            heading: 'Sign out?',
+            title: Message::of('logout.title'),
+            heading: Message::of('logout.heading'),
             returnTo: '/auth/login',
             variables: [
                 'clientName' => $outcome->clientName,

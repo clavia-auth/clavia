@@ -20,12 +20,12 @@
     <form method="post" action="/auth/passkeys" data-webauthn-create="<?= $this->escapeHtmlAttr($options) ?>">
 <?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => $loginState]) ?>
       <input type="hidden" name="credential" value="">
-      <label for="name">Name it <span class="hint">(optional)</span></label>
-      <input id="name" name="name" type="text" maxlength="64" autocomplete="off" placeholder="Work laptop">
-      <p class="hint" data-webauthn-unsupported>This browser cannot make a passkey.</p>
-      <p class="hint" data-webauthn-failed hidden>Your browser did not make the passkey. Try again.</p>
-      <button type="submit" data-webauthn-start hidden>Create passkey</button>
+      <label for="name"><?= $this->escapeHtml($this->t('passkeys.add.name')) ?> <span class="hint"><?= $this->escapeHtml($this->t('passkeys.add.optional')) ?></span></label>
+      <input id="name" name="name" type="text" maxlength="64" autocomplete="off" placeholder="<?= $this->escapeHtmlAttr($this->t('passkeys.add.name_example')) ?>">
+      <p class="hint" data-webauthn-unsupported><?= $this->escapeHtml($this->t('passkeys.add.unsupported')) ?></p>
+      <p class="hint" data-webauthn-failed hidden><?= $this->escapeHtml($this->t('passkeys.add.failed')) ?></p>
+      <button type="submit" data-webauthn-start hidden><?= $this->escapeHtml($this->t('passkeys.add.submit')) ?></button>
     </form>
     <form method="get" action="/auth/passkeys">
-      <button type="submit" class="secondary">Cancel</button>
+      <button type="submit" class="secondary"><?= $this->escapeHtml($this->t('passkeys.add.cancel')) ?></button>
     </form>

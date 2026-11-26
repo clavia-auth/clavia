@@ -18,7 +18,7 @@
 ?>
 <?php $this->placeholder('subtitle')->captureStart() ?>
 <?php if ($signedInAs !== null): ?>
-      <p class="subtitle"><?= $this->escapeHtml($this->t('login.signed_in.as')) ?> <strong><?= $this->escapeHtml($signedInAs) ?></strong>. <?= $this->escapeHtml($this->t('login.signed_in.go_back')) ?></p>
+      <p class="subtitle"><?= $this->emphasised('login.signed_in.subtitle', ['email' => $signedInAs], 'email') ?></p>
 <?php else: ?>
       <p class="subtitle"><?= $this->escapeHtml($this->t('login.subtitle')) ?></p>
 <?php endif ?>

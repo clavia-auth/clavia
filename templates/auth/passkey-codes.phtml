@@ -9,7 +9,7 @@
  */
 ?>
 <?php $this->placeholder('subtitle')->captureStart() ?>
-      <p class="subtitle">Save these recovery codes somewhere safe. Each one signs you in once if you lose your passkey — and this is the only time they are shown.</p>
+      <p class="subtitle"><?= $this->escapeHtml($this->t('passkeys.codes.subtitle')) ?></p>
 <?php $this->placeholder('subtitle')->captureEnd() ?>
     <ul class="codes">
 <?php foreach ($codes as $code): ?>
@@ -20,10 +20,10 @@
 <?php if ($loginState !== ''): ?>
     <form method="post" action="/auth/mfa/enroll/continue">
 <?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => $loginState]) ?>
-      <button type="submit">Continue</button>
+      <button type="submit"><?= $this->escapeHtml($this->t('mfa.continue')) ?></button>
     </form>
 <?php else: ?>
     <form method="get" action="/auth/passkeys">
-      <button type="submit">Done</button>
+      <button type="submit"><?= $this->escapeHtml($this->t('mfa.codes.done')) ?></button>
     </form>
 <?php endif ?>

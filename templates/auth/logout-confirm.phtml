@@ -11,9 +11,9 @@
 ?>
 <?php $this->placeholder('subtitle')->captureStart() ?>
 <?php if ($clientName !== null): ?>
-      <p class="subtitle"><strong><?= $this->escapeHtml($clientName) ?></strong> asks to sign you out of this server.</p>
+      <p class="subtitle"><?= $this->emphasised('logout.asks', ['application' => $clientName], 'application') ?></p>
 <?php else: ?>
-      <p class="subtitle">You are about to sign out of this server.</p>
+      <p class="subtitle"><?= $this->escapeHtml($this->t('logout.about_to')) ?></p>
 <?php endif ?>
 <?php $this->placeholder('subtitle')->captureEnd() ?>
     <form method="post" action="/oidc/logout">
@@ -21,6 +21,6 @@
       <input type="hidden" name="<?= $this->escapeHtmlAttr($name) ?>" value="<?= $this->escapeHtmlAttr($value) ?>">
 <?php endforeach ?>
       <input type="hidden" name="confirmed" value="yes">
-      <button type="submit">Sign out</button>
+      <button type="submit"><?= $this->escapeHtml($this->t('login.sign_out')) ?></button>
     </form>
-    <p class="hint">If you did not mean to sign out, close this page: nothing has changed.</p>
+    <p class="hint"><?= $this->escapeHtml($this->t('logout.not_meant')) ?></p>

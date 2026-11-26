@@ -13,16 +13,16 @@
  */
 ?>
 <?php $this->placeholder('subtitle')->captureStart() ?>
-      <p class="subtitle">Open your authenticator app and add an account by scanning.</p>
+      <p class="subtitle"><?= $this->escapeHtml($this->t('mfa.set_up.subtitle')) ?></p>
 <?php $this->placeholder('subtitle')->captureEnd() ?>
     <div class="qr"><?= $qrSvg ?></div>
 
-    <p class="hint">Can't scan? Enter this key instead:</p>
+    <p class="hint"><?= $this->escapeHtml($this->t('mfa.set_up.cant_scan')) ?></p>
     <p class="secret"><?= $this->escapeHtml($secret) ?></p>
 
     <form method="post" action="/auth/mfa/enroll/confirm" autocomplete="off" novalidate>
 <?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => $loginState]) ?>
-<?= $this->partial('partial::code-field', ['label' => 'Then enter the code your app shows']) ?>
+<?= $this->partial('partial::code-field', ['label' => $this->t('mfa.set_up.code_label')]) ?>
 
-      <button type="submit">Turn on</button>
+      <button type="submit"><?= $this->escapeHtml($this->t('mfa.set_up.turn_on')) ?></button>
     </form>

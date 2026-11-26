@@ -112,7 +112,7 @@ final class ConsentScreenTest extends TestCase
         ));
     }
 
-    public function testTheScreenSaysWhoAsksOfWhomForWhatInTheServersOwnWords(): void
+    public function testTheScreenSaysWhoAsksOfWhomForWhat(): void
     {
         $screen = ($this->describe)(self::HANDLE, $this->jane);
 
@@ -121,8 +121,9 @@ final class ConsentScreenTest extends TestCase
         self::assertSame('jane@example.com', $screen->email);
         self::assertEquals(
             [
-                new ScopeLine('openid', 'Sign you in and know who you are'),
-                new ScopeLine('email', 'See your email address'),
+                // By value: the page words the standard scopes in the person's language.
+                new ScopeLine('openid', 'openid'),
+                new ScopeLine('email', 'email'),
             ],
             $screen->oidcScopes,
         );

@@ -23,7 +23,6 @@ use Clavia\Domain\Identity\AccountLinkPurpose;
 use Clavia\Domain\Identity\Event\PasswordReset;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\Shared\Clock;
-use Clavia\Domain\Shared\InvalidValue;
 
 /**
  * Set a new password from a reset link.
@@ -63,10 +62,9 @@ final readonly class ResetPassword
         ) {
             return new AccountLinkRefused();
         }
-        try {
-            $accepted = $this->passwords->accept($password);
-        } catch (InvalidValue $refusal) {
-            return new PasswordRejected($refusal->getMessage());
+        $accepted = $this->passwords->screen($password);
+        if ($accepted instanceof PasswordRefusal) {
+            return new PasswordRejected($accepted);
         }
 
         $link = $this->links->claim($token);

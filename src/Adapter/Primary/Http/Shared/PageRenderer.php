@@ -104,10 +104,10 @@ final readonly class PageRenderer
         );
     }
 
-    /** A page's message in its language; text as it is, until every page is worded through the catalogue. */
-    private function word(Language $language, Message|string $text): string
+    /** A page's message in its language. */
+    private function word(Language $language, Message $message): string
     {
-        return $text instanceof Message ? $this->messages->text($language, $text->key, $text->values) : $text;
+        return $this->messages->text($language, $message->key, $message->values);
     }
 
     /**

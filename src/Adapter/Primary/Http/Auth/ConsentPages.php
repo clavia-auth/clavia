@@ -24,7 +24,7 @@ final class ConsentPages
 {
     public const string PATH = '/auth/consent';
 
-    public const string EXPIRED = 'This request has expired. Please start again from the application.';
+    public const string EXPIRED = 'consent.error.expired';
 
     private function __construct()
     {
@@ -38,20 +38,19 @@ final class ConsentPages
     public static function question(
         ConsentScreen $screen,
         string $consentState,
-        Message|string|null $error = null,
+        ?Message $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): HtmlPage {
         return new HtmlPage(
             template: 'auth::consent',
-            title: 'Allow access',
-            heading: 'Allow access?',
+            title: Message::of('consent.title'),
+            heading: Message::of('consent.heading'),
             returnTo: self::address($consentState),
             variables: [
                 'consentState' => $consentState,
                 'clientName' => $screen->clientName,
                 'email' => $screen->email,
-                'oidcScopes' => $screen->oidcScopes,
-                'api' => $screen->api,
+                'scopes' => ScopeWording::of($screen->oidcScopes, $screen->api),
             ],
             error: $error,
             status: $status,
@@ -69,10 +68,10 @@ final class ConsentPages
     {
         return new HtmlPage(
             template: 'auth::consent-expired',
-            title: 'Request expired',
-            heading: 'Request expired',
+            title: Message::of('consent.expired.title'),
+            heading: Message::of('consent.expired.title'),
             returnTo: self::PATH,
-            error: self::EXPIRED,
+            error: Message::of(self::EXPIRED),
             status: StatusCodeInterface::STATUS_BAD_REQUEST,
         );
     }

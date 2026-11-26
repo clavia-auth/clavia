@@ -87,7 +87,7 @@ final readonly class MfaChallengeHandler implements RequestHandlerInterface
                 $form->get('credential') ?? '',
                 ClientAddress::of($request),
                 RequestCookies::first($request, $this->cookies->sessionCookieName),
-            )), MfaPages::INVALID_PASSKEY);
+            )), Message::of(MfaPages::INVALID_PASSKEY));
         }
 
         return $this->answered($request, $challenge, $page, ($this->complete)(new SecondFactorAttempt(
@@ -95,7 +95,7 @@ final readonly class MfaChallengeHandler implements RequestHandlerInterface
             $form->get('code') ?? '',
             ClientAddress::of($request),
             RequestCookies::first($request, $this->cookies->sessionCookieName),
-        )), MfaPages::INVALID_CODE);
+        )), Message::of(MfaPages::INVALID_CODE));
     }
 
     private function answered(
@@ -103,7 +103,7 @@ final readonly class MfaChallengeHandler implements RequestHandlerInterface
         string $challenge,
         SecondFactorPage $page,
         SecondFactorOutcome $outcome,
-        string $rejected,
+        Message $rejected,
     ): ResponseInterface {
         if ($outcome instanceof SignedIn) {
             return $this->responder->redirect($outcome->nextUrl, [
@@ -128,7 +128,7 @@ final readonly class MfaChallengeHandler implements RequestHandlerInterface
         ServerRequestInterface $request,
         string $challenge,
         SecondFactorPage $page,
-        Message|string|null $error = null,
+        ?Message $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): ResponseInterface {
         $options = $page->passkey ? ($this->beginPasskey)($challenge) : null;

@@ -74,7 +74,7 @@ final readonly class PasswordForgotHandler implements RequestHandlerInterface
                 ? AccountPages::forgot(
                     $loginState,
                     $email,
-                    AccountPages::RESET_UNAVAILABLE,
+                    Message::of(AccountPages::RESET_UNAVAILABLE),
                     StatusCodeInterface::STATUS_NOT_FOUND,
                 )
                 : AccountPages::forgot(

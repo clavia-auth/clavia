@@ -63,7 +63,7 @@ final readonly class PasswordResetHandler implements RequestHandlerInterface
 
         $outcome = ($this->reset)($token, $form->get('password') ?? '');
         if ($outcome instanceof PasswordRejected) {
-            return $this->again($request, $token, $outcome->detail);
+            return $this->again($request, $token, AccountPages::passwordMessage($outcome->reason));
         }
         if ($outcome instanceof PasswordChanged) {
             return $this->responder->page(
@@ -79,7 +79,7 @@ final readonly class PasswordResetHandler implements RequestHandlerInterface
     private function again(
         ServerRequestInterface $request,
         #[\SensitiveParameter] string $token,
-        Message|string $error,
+        Message $error,
     ): ResponseInterface {
         $email = ($this->describe)($token, AccountLinkPurpose::ResetPassword);
 

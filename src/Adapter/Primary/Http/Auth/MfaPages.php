@@ -33,18 +33,17 @@ final class MfaPages
     /** Back to the request that sent the person to set a second factor up. */
     public const string CONTINUE_PATH = '/auth/mfa/enroll/continue';
 
-    public const string INVALID_CODE = 'That code is not valid.';
+    public const string INVALID_CODE = 'mfa.error.invalid_code';
 
-    public const string INVALID_PASSKEY = 'That passkey did not work. Try again, or use a code.';
+    public const string INVALID_PASSKEY = 'mfa.error.invalid_passkey';
 
-    public const string INVALID_SETUP_CODE = 'That code is not valid. Check your device clock and try again.';
+    public const string INVALID_SETUP_CODE = 'mfa.error.invalid_setup_code';
 
     /**
      * Configuration, not the person's mistake — said plainly rather than as a 500,
      * because whoever reads it on a fresh deployment is the one who can fix it.
      */
-    public const string ENCRYPTION_UNAVAILABLE = 'Two-factor authentication cannot be set up on this server yet: '
-        . 'CLAVIA_SECRET_ENCRYPTION_KEY is not configured.';
+    public const string ENCRYPTION_UNAVAILABLE = 'mfa.error.encryption_unavailable';
 
     private function __construct()
     {
@@ -58,13 +57,15 @@ final class MfaPages
     public static function challenge(
         SecondFactorPage $page,
         ?AssertionOptions $passkey = null,
-        Message|string|null $error = null,
+        ?Message $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): HtmlPage {
         return new HtmlPage(
             template: 'auth::mfa-challenge',
-            title: 'Two-factor authentication',
-            heading: $passkey !== null || $page->stepUp ? 'Confirm it is you' : 'Check your authenticator',
+            title: Message::of('mfa.title'),
+            heading: Message::of(
+                $passkey !== null || $page->stepUp ? 'mfa.challenge.heading_confirm' : 'mfa.challenge.heading_app',
+            ),
             returnTo: self::CHALLENGE_PATH,
             variables: [
                 'authenticatorApp' => $page->authenticatorApp,
@@ -90,14 +91,14 @@ final class MfaPages
      */
     public static function settings(
         MfaStatus $status,
-        ?string $error = null,
+        ?Message $error = null,
         int $httpStatus = StatusCodeInterface::STATUS_OK,
         ?EnrolmentOnTheWay $onTheWay = null,
     ): HtmlPage {
         return new HtmlPage(
             template: 'auth::mfa-settings',
-            title: 'Two-factor authentication',
-            heading: $onTheWay === null ? 'Two-factor authentication' : 'Set up two-factor authentication',
+            title: Message::of('mfa.title'),
+            heading: Message::of($onTheWay === null ? 'mfa.title' : 'mfa.set_up.title'),
             returnTo: self::SETTINGS_PATH,
             variables: [
                 'email' => $status->email,
@@ -116,14 +117,14 @@ final class MfaPages
     /** The seed to scan or type, and the field for the code that proves it. */
     public static function setUp(
         TotpEnrollment $enrollment,
-        ?string $error = null,
+        ?Message $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
         ?EnrolmentOnTheWay $onTheWay = null,
     ): HtmlPage {
         return new HtmlPage(
             template: 'auth::mfa-setup',
-            title: 'Set up two-factor authentication',
-            heading: 'Scan this code',
+            title: Message::of('mfa.set_up.title'),
+            heading: Message::of('mfa.set_up.heading'),
             variables: [
                 'secret' => $enrollment->secret,
                 'qrSvg' => QrCodeSvg::of($enrollment->provisioningUri),
@@ -144,8 +145,8 @@ final class MfaPages
     {
         return new HtmlPage(
             template: 'auth::mfa-codes',
-            title: 'Recovery codes',
-            heading: 'Two-factor authentication is on',
+            title: Message::of('mfa.codes.title'),
+            heading: Message::of('mfa.codes.heading'),
             variables: ['codes' => $codes, 'loginState' => $onTheWay->loginState ?? ''],
             wide: true,
             // Continuing ends at the application's redirect URI (see the auth pages' CSP).

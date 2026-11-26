@@ -8,6 +8,12 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ### Added
 
+- **Every sign-in page in French** (#182): sign-up, verification and reset, second factor and its
+  settings, passkeys (their dates too), consent, device approval, passwordless, sign-out, and the SAML
+  and external sign-in refusals. The standard OpenID Connect scopes are worded in the person's language;
+  an API's permissions keep their operator's words. A refused password is worded from its reason, with
+  the policy's bounds.
+
 - **The sign-in pages in French** (#181, the first of #24): the login page and the error pages follow
   the browser's `Accept-Language`, among the offered languages, and say so in `<html lang>` and
   `Content-Language`. Messages live in `translations/*.arb` (ICU MessageFormat), which `CatalogueTest`
