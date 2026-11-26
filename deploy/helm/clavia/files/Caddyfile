@@ -1,0 +1,176 @@
+# ============================================================
+# Caddyfile — production, for the Compose file (deploy/compose) and the Helm chart (this chart)
+#
+# One file for both, configured by the environment:
+#
+#   CLAVIA_ROOT_DOMAIN           the domain: auth.{domain} and management.{domain} are served.
+#   CLAVIA_CADDY_SCHEME          https (the default): Caddy is the edge, and gets and renews the
+#                                certificates itself (ACME, ports 80 and 443 reachable from the
+#                                Internet); http: an Ingress or a load balancer terminates TLS
+#                                in front, and Caddy listens on port 80.
+#   CLAVIA_CADDY_TRUSTED_PROXIES what may stand in front: the client address is read from
+#                                X-Forwarded-For only on a request from one of these ranges.
+#                                Loopback alone by default, which no client on the network can
+#                                be: at the edge, no forwarded header is ever believed. Behind an
+#                                Ingress, its ranges: the exact CIDRs of its pods, or
+#                                private_ranges, which also believes any other pod that reaches
+#                                Caddy directly (the chart's NetworkPolicy closes that).
+#   CLAVIA_PHP_FASTCGI           PHP-FPM (php:9000 in Compose, 127.0.0.1:9000 beside it in a pod).
+#   CLAVIA_DASHBOARD_UPSTREAM    the dashboard's server (dashboard:3000).
+#
+# Keep the rules in step with the development Caddyfile at the repository root:
+# test/Unit/Deployment/DeploymentKitTest.php fails when a security rule of one is missing from
+# the other.
+#
+# The client address reaches PHP as REMOTE_ADDR, Caddy's {client_ip}: the application trusts
+# no X-Forwarded-* header itself (CLAVIA_TRUSTED_PROXIES stays empty), so Caddy is the one
+# place that decides who the client is.
+# ============================================================
+
+{
+	admin off
+
+	servers {
+		trusted_proxies static {$CLAVIA_CADDY_TRUSTED_PROXIES:127.0.0.1/32 ::1/128}
+		# Right to left, skipping the trusted hops: the client writes the leftmost entries of
+		# X-Forwarded-For, and taking those would let anyone choose the address every per-address
+		# limit (sign-in, the machine endpoints, SCIM tokens) counts against.
+		trusted_proxies_strict
+		client_ip_headers X-Forwarded-For
+	}
+
+	log {
+		level INFO
+		format json
+	}
+}
+
+# ── Snippets ──────────────────────────────────────────────────
+# The application: one front controller, public/index.php, for every path that is not a file
+# under public/. The root is the path inside the PHP container, where the same files are, so the
+# SCRIPT_FILENAME Caddy computes is one PHP-FPM can open.
+(clavia_app) {
+	root * /app/public
+	php_fastcgi {$CLAVIA_PHP_FASTCGI:php:9000} {
+		# The front controller and nothing else: no other file under public/ is ever executed,
+		# and a directory there never triggers a redirect.
+		try_files index.php
+		# The client as Caddy decided it (see trusted_proxies above).
+		env REMOTE_ADDR {client_ip}
+	}
+}
+
+# ── Liveness of the application, for probes: never published ───
+# PHP's /healthz through this Caddy, on a port no Service or published port exposes.
+:8081 {
+	handle /healthz {
+		import clavia_app
+	}
+	handle {
+		respond 404
+	}
+}
+
+# ── Any other host: nothing here ───────────────────────────────
+# A request naming neither host (an IP address, a stale DNS name, a scanner) is refused rather
+# than answered with an empty 200. At the edge, the redirects to https of the two hosts are more
+# specific and still win.
+http:// {
+	respond 404
+}
+
+# ── OAuth2 / OIDC / login — auth.{CLAVIA_ROOT_DOMAIN} ─────────
+# Serves /oauth2/*, /oidc/*, /auth/*, /.well-known/*. Its own origin, isolated from management.*:
+# this is where redirect_uris are validated and where the host-only session cookie lives.
+{$CLAVIA_CADDY_SCHEME:https}://auth.{$CLAVIA_ROOT_DOMAIN} {
+	# `defer` applies these after the upstream response arrives, so Caddy's value replaces the
+	# upstream's rather than being appended alongside it.
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		# PHP-FPM states the response code in a CGI `Status` header; it is not an HTTP header and
+		# has no business reaching a client.
+		-Status
+		defer
+	}
+
+	# Nothing on this origin may come out of a shared cache, with the exceptions that exist to be
+	# cached: the discovery document, the JWKS, each SAML connection's service provider metadata,
+	# and static assets. The application sets no-store itself on every sensitive response; this
+	# is the belt to those braces.
+	@sensitive not path /.well-known/* /oidc/jwks.json /auth/static/* /favicon.ico /auth/saml/*/metadata
+	header @sensitive {
+		Cache-Control "no-store"
+		defer
+	}
+
+	# The Management API and SCIM live on management.*, never here: a machine plane reachable on
+	# the origin where credentials are typed would undo the separation of the two hosts.
+	handle /api/v1/* {
+		respond 404
+	}
+	handle /scim/v2/* {
+		respond 404
+	}
+
+	# The sign-in pages' stylesheet, script and icon. Files only: nothing under this prefix ever
+	# reaches PHP.
+	handle /auth/static/* {
+		root * /app/public
+		file_server
+	}
+
+	handle /favicon.ico {
+		root * /app/public
+		rewrite * /auth/static/clavia-icon.svg
+		header Cache-Control "public, max-age=86400"
+		file_server
+	}
+
+	handle {
+		import clavia_app
+	}
+}
+
+# ── Management API, SCIM and the dashboard — management.{CLAVIA_ROOT_DOMAIN} ─
+# The dashboard's own calls to /api/v1/* need no CORS: they share this origin.
+{$CLAVIA_CADDY_SCHEME:https}://management.{$CLAVIA_ROOT_DOMAIN} {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Status
+		defer
+	}
+
+	# The Management API: bearer tokens only, nothing cacheable.
+	handle /api/v1/* {
+		header Cache-Control "no-store" {
+			defer
+		}
+		import clavia_app
+	}
+
+	# SCIM 2.0 (RFC 7644): directories, with a provisioning token. Nothing cacheable.
+	handle /scim/v2/* {
+		header Cache-Control "no-store" {
+			defer
+		}
+		import clavia_app
+	}
+
+	# The dashboard (clavia-dashboard), which sets its own headers, its Content-Security-Policy
+	# among them. The Host header reaches it unchanged: its server actions refuse a request whose
+	# Origin does not match the Host it was sent to.
+	@dashboard path /dashboard /dashboard/*
+	handle @dashboard {
+		reverse_proxy {$CLAVIA_DASHBOARD_UPSTREAM:dashboard:3000}
+	}
+
+	# Anything else goes to the dashboard. Temporary: a cached permanent redirect could never be
+	# taken back the day this host serves something at "/".
+	handle {
+		redir * /dashboard 302
+	}
+}

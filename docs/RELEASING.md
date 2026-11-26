@@ -32,7 +32,7 @@ done
 ## 2. Open the release pull request
 
 Branch `chore/release-X.Y.Z`, pull request `Release X.Y.Z`, with `Part of` the release issue.
-It changes two things:
+It changes three things:
 
 - **`CHANGELOG.md`**: a section `## [X.Y.Z] - YYYY-MM-DD` under `## [Unreleased]`, in
   [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) form (Added, Changed, Fixed, Security),
@@ -43,6 +43,11 @@ It changes two things:
 - **`composer.json`**: `"version": "X.Y.Z"`. A version field changes Composer's lock hash, so
   refresh it without touching a package: `composer update --lock` (never `composer update` of
   `php-db/*`, which is pinned), and keep only the `content-hash` line of the lock file's diff.
+- **The same version everywhere a release is named**: `src/Configuration/Version.php` (what
+  `/healthz` and the console report), the chart's `version` and `appVersion`
+  (`deploy/helm/clavia/Chart.yaml`), and the Compose kit's defaults (`CLAVIA_VERSION` and
+  `CLAVIA_DASHBOARD_VERSION` in `deploy/compose/compose.yaml` and `env.example`).
+  `DeploymentKitTest` fails until they all agree with `composer.json`.
 
 Merge it once `composer check` is green.
 

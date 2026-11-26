@@ -119,6 +119,9 @@ docs/openapi/               management-api.yaml, the Management API's contract
 docs/site/                  the published API reference: Scalar over that document (docs.yml)
 docs/SECURITY-REVIEW.md     review of every adapter against the invariants
 docs/RELEASING.md           how a release is made: changelog, version, tag, the Release workflow
+docs/PRODUCTION.md          how a release is run: hosts, TLS, secrets, keys, first start, backups, upgrades
+deploy/compose/             production on one host: compose.yaml, the scheduler, the settings to fill in
+deploy/helm/clavia/         production on Kubernetes; files/Caddyfile is the production Caddyfile of both
 CHANGELOG.md                what each release changed, for operators
 conformance/                OpenID Foundation conformance: results and how to run them
 test/{Unit,Integration,Acceptance,Support}/
@@ -254,7 +257,12 @@ through Bonjour at seconds per lookup, and never a real suffix such as `.dev`.
 on `management.*`, to PHP-FPM (both answer `404` on `auth.*`)
 (`index.php` is the only script it runs), and reverse-proxies `/dashboard` to
 `CLAVIA_DASHBOARD_UPSTREAM` with the `Host` header kept. No `X-Forwarded-*` header is trusted
-unless `CLAVIA_TRUSTED_PROXIES` names the proxy, and the host never comes from a header.
+unless `CLAVIA_TRUSTED_PROXIES` names the proxy, and the host never comes from a header. In
+production (`deploy/helm/clavia/files/Caddyfile`, for Compose and Helm alike) Caddy is the edge with
+ACME, or plain HTTP behind an Ingress whose `X-Forwarded-For` it alone believes
+(`CLAVIA_CADDY_TRUSTED_PROXIES`), passing `{client_ip}` as `REMOTE_ADDR`; any other host is `404`, and
+PHP's `/healthz` is on `:8081` for probes. `DeploymentKitTest` fails when the two Caddyfiles part on a
+security rule, a scheduled command is missing from a kit, or a release's version is not everywhere.
 
 ### Five surfaces, five authentication mechanisms
 

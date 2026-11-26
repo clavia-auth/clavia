@@ -1,0 +1,29 @@
+{{- if .Values.migrations.enabled }}
+# The database migrations, before every install and upgrade: the new version's pods start on a schema
+# it knows. Forward only and one transaction each, so a failed Job leaves the schema as it was.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "clavia.fullname" . }}-migrate
+  labels:
+    {{- include "clavia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrate
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.migrations.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        {{- include "clavia.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: Never
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        {{- include "clavia.commandContainer" (dict "root" . "command" "db:migrate") | nindent 8 }}
+{{- end }}

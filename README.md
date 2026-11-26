@@ -148,6 +148,10 @@ the server sees. The essentials:
 
 ### In production
 
+**[`docs/PRODUCTION.md`](docs/PRODUCTION.md)** takes a release to production, with the Docker
+Compose file or the Helm chart in [`deploy/`](deploy): hosts and TLS, secrets, signing keys, the
+first start, backups and upgrades. In short:
+
 - **Keep signing keys out of the server**: use a KMS backend. With `aws-kms`, the task role needs
   only `kms:Sign` and `kms:GetPublicKey`. To rotate, create a new key version, make it
   `CLAVIA_SIGNING_KEY_REF`, and list the old one in `CLAVIA_SIGNING_RETIRED_KEY_REFS` until its

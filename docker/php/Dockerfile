@@ -35,10 +35,11 @@ COPY --from=app src ./src
 RUN composer install --no-dev --no-scripts --no-interaction --no-progress --prefer-dist \
         --classmap-authoritative
 
-# ── production ───────────────────────────────────────────────────────────────────────────────
-FROM base AS production
-COPY production.ini /usr/local/etc/php/conf.d/zz-clavia-production.ini
-COPY --from=vendor /app/vendor ./vendor
+# ── The application's files, readable by PHP-FPM's workers whatever the checkout's modes ─────
+# COPY keeps the build context's permissions, and the workers run as www-data: a checkout whose
+# files are 0600 would build an image that answers every request with a 500. Made readable here,
+# in a stage of their own, so the final image holds each file once.
+FROM base AS source
 COPY --from=app composer.json ./composer.json
 COPY --from=app bin ./bin
 COPY --from=app config ./config
@@ -47,6 +48,13 @@ COPY --from=app public ./public
 COPY --from=app src ./src
 COPY --from=app templates ./templates
 COPY --from=app docs/openapi ./docs/openapi
+RUN chmod -R a+rX,go-w /app
+
+# ── production ───────────────────────────────────────────────────────────────────────────────
+FROM base AS production
+COPY production.ini /usr/local/etc/php/conf.d/zz-clavia-production.ini
+COPY --from=vendor /app/vendor ./vendor
+COPY --from=source /app ./
 
 # ── development ──────────────────────────────────────────────────────────────────────────────
 FROM base AS development

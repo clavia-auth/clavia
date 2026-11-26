@@ -30,3 +30,6 @@ certs/*.pem
 
 # Claude Code: personal settings, never shared.
 .claude/settings.local.json
+
+# deploy/compose: the settings of a deployment, which hold its secrets
+deploy/compose/dashboard.env

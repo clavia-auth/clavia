@@ -1,0 +1,160 @@
+# Clavia in production on one host, with Docker Compose (docs/PRODUCTION.md).
+#
+#   cp env.example .env && cp dashboard.env.example dashboard.env   # then fill both in
+#   docker compose up -d
+#
+# What runs:
+#   caddy       the edge: TLS for auth.{domain} and management.{domain} (ACME), static files,
+#               PHP-FPM over FastCGI, the dashboard behind /dashboard
+#   php         the application, PHP-FPM, from ghcr.io/clavia-auth/clavia
+#   scheduler   bin/clavia's scheduled commands (scheduler.sh): jobs:run and webhooks:deliver every
+#               minute, audit:purge and clients:purge-unused daily
+#   dashboard   the administration dashboard, from ghcr.io/clavia-auth/clavia-dashboard
+#   db, redis   PostgreSQL 17 and Redis 7. Point the settings at managed services instead and
+#               delete these two services (and their depends_on) to keep storage elsewhere.
+#
+# And, once per `up`: `migrate` applies the database migrations before the application starts, and
+# `assets` copies the image's public/ for Caddy to serve, so an upgraded image's static files are
+# the ones served.
+
+name: clavia
+
+x-clavia: &clavia
+  image: ghcr.io/clavia-auth/clavia:${CLAVIA_VERSION:-0.4.0}
+  env_file: [.env]
+  restart: unless-stopped
+  networks: [clavia]
+
+services:
+  migrate:
+    <<: *clavia
+    command: ["php", "bin/clavia", "db:migrate"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false
+
+  assets:
+    image: ghcr.io/clavia-auth/clavia:${CLAVIA_VERSION:-0.4.0}
+    # The image's public/ into the volume Caddy serves, replaced whole.
+    command: ["sh", "-c", "rm -rf /shared/* && cp -a /app/public/. /shared/"]
+    restart: "no"
+    volumes:
+      - public:/shared
+    networks: [clavia]
+
+  php:
+    <<: *clavia
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+        required: false
+
+  scheduler:
+    <<: *clavia
+    command: ["sh", "/opt/clavia/scheduler.sh"]
+    volumes:
+      - ./scheduler.sh:/opt/clavia/scheduler.sh:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+        required: false
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      CLAVIA_ROOT_DOMAIN: ${CLAVIA_ROOT_DOMAIN:?set CLAVIA_ROOT_DOMAIN in .env}
+      CLAVIA_PHP_FASTCGI: php:9000
+      CLAVIA_DASHBOARD_UPSTREAM: dashboard:3000
+    volumes:
+      # One Caddyfile for Compose and the Helm chart.
+      - ../helm/clavia/files/Caddyfile:/etc/caddy/Caddyfile:ro
+      # The same path as in the php container: Caddy passes it to PHP-FPM as SCRIPT_FILENAME.
+      - public:/app/public:ro
+      # The certificates and the ACME account: keep this volume, or Caddy asks for new ones.
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      assets:
+        condition: service_completed_successfully
+      php:
+        condition: service_started
+    networks:
+      clavia:
+      # The dashboard calls auth.{domain} and management.{domain} from its own server: on this
+      # network, which only Caddy and the dashboard share, those names are Caddy. Never on the
+      # application's network: there they would resolve to a private address, which the server
+      # refuses for every URL it calls on an operator's say-so (the dashboard's back-channel
+      # logout URI among them).
+      edge:
+        aliases:
+          - auth.${CLAVIA_ROOT_DOMAIN}
+          - management.${CLAVIA_ROOT_DOMAIN}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  dashboard:
+    image: ghcr.io/clavia-auth/clavia-dashboard:${CLAVIA_DASHBOARD_VERSION:-0.4.0}
+    restart: unless-stopped
+    env_file: [dashboard.env]
+    depends_on:
+      redis:
+        condition: service_healthy
+        required: false
+    networks: [clavia, edge]
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    # The image takes the plain POSTGRES_* names; .env holds Clavia's.
+    environment:
+      POSTGRES_USER: ${CLAVIA_POSTGRES_USER:-clavia}
+      POSTGRES_PASSWORD: ${CLAVIA_POSTGRES_PASSWORD:?set CLAVIA_POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${CLAVIA_POSTGRES_DB:-clavia}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [clavia]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CLAVIA_POSTGRES_USER:-clavia} -d ${CLAVIA_POSTGRES_DB:-clavia}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Sessions and other short-lived material only: losing it signs everyone out and corrupts
+  # nothing. Kept on disk all the same, so a restart does not.
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    networks: [clavia]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+networks:
+  clavia:
+  edge:
+
+volumes:
+  public:
+  pgdata:
+  redisdata:
+  caddy-data:
+  caddy-config:

@@ -1,0 +1,38 @@
+{{- if .Values.ingress.enabled }}
+# Both hosts to Caddy, which keeps them apart: each has its own site, and the Management API and SCIM
+# answer only on management.{rootDomain}.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "clavia.fullname" . }}
+  labels:
+    {{- include "clavia.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.ingress.tlsSecretName }}
+  tls:
+    - secretName: {{ . }}
+      hosts:
+        - auth.{{ $.Values.rootDomain }}
+        - management.{{ $.Values.rootDomain }}
+  {{- end }}
+  rules:
+    {{- range list "auth" "management" }}
+    - host: {{ . }}.{{ $.Values.rootDomain }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "clavia.fullname" $ }}
+                port:
+                  name: http
+    {{- end }}
+{{- end }}

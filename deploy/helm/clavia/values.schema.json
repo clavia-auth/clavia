@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["rootDomain", "existingSecret"],
+  "properties": {
+    "rootDomain": {"type": "string", "minLength": 1, "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$"},
+    "existingSecret": {"type": "string", "minLength": 1},
+    "env": {"type": "object", "additionalProperties": {"type": "string"}},
+    "replicaCount": {"type": "integer", "minimum": 1},
+    "schedules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "schedule", "command"],
+        "properties": {
+          "name": {"type": "string", "pattern": "^[a-z0-9-]+$"},
+          "schedule": {"type": "string"},
+          "command": {"type": "string"}
+        }
+      }
+    },
+    "dashboard": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "existingSecret": {"type": "string"}
+      }
+    }
+  }
+}
