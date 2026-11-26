@@ -18,7 +18,8 @@ use RuntimeException;
  *
  * The stack's names (`auth.clavia.test`, `management.clavia.test`) are called as they are, over HTTPS on
  * port 443, which {@see Browser} connects to wherever Caddy is published (`CLAVIA_E2E_ADDRESS`, default
- * 127.0.0.1, and `CLAVIA_E2E_HTTPS_PORT`), so no `/etc/hosts` entry is needed and a URL in a response is
+ * 127.0.0.1, and `CLAVIA_E2E_HTTPS_PORT`; Mailpit's API at `CLAVIA_E2E_MAIL_PORT`), so no `/etc/hosts` entry
+ * is needed and a URL in a response is
  * one the suite can follow. `CLAVIA_E2E_CA` and `CLAVIA_E2E_SEED` move the CA and the seed output, which
  * `up.sh` leaves in `test/e2e/.work/`.
  */
@@ -29,6 +30,7 @@ final readonly class Stack
     public function __construct(
         public string $address,
         public int $httpsPort,
+        public int $mailPort,
         public string $certificateAuthority,
         public string $seedFile,
     ) {
@@ -41,6 +43,7 @@ final readonly class Stack
         return new self(
             self::address(self::setting('CLAVIA_E2E_ADDRESS', '127.0.0.1')),
             self::port(self::setting('CLAVIA_E2E_HTTPS_PORT', '443')),
+            self::port(self::setting('CLAVIA_E2E_MAIL_PORT', '8025')),
             self::existing(self::setting('CLAVIA_E2E_CA', $work . '/rootCA.pem')),
             self::existing(self::setting('CLAVIA_E2E_SEED', $work . '/seed.txt')),
         );
@@ -54,6 +57,12 @@ final readonly class Stack
     public function managementUrl(string $path = ''): string
     {
         return 'https://management.' . self::DOMAIN . $path;
+    }
+
+    /** Mailpit's HTTP API, where what the stack mailed is read back. */
+    public function mailUrl(string $path = ''): string
+    {
+        return sprintf('http://%s:%d%s', $this->address, $this->mailPort, $path);
     }
 
     /** The Management API's identifier, which is also where it is served. */
@@ -103,6 +112,7 @@ final readonly class Stack
      * that could lead elsewhere.
      *
      * @psalm-taint-escape ssrf
+     * @psalm-taint-escape url_component
      */
     private static function address(string $address): string
     {
@@ -113,11 +123,12 @@ final readonly class Stack
         return $address;
     }
 
+    /** @psalm-taint-escape ssrf */
     private static function port(string $port): int
     {
         $number = filter_var($port, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 65535]]);
         if ($number === false) {
-            throw new RuntimeException(sprintf('CLAVIA_E2E_HTTPS_PORT is %s, not a port.', $port));
+            throw new RuntimeException(sprintf('%s is not a port.', $port));
         }
 
         return $number;
