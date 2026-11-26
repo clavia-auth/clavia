@@ -10,6 +10,7 @@
 declare(strict_types=1);
 
 use Clavia\Adapter\Primary\Http\Shared\AuditContextMiddleware;
+use Clavia\Adapter\Primary\Http\Shared\MetricsMiddleware;
 use Clavia\Adapter\Primary\Http\Shared\MethodNotAllowedMiddleware;
 use Clavia\Adapter\Primary\Http\Shared\NotFoundHandler;
 use Laminas\Stratigility\Middleware\ErrorHandler;
@@ -32,6 +33,8 @@ return static function (Application $app): void {
     $app->pipe(AuditContextMiddleware::class);
 
     $app->pipe(RouteMiddleware::class);
+    // After routing, so a request is timed by its route's name; before dispatch, so everything is.
+    $app->pipe(MetricsMiddleware::class);
     $app->pipe(MethodNotAllowedMiddleware::class);
     $app->pipe(DispatchMiddleware::class);
 

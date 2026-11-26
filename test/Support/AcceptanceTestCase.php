@@ -149,6 +149,8 @@ abstract class AcceptanceTestCase extends TestCase
 
     /**
      * @param array<non-empty-string, string> $headers
+     * @param array<non-empty-string, string> $serverParams What the web server passes besides the
+     *                                                      client address (a FastCGI parameter).
      */
     protected function request(
         string $method,
@@ -156,6 +158,7 @@ abstract class AcceptanceTestCase extends TestCase
         array $headers = [],
         string $host = self::AUTH_HOST,
         string $body = '',
+        array $serverParams = [],
     ): ResponseInterface {
         $stream = new Stream('php://temp', 'wb+');
         $stream->write($body);
@@ -168,7 +171,7 @@ abstract class AcceptanceTestCase extends TestCase
         }
 
         $request = new ServerRequest(
-            serverParams: ['REMOTE_ADDR' => $this->clientAddress],
+            serverParams: ['REMOTE_ADDR' => $this->clientAddress] + $serverParams,
             uri: 'https://' . $host . $path,
             method: $method,
             body: $stream,

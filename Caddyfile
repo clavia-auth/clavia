@@ -40,6 +40,31 @@
 	}
 }
 
+# The application, as the internal listener reaches it: the FastCGI parameter CLAVIA_LISTENER says
+# so, and a client cannot set it (its headers reach PHP as HTTP_*). /metrics answers only then.
+(clavia_internal) {
+	root * /app/public
+	php_fastcgi php:9000 {
+		try_files index.php
+		env CLAVIA_LISTENER internal
+	}
+}
+
+# ── The internal listener: /healthz and /metrics, not published ─
+# docker-compose.yml publishes 80 and 443 only: read it from inside, with
+# `docker compose exec caddy wget -qO- http://127.0.0.1:8081/metrics`.
+http://:8081 {
+	handle /healthz {
+		import clavia_internal
+	}
+	handle /metrics {
+		import clavia_internal
+	}
+	handle {
+		respond 404
+	}
+}
+
 # ── HTTP → HTTPS redirect ─────────────────────────────────────
 # auto_https off disables the automatic redirect, so it is declared
 # explicitly to give the published port 80 something to do.
@@ -91,6 +116,10 @@ auth.{$CLAVIA_ROOT_DOMAIN} {
 		respond 404
 	}
 	handle /scim/v2/* {
+		respond 404
+	}
+	# Metrics are the internal listener's alone.
+	handle /metrics {
 		respond 404
 	}
 
@@ -157,6 +186,10 @@ management.{$CLAVIA_ROOT_DOMAIN} {
 			defer
 		}
 		import clavia_app
+	}
+
+	handle /metrics {
+		respond 404
 	}
 
 	# The dashboard, on the host in development (`npm run dev`, port 3000) or

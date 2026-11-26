@@ -1,0 +1,41 @@
+{{- if .Values.metrics.service.enabled }}
+# The internal listener, for Prometheus: /metrics answers only here (CLAVIA_LISTENER=internal), never
+# through the Ingress. Each pod's numbers are the same, shared through Redis: scrape the Service, not
+# every pod.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "clavia.fullname" . }}-metrics
+  labels:
+    {{- include "clavia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: metrics
+spec:
+  selector:
+    {{- include "clavia.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+  ports:
+    - name: metrics
+      port: 8081
+      targetPort: internal
+{{- if .Values.metrics.serviceMonitor.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "clavia.fullname" . }}
+  labels:
+    {{- include "clavia.labels" . | nindent 4 }}
+    {{- with .Values.metrics.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "clavia.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: metrics
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: {{ .Values.metrics.serviceMonitor.interval }}
+{{- end }}
+{{- end }}

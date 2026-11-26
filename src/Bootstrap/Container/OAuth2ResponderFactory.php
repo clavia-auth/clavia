@@ -13,6 +13,7 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Adapter\Primary\Http\OAuth2\OAuth2Responder;
 use Clavia\Adapter\Primary\Http\Shared\ErrorResponder;
+use Clavia\Application\Port\Metrics;
 use Clavia\Configuration\Settings;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
@@ -28,6 +29,9 @@ final class OAuth2ResponderFactory
         /** @var Settings $settings */
         $settings = $container->get(Settings::class);
 
-        return new OAuth2Responder($responses, $errors, $settings->issuer());
+        /** @var Metrics $metrics */
+        $metrics = $container->get(Metrics::class);
+
+        return new OAuth2Responder($responses, $errors, $settings->issuer(), $metrics);
     }
 }

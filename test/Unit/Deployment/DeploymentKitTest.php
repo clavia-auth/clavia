@@ -26,7 +26,7 @@ final class DeploymentKitTest extends TestCase
 
     /** The directives of a Caddyfile that are security rules. */
     private const string SECURITY_RULE = '/^(Strict-Transport-Security|X-Content-Type-Options|X-Frame-Options'
-        . '|Referrer-Policy|-Status|Cache-Control "no-store"|@sensitive|handle \/(api|scim|auth\/static)'
+        . '|Referrer-Policy|-Status|Cache-Control "no-store"|@sensitive|handle \/(api|scim|auth\/static|metrics)'
         . '|try_files|@dashboard|redir \* \/dashboard)/';
 
     /** What the console's commands ask to be run on a schedule (their own descriptions say so). */
@@ -67,6 +67,19 @@ final class DeploymentKitTest extends TestCase
         $production = array_map('trim', explode("\n", self::read('deploy/helm/clavia/files/Caddyfile')));
 
         self::assertContains('trusted_proxies_strict', $production);
+    }
+
+    /** Only the internal listener marks its requests: /metrics answers nowhere else (#23). */
+    public function testOnlyTheInternalListenerMarksItsRequests(): void
+    {
+        foreach (['Caddyfile', 'deploy/helm/clavia/files/Caddyfile'] as $path) {
+            $caddyfile = self::read($path);
+
+            self::assertSame(1, substr_count($caddyfile, 'env CLAVIA_LISTENER internal'), $path);
+            self::assertSame(2, substr_count($caddyfile, 'import clavia_internal'), $path . ': /healthz and /metrics.');
+            $refused = substr_count($caddyfile, "handle /metrics {\n\t\trespond 404");
+            self::assertSame(2, $refused, $path . ': both hosts.');
+        }
     }
 
     public function testThereAreSecurityRulesToCompare(): void

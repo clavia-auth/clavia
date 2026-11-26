@@ -8,6 +8,13 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ### Added
 
+- **Prometheus metrics** (#23): tokens issued, sign-ins, sign-in refusals by reason, OAuth errors by
+  code, mail sent and failed, and request latency by route, at `/metrics` on the internal listener
+  (Caddy's port 8081, never `auth.*` or `management.*`), shared by every process through Redis. New
+  setting **`CLAVIA_METRICS_ENABLED`** (on). The Helm chart gains a metrics Service and an optional
+  ServiceMonitor. A proxy of your own in front of PHP-FPM must answer `/metrics` with `404` on both hosts,
+  and pass `CLAVIA_LISTENER=internal` only from an internal listener.
+
 - **A production deployment kit** (#22): [`docs/PRODUCTION.md`](docs/PRODUCTION.md), a guide to hosts,
   TLS, secrets, signing keys, the first start (the dashboard's client and the first administrator),
   backups and upgrades; a Docker Compose file for one host ([`deploy/compose`](deploy/compose), with

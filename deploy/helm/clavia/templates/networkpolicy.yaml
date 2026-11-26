@@ -18,4 +18,10 @@ spec:
         {{- toYaml .Values.networkPolicy.from | nindent 8 }}
       ports:
         - port: http
+    {{- with .Values.networkPolicy.metricsFrom }}
+    - from:
+        {{- toYaml . | nindent 8 }}
+      ports:
+        - port: internal
+    {{- end }}
 {{- end }}

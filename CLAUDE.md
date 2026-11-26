@@ -210,8 +210,8 @@ A violation is a build failure, not a review comment.
   laminas-servicemanager), pipes the middleware (`config/pipeline.php`) and the routes
   (`config/routes.php`), runs the request, then calls `fastcgi_finish_request()` and runs the
   deferred tasks (`System\AfterResponseTasks`).
-- **The pipeline**: `ErrorHandler` → `AuditContextMiddleware` → routing → 405 → dispatch →
-  404. There is no implicit `HEAD` or `OPTIONS`: a route answers the methods it lists. Mezzio's
+- **The pipeline**: `ErrorHandler` → `AuditContextMiddleware` → routing → `MetricsMiddleware` →
+  405 → dispatch → 404. There is no implicit `HEAD` or `OPTIONS`: a route answers the methods it lists. Mezzio's
   `ImplicitHeadMiddleware` is absent on purpose, because it would answer `HEAD
   /oauth2/authorize` by running the handler, which mints a code.
 - **Per-surface authentication** is attached to route groups in `config/routes.php`, never
@@ -987,6 +987,24 @@ switching `provisionable` (`UpdateRole`) works out again everyone a group of the
 A provisionable role holding a permission on a system API is refused when the role is defined, given a
 permission, or switched (`Role::define()`, `GrantedPermission::$onSystemApi`), and by the database
 (`provisionable_role_check`): no group can make anyone an administrator of this server.
+
+### Metrics
+
+Prometheus metrics (#23), on by default (`CLAVIA_METRICS_ENABLED`). The port is
+`Application\Port\Metrics` (`count`, `observe`, `samples`); the catalogue is `Application\Metrics\Metric`,
+each metric with fixed labels whose values are kinds (`LabelValue`: a safe alphabet, 64 characters),
+never an account, a client or an address. What records:
+- `MetricsSubscriber`, an event subscriber: tokens issued by grant, sessions by `amr`, refusals by
+  reason and factor;
+- `OAuth2Responder`: every OAuth error it answers or redirects, by endpoint and code;
+- `CountingMailer`, wrapping the mailer: `sent` or `failed`;
+- `MetricsMiddleware`: request latency by route name, method and status.
+
+`RedisMetrics` keeps a hash per metric (a histogram's cumulative buckets, sum and count), buffers a
+request's samples, and asks the deferred tasks for one pipelined flush whenever it holds samples
+again; a failed write is logged and dropped. `/metrics` (`MetricsHandler`, text format 0.0.4)
+answers only a request carrying the FastCGI parameter `CLAVIA_LISTENER=internal`, which only Caddy's
+`:8081` site sets (a client's headers reach PHP as `HTTP_*`), and both hosts answer it `404` at Caddy.
 
 ### Domain events and the audit trail
 

@@ -11,6 +11,9 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\OAuth2;
 
+use Clavia\Application\Metrics\Metric;
+use Clavia\Application\Metrics\NoMetrics;
+use Clavia\Application\Port\Metrics;
 use Clavia\Adapter\Primary\Http\Shared\ErrorPage;
 use Clavia\Adapter\Primary\Http\Shared\ErrorResponder;
 use Clavia\Application\Clients\Registration\RegistrationRefused;
@@ -46,6 +49,7 @@ final readonly class OAuth2Responder
         private ResponseFactoryInterface $responses,
         private ErrorResponder $errors,
         private string $issuer,
+        private Metrics $metrics = new NoMetrics(),
     ) {
     }
 
@@ -89,6 +93,7 @@ final readonly class OAuth2Responder
      */
     public function tokenError(OAuth2Error $error): ResponseInterface
     {
+        $this->metrics->count(Metric::OAuthErrors, ['endpoint' => 'token', 'error' => $error->error->value]);
         if ($error->dpopNonce !== null) {
             // RFC 9449 §8: `use_dpop_nonce` is a 400 carrying the nonce to use.
             return new JsonResponse(
@@ -119,6 +124,11 @@ final readonly class OAuth2Responder
      */
     public function tooManyFailures(TooManyFailedRequests $refusal): ResponseInterface
     {
+        $this->metrics->count(Metric::OAuthErrors, [
+            'endpoint' => 'token',
+            'error' => ErrorCode::TemporarilyUnavailable->value,
+        ]);
+
         return new JsonResponse(
             [
                 'error' => ErrorCode::TemporarilyUnavailable->value,
@@ -171,6 +181,7 @@ final readonly class OAuth2Responder
      */
     public function authorizationError(ServerRequestInterface $request, OAuth2Error $error): ResponseInterface
     {
+        $this->metrics->count(Metric::OAuthErrors, ['endpoint' => 'authorize', 'error' => $error->error->value]);
         return $this->errors->respond(
             $request,
             StatusCodeInterface::STATUS_BAD_REQUEST,
@@ -195,6 +206,10 @@ final readonly class OAuth2Responder
      */
     public function redirectToClient(string $redirectUri, array $parameters): ResponseInterface
     {
+        // An error the authorization endpoint sends back to the client (RFC 6749 §4.1.2.1).
+        if (isset($parameters['error'])) {
+            $this->metrics->count(Metric::OAuthErrors, ['endpoint' => 'authorize', 'error' => $parameters['error']]);
+        }
         $parameters = array_filter(
             // The issuer is this server's to state: it replaces whatever a caller passed.
             [...$parameters, 'iss' => $this->issuer],

@@ -267,6 +267,24 @@ migrations run over it. Practise it on a copy.
   else.
 - **Health**: `GET /healthz` answers `{"status":"ok","version":"…"}` without touching the database
   or Redis.
+- **Metrics**, for Prometheus, at `/metrics` on the internal listener: Caddy's port 8081, which
+  nothing publishes. It answers only there, and is `404` on both hosts.
+  - Compose: a Prometheus on the `clavia` network scrapes `caddy:8081`.
+  - Kubernetes: the chart's `<release>-metrics` Service, or its ServiceMonitor
+    (`metrics.serviceMonitor.enabled`). Every pod reports the same numbers, kept in Redis, so
+    scrape the Service and not every pod.
+
+  | Metric | Labels | What |
+  |---|---|---|
+  | `clavia_tokens_issued_total` | `grant_type` | Access tokens issued |
+  | `clavia_sign_ins_total` | `methods` (`pwd`, `pwd+otp+mfa`…) | Sessions established |
+  | `clavia_sign_in_refusals_total` | `reason`, `method` | Sign-ins refused (`wrong_password`, `throttled`…) |
+  | `clavia_oauth_errors_total` | `endpoint` (`token`, `authorize`), `error` | OAuth error answers |
+  | `clavia_mail_total` | `outcome` (`sent`, `failed`) | Mail handed to the mail server |
+  | `clavia_http_request_duration_seconds` | `route`, `method`, `status` | Request latency (a histogram) |
+
+  Labels are kinds, never an account, a client or an address. A request's samples are written to
+  Redis in one round trip once its response is out. `CLAVIA_METRICS_ENABLED=false` measures nothing.
 - **The audit trail**: `GET /api/v1/audit-events`, or the dashboard, or stream it to your SIEM with
   webhooks.
 
