@@ -2,7 +2,8 @@ name: End to end
 
 # Clavia as it is deployed (docs/design/end-to-end-scenarios.md): the production topology of
 # test/e2e/compose.yaml, built from this pull request, started and checked from outside over HTTPS.
-# The scenarios that drive it come with the next slices.
+# Behat then drives it from outside (test/e2e/features); the dashboard's Playwright suite joins it in the
+# dashboard's own workflow.
 on:
   push:
     branches: [main]
@@ -17,7 +18,7 @@ permissions:
 
 jobs:
   stack:
-    name: The stack starts, seeded, and answers as deployed
+    name: The stack starts, and the scenarios pass against it
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -35,8 +36,30 @@ jobs:
       - name: Start the stack
         run: test/e2e/up.sh
 
-      - name: Check it from outside
+      - name: Check it answers
         run: test/e2e/verify.sh
+
+      # PHP and the dev dependencies only to run Behat: the stack itself is in containers.
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: intl, curl, openssl
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Scenarios
+        run: composer e2e
+
+      - name: Scenario results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: behat
+          path: build/behat
+          retention-days: 7
 
       - name: Server logs
         if: failure()
