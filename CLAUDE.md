@@ -839,6 +839,28 @@ is refused at load. It reports every violation, never repeats a value, coerces e
 not an integer), and is strict where the specification is loose (undescribed query parameters, a
 body sent to an operation without one, a single value or a form field sent twice).
 
+### The authorization server's document
+
+`docs/openapi/authorization-server.yaml` (#93, `docs/design/authorization-server-openapi.md`)
+describes every endpoint of `auth.{domain}` an application or an API calls: token (one operation, a
+`oneOf` per grant), PAR, introspection, revocation, device code, registration (RFC 7591, 7592),
+userinfo, the JWKS, both discovery documents, and the browser's two, authorize and end session
+(their parameters and refusals; a redirect's `Location` checked for presence, pages opaque HTML).
+Forms in (`FormBody`), RFC 6749 §5.2 error documents out, with the codes each endpoint gives.
+
+**It describes, it never gates**: nothing at runtime reads it, so the handlers keep RFC 6749's
+shapes and order (client authentication before the grant). It is kept true by tests:
+- every acceptance answer to `auth.*` that matches one of its operations is checked against it
+  (`AuthorizationServerContract`, from `AcceptanceTestCase::request()`); requests are not checked;
+- `AuthorizationServerCoverageTest`: its operations and the routes under `/oauth2`, `/oidc` and
+  `/.well-known` are the same set, registration's included;
+- `DiscoveryAgreesWithDocumentTest`: discovery's grant types, response types, client authentication
+  methods (introspection's are only those with a secret), PKCE methods and DPoP algorithms are the
+  document's enums, and the token request has one schema per grant;
+- `OpenApiDocumentationTest` and `OpenApiExamplesTest`, as for the Management API.
+
+A new endpoint, a grant, a refusal code or a header is a change to this document too.
+
 ### Bulk jobs on the users
 
 `POST /api/v1/jobs/users-imports` (`create:users`, `?connection=` a pool) takes NDJSON, one account
@@ -1350,7 +1372,8 @@ Tests state behaviour from the specifications, and name the RFC section where it
   picks it up.
 - **An endpoint**: a route in `config/routes.php` (with the methods it answers), a handler that
   translates, one use case. If it is advertised, add it to `ProviderMetadata`; `OidcTest` fetches
-  it.
+  it. On `auth.*` under `/oauth2`, `/oidc` or `/.well-known`, describe it in
+  `docs/openapi/authorization-server.yaml`: `AuthorizationServerCoverageTest` fails until it is.
 - **A Management API operation**: the path in `docs/openapi/management-api.yaml` (a short
   `summary`, examples of its body and its success), a route behind `ManagementApiMiddleware`, a
   handler, a use case. `ManagementApiTest` fails if the routes and the

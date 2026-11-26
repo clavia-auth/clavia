@@ -49,6 +49,21 @@ tags:
   - name: devices
     x-displayName: Devices
     description: Signing in on a device with no browser, or no keyboard (RFC 8628).
+  - name: browser
+    x-displayName: Browser
+    description: |
+      Where an application sends the person's browser: to sign in and authorize (RFC 6749 §4.1.1,
+      OpenID Connect Core §3.1.2), and to sign out (OpenID Connect RP-Initiated Logout 1.0). These are
+      navigations, not calls: they answer with redirects and pages.
+  - name: openid-connect
+    x-displayName: OpenID Connect
+    description: What a relying party reads about the person, and about this server (OpenID Connect Core §5.3, Discovery 1.0, RFC 8414).
+  - name: registration
+    x-displayName: Registration
+    description: |
+      Clients registering themselves with an initial access token (RFC 7591), and managing their
+      registration (RFC 7592). Only when the deployment sets `CLAVIA_CLIENT_REGISTRATION=token`;
+      otherwise these paths do not exist.
 
 paths:
   /oauth2/token:
@@ -409,6 +424,394 @@ paths:
         '500':
           $ref: '#/components/responses/ServerError'
 
+  /oauth2/authorize:
+    get:
+      tags: [browser]
+      summary: Authorize
+      operationId: authorize
+      description: |
+        Where an application sends the person's browser to sign in and authorize it (RFC 6749 §4.1.1,
+        OAuth 2.1 §4.1.1, OpenID Connect Core §3.1.2.1). Not a call: the browser follows redirects and
+        sees pages.
+
+        The order is fixed:
+        1. **The client and the redirect URI** are settled, or the request is refused here, never
+           redirected (`400`, a page for a browser, the error document for a program). Redirect URIs
+           match registered ones exactly.
+        2. **A pushed request** (RFC 9126): `client_id` and `request_uri` alone stand for what was pushed
+           to `/oauth2/par`. A client registered with `require_pushed_authorization_requests` must push.
+        3. **Everything else is validated**: a repeated parameter, a request object (`request`, any other
+           `request_uri`), the response type, PKCE (S256 only), scope, `audience`, `prompt`, `max_age`.
+           These refusals go **to the redirect URI**, with `state` and `iss` (RFC 9207).
+        4. **The person**: with no session, or one that does not meet `prompt`, `max_age` or the levels
+           asked for (`acr_values`, the client's and the API's MFA policy), the browser goes to the
+           sign-in page (`303`), and comes back here when done. `prompt=none` answers `login_required`
+           or `interaction_required` instead.
+        5. **Roles and consent**: somebody with no role on an API that enforces them gets
+           `access_denied`; a request that needs consent goes to the consent screen (`303`).
+        6. **The code** goes to the redirect URI (`302`) with `state` and `iss`. It is good once, briefly,
+           for this client, this redirect URI and this PKCE challenge.
+      parameters:
+        - {$ref: '#/components/parameters/ResponseType'}
+        - {$ref: '#/components/parameters/ClientId'}
+        - {$ref: '#/components/parameters/RedirectUri'}
+        - {$ref: '#/components/parameters/AuthorizationScope'}
+        - {$ref: '#/components/parameters/State'}
+        - {$ref: '#/components/parameters/CodeChallenge'}
+        - {$ref: '#/components/parameters/CodeChallengeMethod'}
+        - {$ref: '#/components/parameters/Audience'}
+        - {$ref: '#/components/parameters/Nonce'}
+        - {$ref: '#/components/parameters/Prompt'}
+        - {$ref: '#/components/parameters/MaxAge'}
+        - {$ref: '#/components/parameters/AcrValues'}
+        - {$ref: '#/components/parameters/DpopJkt'}
+        - {$ref: '#/components/parameters/RequestUri'}
+      responses:
+        '302':
+          $ref: '#/components/responses/ToTheClient'
+        '303':
+          $ref: '#/components/responses/WithinTheServer'
+        '400':
+          $ref: '#/components/responses/AuthorizationRefused'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags: [browser]
+      summary: Authorize by form
+      operationId: authorizeByForm
+      description: |
+        The same request as a form posted by the browser (OpenID Connect Core §3.1.2.1): the parameters
+        in the body instead of the query, decided exactly as `GET /oauth2/authorize` decides them.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AuthorizationRequest'
+            examples:
+              AuthorizationRequest:
+                $ref: '#/components/examples/AuthorizationRequest'
+      responses:
+        '302':
+          $ref: '#/components/responses/ToTheClient'
+        '303':
+          $ref: '#/components/responses/WithinTheServer'
+        '400':
+          $ref: '#/components/responses/AuthorizationRefused'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /oidc/logout:
+    get:
+      tags: [browser]
+      summary: Sign out
+      operationId: endSession
+      description: |
+        Where an application sends the browser to end the person's session (OpenID Connect
+        RP-Initiated Logout 1.0 §2).
+
+        The session ends at once when `id_token_hint` is an ID token this server signed (with a
+        published key, retired ones included; its expiry is not checked) for the session's person.
+        Anything less shows a confirmation page, whose form posts back here with `confirmed=yes`. Then
+        the browser goes to `post_logout_redirect_uri`, when it is one the client registered (exactly,
+        with `state`), or to the sign-in page. Every application signed in through the session is told
+        by back-channel logout, when it registered for it.
+      parameters:
+        - {$ref: '#/components/parameters/IdTokenHint'}
+        - {$ref: '#/components/parameters/PostLogoutRedirectUri'}
+        - {$ref: '#/components/parameters/LogoutState'}
+        - {$ref: '#/components/parameters/LogoutClientId'}
+      responses:
+        '200':
+          $ref: '#/components/responses/Page'
+        '302':
+          $ref: '#/components/responses/AfterSignOut'
+        '303':
+          $ref: '#/components/responses/AfterSignOut'
+        '400':
+          $ref: '#/components/responses/Page'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags: [browser]
+      summary: Sign out by form
+      operationId: endSessionByForm
+      description: |
+        The same request as a form, and the confirmation page's answer (`confirmed=yes`), which only
+        a POST carries.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EndSessionRequest'
+            examples:
+              EndSessionRequest:
+                $ref: '#/components/examples/EndSessionRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/Page'
+        '302':
+          $ref: '#/components/responses/AfterSignOut'
+        '303':
+          $ref: '#/components/responses/AfterSignOut'
+        '400':
+          $ref: '#/components/responses/Page'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /oidc/userinfo:
+    get:
+      tags: [openid-connect]
+      summary: Get the person's claims
+      operationId: getUserInfo
+      description: |
+        What the access token lets the application know about the person (OpenID Connect Core §5.3):
+        `sub`, and the claims the token's scopes release (`profile`, `email`), then the application's
+        custom claims meant for userinfo. A claim with no value is left out, never null.
+
+        The token comes in the `Authorization` header only: `Bearer`, or `DPoP` with a proof when it
+        is bound (RFC 9449 §7). It must be live, for a person (a machine token describes nobody), and
+        carry `openid`.
+      security:
+        - accessToken: []
+        - dpopAccessToken: []
+      parameters:
+        - $ref: '#/components/parameters/DPoP'
+      responses:
+        '200':
+          $ref: '#/components/responses/UserInfo'
+        '400':
+          $ref: '#/components/responses/BearerRefused'
+        '401':
+          $ref: '#/components/responses/BearerRefused'
+        '403':
+          $ref: '#/components/responses/BearerRefused'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags: [openid-connect]
+      summary: Get the person's claims by POST
+      operationId: postUserInfo
+      description: The same as `GET`, for clients that prefer POST (OpenID Connect Core §5.3.1). No body is read.
+      security:
+        - accessToken: []
+        - dpopAccessToken: []
+      parameters:
+        - $ref: '#/components/parameters/DPoP'
+      responses:
+        '200':
+          $ref: '#/components/responses/UserInfo'
+        '400':
+          $ref: '#/components/responses/BearerRefused'
+        '401':
+          $ref: '#/components/responses/BearerRefused'
+        '403':
+          $ref: '#/components/responses/BearerRefused'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /oidc/jwks.json:
+    get:
+      tags: [openid-connect]
+      summary: Get the signing keys
+      operationId: getJwks
+      description: |
+        The public keys tokens are signed with (RFC 7517 §5): the active key and the retired ones whose
+        tokens may still be live. Pick a key by the token's `kid`, and the algorithm by the key's `alg`,
+        never the token's header. A token with an unknown `kid` is a reason to fetch this again, once.
+      responses:
+        '200':
+          description: The key set. Cacheable for a short while.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PublicCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JwkSet'
+              examples:
+                JwkSet:
+                  $ref: '#/components/examples/JwkSet'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /.well-known/openid-configuration:
+    get:
+      tags: [openid-connect]
+      summary: Get the discovery document
+      operationId: getOpenIdConfiguration
+      description: |
+        This server's metadata (OpenID Connect Discovery 1.0 §4): its endpoints and what it supports. It
+        names only what exists (`registration_endpoint` only when registration is on), and states every
+        value whose default would mislead.
+      responses:
+        '200':
+          $ref: '#/components/responses/Metadata'
+
+  /.well-known/oauth-authorization-server:
+    get:
+      tags: [openid-connect]
+      summary: Get the server metadata
+      operationId: getAuthorizationServerMetadata
+      description: The same document under RFC 8414 §3's name, for OAuth clients that look there.
+      responses:
+        '200':
+          $ref: '#/components/responses/Metadata'
+
+  /oauth2/register:
+    post:
+      tags: [registration]
+      summary: Register a client
+      operationId: registerClient
+      description: |
+        A client registers itself (RFC 7591 §3.1), holding an initial access token an operator issued.
+        The client is always third-party (a `tpc_` id), so it never reaches a system API, and people are
+        asked for their consent. It holds the code grant, and the refresh grant if it asks; it
+        authenticates with `client_secret_basic` (the default), `client_secret_post` or `none`.
+
+        In order: the client address is counted (`CLAVIA_CLIENT_REGISTRATION_MAX_PER_ADDRESS` per
+        `CLAVIA_CLIENT_REGISTRATION_WINDOW`, `429` past it); the initial access token is checked; the
+        metadata is read. A refused registration spends no use of the token. The answer carries the
+        client secret and the registration access token, once.
+      security:
+        - initialAccessToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientMetadata'
+            examples:
+              ClientMetadata:
+                $ref: '#/components/examples/ClientMetadata'
+      responses:
+        '201':
+          description: Registered. The secrets are shown once.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisteredClient'
+              examples:
+                RegisteredClient:
+                  $ref: '#/components/examples/RegisteredClient'
+        '400':
+          $ref: '#/components/responses/RegistrationRefused'
+        '401':
+          $ref: '#/components/responses/BearerRefused'
+        '404':
+          $ref: '#/components/responses/RegistrationOff'
+        '429':
+          $ref: '#/components/responses/TooManyRegistrations'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /oauth2/register/{client_id}:
+    parameters:
+      - name: client_id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 64
+    get:
+      tags: [registration]
+      summary: Read a registration
+      operationId: readRegistration
+      description: |
+        The client's metadata, without its secret (RFC 7592 §2.1), to the registration access token of
+        this client only. Rotates nothing.
+      security:
+        - registrationAccessToken: []
+      responses:
+        '200':
+          description: The client's metadata.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientConfiguration'
+              examples:
+                ClientConfiguration:
+                  $ref: '#/components/examples/ClientConfiguration'
+        '400':
+          $ref: '#/components/responses/BearerRefused'
+        '401':
+          $ref: '#/components/responses/BearerRefused'
+        '404':
+          $ref: '#/components/responses/RegistrationOff'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    put:
+      tags: [registration]
+      summary: Update a registration
+      operationId: updateRegistration
+      description: |
+        Replaces the client's metadata (RFC 7592 §2.2), held to the registration's rules: every member
+        stated, one left out taking its default (leave out `grant_types` and the refresh grant goes).
+        The body names `client_id`; it may not name the server's own members
+        (`registration_access_token`, `registration_client_uri`, `client_secret_expires_at`,
+        `client_id_issued_at`), a `client_secret` other than the current one, or another client type.
+
+        The answer carries a **new registration access token**: the old one stops working at once. The
+        id, the secret and the operator's settings stay.
+      security:
+        - registrationAccessToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientMetadataUpdate'
+            examples:
+              ClientMetadataUpdate:
+                $ref: '#/components/examples/ClientMetadataUpdate'
+      responses:
+        '200':
+          description: Updated, with the new registration access token.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientConfiguration'
+              examples:
+                UpdatedClientConfiguration:
+                  $ref: '#/components/examples/UpdatedClientConfiguration'
+        '400':
+          $ref: '#/components/responses/RegistrationRefused'
+        '401':
+          $ref: '#/components/responses/BearerRefused'
+        '404':
+          $ref: '#/components/responses/RegistrationOff'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      tags: [registration]
+      summary: Delete a registration
+      operationId: deleteRegistration
+      description: The client deletes itself (RFC 7592 §2.3).
+      security:
+        - registrationAccessToken: []
+      responses:
+        '204':
+          description: Deleted.
+        '400':
+          $ref: '#/components/responses/BearerRefused'
+        '401':
+          $ref: '#/components/responses/BearerRefused'
+        '404':
+          $ref: '#/components/responses/RegistrationOff'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
 components:
   securitySchemes:
     clientSecretBasic:
@@ -419,8 +822,115 @@ components:
         password, each form-encoded before they are joined. A client registered for
         `client_secret_post` or `none` sends no `Authorization` header: its `client_id` (and
         `client_secret`) are body fields, and this requirement is then the empty one.
+    accessToken:
+      type: http
+      scheme: bearer
+      description: An access token (RFC 6750 §2.1), in the `Authorization` header only.
+    dpopAccessToken:
+      type: http
+      scheme: DPoP
+      description: A DPoP-bound access token (RFC 9449 §7.1), with a proof for this request in `DPoP`.
+    initialAccessToken:
+      type: http
+      scheme: bearer
+      description: An initial access token (RFC 7591 §3), issued by an operator. Never a DPoP token.
+    registrationAccessToken:
+      type: http
+      scheme: bearer
+      description: The registration access token of this client (RFC 7592 §3), from its registration or its last update.
 
   parameters:
+    ResponseType:
+      name: response_type
+      in: query
+      required: true
+      description: '`code`: the only response type (OAuth 2.1 §4.1.1).'
+      schema: {type: string, enum: [code]}
+    ClientId:
+      name: client_id
+      in: query
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 64}
+    RedirectUri:
+      name: redirect_uri
+      in: query
+      description: One of the client's registered redirect URIs, exactly. Required unless the client registered only one.
+      schema: {type: string}
+    AuthorizationScope:
+      name: scope
+      in: query
+      description: Space-separated scopes; `openid` for an ID token.
+      schema: {$ref: '#/components/schemas/Scope'}
+    State:
+      name: state
+      in: query
+      description: Sent back unchanged to the redirect URI.
+      schema: {type: string}
+    CodeChallenge:
+      name: code_challenge
+      in: query
+      description: The base64url SHA-256 of the PKCE verifier (RFC 7636 §4.2).
+      schema: {type: string, minLength: 43, maxLength: 43}
+    CodeChallengeMethod:
+      name: code_challenge_method
+      in: query
+      description: '`S256`, the only method: `plain` does not exist here.'
+      schema: {type: string, enum: [S256]}
+    Audience:
+      name: audience
+      in: query
+      description: The identifier of the API whose permissions the scope may hold. Unknown is `invalid_target`.
+      schema: {type: string}
+    Nonce:
+      name: nonce
+      in: query
+      description: Copied into the ID token (OpenID Connect Core §3.1.2.1).
+      schema: {type: string}
+    Prompt:
+      name: prompt
+      in: query
+      description: '`none`, `login`, `consent` or `select_account`, space-separated (OpenID Connect Core §3.1.2.1).'
+      schema: {type: string}
+    MaxAge:
+      name: max_age
+      in: query
+      description: Seconds since the person last signed in, at most; older asks them again.
+      schema: {type: string, pattern: '^[0-9]+$'}
+    AcrValues:
+      name: acr_values
+      in: query
+      description: Levels of authentication, space-separated, any one accepted (OpenID Connect Core §3.1.2.1).
+      schema: {type: string}
+    DpopJkt:
+      name: dpop_jkt
+      in: query
+      description: The thumbprint of the key the code is bound to (RFC 9449 §10).
+      schema: {type: string}
+    RequestUri:
+      name: request_uri
+      in: query
+      description: The handle `/oauth2/par` answered (RFC 9126 §4), with `client_id` alone.
+      schema: {type: string, pattern: '^urn:ietf:params:oauth:request_uri:'}
+    IdTokenHint:
+      name: id_token_hint
+      in: query
+      description: An ID token this server issued for the session's person; with it, no confirmation is asked.
+      schema: {type: string}
+    PostLogoutRedirectUri:
+      name: post_logout_redirect_uri
+      in: query
+      description: Where to send the browser after, if the client registered it exactly.
+      schema: {type: string}
+    LogoutState:
+      name: state
+      in: query
+      description: Sent back to `post_logout_redirect_uri`.
+      schema: {type: string}
+    LogoutClientId:
+      name: client_id
+      in: query
+      description: The client, when no `id_token_hint` names it.
+      schema: {type: string}
     DPoP:
       name: DPoP
       in: header
@@ -433,6 +943,26 @@ components:
         pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
 
   headers:
+    PublicCache:
+      description: Public, for an hour; the key rotation's grace covers it.
+      required: true
+      schema:
+        type: string
+        pattern: '^public, max-age=[0-9]+$'
+    NoStore:
+      description: Not to be stored.
+      required: true
+      schema:
+        type: string
+        enum: [no-store]
+    BearerChallenge:
+      description: |
+        RFC 6750 §3: the scheme the token was refused in (`Bearer`, or `DPoP` with the algorithms
+        accepted), this server's realm, and the error when a token was sent.
+      required: true
+      schema:
+        type: string
+        pattern: '^(Bearer|DPoP) realm="[^"]+"'
     CacheControl:
       description: Nothing these endpoints answer may be stored (RFC 6749 §5.1).
       required: true
@@ -445,6 +975,12 @@ components:
       schema:
         type: string
         enum: [no-cache]
+    Location:
+      description: Where the browser goes next.
+      required: true
+      schema:
+        type: string
+        minLength: 1
     DPoPNonce:
       description: The nonce the client's next DPoP proof must carry (RFC 9449 §8).
       schema:
@@ -464,6 +1000,141 @@ components:
         pattern: '^Basic realm="[^"]+"$'
 
   responses:
+    ToTheClient:
+      description: |
+        To the client's redirect URI (RFC 6749 §4.1.2), with `code`, `state` and `iss`; or a refusal,
+        with `error`, `error_description`, `state` and `iss` (RFC 6749 §4.1.2.1, RFC 9207).
+      headers:
+        Location:
+          $ref: '#/components/headers/Location'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+    WithinTheServer:
+      description: |
+        To a page of this server (`/auth/login`, `/auth/consent`, `/auth/mfa`), which comes back here once
+        the person has done what it asks. The request waits behind an opaque handle; nothing of it is in
+        the address.
+      headers:
+        Location:
+          $ref: '#/components/headers/Location'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+    AuthorizationRefused:
+      description: |
+        The client or its redirect URI cannot be trusted, so nothing is redirected (RFC 6749 §4.1.2.1):
+        a page for a person, the error document for a program. Also an unknown, expired or another
+        client's `request_uri`.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/OAuthError'
+          examples:
+            UnknownClient:
+              $ref: '#/components/examples/UnknownClient'
+        text/html:
+          schema:
+            type: string
+            format: binary
+    Page:
+      description: A page for the person (a confirmation, or a refusal), never for a program to read.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        text/html:
+          schema:
+            type: string
+            format: binary
+          example: '<!doctype html><html lang="en"><title>Sign out?</title>…</html>'
+    AfterSignOut:
+      description: Signed out; to `post_logout_redirect_uri` with `state`, or to the sign-in page.
+      headers:
+        Location:
+          $ref: '#/components/headers/Location'
+    UserInfo:
+      description: The person's claims.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UserInfo'
+          examples:
+            UserInfo:
+              $ref: '#/components/examples/UserInfo'
+    BearerRefused:
+      description: |
+        The token is refused (RFC 6750 §3, RFC 9449 §7.1): `400 invalid_request` (credentials that
+        cannot be read), `401 invalid_token`, `401 invalid_dpop_proof`, `403 insufficient_scope`. With
+        no credentials at all, a bare `401` and an empty object.
+      headers:
+        WWW-Authenticate:
+          $ref: '#/components/headers/BearerChallenge'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BearerError'
+          examples:
+            InvalidToken:
+              $ref: '#/components/examples/InvalidToken'
+    Metadata:
+      description: The metadata. Cacheable for an hour.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/PublicCache'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProviderMetadata'
+          examples:
+            ProviderMetadata:
+              $ref: '#/components/examples/ProviderMetadata'
+    RegistrationRefused:
+      description: |
+        The metadata is refused (RFC 7591 §3.2.2), the member at fault named, never its value:
+        `invalid_redirect_uri`, `invalid_client_metadata`, `invalid_software_statement`.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/RegistrationError'
+          examples:
+            InvalidRedirectUri:
+              $ref: '#/components/examples/InvalidRedirectUri'
+    RegistrationOff:
+      description: Registration is off on this deployment (`CLAVIA_CLIENT_REGISTRATION=off`), so the path does not exist.
+      content:
+        application/json:
+          schema:
+            type: object
+          example:
+            detail: Not Found
+        text/html:
+          schema:
+            type: string
+            format: binary
+    TooManyRegistrations:
+      description: Too many registrations from this address. Nothing was looked at; wait `Retry-After` seconds.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/TemporarilyUnavailableError'
+          examples:
+            TooManyRegistrations:
+              $ref: '#/components/examples/TooManyRegistrations'
     InvalidClient:
       description: |
         The client did not authenticate (RFC 6749 §5.2): an unknown client, a wrong secret, a method
@@ -911,6 +1582,250 @@ components:
               type: string
               enum: [temporarily_unavailable]
 
+    AuthorizationRequest:
+      description: An authorization request as a form (OpenID Connect Core §3.1.2.1), the query's parameters.
+      type: object
+      required: [client_id]
+      properties:
+        response_type: {type: string, enum: [code]}
+        client_id: {type: string, minLength: 1, maxLength: 64}
+        redirect_uri: {type: string}
+        scope: {$ref: '#/components/schemas/Scope'}
+        state: {type: string}
+        code_challenge: {type: string, minLength: 43, maxLength: 43}
+        code_challenge_method: {type: string, enum: [S256]}
+        audience: {type: string}
+        nonce: {type: string}
+        prompt: {type: string}
+        max_age: {type: string, pattern: '^[0-9]+$'}
+        acr_values: {type: string}
+        dpop_jkt: {type: string}
+        request_uri: {type: string}
+
+    EndSessionRequest:
+      description: An RP-Initiated Logout request as a form, or the confirmation page's answer.
+      type: object
+      properties:
+        id_token_hint: {type: string}
+        post_logout_redirect_uri: {type: string}
+        state: {type: string}
+        client_id: {type: string}
+        confirmed:
+          type: string
+          enum: ['yes']
+          description: The confirmation page's answer; read from a POST only.
+        csrf_token:
+          type: string
+          description: The confirmation page's own field.
+
+    UserInfo:
+      description: |
+        `sub`, then the claims the token's scopes release (OpenID Connect Core §5.1), then the
+        application's custom claims for userinfo. A claim without a value is left out.
+      type: object
+      required: [sub]
+      properties:
+        sub: {type: string}
+        email: {type: string}
+        email_verified: {type: boolean}
+        name: {type: string}
+        given_name: {type: string}
+        family_name: {type: string}
+        nickname: {type: string}
+        picture: {type: string}
+        locale: {type: string}
+        updated_at: {type: integer}
+
+    BearerError:
+      description: An RFC 6750 §3 error, or RFC 9449's; an empty object when no credentials came.
+      type: object
+      additionalProperties: false
+      properties:
+        error:
+          type: string
+          enum: [invalid_request, invalid_token, insufficient_scope, invalid_dpop_proof]
+        error_description: {type: string}
+
+    JwkSet:
+      type: object
+      additionalProperties: false
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          items:
+            $ref: '#/components/schemas/Jwk'
+
+    Jwk:
+      description: A public key (RFC 7517 §4), named by its RFC 7638 thumbprint.
+      type: object
+      required: [kty, kid, use, alg]
+      properties:
+        kty: {type: string, enum: [RSA, EC, OKP]}
+        kid: {type: string}
+        use: {type: string, enum: [sig]}
+        alg: {type: string}
+        n: {type: string}
+        e: {type: string}
+        crv: {type: string}
+        x: {type: string}
+        y: {type: string}
+
+    ProviderMetadata:
+      description: |
+        OpenID Connect Discovery 1.0 §3 and RFC 8414 §2. Endpoints this deployment does not have are left
+        out (`registration_endpoint` when registration is off).
+      type: object
+      required:
+        - issuer
+        - authorization_endpoint
+        - token_endpoint
+        - jwks_uri
+        - response_types_supported
+        - grant_types_supported
+        - token_endpoint_auth_methods_supported
+        - code_challenge_methods_supported
+      properties:
+        issuer: {type: string}
+        authorization_endpoint: {type: string}
+        token_endpoint: {type: string}
+        userinfo_endpoint: {type: string}
+        jwks_uri: {type: string}
+        registration_endpoint: {type: string}
+        end_session_endpoint: {type: string}
+        introspection_endpoint: {type: string}
+        revocation_endpoint: {type: string}
+        device_authorization_endpoint: {type: string}
+        pushed_authorization_request_endpoint: {type: string}
+        require_pushed_authorization_requests: {type: boolean}
+        scopes_supported: {type: array, items: {type: string}}
+        response_types_supported: {type: array, items: {type: string, enum: [code]}}
+        response_modes_supported: {type: array, items: {type: string}}
+        grant_types_supported:
+          type: array
+          items:
+            type: string
+            enum:
+              - authorization_code
+              - refresh_token
+              - client_credentials
+              - 'urn:ietf:params:oauth:grant-type:device_code'
+        acr_values_supported: {type: array, items: {type: string}}
+        subject_types_supported: {type: array, items: {type: string}}
+        id_token_signing_alg_values_supported: {type: array, items: {type: string}}
+        token_endpoint_auth_methods_supported:
+          type: array
+          items: {$ref: '#/components/schemas/ClientAuthMethod'}
+        introspection_endpoint_auth_methods_supported:
+          type: array
+          items: {$ref: '#/components/schemas/SecretClientAuthMethod'}
+        revocation_endpoint_auth_methods_supported:
+          type: array
+          items: {$ref: '#/components/schemas/ClientAuthMethod'}
+        dpop_signing_alg_values_supported:
+          type: array
+          items: {type: string, enum: [ES256, EdDSA, RS256]}
+        claim_types_supported: {type: array, items: {type: string}}
+        claims_supported: {type: array, items: {type: string}}
+        prompt_values_supported: {type: array, items: {type: string}}
+        claims_parameter_supported: {type: boolean}
+        request_parameter_supported: {type: boolean}
+        request_uri_parameter_supported: {type: boolean}
+        code_challenge_methods_supported: {type: array, items: {type: string, enum: [S256]}}
+        authorization_response_iss_parameter_supported: {type: boolean}
+        backchannel_logout_supported: {type: boolean}
+        backchannel_logout_session_supported: {type: boolean}
+
+    ClientAuthMethod:
+      type: string
+      enum: [client_secret_basic, client_secret_post, none]
+
+    SecretClientAuthMethod:
+      description: The methods with a secret, the only ones introspection takes.
+      type: string
+      enum: [client_secret_basic, client_secret_post]
+
+    ClientMetadata:
+      description: |
+        What a self-registering client may say (RFC 7591 §2). Anything else, the operator's settings
+        included, is ignored and left out of the answer.
+      type: object
+      required: [client_name, redirect_uris]
+      properties:
+        client_name: {type: string, minLength: 1, maxLength: 120}
+        redirect_uris:
+          type: array
+          minItems: 1
+          items: {type: string}
+          description: https without a fragment; a public client may use http on 127.0.0.1 or [::1], never localhost.
+        post_logout_redirect_uris: {type: array, items: {type: string}}
+        grant_types:
+          type: array
+          items: {type: string, enum: [authorization_code, refresh_token]}
+          description: '`authorization_code` alone by default.'
+        response_types: {type: array, items: {type: string, enum: [code]}}
+        token_endpoint_auth_method: {$ref: '#/components/schemas/ClientAuthMethod'}
+        backchannel_logout_uri: {type: string, description: An https URL on a public address.}
+        backchannel_logout_session_required: {type: boolean}
+        dpop_bound_access_tokens: {type: boolean}
+
+    ClientMetadataUpdate:
+      description: The whole metadata again (RFC 7592 §2.2), naming the client.
+      allOf:
+        - $ref: '#/components/schemas/ClientMetadata'
+        - type: object
+          required: [client_id]
+          properties:
+            client_id: {type: string}
+            client_secret:
+              type: string
+              description: The current secret, if sent at all; any other is refused.
+
+    ClientConfiguration:
+      description: The client as registered (RFC 7592 §3), without its secret.
+      type: object
+      required: [client_id, client_id_issued_at, registration_client_uri, client_name, token_endpoint_auth_method, grant_types, response_types, redirect_uris]
+      properties:
+        client_id: {type: string, pattern: '^tpc_'}
+        client_id_issued_at: {type: integer}
+        registration_access_token:
+          type: string
+          description: After an update only, and once.
+        registration_client_uri: {type: string}
+        client_name: {type: string}
+        token_endpoint_auth_method: {$ref: '#/components/schemas/ClientAuthMethod'}
+        grant_types: {type: array, items: {type: string}}
+        response_types: {type: array, items: {type: string}}
+        redirect_uris: {type: array, items: {type: string}}
+        post_logout_redirect_uris: {type: array, items: {type: string}}
+        backchannel_logout_uri: {type: string}
+        backchannel_logout_session_required: {type: boolean}
+        dpop_bound_access_tokens: {type: boolean}
+
+    RegisteredClient:
+      description: The client just registered (RFC 7591 §3.2.1), its secrets shown once.
+      allOf:
+        - $ref: '#/components/schemas/ClientConfiguration'
+        - type: object
+          required: [registration_access_token]
+          properties:
+            client_secret:
+              type: string
+              description: Absent for a public client (`none`).
+            client_secret_expires_at:
+              type: integer
+              enum: [0]
+              description: Never; sent with a secret only.
+
+    RegistrationError:
+      allOf:
+        - $ref: '#/components/schemas/OAuthError'
+        - type: object
+          properties:
+            error:
+              type: string
+              enum: [invalid_redirect_uri, invalid_client_metadata, invalid_software_statement]
+
     OAuthError:
       description: An RFC 6749 §5.2 error document.
       type: object
@@ -1063,3 +1978,137 @@ components:
       value:
         error: unauthorized_client
         error_description: "The client is not allowed to use the device authorization grant."
+
+    AuthorizationRequest:
+      summary: A sign-in with Acme Reports, as a form
+      value:
+        response_type: code
+        client_id: "Xk7pQ2mN9vR4tL8wC3yB6hJ1dF5gS0aE"
+        redirect_uri: "https://reports.example.com/callback"
+        scope: "openid email read:reports"
+        state: "af0ifjsldkj"
+        nonce: "n-0S6_WzA2Mj"
+        code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+        code_challenge_method: S256
+    UnknownClient:
+      summary: A client or redirect URI not to be trusted
+      value:
+        error: invalid_request
+        error_description: "The redirect URI is not registered for this client."
+    EndSessionRequest:
+      summary: Signing out of Acme Reports
+      value:
+        id_token_hint: "example.id-token.not-real"
+        post_logout_redirect_uri: "https://reports.example.com/"
+        state: "4bAq7"
+    UserInfo:
+      summary: Ada, with the email scope
+      value:
+        sub: "3f8e2d1c-5b4a-4c9e-8d7f-6a5b4c3d2e1f"
+        email: "ada@example.com"
+        email_verified: true
+    InvalidToken:
+      summary: An unusable token
+      value:
+        error: invalid_token
+        error_description: "The access token is expired, revoked, or not valid."
+    JwkSet:
+      summary: One RSA key
+      value:
+        keys:
+          - kty: RSA
+            kid: "fv1yLZeJTloEHvzxRvLo7zNUgn1x5tWR02z73c2qDsg"
+            use: sig
+            alg: RS256
+            n: "example-modulus-not-a-real-key"
+            e: "AQAB"
+    ProviderMetadata:
+      summary: This server's metadata
+      value:
+        issuer: "https://auth.example.com"
+        authorization_endpoint: "https://auth.example.com/oauth2/authorize"
+        token_endpoint: "https://auth.example.com/oauth2/token"
+        userinfo_endpoint: "https://auth.example.com/oidc/userinfo"
+        jwks_uri: "https://auth.example.com/oidc/jwks.json"
+        end_session_endpoint: "https://auth.example.com/oidc/logout"
+        introspection_endpoint: "https://auth.example.com/oauth2/introspect"
+        revocation_endpoint: "https://auth.example.com/oauth2/revoke"
+        device_authorization_endpoint: "https://auth.example.com/oauth2/device/code"
+        pushed_authorization_request_endpoint: "https://auth.example.com/oauth2/par"
+        require_pushed_authorization_requests: false
+        scopes_supported: [openid, profile, email, offline_access]
+        response_types_supported: [code]
+        grant_types_supported:
+          - authorization_code
+          - refresh_token
+          - client_credentials
+          - 'urn:ietf:params:oauth:grant-type:device_code'
+        token_endpoint_auth_methods_supported: [client_secret_basic, client_secret_post, none]
+        code_challenge_methods_supported: [S256]
+        dpop_signing_alg_values_supported: [ES256, EdDSA, RS256]
+        id_token_signing_alg_values_supported: [RS256]
+        subject_types_supported: [public]
+        authorization_response_iss_parameter_supported: true
+    ClientMetadata:
+      summary: Acme Reports registering itself
+      value:
+        client_name: "Acme Reports"
+        redirect_uris: ["https://reports.acme.example/callback"]
+        grant_types: [authorization_code, refresh_token]
+    RegisteredClient:
+      summary: Registered, with its secrets
+      value:
+        client_id: "tpc_iK0Bks4PODSlxzzSwo1zaKKRgd8ZZOtz"
+        client_secret: "example-client-secret-not-real-0000000000000"
+        client_secret_expires_at: 0
+        client_id_issued_at: 1768471200
+        registration_access_token: "example-registration-token-not-real-0000000"
+        registration_client_uri: "https://auth.example.com/oauth2/register/tpc_iK0Bks4PODSlxzzSwo1zaKKRgd8ZZOtz"
+        client_name: "Acme Reports"
+        token_endpoint_auth_method: client_secret_basic
+        grant_types: [authorization_code, refresh_token]
+        response_types: [code]
+        redirect_uris: ["https://reports.acme.example/callback"]
+        dpop_bound_access_tokens: false
+    ClientConfiguration:
+      summary: The client as registered
+      value:
+        client_id: "tpc_iK0Bks4PODSlxzzSwo1zaKKRgd8ZZOtz"
+        client_id_issued_at: 1768471200
+        registration_client_uri: "https://auth.example.com/oauth2/register/tpc_iK0Bks4PODSlxzzSwo1zaKKRgd8ZZOtz"
+        client_name: "Acme Reports"
+        token_endpoint_auth_method: client_secret_basic
+        grant_types: [authorization_code, refresh_token]
+        response_types: [code]
+        redirect_uris: ["https://reports.acme.example/callback"]
+        dpop_bound_access_tokens: false
+    ClientMetadataUpdate:
+      summary: A second redirect URI
+      value:
+        client_id: "tpc_iK0Bks4PODSlxzzSwo1zaKKRgd8ZZOtz"
+        client_name: "Acme Reports"
+        redirect_uris: ["https://reports.acme.example/callback", "https://reports.acme.example/v2/callback"]
+        grant_types: [authorization_code, refresh_token]
+    UpdatedClientConfiguration:
+      summary: Updated, with a new registration access token
+      value:
+        client_id: "tpc_iK0Bks4PODSlxzzSwo1zaKKRgd8ZZOtz"
+        client_id_issued_at: 1768471200
+        registration_access_token: "example-registration-token-not-real-1111111"
+        registration_client_uri: "https://auth.example.com/oauth2/register/tpc_iK0Bks4PODSlxzzSwo1zaKKRgd8ZZOtz"
+        client_name: "Acme Reports"
+        token_endpoint_auth_method: client_secret_basic
+        grant_types: [authorization_code, refresh_token]
+        response_types: [code]
+        redirect_uris: ["https://reports.acme.example/callback", "https://reports.acme.example/v2/callback"]
+        dpop_bound_access_tokens: false
+    InvalidRedirectUri:
+      summary: A redirect URI the rules refuse
+      value:
+        error: invalid_redirect_uri
+        error_description: "Each of 'redirect_uris' must be https without a fragment, or, for a public client, http on 127.0.0.1 or [::1]."
+    TooManyRegistrations:
+      summary: Too many registrations
+      value:
+        error: temporarily_unavailable
+        error_description: "Too many registrations. Retry later."
