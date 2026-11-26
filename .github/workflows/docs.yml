@@ -57,8 +57,16 @@ jobs:
           git rev-parse --verify --quiet "refs/tags/${TAG}" >/dev/null \
             || { echo "::error::There is no tag ${TAG}."; exit 1; }
           git show "${TAG}:docs/openapi/management-api.yaml" > "${RUNNER_TEMP}/management-api.yaml"
-          docs/site/build.sh "${VERSION}" "${RUNNER_TEMP}/management-api.yaml" "${RUNNER_TEMP}/site/v${VERSION}" "../"
-          docs/site/build.sh "${VERSION}" "${RUNNER_TEMP}/management-api.yaml" "${RUNNER_TEMP}/site/root" ""
+          # The guides come from the tag too, as the API they describe does; a release from before
+          # them is built without.
+          guides=""
+          if git cat-file -e "${TAG}:docs/guides/README.md" 2>/dev/null; then
+            mkdir -p "${RUNNER_TEMP}/tag"
+            git archive "${TAG}" docs/guides | tar -x -C "${RUNNER_TEMP}/tag"
+            guides="${RUNNER_TEMP}/tag/docs/guides"
+          fi
+          docs/site/build.sh "${VERSION}" "${RUNNER_TEMP}/management-api.yaml" "${RUNNER_TEMP}/site/v${VERSION}" "../" "${guides}"
+          docs/site/build.sh "${VERSION}" "${RUNNER_TEMP}/management-api.yaml" "${RUNNER_TEMP}/site/root" "" "${guides}"
 
       - name: Publish to gh-pages
         env:
