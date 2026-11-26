@@ -42,6 +42,7 @@ use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\OidcFixtures;
 use ClaviaTest\Support\TestStorage;
 use DateTimeImmutable;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -191,7 +192,7 @@ final class ApiCustomClaimsTest extends AcceptanceTestCase
         $api = $this->machineApi();
         $path = '/api/v1/resource-servers/' . $api->id->value;
 
-        $set = $this->api('PATCH', $path, ['claims' => [
+        $set = $this->api(RequestMethodInterface::METHOD_PATCH, $path, ['claims' => [
             ['name' => 'https://example.com/plan', 'source' => 'app_metadata.plan'],
             ['name' => 'deployment', 'source' => 'constant', 'value' => ['region' => 'eu']],
         ]]);
@@ -199,10 +200,10 @@ final class ApiCustomClaimsTest extends AcceptanceTestCase
         self::assertSame(
             [['name' => 'https://example.com/plan', 'source' => 'app_metadata.plan'],
                 ['name' => 'deployment', 'source' => 'constant', 'value' => ['region' => 'eu']]],
-            self::document($this->api('GET', $path))['claims'],
+            self::document($this->api(RequestMethodInterface::METHOD_GET, $path))['claims'],
         );
 
-        $entries = $this->api('PATCH', $path, ['claims' => [
+        $entries = $this->api(RequestMethodInterface::METHOD_PATCH, $path, ['claims' => [
             ['name' => 'sub', 'source' => 'email'],
             ['name' => 'fine', 'source' => 'email'],
             ['name' => 'unknown', 'source' => 'request.audience'],
@@ -212,14 +213,19 @@ final class ApiCustomClaimsTest extends AcceptanceTestCase
         $pointers = array_column((array) self::document($entries)['errors'], 'pointer');
         self::assertSame(['/claims/0', '/claims/2', '/claims/3'], $pointers);
 
-        $list = $this->api('PATCH', $path, ['claims' => [
+        $list = $this->api(RequestMethodInterface::METHOD_PATCH, $path, ['claims' => [
             ['name' => 'tenant', 'source' => 'app_metadata.tenant'],
             ['name' => 'tenant_id', 'source' => 'app_metadata.tenant.id'],
         ]]);
         self::assertSame(['/claims'], array_column((array) self::document($list)['errors'], 'pointer'));
-        self::assertCount(2, (array) self::document($this->api('GET', $path))['claims'], 'A refusal changes nothing.');
+        self::assertCount(
+            2,
+            (array) self::document($this->api(RequestMethodInterface::METHOD_GET, $path))['claims'],
+            'A refusal changes nothing.',
+        );
 
-        $system = $this->api('PATCH', '/api/v1/resource-servers/' . $this->managementApi()->id->value, [
+        $managementApi = '/api/v1/resource-servers/' . $this->managementApi()->id->value;
+        $system = $this->api(RequestMethodInterface::METHOD_PATCH, $managementApi, [
             'claims' => [['name' => 'plan', 'source' => 'app_metadata.plan']],
         ]);
         self::assertSame(StatusCodeInterface::STATUS_CONFLICT, $system->getStatusCode(), 'A system API takes none.');

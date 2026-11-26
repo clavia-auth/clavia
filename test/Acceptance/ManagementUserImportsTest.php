@@ -21,6 +21,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -69,7 +70,7 @@ final class ManagementUserImportsTest extends AcceptanceTestCase
 
         self::assertSame("Ran 1 job; 0 stalled jobs failed; 0 finished jobs purged.\n", $this->runJobs());
 
-        $done = self::document($this->api('GET', '/api/v1/jobs/' . $job['id']));
+        $done = self::document($this->api(RequestMethodInterface::METHOD_GET, '/api/v1/jobs/' . $job['id']));
         self::assertSame('completed', $done['status']);
         self::assertSame(['total' => 8, 'created' => 2, 'failed' => 6], $done['summary']);
         self::assertSame(
@@ -119,7 +120,11 @@ final class ManagementUserImportsTest extends AcceptanceTestCase
         );
         self::assertSame(
             StatusCodeInterface::STATUS_UNSUPPORTED_MEDIA_TYPE,
-            $this->api('POST', self::IMPORTS, rawBody: '{"email":"a@example.com"}')->getStatusCode(),
+            $this->api(
+                RequestMethodInterface::METHOD_POST,
+                self::IMPORTS,
+                rawBody: '{"email":"a@example.com"}',
+            )->getStatusCode(),
         );
         self::assertSame(0, (int) TestStorage::database()->fetchValue('SELECT count(*) FROM user_jobs'));
     }
@@ -145,14 +150,17 @@ final class ManagementUserImportsTest extends AcceptanceTestCase
         );
         self::assertSame(
             StatusCodeInterface::STATUS_NOT_FOUND,
-            $this->api('GET', '/api/v1/jobs/0b0f5a3e-8f2c-4d1a-9b7e-3c2d1e0f9a8b')->getStatusCode(),
+            $this->api(
+                RequestMethodInterface::METHOD_GET,
+                '/api/v1/jobs/0b0f5a3e-8f2c-4d1a-9b7e-3c2d1e0f9a8b',
+            )->getStatusCode(),
         );
     }
 
     private function import(string $ndjson, ?string $connection = null): ResponseInterface
     {
         return $this->api(
-            'POST',
+            RequestMethodInterface::METHOD_POST,
             self::IMPORTS,
             query: $connection === null ? [] : ['connection' => $connection],
             headers: ['Content-Type' => 'application/x-ndjson'],

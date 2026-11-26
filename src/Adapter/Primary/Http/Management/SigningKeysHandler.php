@@ -15,6 +15,7 @@ use Clavia\Application\Management\Conflict;
 use Clavia\Application\Oidc\Keys\ListSigningKeys;
 use Clavia\Application\Oidc\Keys\RotateSigningKey;
 use Clavia\Application\Port\EncryptionUnavailable;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
@@ -52,10 +53,10 @@ final readonly class SigningKeysHandler implements RequestHandlerInterface
             throw new Conflict('This deployment keeps its signing keys at the provider: rotate them there.');
         }
 
-        if ($request->getMethod() === 'GET') {
+        if ($request->getMethod() === RequestMethodInterface::METHOD_GET) {
             return $this->responder->jsonList(array_map(ManagementViews::signingKey(...), ($this->list)()));
         }
-        if ($request->getMethod() !== 'POST') {
+        if ($request->getMethod() !== RequestMethodInterface::METHOD_POST) {
             throw new LogicException('Routed with a method the handler does not serve.');
         }
 

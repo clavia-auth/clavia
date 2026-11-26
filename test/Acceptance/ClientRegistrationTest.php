@@ -25,6 +25,7 @@ use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Psr\Http\Message\ResponseInterface;
@@ -343,7 +344,7 @@ final class ClientRegistrationTest extends AcceptanceTestCase
         $token = $this->initialAccessToken();
 
         foreach (['[1, 2]', '{"client_name": ', 'client_name=x'] as $body) {
-            $response = $this->request('POST', '/oauth2/register', [
+            $response = $this->request(RequestMethodInterface::METHOD_POST, '/oauth2/register', [
                 'Authorization' => 'Bearer ' . $token,
                 'Content-Type' => 'application/json',
             ], body: $body);
@@ -374,7 +375,12 @@ final class ClientRegistrationTest extends AcceptanceTestCase
             $headers['Authorization'] = 'Bearer ' . $token;
         }
 
-        return $this->request('POST', '/oauth2/register', $headers, body: (string) json_encode($metadata));
+        return $this->request(
+            RequestMethodInterface::METHOD_POST,
+            '/oauth2/register',
+            $headers,
+            body: (string) json_encode($metadata),
+        );
     }
 
     /** @return non-empty-string */

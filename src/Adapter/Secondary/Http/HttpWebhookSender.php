@@ -15,6 +15,7 @@ use Clavia\Application\Port\SendOutcome;
 use Clavia\Application\Port\WebhookSender;
 use Clavia\Domain\Shared\Url;
 use Clavia\Domain\Webhook\DeliveryFailure;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
@@ -49,7 +50,7 @@ final readonly class HttpWebhookSender implements WebhookSender
             return SendOutcome::unsent(DeliveryFailure::RefusedUrl, self::since($started));
         }
 
-        $request = $this->requests->createRequest('POST', $url->value)
+        $request = $this->requests->createRequest(RequestMethodInterface::METHOD_POST, $url->value)
             ->withHeader('User-Agent', 'Clavia')
             ->withBody($this->streams->createStream($body));
         foreach ($headers as $name => $value) {

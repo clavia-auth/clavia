@@ -27,6 +27,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use RuntimeException;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -59,7 +60,7 @@ final class WebhookDeliveryTest extends AcceptanceTestCase
         $secret = $this->registerWebhook(['user.updated']);
         $user = $this->user();
 
-        $this->api('PATCH', '/api/v1/users/' . $user->id->value, ['name' => 'Ada King']);
+        $this->api(RequestMethodInterface::METHOD_PATCH, '/api/v1/users/' . $user->id->value, ['name' => 'Ada King']);
         self::assertSame(1, self::deliveryCount("WHERE status = 'pending'"));
 
         self::assertSame(
@@ -73,7 +74,9 @@ final class WebhookDeliveryTest extends AcceptanceTestCase
         $body = json_decode($sent['body'], true, 16, JSON_THROW_ON_ERROR);
         self::assertSame('user.updated', $body['type']);
         /** @var array{items: list<array<string, mixed>>} $listed */
-        $listed = self::document($this->api('GET', '/api/v1/audit-events', query: ['type' => 'user.updated']));
+        $listed = self::document(
+            $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/audit-events', query: ['type' => 'user.updated']),
+        );
         self::assertSame($listed['items'][0], $body['data'], 'Exactly what the audit API returns.');
         $headers = $sent['headers'];
         self::assertSame($body['data']['id'], $headers['webhook-id']);
@@ -114,7 +117,11 @@ final class WebhookDeliveryTest extends AcceptanceTestCase
         $clock = $this->freezeClock('2026-03-04T09:00:00Z');
         $this->adminToken();
         $this->registerWebhook(['user.updated']);
-        $this->api('PATCH', '/api/v1/users/' . $this->user()->id->value, ['name' => 'Ada King']);
+        $this->api(
+            RequestMethodInterface::METHOD_PATCH,
+            '/api/v1/users/' . $this->user()->id->value,
+            ['name' => 'Ada King'],
+        );
         $unavailable = SendOutcome::refused(StatusCodeInterface::STATUS_SERVICE_UNAVAILABLE, 20);
         $this->wire->answers = array_fill(0, 8, $unavailable);
 
@@ -140,9 +147,13 @@ final class WebhookDeliveryTest extends AcceptanceTestCase
     {
         $this->adminToken();
         $this->registerWebhook(['user.updated']);
-        $this->api('PATCH', '/api/v1/users/' . $this->user()->id->value, ['name' => 'Ada King']);
+        $this->api(
+            RequestMethodInterface::METHOD_PATCH,
+            '/api/v1/users/' . $this->user()->id->value,
+            ['name' => 'Ada King'],
+        );
         $id = (string) TestStorage::database()->fetchValue('SELECT id FROM webhook_endpoints');
-        $this->api('PATCH', '/api/v1/webhooks/' . $id, ['is_enabled' => false]);
+        $this->api(RequestMethodInterface::METHOD_PATCH, '/api/v1/webhooks/' . $id, ['is_enabled' => false]);
 
         self::assertStringContainsString('1 abandoned', $this->deliver());
         self::assertSame([], $this->wire->sent);
@@ -161,7 +172,7 @@ final class WebhookDeliveryTest extends AcceptanceTestCase
         $this->registerWebhook(['*'], 'https://alerts.acme.example/clavia');
 
         $clock->advance(60);
-        $queued = $this->api('POST', '/api/v1/webhooks/' . $tested . '/test');
+        $queued = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/webhooks/' . $tested . '/test');
         self::assertSame(StatusCodeInterface::STATUS_ACCEPTED, $queued->getStatusCode(), (string) $queued->getBody());
         $this->deliver();
 
@@ -183,7 +194,7 @@ final class WebhookDeliveryTest extends AcceptanceTestCase
             $tests[0]['headers']['webhook-signature'],
         );
 
-        $log = $this->api('GET', '/api/v1/webhooks/' . $tested . '/deliveries');
+        $log = $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/webhooks/' . $tested . '/deliveries');
         self::assertSame(StatusCodeInterface::STATUS_OK, $log->getStatusCode(), (string) $log->getBody());
         /** @var array{items: list<array<string, mixed>>, total: int} $page */
         $page = self::document($log);
@@ -199,25 +210,28 @@ final class WebhookDeliveryTest extends AcceptanceTestCase
         $this->adminToken();
         $this->registerWebhook(['*']);
         $id = (string) TestStorage::database()->fetchValue('SELECT id FROM webhook_endpoints');
-        $this->api('PATCH', '/api/v1/webhooks/' . $id, ['is_enabled' => false]);
+        $this->api(RequestMethodInterface::METHOD_PATCH, '/api/v1/webhooks/' . $id, ['is_enabled' => false]);
 
         self::assertSame(
             StatusCodeInterface::STATUS_CONFLICT,
-            $this->api('POST', '/api/v1/webhooks/' . $id . '/test')->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/webhooks/' . $id . '/test')->getStatusCode(),
         );
         $this->adminToken(['update:webhooks', 'read:webhooks']);
-        $refused = $this->api('POST', '/api/v1/webhooks/' . $id . '/test');
+        $refused = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/webhooks/' . $id . '/test');
         self::assertSame(StatusCodeInterface::STATUS_FORBIDDEN, $refused->getStatusCode());
         self::assertStringContainsString('read:audit_events', $refused->getHeaderLine('WWW-Authenticate'));
         self::assertSame(
             StatusCodeInterface::STATUS_FORBIDDEN,
-            $this->api('GET', '/api/v1/webhooks/' . $id . '/deliveries')->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/webhooks/' . $id . '/deliveries')->getStatusCode(),
             'The log names audit events: a view of the trail.',
         );
         $this->adminToken();
         self::assertSame(
             StatusCodeInterface::STATUS_NOT_FOUND,
-            $this->api('GET', '/api/v1/webhooks/6b0e5c9a-2f4d-4a1e-9b3c-7d8e9f0a1b2c/deliveries')->getStatusCode(),
+            $this->api(
+                RequestMethodInterface::METHOD_GET,
+                '/api/v1/webhooks/6b0e5c9a-2f4d-4a1e-9b3c-7d8e9f0a1b2c/deliveries',
+            )->getStatusCode(),
         );
     }
 
@@ -232,26 +246,36 @@ final class WebhookDeliveryTest extends AcceptanceTestCase
 
         // A new event a day, every one of them failing.
         foreach (range(1, 5) as $day) {
-            $this->api('PATCH', '/api/v1/users/' . $user->id->value, ['name' => 'Ada ' . $day]);
+            $this->api(
+                RequestMethodInterface::METHOD_PATCH,
+                '/api/v1/users/' . $user->id->value,
+                ['name' => 'Ada ' . $day],
+            );
             $this->deliver();
             self::assertSame('2026-03-04T09:00:00Z', self::webhook($this, $id)['failing_since']);
             self::assertTrue(self::webhook($this, $id)['is_enabled'], 'Day ' . $day);
             $clock->advance(86_400);
             $this->adminToken();
         }
-        $this->api('PATCH', '/api/v1/users/' . $user->id->value, ['name' => 'Ada 6']);
+        $this->api(RequestMethodInterface::METHOD_PATCH, '/api/v1/users/' . $user->id->value, ['name' => 'Ada 6']);
 
         self::assertStringContainsString('Switched off 1 endpoint(s) failing for 5 days.', $this->deliver());
         $off = self::webhook($this, $id);
         self::assertFalse($off['is_enabled']);
         self::assertSame('failing', $off['disabled_reason']);
         /** @var array{items: list<array{actor: array{kind: string}, details: array<string, mixed>}>} $trail */
-        $trail = self::document($this->api('GET', '/api/v1/audit-events', query: ['type' => 'webhook.disabled']));
+        $trail = self::document(
+            $this->api(
+                RequestMethodInterface::METHOD_GET,
+                '/api/v1/audit-events',
+                query: ['type' => 'webhook.disabled'],
+            ),
+        );
         self::assertSame('system', $trail['items'][0]['actor']['kind']);
         self::assertSame(['days' => 5, 'reason' => 'failing'], $trail['items'][0]['details']);
         self::assertStringContainsString('abandoned', $this->deliver(), 'Its pending deliveries end.');
 
-        $on = $this->api('PATCH', '/api/v1/webhooks/' . $id, ['is_enabled' => true]);
+        $on = $this->api(RequestMethodInterface::METHOD_PATCH, '/api/v1/webhooks/' . $id, ['is_enabled' => true]);
         self::assertSame(StatusCodeInterface::STATUS_OK, $on->getStatusCode());
         self::assertSame([true, null, null], [
             self::document($on)['is_enabled'],
@@ -264,7 +288,7 @@ final class WebhookDeliveryTest extends AcceptanceTestCase
     private static function webhook(self $test, string $id): array
     {
         /** @var array<string, mixed> */
-        return self::document($test->api('GET', '/api/v1/webhooks/' . $id));
+        return self::document($test->api(RequestMethodInterface::METHOD_GET, '/api/v1/webhooks/' . $id));
     }
 
     /**
@@ -274,7 +298,11 @@ final class WebhookDeliveryTest extends AcceptanceTestCase
      */
     private function registerWebhook(array $events, string $url = 'https://siem.acme.example/hooks'): string
     {
-        $created = $this->api('POST', '/api/v1/webhooks', ['url' => $url, 'events' => $events]);
+        $created = $this->api(
+            RequestMethodInterface::METHOD_POST,
+            '/api/v1/webhooks',
+            ['url' => $url, 'events' => $events],
+        );
         self::assertSame(StatusCodeInterface::STATUS_CREATED, $created->getStatusCode(), (string) $created->getBody());
         $secret = (string) self::document($created)['secret'];
         assert($secret !== '');

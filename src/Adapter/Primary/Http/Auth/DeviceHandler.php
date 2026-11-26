@@ -24,6 +24,7 @@ use Clavia\Application\OAuth2\Device\DeviceStrongerSignInRequired;
 use Clavia\Application\OAuth2\Device\UserCodeThrottle;
 use Clavia\Domain\Authentication\LocalPath;
 use Clavia\Domain\Client\ClientId;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -55,7 +56,7 @@ final readonly class DeviceHandler implements RequestHandlerInterface
     #[\Override]
     public function handle(ServerRequestInterface $request): ResponseInterface
     {
-        $isPost = $request->getMethod() === 'POST';
+        $isPost = $request->getMethod() === RequestMethodInterface::METHOD_POST;
         $form = RequestParameterReader::form($request);
         $typed = ($isPost ? $form->get('user_code') : RequestParameterReader::query($request)->get('user_code')) ?? '';
 

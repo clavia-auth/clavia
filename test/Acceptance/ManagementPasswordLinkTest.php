@@ -31,6 +31,7 @@ use ClaviaTest\Support\LoginFixtures;
 use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -110,7 +111,7 @@ final class ManagementPasswordLinkTest extends AcceptanceTestCase
     public function testAnAccountCreatedThroughTheApiWithoutAPasswordIsInvitedAndSignsIn(): void
     {
         $this->adminToken();
-        $created = $this->api('POST', '/api/v1/users', ['email' => self::EMAIL]);
+        $created = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/users', ['email' => self::EMAIL]);
         self::assertSame(StatusCodeInterface::STATUS_CREATED, $created->getStatusCode(), (string) $created->getBody());
         $id = self::document($created)['id'];
         self::assertIsString($id);
@@ -120,7 +121,7 @@ final class ManagementPasswordLinkTest extends AcceptanceTestCase
             'There is no password yet.',
         );
 
-        $invited = $this->api('POST', '/api/v1/users/' . $id . '/password-reset');
+        $invited = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/users/' . $id . '/password-reset');
 
         self::assertSame(StatusCodeInterface::STATUS_ACCEPTED, $invited->getStatusCode(), (string) $invited->getBody());
         self::assertSame(['kind' => 'invitation'], self::document($invited));
@@ -132,7 +133,9 @@ final class ManagementPasswordLinkTest extends AcceptanceTestCase
             'csrf_token' => self::csrfTokenFrom($form),
         ]);
         self::assertSame(StatusCodeInterface::STATUS_OK, $changed->getStatusCode(), (string) $changed->getBody());
-        self::assertTrue(self::document($this->api('GET', '/api/v1/users/' . $id))['has_password']);
+        self::assertTrue(
+            self::document($this->api(RequestMethodInterface::METHOD_GET, '/api/v1/users/' . $id))['has_password'],
+        );
         $this->clearCookies();
         self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $this->signIn(self::PASSWORD)->getStatusCode());
     }
@@ -186,7 +189,10 @@ final class ManagementPasswordLinkTest extends AcceptanceTestCase
     {
         $this->adminToken();
 
-        $response = $this->api('POST', '/api/v1/users/6f1c8a52-1b1e-4c8e-9d38-0f2b3d7c9e10/password-reset');
+        $response = $this->api(
+            RequestMethodInterface::METHOD_POST,
+            '/api/v1/users/6f1c8a52-1b1e-4c8e-9d38-0f2b3d7c9e10/password-reset',
+        );
 
         self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $response->getStatusCode());
         self::assertCount(0, $this->outbox()->recent(10));
@@ -250,7 +256,10 @@ final class ManagementPasswordLinkTest extends AcceptanceTestCase
 
     private function sendLink(User $user): ResponseInterface
     {
-        return $this->api('POST', '/api/v1/users/' . $user->id->toString() . '/password-reset');
+        return $this->api(
+            RequestMethodInterface::METHOD_POST,
+            '/api/v1/users/' . $user->id->toString() . '/password-reset',
+        );
     }
 
     private function account(?string $password, bool $active = true): User

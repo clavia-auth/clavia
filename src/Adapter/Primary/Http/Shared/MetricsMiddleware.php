@@ -13,6 +13,7 @@ namespace Clavia\Adapter\Primary\Http\Shared;
 
 use Clavia\Application\Metrics\Metric;
 use Clavia\Application\Port\Metrics;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Mezzio\Router\RouteResult;
 use Psr\Http\Message\ResponseInterface;
@@ -28,7 +29,15 @@ use Throwable;
  */
 final readonly class MetricsMiddleware implements MiddlewareInterface
 {
-    private const array METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'];
+    private const array METHODS = [
+        RequestMethodInterface::METHOD_GET,
+        RequestMethodInterface::METHOD_HEAD,
+        RequestMethodInterface::METHOD_POST,
+        RequestMethodInterface::METHOD_PUT,
+        RequestMethodInterface::METHOD_PATCH,
+        RequestMethodInterface::METHOD_DELETE,
+        RequestMethodInterface::METHOD_OPTIONS,
+    ];
 
     public function __construct(private Metrics $metrics)
     {

@@ -15,6 +15,7 @@ use Clavia\Application\Connection\Saml\ListServiceProviderKeys;
 use Clavia\Application\Connection\Saml\RotateServiceProviderKeys;
 use Clavia\Application\Management\Conflict;
 use Clavia\Application\Port\EncryptionUnavailable;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
@@ -39,12 +40,12 @@ final readonly class SamlKeysHandler implements RequestHandlerInterface
     #[\Override]
     public function handle(ServerRequestInterface $request): ResponseInterface
     {
-        if ($request->getMethod() === 'GET') {
+        if ($request->getMethod() === RequestMethodInterface::METHOD_GET) {
             return $this->responder->jsonList(
                 array_map(ManagementViews::samlKey(...), ($this->list)()->keys),
             );
         }
-        if ($request->getMethod() !== 'POST') {
+        if ($request->getMethod() !== RequestMethodInterface::METHOD_POST) {
             throw new LogicException('Routed with a method the handler does not serve.');
         }
 

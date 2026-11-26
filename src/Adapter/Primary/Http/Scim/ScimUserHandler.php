@@ -22,6 +22,7 @@ use Clavia\Domain\Provisioning\ScimPatch;
 use Clavia\Domain\Provisioning\ScimPatchRefused;
 use Clavia\Domain\Provisioning\ScimUser;
 use Clavia\Domain\Shared\InvalidValue;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
@@ -63,10 +64,20 @@ final readonly class ScimUserHandler implements RequestHandlerInterface
         $ifMatch = self::ifMatch($request);
         try {
             $outcome = match ($request->getMethod()) {
-                'GET' => $this->read->find($caller, $id),
-                'PUT' => ($this->replace)($caller, $id, ScimUser::fromJson(ScimBody::read($request)), $ifMatch),
-                'PATCH' => ($this->patch)($caller, $id, ScimPatch::fromJson(ScimBody::read($request)), $ifMatch),
-                'DELETE' => ($this->delete)($caller, $id, $ifMatch),
+                RequestMethodInterface::METHOD_GET => $this->read->find($caller, $id),
+                RequestMethodInterface::METHOD_PUT => ($this->replace)(
+                    $caller,
+                    $id,
+                    ScimUser::fromJson(ScimBody::read($request)),
+                    $ifMatch,
+                ),
+                RequestMethodInterface::METHOD_PATCH => ($this->patch)(
+                    $caller,
+                    $id,
+                    ScimPatch::fromJson(ScimBody::read($request)),
+                    $ifMatch,
+                ),
+                RequestMethodInterface::METHOD_DELETE => ($this->delete)($caller, $id, $ifMatch),
                 default => throw new LogicException('Routed with a method the handler does not serve.'),
             };
         } catch (ScimRequestRejected $rejection) {

@@ -35,6 +35,7 @@ use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryAccessTokenRepository;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
 use ClaviaTest\Support\Fake\SeededRandomSource;
+use Fig\Http\Message\RequestMethodInterface;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -62,7 +63,11 @@ final class CallerTest extends TestCase
     {
         $this->issue('token', self::MANAGEMENT_API, 'read:users read:clients');
 
-        $caller = $this->authenticate()(PresentedCredentials::bearer('token'), 'GET', self::URL);
+        $caller = $this->authenticate()(
+            PresentedCredentials::bearer('token'),
+            RequestMethodInterface::METHOD_GET,
+            self::URL,
+        );
 
         self::assertTrue($caller->isClient(ClientId::fromString('machine')));
         self::assertNull($caller->userId);
@@ -93,7 +98,11 @@ final class CallerTest extends TestCase
         $this->users->save($user);
         $this->issue('token', self::MANAGEMENT_API, 'read:users', $user->id);
 
-        $caller = $this->authenticate()(PresentedCredentials::bearer('token'), 'GET', self::URL);
+        $caller = $this->authenticate()(
+            PresentedCredentials::bearer('token'),
+            RequestMethodInterface::METHOD_GET,
+            self::URL,
+        );
 
         self::assertTrue($caller->isActingAs($user->id));
 
@@ -150,7 +159,7 @@ final class CallerTest extends TestCase
     private function assertRefused(string $token): void
     {
         try {
-            $this->authenticate()(PresentedCredentials::bearer($token), 'GET', self::URL);
+            $this->authenticate()(PresentedCredentials::bearer($token), RequestMethodInterface::METHOD_GET, self::URL);
             self::fail('The token was accepted.');
         } catch (BearerTokenError $refusal) {
             self::assertSame(BearerErrorCode::InvalidToken, $refusal->error);

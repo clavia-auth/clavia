@@ -16,6 +16,7 @@ use ClaviaTest\Support\DpopClient;
 use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -42,7 +43,10 @@ final class DpopResourcesTest extends AcceptanceTestCase
         $client = DpopClient::es256();
         $token = $this->boundAdminToken($client);
 
-        $response = $this->management($token, $client->proof('GET', self::USERS, accessToken: $token));
+        $response = $this->management(
+            $token,
+            $client->proof(RequestMethodInterface::METHOD_GET, self::USERS, accessToken: $token),
+        );
 
         self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
     }
@@ -52,7 +56,7 @@ final class DpopResourcesTest extends AcceptanceTestCase
         // RFC 9449 §7.2: otherwise binding would be optional for whoever stole it.
         $token = $this->boundAdminToken(DpopClient::es256());
 
-        $response = $this->api('GET', '/api/v1/users', token: $token);
+        $response = $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/users', token: $token);
 
         self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertSame('invalid_token', self::json($response)['error']);
@@ -64,9 +68,18 @@ final class DpopResourcesTest extends AcceptanceTestCase
         $token = $this->boundAdminToken($client);
 
         $noProof = $this->management($token, null);
-        $anotherKey = $this->management($token, DpopClient::es256()->proof('GET', self::USERS, accessToken: $token));
-        $anotherUrl = $this->management($token, $client->proof('GET', self::USERINFO, accessToken: $token));
-        $anotherToken = $this->management($token, $client->proof('GET', self::USERS, accessToken: 'another'));
+        $anotherKey = $this->management(
+            $token,
+            DpopClient::es256()->proof(RequestMethodInterface::METHOD_GET, self::USERS, accessToken: $token),
+        );
+        $anotherUrl = $this->management(
+            $token,
+            $client->proof(RequestMethodInterface::METHOD_GET, self::USERINFO, accessToken: $token),
+        );
+        $anotherToken = $this->management(
+            $token,
+            $client->proof(RequestMethodInterface::METHOD_GET, self::USERS, accessToken: 'another'),
+        );
 
         foreach ([$noProof, $anotherKey, $anotherUrl, $anotherToken] as $response) {
             self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
@@ -80,7 +93,7 @@ final class DpopResourcesTest extends AcceptanceTestCase
     {
         $client = DpopClient::es256();
         $token = $this->boundAdminToken($client);
-        $proof = $client->proof('GET', self::USERS, accessToken: $token);
+        $proof = $client->proof(RequestMethodInterface::METHOD_GET, self::USERS, accessToken: $token);
 
         self::assertSame(StatusCodeInterface::STATUS_OK, $this->management($token, $proof)->getStatusCode());
         self::assertSame('invalid_dpop_proof', self::json($this->management($token, $proof))['error']);
@@ -90,7 +103,10 @@ final class DpopResourcesTest extends AcceptanceTestCase
     {
         $token = $this->adminToken();
 
-        $response = $this->management($token, DpopClient::es256()->proof('GET', self::USERS, accessToken: $token));
+        $response = $this->management(
+            $token,
+            DpopClient::es256()->proof(RequestMethodInterface::METHOD_GET, self::USERS, accessToken: $token),
+        );
 
         self::assertSame('invalid_token', self::json($response)['error']);
         self::assertStringStartsWith('DPoP ', $response->getHeaderLine('WWW-Authenticate'));
@@ -112,11 +128,15 @@ final class DpopResourcesTest extends AcceptanceTestCase
         )))['access_token'];
         self::assertIsString($token);
 
-        $withProof = $this->request('GET', '/oidc/userinfo', [
+        $withProof = $this->request(RequestMethodInterface::METHOD_GET, '/oidc/userinfo', [
             'Authorization' => 'DPoP ' . $token,
-            'DPoP' => $client->proof('GET', self::USERINFO, accessToken: $token),
+            'DPoP' => $client->proof(RequestMethodInterface::METHOD_GET, self::USERINFO, accessToken: $token),
         ]);
-        $asBearer = $this->request('GET', '/oidc/userinfo', ['Authorization' => 'Bearer ' . $token]);
+        $asBearer = $this->request(
+            RequestMethodInterface::METHOD_GET,
+            '/oidc/userinfo',
+            ['Authorization' => 'Bearer ' . $token],
+        );
 
         self::assertSame(StatusCodeInterface::STATUS_OK, $withProof->getStatusCode(), (string) $withProof->getBody());
         self::assertSame(self::TEST_USER_EMAIL, self::json($withProof)['email']);
@@ -145,17 +165,19 @@ final class DpopResourcesTest extends AcceptanceTestCase
             $headers['DPoP'] = $proof;
         }
 
-        return $this->api('GET', '/api/v1/users', token: '', headers: $headers);
+        return $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/users', token: '', headers: $headers);
     }
 
     /** @param callable(string): ResponseInterface $send */
     private function withNonce(DpopClient $client, callable $send): ResponseInterface
     {
-        $first = $send($client->proof('POST', self::TOKEN));
+        $first = $send($client->proof(RequestMethodInterface::METHOD_POST, self::TOKEN));
         if ((self::json($first)['error'] ?? null) !== 'use_dpop_nonce') {
             return $first;
         }
 
-        return $send($client->proof('POST', self::TOKEN, $first->getHeaderLine('DPoP-Nonce')));
+        return $send(
+            $client->proof(RequestMethodInterface::METHOD_POST, self::TOKEN, $first->getHeaderLine('DPoP-Nonce')),
+        );
     }
 }

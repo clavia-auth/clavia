@@ -13,6 +13,7 @@ namespace ClaviaTest\Unit\Bootstrap;
 
 use Clavia\Bootstrap\Container\ForwardedHeadersFilterFactory;
 use Clavia\Configuration\Settings;
+use Fig\Http\Message\RequestMethodInterface;
 use Laminas\Diactoros\ServerRequest;
 use Laminas\ServiceManager\ServiceManager;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -68,7 +69,7 @@ final class ForwardedHeadersFilterTest extends TestCase
         return $filter(new ServerRequest(
             serverParams: ['REMOTE_ADDR' => $peer],
             uri: 'http://auth.acme.com/oauth2/authorize',
-            method: 'GET',
+            method: RequestMethodInterface::METHOD_GET,
             headers: [
                 'Host' => 'auth.acme.com',
                 'X-Forwarded-Proto' => 'https',

@@ -28,6 +28,7 @@ use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
 use DateTimeImmutable;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -345,14 +346,14 @@ final class RefreshTokenTest extends AcceptanceTestCase
     {
         $this->adminToken();
 
-        $response = $this->api('POST', '/api/v1/clients', [
+        $response = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/clients', [
             'client_type' => 'public',
             'grant_types' => ['refresh_token'],
             'redirect_uris' => ['https://spa.test/callback'],
         ]);
 
         self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
-        $accepted = $this->api('POST', '/api/v1/clients', [
+        $accepted = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/clients', [
             'client_type' => 'public',
             'grant_types' => ['authorization_code', 'refresh_token'],
             'response_types' => ['code'],
@@ -414,7 +415,11 @@ final class RefreshTokenTest extends AcceptanceTestCase
 
     private function userinfo(string $accessToken): ResponseInterface
     {
-        return $this->request('GET', '/oidc/userinfo', ['Authorization' => 'Bearer ' . $accessToken]);
+        return $this->request(
+            RequestMethodInterface::METHOD_GET,
+            '/oidc/userinfo',
+            ['Authorization' => 'Bearer ' . $accessToken],
+        );
     }
 
     /**

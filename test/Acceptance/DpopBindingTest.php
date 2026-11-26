@@ -15,6 +15,7 @@ use Clavia\Domain\Client\GrantType;
 use ClaviaTest\Support\AcceptanceTestCase;
 use ClaviaTest\Support\DpopClient;
 use ClaviaTest\Support\OAuth2Fixtures;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -239,12 +240,12 @@ final class DpopBindingTest extends AcceptanceTestCase
      */
     private function send(DpopClient $client, string $url, callable $send): ResponseInterface
     {
-        $first = $send($client->proof('POST', $url));
+        $first = $send($client->proof(RequestMethodInterface::METHOD_POST, $url));
         if ((self::json($first)['error'] ?? null) !== 'use_dpop_nonce') {
             return $first;
         }
 
-        return $send($client->proof('POST', $url, $first->getHeaderLine('DPoP-Nonce')));
+        return $send($client->proof(RequestMethodInterface::METHOD_POST, $url, $first->getHeaderLine('DPoP-Nonce')));
     }
 
     /**

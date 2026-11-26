@@ -31,6 +31,7 @@ use ClaviaTest\Support\LoginFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\SoftwareAuthenticator;
 use DateTimeImmutable;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -208,7 +209,7 @@ final class PasskeyRegistrationTest extends AcceptanceTestCase
         $this->post('/auth/passkeys', $form);
 
         // The same answer again, as if the browser had kept the ceremony's cookie.
-        $replayed = $this->request('POST', '/auth/passkeys', [
+        $replayed = $this->request(RequestMethodInterface::METHOD_POST, '/auth/passkeys', [
             'Content-Type' => 'application/x-www-form-urlencoded',
             'Cookie' => implode('; ', [
                 'clavia_session=' . ($this->cookie('clavia_session') ?? ''),

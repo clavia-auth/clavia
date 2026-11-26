@@ -14,6 +14,7 @@ namespace ClaviaTest\Support\Contract;
 use Clavia\Application\Metrics\Metric;
 use Clavia\Application\Metrics\MetricSample;
 use Clavia\Application\Port\Metrics;
+use Fig\Http\Message\RequestMethodInterface;
 use PHPUnit\Framework\Attributes\Test;
 
 /** What every {@see Metrics} must do, run against the double and Redis. */
@@ -46,7 +47,7 @@ trait MetricsContract
     #[Test]
     public function aHistogramKeepsCumulativeBucketsItsSumAndItsCount(): void
     {
-        $labels = ['route' => 'oauth2.token', 'method' => 'POST', 'status' => '200'];
+        $labels = ['route' => 'oauth2.token', 'method' => RequestMethodInterface::METHOD_POST, 'status' => '200'];
         $this->metrics()->observe(Metric::RequestDuration, 0.004, $labels);
         $this->metrics()->observe(Metric::RequestDuration, 0.3, $labels);
         $this->metrics()->observe(Metric::RequestDuration, 30.0, $labels);

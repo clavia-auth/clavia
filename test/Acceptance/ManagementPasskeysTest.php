@@ -34,6 +34,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use DateTimeImmutable;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 
 /**
@@ -54,7 +55,7 @@ final class ManagementPasskeysTest extends AcceptanceTestCase
         $passkey = $this->passkeyOf($user, 'Work laptop', synced: true);
         $this->adminToken();
 
-        $response = $this->api('GET', '/api/v1/users/' . $user->id->value . '/passkeys');
+        $response = $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/users/' . $user->id->value . '/passkeys');
 
         self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
         self::assertSame([[
@@ -73,17 +74,19 @@ final class ManagementPasskeysTest extends AcceptanceTestCase
     {
         $user = $this->user();
         $this->adminToken();
-        $before = self::document($this->api('GET', '/api/v1/users/' . $user->id->value));
+        $before = self::document($this->api(RequestMethodInterface::METHOD_GET, '/api/v1/users/' . $user->id->value));
 
         $this->passkeyOf($user, 'One');
         $this->passkeyOf($user, 'Two');
-        $after = self::document($this->api('GET', '/api/v1/users/' . $user->id->value));
+        $after = self::document($this->api(RequestMethodInterface::METHOD_GET, '/api/v1/users/' . $user->id->value));
 
         self::assertSame(0, $before['passkey_count']);
         self::assertFalse($before['mfa_enrolled']);
         self::assertSame(2, $after['passkey_count']);
         self::assertTrue($after['mfa_enrolled']);
-        $listed = self::document($this->api('GET', '/api/v1/users', query: ['q' => self::TEST_USER_EMAIL]));
+        $listed = self::document(
+            $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/users', query: ['q' => self::TEST_USER_EMAIL]),
+        );
         self::assertSame(2, $listed['items'][0]['passkey_count'] ?? null);
     }
 
@@ -93,7 +96,10 @@ final class ManagementPasskeysTest extends AcceptanceTestCase
         $passkey = $this->passkeyOf($user, 'Lost phone');
         $this->adminToken();
 
-        $removed = $this->api('DELETE', '/api/v1/users/' . $user->id->value . '/passkeys/' . $passkey->id->value);
+        $removed = $this->api(
+            RequestMethodInterface::METHOD_DELETE,
+            '/api/v1/users/' . $user->id->value . '/passkeys/' . $passkey->id->value,
+        );
 
         self::assertSame(StatusCodeInterface::STATUS_NO_CONTENT, $removed->getStatusCode());
         self::assertSame([], $this->container()->get(PasskeyRepository::class)->ofUser($user->id));
@@ -114,12 +120,18 @@ final class ManagementPasskeysTest extends AcceptanceTestCase
         $theirs = $this->passkeyOf($other, 'Theirs');
         $this->adminToken();
 
-        $wrongAccount = $this->api('DELETE', '/api/v1/users/' . $user->id->value . '/passkeys/' . $theirs->id->value);
+        $wrongAccount = $this->api(
+            RequestMethodInterface::METHOD_DELETE,
+            '/api/v1/users/' . $user->id->value . '/passkeys/' . $theirs->id->value,
+        );
         $none = $this->api(
-            'DELETE',
+            RequestMethodInterface::METHOD_DELETE,
             '/api/v1/users/' . $user->id->value . '/passkeys/00000000-0000-4000-8000-000000000009',
         );
-        $noUser = $this->api('GET', '/api/v1/users/00000000-0000-4000-8000-000000000009/passkeys');
+        $noUser = $this->api(
+            RequestMethodInterface::METHOD_GET,
+            '/api/v1/users/00000000-0000-4000-8000-000000000009/passkeys',
+        );
 
         self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $wrongAccount->getStatusCode());
         self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $none->getStatusCode());
@@ -133,8 +145,11 @@ final class ManagementPasskeysTest extends AcceptanceTestCase
         $passkey = $this->passkeyOf($user, 'Key');
         $this->adminToken(['read:users']);
 
-        $list = $this->api('GET', '/api/v1/users/' . $user->id->value . '/passkeys');
-        $remove = $this->api('DELETE', '/api/v1/users/' . $user->id->value . '/passkeys/' . $passkey->id->value);
+        $list = $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/users/' . $user->id->value . '/passkeys');
+        $remove = $this->api(
+            RequestMethodInterface::METHOD_DELETE,
+            '/api/v1/users/' . $user->id->value . '/passkeys/' . $passkey->id->value,
+        );
 
         self::assertSame(StatusCodeInterface::STATUS_OK, $list->getStatusCode());
         self::assertSame(StatusCodeInterface::STATUS_FORBIDDEN, $remove->getStatusCode());

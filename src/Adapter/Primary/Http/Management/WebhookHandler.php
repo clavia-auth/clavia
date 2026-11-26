@@ -16,6 +16,7 @@ use Clavia\Application\Management\Webhooks\DeleteWebhook;
 use Clavia\Application\Management\Webhooks\ReadWebhooks;
 use Clavia\Application\Management\Webhooks\UpdateWebhook;
 use Clavia\Domain\Webhook\WebhookEndpointId;
+use Fig\Http\Message\RequestMethodInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -42,9 +43,9 @@ final readonly class WebhookHandler implements RequestHandlerInterface
         $id = WebhookEndpointId::fromString($management->path('webhook_id'));
 
         switch ($request->getMethod()) {
-            case 'GET':
+            case RequestMethodInterface::METHOD_GET:
                 return $this->responder->json(ManagementViews::webhook($this->read->one($id)));
-            case 'PATCH':
+            case RequestMethodInterface::METHOD_PATCH:
                 $body = $management->body;
                 if ($body->has('url') || $body->has('events')) {
                     $management->caller->require(ManagementPermission::ReadAuditEvents);
@@ -57,7 +58,7 @@ final readonly class WebhookHandler implements RequestHandlerInterface
                     $body->strings('events'),
                     $body->bool('is_enabled'),
                 )));
-            case 'DELETE':
+            case RequestMethodInterface::METHOD_DELETE:
                 ($this->delete)($id);
 
                 return $this->responder->noContent();

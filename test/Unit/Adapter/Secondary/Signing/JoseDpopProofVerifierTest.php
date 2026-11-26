@@ -14,6 +14,7 @@ namespace ClaviaTest\Unit\Adapter\Secondary\Signing;
 use Clavia\Adapter\Secondary\Signing\Jose\JoseDpopProofVerifier;
 use Clavia\Domain\OAuth2\Dpop\DpopAlgorithm;
 use ClaviaTest\Support\DpopClient;
+use Fig\Http\Message\RequestMethodInterface;
 use Jose\Component\Core\JWK;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -36,12 +37,14 @@ final class JoseDpopProofVerifierTest extends TestCase
     #[DataProvider('clients')]
     public function testAProofOfEachAlgorithmVerifiesAndSaysWhatItIsFor(DpopClient $client): void
     {
-        $proof = new JoseDpopProofVerifier()->verify($client->proof('POST', self::URL, 'n-1', 'the-token'));
+        $proof = new JoseDpopProofVerifier()->verify(
+            $client->proof(RequestMethodInterface::METHOD_POST, self::URL, 'n-1', 'the-token'),
+        );
 
         self::assertNotNull($proof);
         self::assertSame($client->thumbprint(), $proof->thumbprint->value);
         self::assertSame(DpopAlgorithm::from($client->algorithm), $proof->algorithm);
-        self::assertSame('POST', $proof->method);
+        self::assertSame(RequestMethodInterface::METHOD_POST, $proof->method);
         self::assertSame(self::URL, $proof->url);
         self::assertSame('n-1', $proof->nonce);
         self::assertNotNull($proof->accessTokenHash);
@@ -66,21 +69,27 @@ final class JoseDpopProofVerifierTest extends TestCase
     public static function forgeries(): iterable
     {
         $es = DpopClient::es256();
-        [$header, $payload, $signature] = explode('.', $es->proof('POST', self::URL));
+        [$header, $payload, $signature] = explode('.', $es->proof(RequestMethodInterface::METHOD_POST, self::URL));
 
         yield 'not a JWS' => ['not.a.proof'];
-        yield 'another typ' => [$es->proof('POST', self::URL, headers: ['typ' => 'JWT'])];
+        yield 'another typ' => [$es->proof(RequestMethodInterface::METHOD_POST, self::URL, headers: ['typ' => 'JWT'])];
         $rsHeader = rtrim(strtr(base64_encode((string) json_encode(
             ['typ' => 'dpop+jwt', 'alg' => 'RS256', 'jwk' => $es->key->toPublic()->all()],
         )), '+/', '-_'), '=');
         yield 'an algorithm the key does not sign with' => [$rsHeader . '.' . $payload . '.' . $signature];
-        yield 'a private member in the jwk' => [$es->proof('POST', self::URL, headers: ['jwk' => $es->key->all()])];
+        yield 'a private member in the jwk' => [
+            $es->proof(RequestMethodInterface::METHOD_POST, self::URL, headers: ['jwk' => $es->key->all()]),
+        ];
         $changed = self::b64('{"jti":"x","htm":"POST","htu":"u","iat":1}');
         yield 'a changed payload' => [$header . '.' . $changed . '.' . $signature];
         yield 'no signature' => [$header . '.' . $payload . '.'];
-        yield 'a missing jti' => [$es->proof('POST', self::URL, claims: ['jti' => null])];
-        yield 'an iat that is not a number' => [$es->proof('POST', self::URL, claims: ['iat' => 'yesterday'])];
-        yield 'an RSA key under 2048 bits' => [DpopClient::rs256(1024)->proof('POST', self::URL)];
+        yield 'a missing jti' => [$es->proof(RequestMethodInterface::METHOD_POST, self::URL, claims: ['jti' => null])];
+        yield 'an iat that is not a number' => [
+            $es->proof(RequestMethodInterface::METHOD_POST, self::URL, claims: ['iat' => 'yesterday']),
+        ];
+        yield 'an RSA key under 2048 bits' => [
+            DpopClient::rs256(1024)->proof(RequestMethodInterface::METHOD_POST, self::URL),
+        ];
         yield 'a MAC' => [self::mac()];
         yield 'PS256, which is not offered' => [self::ps256()];
     }
@@ -98,7 +107,7 @@ final class JoseDpopProofVerifierTest extends TestCase
     private static function ps256(): string
     {
         $client = DpopClient::rs256();
-        [, $payload, $signature] = explode('.', $client->proof('POST', self::URL));
+        [, $payload, $signature] = explode('.', $client->proof(RequestMethodInterface::METHOD_POST, self::URL));
         $header = rtrim(strtr(base64_encode((string) json_encode(
             ['typ' => 'dpop+jwt', 'alg' => 'PS256', 'jwk' => $client->key->toPublic()->all()],
         )), '+/', '-_'), '=');

@@ -17,6 +17,7 @@ use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Shared\Url;
 use ClaviaTest\Support\Fake\FakeHttpClient;
 use ClaviaTest\Support\RecordingLogger;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\RequestFactory;
 use Laminas\Diactoros\Response\EmptyResponse;
@@ -44,7 +45,7 @@ final class HttpBackChannelLogoutDeliveryTest extends TestCase
 
         self::assertCount(1, $this->http->requests);
         $request = $this->http->requests[0];
-        self::assertSame('POST', $request->getMethod());
+        self::assertSame(RequestMethodInterface::METHOD_POST, $request->getMethod());
         self::assertSame('https://app.example/bc', (string) $request->getUri());
         self::assertSame('application/x-www-form-urlencoded', $request->getHeaderLine('Content-Type'));
         self::assertSame(['logout_token' => 'a.b.c'], FakeHttpClient::form($request));

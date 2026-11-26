@@ -19,6 +19,7 @@ use Clavia\Application\Authentication\Passwordless\PasswordlessFailure;
 use Clavia\Application\Authentication\SignIn\SecondFactorRequired;
 use Clavia\Application\Authentication\SignIn\SignedIn;
 use Clavia\Domain\Authentication\PasswordlessMode;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -45,7 +46,7 @@ final readonly class PasswordlessLinkHandler implements RequestHandlerInterface
     #[\Override]
     public function handle(ServerRequestInterface $request): ResponseInterface
     {
-        if ($request->getMethod() !== 'POST') {
+        if ($request->getMethod() !== RequestMethodInterface::METHOD_POST) {
             $token = RequestParameterReader::query($request)->get('token') ?? '';
             $prompt = ($this->describe)($token, PasswordlessMode::Link);
 

@@ -25,6 +25,7 @@ use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
 use DateTimeImmutable;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 
 /**
@@ -44,7 +45,7 @@ final class ManagementWebhooksTest extends AcceptanceTestCase
     {
         $this->adminToken();
 
-        $created = $this->api('POST', '/api/v1/webhooks', [
+        $created = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/webhooks', [
             'url' => self::URL,
             'description' => 'SIEM',
             'events' => ['user.updated', 'user.created'],
@@ -60,8 +61,14 @@ final class ManagementWebhooksTest extends AcceptanceTestCase
         self::assertSame('/api/v1/webhooks/' . $id, $created->getHeaderLine('Location'));
 
         // Never again: not in the list, not in the endpoint, not in the trail.
-        self::assertStringNotContainsString($secret, (string) $this->api('GET', '/api/v1/webhooks')->getBody());
-        self::assertArrayNotHasKey('secret', self::document($this->api('GET', '/api/v1/webhooks/' . $id)));
+        self::assertStringNotContainsString(
+            $secret,
+            (string) $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/webhooks')->getBody(),
+        );
+        self::assertArrayNotHasKey(
+            'secret',
+            self::document($this->api(RequestMethodInterface::METHOD_GET, '/api/v1/webhooks/' . $id)),
+        );
         $trail = (string) TestStorage::database()->fetchValue(
             "SELECT details::text FROM audit_events WHERE type = 'webhook.created'",
         );
@@ -82,7 +89,11 @@ final class ManagementWebhooksTest extends AcceptanceTestCase
     {
         $this->adminToken(['create:webhooks', 'read:webhooks', 'update:webhooks']);
 
-        $refused = $this->api('POST', '/api/v1/webhooks', ['url' => self::URL, 'events' => ['*']]);
+        $refused = $this->api(
+            RequestMethodInterface::METHOD_POST,
+            '/api/v1/webhooks',
+            ['url' => self::URL, 'events' => ['*']],
+        );
 
         self::assertSame(StatusCodeInterface::STATUS_FORBIDDEN, $refused->getStatusCode());
         self::assertStringContainsString('read:audit_events', $refused->getHeaderLine('WWW-Authenticate'));
@@ -92,13 +103,21 @@ final class ManagementWebhooksTest extends AcceptanceTestCase
         $path = '/api/v1/webhooks/' . $endpoint->id->value;
         self::assertSame(
             StatusCodeInterface::STATUS_FORBIDDEN,
-            $this->api('PATCH', $path, ['events' => ['*']])->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_PATCH, $path, ['events' => ['*']])->getStatusCode(),
         );
         self::assertSame(
             StatusCodeInterface::STATUS_FORBIDDEN,
-            $this->api('PATCH', $path, ['url' => 'https://other.example/'])->getStatusCode(),
+            $this->api(
+                RequestMethodInterface::METHOD_PATCH,
+                $path,
+                ['url' => 'https://other.example/'],
+            )->getStatusCode(),
         );
-        $described = $this->api('PATCH', $path, ['description' => 'Paused', 'is_enabled' => false]);
+        $described = $this->api(
+            RequestMethodInterface::METHOD_PATCH,
+            $path,
+            ['description' => 'Paused', 'is_enabled' => false],
+        );
         self::assertSame(
             StatusCodeInterface::STATUS_OK,
             $described->getStatusCode(),
@@ -112,29 +131,47 @@ final class ManagementWebhooksTest extends AcceptanceTestCase
         $this->adminToken();
 
         foreach (['http://siem.acme.example/hooks', 'https://127.0.0.1/hooks', 'https://10.0.0.1/hooks'] as $url) {
-            $response = $this->api('POST', '/api/v1/webhooks', ['url' => $url, 'events' => ['*']]);
+            $response = $this->api(
+                RequestMethodInterface::METHOD_POST,
+                '/api/v1/webhooks',
+                ['url' => $url, 'events' => ['*']],
+            );
             self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode(), $url);
             self::assertStringNotContainsString('127.0.0.1', (string) $response->getBody(), 'Never the address.');
         }
-        $unknown = $this->api('POST', '/api/v1/webhooks', ['url' => self::URL, 'events' => ['user.exploded']]);
+        $unknown = $this->api(
+            RequestMethodInterface::METHOD_POST,
+            '/api/v1/webhooks',
+            ['url' => self::URL, 'events' => ['user.exploded']],
+        );
         self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $unknown->getStatusCode());
 
         foreach (range(1, WebhookEndpoint::MAX_ENDPOINTS) as $i) {
             $this->anEndpoint($i);
         }
-        $twentyFirst = $this->api('POST', '/api/v1/webhooks', ['url' => self::URL, 'events' => ['*']]);
+        $twentyFirst = $this->api(
+            RequestMethodInterface::METHOD_POST,
+            '/api/v1/webhooks',
+            ['url' => self::URL, 'events' => ['*']],
+        );
         self::assertSame(StatusCodeInterface::STATUS_CONFLICT, $twentyFirst->getStatusCode());
-        self::assertCount(20, self::json($this->api('GET', '/api/v1/webhooks')));
+        self::assertCount(20, self::json($this->api(RequestMethodInterface::METHOD_GET, '/api/v1/webhooks')));
     }
 
     public function testRotatingKeepsThePreviousSecretSigningForADay(): void
     {
         $this->freezeClock('2026-03-04T09:00:00Z');
         $this->adminToken();
-        $first = self::document($this->api('POST', '/api/v1/webhooks', ['url' => self::URL, 'events' => ['*']]));
+        $first = self::document(
+            $this->api(
+                RequestMethodInterface::METHOD_POST,
+                '/api/v1/webhooks',
+                ['url' => self::URL, 'events' => ['*']],
+            ),
+        );
         $path = '/api/v1/webhooks/' . (string) $first['id'];
 
-        $rotated = $this->api('POST', $path . '/rotate-secret');
+        $rotated = $this->api(RequestMethodInterface::METHOD_POST, $path . '/rotate-secret');
 
         self::assertSame(StatusCodeInterface::STATUS_OK, $rotated->getStatusCode(), (string) $rotated->getBody());
         $document = self::document($rotated);
@@ -159,7 +196,11 @@ final class ManagementWebhooksTest extends AcceptanceTestCase
         $endpoint = $this->anEndpoint(1);
         $path = '/api/v1/webhooks/' . $endpoint->id->value;
 
-        $changed = $this->api('PATCH', $path, ['events' => ['*'], 'url' => 'https://alerts.acme.example/clavia']);
+        $changed = $this->api(
+            RequestMethodInterface::METHOD_PATCH,
+            $path,
+            ['events' => ['*'], 'url' => 'https://alerts.acme.example/clavia'],
+        );
         self::assertSame(['*'], self::document($changed)['events']);
         self::assertSame('https://alerts.acme.example/clavia', self::document($changed)['url']);
         $fields = (string) TestStorage::database()->fetchValue(
@@ -168,8 +209,14 @@ final class ManagementWebhooksTest extends AcceptanceTestCase
         self::assertStringContainsString('events', $fields);
         self::assertStringNotContainsString('alerts.acme.example', $fields, 'The fields, never their values.');
 
-        self::assertSame(StatusCodeInterface::STATUS_NO_CONTENT, $this->api('DELETE', $path)->getStatusCode());
-        self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $this->api('GET', $path)->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_NO_CONTENT,
+            $this->api(RequestMethodInterface::METHOD_DELETE, $path)->getStatusCode(),
+        );
+        self::assertSame(
+            StatusCodeInterface::STATUS_NOT_FOUND,
+            $this->api(RequestMethodInterface::METHOD_GET, $path)->getStatusCode(),
+        );
         self::assertSame(
             1,
             (int) TestStorage::database()->fetchValue(

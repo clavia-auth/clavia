@@ -17,6 +17,7 @@ use Clavia\Adapter\Secondary\IdentityProvider\ProviderHttp;
 use Clavia\Application\Port\Saml\MetadataUnavailable;
 use Clavia\Application\Port\Saml\SamlMetadataSource;
 use Clavia\Domain\Shared\Url;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
@@ -47,7 +48,7 @@ final readonly class HttpSamlMetadataSource implements SamlMetadataSource
         }
         try {
             $response = $this->client->sendRequest(
-                $this->requests->createRequest('GET', $url->value)
+                $this->requests->createRequest(RequestMethodInterface::METHOD_GET, $url->value)
                     ->withHeader('Accept', 'application/samlmetadata+xml, application/xml;q=0.9, text/xml;q=0.8')
                     ->withHeader('User-Agent', ProviderHttp::USER_AGENT),
             );

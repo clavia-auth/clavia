@@ -24,6 +24,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\Response\JsonResponse;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -146,7 +147,7 @@ final class OidcConnectionTest extends AcceptanceTestCase
 
     public function testRegistrationNeedsEveryOidcSetting(): void
     {
-        $response = $this->api('POST', self::CONNECTIONS, [
+        $response = $this->api(RequestMethodInterface::METHOD_POST, self::CONNECTIONS, [
             'name' => 'half',
             'display_name' => 'Half',
             'strategy' => 'oidc',
@@ -158,7 +159,7 @@ final class OidcConnectionTest extends AcceptanceTestCase
 
     public function testThePoolTakesNoOidcSettings(): void
     {
-        $response = $this->api('POST', self::CONNECTIONS, [
+        $response = $this->api(RequestMethodInterface::METHOD_POST, self::CONNECTIONS, [
             'name' => 'staff',
             'display_name' => 'Staff',
             'strategy' => 'database',
@@ -173,7 +174,11 @@ final class OidcConnectionTest extends AcceptanceTestCase
         $this->registerAcme();
         $before = count($this->wire->requests);
 
-        $patched = $this->api('PATCH', self::CONNECTIONS . '/' . self::NAME, ['oidc_client_id' => 'another-id']);
+        $patched = $this->api(
+            RequestMethodInterface::METHOD_PATCH,
+            self::CONNECTIONS . '/' . self::NAME,
+            ['oidc_client_id' => 'another-id'],
+        );
 
         self::assertSame(StatusCodeInterface::STATUS_OK, $patched->getStatusCode(), (string) $patched->getBody());
         self::assertSame('another-id', self::json($patched)['oidc_client_id']);
@@ -182,12 +187,20 @@ final class OidcConnectionTest extends AcceptanceTestCase
         self::assertSame(FakeOpenIdProvider::DISCOVERY_URL, (string) $discovery->getUri());
         self::assertSame(
             StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
-            $this->api('PATCH', self::CONNECTIONS . '/' . self::NAME, ['oidc_issuer' => 'https://10.0.0.5'])
+            $this->api(
+                RequestMethodInterface::METHOD_PATCH,
+                self::CONNECTIONS . '/' . self::NAME,
+                ['oidc_issuer' => 'https://10.0.0.5'],
+            )
                 ->getStatusCode(),
         );
         self::assertSame(
             StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
-            $this->api('PATCH', self::CONNECTIONS . '/password', ['oidc_client_id' => 'x'])->getStatusCode(),
+            $this->api(
+                RequestMethodInterface::METHOD_PATCH,
+                self::CONNECTIONS . '/password',
+                ['oidc_client_id' => 'x'],
+            )->getStatusCode(),
             'A pool has no provider settings.',
         );
     }
@@ -287,7 +300,11 @@ final class OidcConnectionTest extends AcceptanceTestCase
 
         self::assertSame(
             StatusCodeInterface::STATUS_OK,
-            $this->api('PATCH', self::CONNECTIONS . '/' . self::NAME, ['is_enabled' => false])->getStatusCode(),
+            $this->api(
+                RequestMethodInterface::METHOD_PATCH,
+                self::CONNECTIONS . '/' . self::NAME,
+                ['is_enabled' => false],
+            )->getStatusCode(),
         );
 
         self::assertSame(
@@ -302,7 +319,7 @@ final class OidcConnectionTest extends AcceptanceTestCase
         $this->registerAcme();
         self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $this->finish($this->start())->getStatusCode());
 
-        $response = $this->api('DELETE', self::CONNECTIONS . '/' . self::NAME);
+        $response = $this->api(RequestMethodInterface::METHOD_DELETE, self::CONNECTIONS . '/' . self::NAME);
 
         self::assertSame(StatusCodeInterface::STATUS_CONFLICT, $response->getStatusCode());
         self::assertStringContainsString('1 account belongs', (string) self::document($response)['detail']);
@@ -314,11 +331,11 @@ final class OidcConnectionTest extends AcceptanceTestCase
 
         self::assertSame(
             StatusCodeInterface::STATUS_NO_CONTENT,
-            $this->api('DELETE', self::CONNECTIONS . '/' . self::NAME)->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_DELETE, self::CONNECTIONS . '/' . self::NAME)->getStatusCode(),
         );
         self::assertSame(
             StatusCodeInterface::STATUS_NOT_FOUND,
-            $this->api('GET', self::CONNECTIONS . '/' . self::NAME)->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_GET, self::CONNECTIONS . '/' . self::NAME)->getStatusCode(),
         );
         $connections = $this->container()->get(ConnectionRepository::class);
         self::assertNull($connections->find(ConnectionName::fromString(self::NAME)));
@@ -350,7 +367,7 @@ final class OidcConnectionTest extends AcceptanceTestCase
      */
     private function registerConnection(array $overrides = []): ResponseInterface
     {
-        return $this->api('POST', self::CONNECTIONS, $overrides + [
+        return $this->api(RequestMethodInterface::METHOD_POST, self::CONNECTIONS, $overrides + [
             'name' => self::NAME,
             'display_name' => 'Acme SSO',
             'strategy' => 'oidc',

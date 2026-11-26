@@ -23,6 +23,7 @@ use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
 use DateTimeImmutable;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -50,7 +51,7 @@ final class ManagementUserExportsTest extends AcceptanceTestCase
             new DateTimeImmutable('2026-01-15T10:00:00Z'),
         ));
 
-        $queued = $this->api('POST', self::EXPORTS);
+        $queued = $this->api(RequestMethodInterface::METHOD_POST, self::EXPORTS);
         self::assertSame(StatusCodeInterface::STATUS_ACCEPTED, $queued->getStatusCode(), (string) $queued->getBody());
         $job = self::document($queued);
         self::assertIsString($job['id']);
@@ -64,7 +65,7 @@ final class ManagementUserExportsTest extends AcceptanceTestCase
 
         self::assertSame("Ran 1 job; 0 stalled jobs failed; 0 finished jobs purged.\n", $this->runJobs());
 
-        $done = self::document($this->api('GET', '/api/v1/jobs/' . $job['id']));
+        $done = self::document($this->api(RequestMethodInterface::METHOD_GET, '/api/v1/jobs/' . $job['id']));
         self::assertSame('completed', $done['status']);
         self::assertSame(['total' => 1, 'created' => 0, 'failed' => 0], $done['summary']);
 
@@ -92,13 +93,15 @@ final class ManagementUserExportsTest extends AcceptanceTestCase
 
         // An export imports as it is: the line is refused only because the account is there.
         $import = self::document($this->api(
-            'POST',
+            RequestMethodInterface::METHOD_POST,
             '/api/v1/jobs/users-imports',
             headers: ['Content-Type' => 'application/x-ndjson'],
             rawBody: (string) $output->getBody(),
         ));
         $this->runJobs();
-        $report = self::document($this->api('GET', '/api/v1/jobs/' . (string) $import['id']));
+        $report = self::document(
+            $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/jobs/' . (string) $import['id']),
+        );
         self::assertSame(
             [['line' => 1, 'error' => 'already_exists', 'detail' => 'An account in this pool has that address.']],
             $report['errors'],
@@ -111,11 +114,19 @@ final class ManagementUserExportsTest extends AcceptanceTestCase
 
         self::assertSame(
             StatusCodeInterface::STATUS_ACCEPTED,
-            $this->api('POST', self::EXPORTS, query: ['connection' => 'google'])->getStatusCode(),
+            $this->api(
+                RequestMethodInterface::METHOD_POST,
+                self::EXPORTS,
+                query: ['connection' => 'google'],
+            )->getStatusCode(),
         );
         self::assertSame(
             StatusCodeInterface::STATUS_NOT_FOUND,
-            $this->api('POST', self::EXPORTS, query: ['connection' => 'nowhere'])->getStatusCode(),
+            $this->api(
+                RequestMethodInterface::METHOD_POST,
+                self::EXPORTS,
+                query: ['connection' => 'nowhere'],
+            )->getStatusCode(),
         );
     }
 
@@ -123,7 +134,7 @@ final class ManagementUserExportsTest extends AcceptanceTestCase
     {
         $this->adminToken(['read:users', 'create:users']);
         $import = self::document($this->api(
-            'POST',
+            RequestMethodInterface::METHOD_POST,
             '/api/v1/jobs/users-imports',
             headers: ['Content-Type' => 'application/x-ndjson'],
             rawBody: "{\"email\":\"ada@example.com\"}\n",
@@ -140,13 +151,16 @@ final class ManagementUserExportsTest extends AcceptanceTestCase
     {
         $this->adminToken(['create:users']);
 
-        self::assertSame(StatusCodeInterface::STATUS_FORBIDDEN, $this->api('POST', self::EXPORTS)->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_FORBIDDEN,
+            $this->api(RequestMethodInterface::METHOD_POST, self::EXPORTS)->getStatusCode(),
+        );
         self::assertSame(0, (int) TestStorage::database()->fetchValue('SELECT count(*) FROM user_jobs'));
     }
 
     private function download(string $jobId): ResponseInterface
     {
-        return $this->api('GET', '/api/v1/jobs/' . $jobId . '/output');
+        return $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/jobs/' . $jobId . '/output');
     }
 
     private function runJobs(): string

@@ -16,6 +16,7 @@ use ClaviaTest\Support\LoginFixtures;
 use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 
 /**
@@ -41,7 +42,7 @@ final class AuditTrailTest extends AcceptanceTestCase
     {
         $this->adminToken(['read:users']);
 
-        $response = $this->api('GET', self::EVENTS);
+        $response = $this->api(RequestMethodInterface::METHOD_GET, self::EVENTS);
 
         self::assertSame(StatusCodeInterface::STATUS_FORBIDDEN, $response->getStatusCode());
         self::assertStringContainsString('scope="read:audit_events"', $response->getHeaderLine('WWW-Authenticate'));
@@ -52,7 +53,7 @@ final class AuditTrailTest extends AcceptanceTestCase
         $this->adminToken();
 
         $created = $this->api(
-            'POST',
+            RequestMethodInterface::METHOD_POST,
             self::USERS,
             ['email' => 'new@clavia.dev', 'password' => 'a-good-password'],
             headers: ['User-Agent' => 'clavia-test/1.0'],
@@ -82,9 +83,15 @@ final class AuditTrailTest extends AcceptanceTestCase
     {
         $this->adminToken();
         $new = ['email' => 'twice@clavia.dev', 'password' => 'a-good-password'];
-        self::assertSame(StatusCodeInterface::STATUS_CREATED, $this->api('POST', self::USERS, $new)->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_CREATED,
+            $this->api(RequestMethodInterface::METHOD_POST, self::USERS, $new)->getStatusCode(),
+        );
 
-        self::assertSame(StatusCodeInterface::STATUS_CONFLICT, $this->api('POST', self::USERS, $new)->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_CONFLICT,
+            $this->api(RequestMethodInterface::METHOD_POST, self::USERS, $new)->getStatusCode(),
+        );
 
         $this->onlyEvent('user.created');
     }
@@ -133,10 +140,12 @@ final class AuditTrailTest extends AcceptanceTestCase
         $this->submitLogin();
         $this->adminToken();
 
-        $failures = self::document($this->api('GET', self::EVENTS, query: ['outcome' => 'failure']));
+        $failures = self::document(
+            $this->api(RequestMethodInterface::METHOD_GET, self::EVENTS, query: ['outcome' => 'failure']),
+        );
         self::assertSame(2, $failures['total']);
 
-        $both = self::document($this->api('GET', self::EVENTS, query: [
+        $both = self::document($this->api(RequestMethodInterface::METHOD_GET, self::EVENTS, query: [
             'type' => 'authentication.succeeded,authentication.failed',
         ]));
         self::assertSame(3, $both['total']);
@@ -145,7 +154,7 @@ final class AuditTrailTest extends AcceptanceTestCase
         self::assertIsArray($first);
         self::assertSame('authentication.succeeded', $first['type']);
 
-        $byTheMachine = self::document($this->api('GET', self::EVENTS, query: [
+        $byTheMachine = self::document($this->api(RequestMethodInterface::METHOD_GET, self::EVENTS, query: [
             'client_id' => self::TEST_M2M_CLIENT_ID,
             'type' => 'token.issued',
         ]));
@@ -158,7 +167,11 @@ final class AuditTrailTest extends AcceptanceTestCase
 
         self::assertSame(
             StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
-            $this->api('GET', self::EVENTS, query: ['type' => 'user.exploded'])->getStatusCode(),
+            $this->api(
+                RequestMethodInterface::METHOD_GET,
+                self::EVENTS,
+                query: ['type' => 'user.exploded'],
+            )->getStatusCode(),
         );
     }
 
@@ -169,7 +182,7 @@ final class AuditTrailTest extends AcceptanceTestCase
      */
     private function onlyEvent(string $type): array
     {
-        $page = self::document($this->api('GET', self::EVENTS, query: ['type' => $type]));
+        $page = self::document($this->api(RequestMethodInterface::METHOD_GET, self::EVENTS, query: ['type' => $type]));
         self::assertSame(1, $page['total'], json_encode($page, JSON_THROW_ON_ERROR));
         self::assertIsArray($page['items']);
         $event = $page['items'][0];

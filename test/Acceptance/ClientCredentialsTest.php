@@ -17,6 +17,7 @@ use ClaviaTest\Support\AcceptanceTestCase;
 use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Throwable;
 
@@ -110,7 +111,7 @@ final class ClientCredentialsTest extends AcceptanceTestCase
         $this->machineApi();
 
         $response = $this->request(
-            'POST',
+            RequestMethodInterface::METHOD_POST,
             '/oauth2/token',
             [
                 'AUTHORIZATION' => 'Basic ' . base64_encode(self::TEST_M2M_CLIENT_ID . ':' . self::TEST_M2M_SECRET),
@@ -270,7 +271,11 @@ final class ClientCredentialsTest extends AcceptanceTestCase
         $token = self::json($this->requestMachineToken())['access_token'];
         self::assertIsString($token);
 
-        $response = $this->request('GET', '/oidc/userinfo', ['Authorization' => 'Bearer ' . $token]);
+        $response = $this->request(
+            RequestMethodInterface::METHOD_GET,
+            '/oidc/userinfo',
+            ['Authorization' => 'Bearer ' . $token],
+        );
 
         self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertSame('invalid_token', self::json($response)['error']);

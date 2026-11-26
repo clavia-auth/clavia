@@ -18,6 +18,7 @@ use Clavia\Adapter\Primary\Http\OpenApi\Validation\RequestRejected;
 use Clavia\Adapter\Primary\Http\OpenApi\Validation\ResponseDoesNotMatch;
 use Clavia\Application\Management\ManagementPermission;
 use Clavia\Bootstrap\Container\ManagementContractFactory;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\Response;
 use Laminas\Diactoros\Response\JsonResponse;
@@ -65,7 +66,9 @@ final class ManagementContractTest extends TestCase
 
     public function testTheMostSpecificPathIsTheOperation(): void
     {
-        $operation = self::contract()->operationFor(self::request('POST', '/api/v1/clients/abc/rotate-secret'));
+        $operation = self::contract()->operationFor(
+            self::request(RequestMethodInterface::METHOD_POST, '/api/v1/clients/abc/rotate-secret'),
+        );
 
         self::assertNotNull($operation);
         self::assertSame('POST /api/v1/clients/{client_id}/rotate-secret', (string) $operation);
@@ -74,12 +77,20 @@ final class ManagementContractTest extends TestCase
 
     public function testAPathOrMethodTheDocumentDoesNotDescribeIsNoOperation(): void
     {
-        self::assertNull(self::contract()->operationFor(self::request('GET', '/api/v1/logs')));
-        self::assertNull(self::contract()->operationFor(self::request('PUT', '/api/v1/users')));
         self::assertNull(
-            self::contract()->operationFor(self::request('DELETE', '/api/v1/roles/rol_aaaaaaaaaaaaaaaa/users')),
+            self::contract()->operationFor(self::request(RequestMethodInterface::METHOD_GET, '/api/v1/logs')),
         );
-        self::assertNull(self::contract()->operationFor(self::request('HEAD', '/api/v1/users')));
+        self::assertNull(
+            self::contract()->operationFor(self::request(RequestMethodInterface::METHOD_PUT, '/api/v1/users')),
+        );
+        self::assertNull(
+            self::contract()->operationFor(
+                self::request(RequestMethodInterface::METHOD_DELETE, '/api/v1/roles/rol_aaaaaaaaaaaaaaaa/users'),
+            ),
+        );
+        self::assertNull(
+            self::contract()->operationFor(self::request(RequestMethodInterface::METHOD_HEAD, '/api/v1/users')),
+        );
     }
 
     public function testOnlyCreationsAndUpdatesTakeABody(): void
@@ -89,7 +100,15 @@ final class ManagementContractTest extends TestCase
         // (a rotation, a mail sent, an export or a test queued, metadata read again).
         foreach (self::contract()->operations() as $operation) {
             self::assertSame(
-                in_array($operation->method, ['POST', 'PATCH', 'PUT'], true)
+                in_array(
+                    $operation->method,
+                    [
+                        RequestMethodInterface::METHOD_POST,
+                        RequestMethodInterface::METHOD_PATCH,
+                        RequestMethodInterface::METHOD_PUT,
+                    ],
+                    true,
+                )
                     && ! str_ends_with($operation->path->template, 'rotate-secret')
                     && ! str_ends_with($operation->path->template, '/rotate')
                     && ! str_ends_with($operation->path->template, 'password-reset')
@@ -105,7 +124,11 @@ final class ManagementContractTest extends TestCase
     public function testAValidRequestComesBackDecoded(): void
     {
         $validated = self::contract()->validateRequest(
-            self::request('POST', '/api/v1/users', '{"email":"a@b.test","password":"long-enough"}'),
+            self::request(
+                RequestMethodInterface::METHOD_POST,
+                '/api/v1/users',
+                '{"email":"a@b.test","password":"long-enough"}',
+            ),
         );
 
         self::assertTrue($validated->hasBody);
@@ -116,7 +139,7 @@ final class ManagementContractTest extends TestCase
     public function testAViolationInTheBodyPointsAtItWithoutRepeatingTheValue(): void
     {
         $problem = self::problem(self::request(
-            'POST',
+            RequestMethodInterface::METHOD_POST,
             '/api/v1/resource-servers',
             '{"identifier":"https://x.test/","permissions":[{"value":"has space"}]}',
         ));
@@ -128,7 +151,7 @@ final class ManagementContractTest extends TestCase
 
     public function testAViolationInTheQueryNamesTheParameter(): void
     {
-        $problem = self::problem(self::request('GET', '/api/v1/users?page=0'));
+        $problem = self::problem(self::request(RequestMethodInterface::METHOD_GET, '/api/v1/users?page=0'));
 
         self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $problem->status);
         self::assertSame(
@@ -140,7 +163,7 @@ final class ManagementContractTest extends TestCase
     public function testAnUnknownMemberIsReportedWhereItIs(): void
     {
         $problem = self::problem(self::request(
-            'PATCH',
+            RequestMethodInterface::METHOD_PATCH,
             '/api/v1/users/6f1c8a52-1b1e-4c8e-9d38-0f2b3d7c9e10',
             '{"a/b~c":1}',
         ));
@@ -152,15 +175,22 @@ final class ManagementContractTest extends TestCase
     {
         self::assertSame(
             StatusCodeInterface::STATUS_BAD_REQUEST,
-            self::problem(self::request('POST', '/api/v1/users', '{"email":'))->status,
+            self::problem(self::request(RequestMethodInterface::METHOD_POST, '/api/v1/users', '{"email":'))->status,
         );
         self::assertSame(
             StatusCodeInterface::STATUS_BAD_REQUEST,
-            self::problem(self::request('GET', '/api/v1/users?page=1&page=2'))->status,
+            self::problem(self::request(RequestMethodInterface::METHOD_GET, '/api/v1/users?page=1&page=2'))->status,
         );
         self::assertSame(
             StatusCodeInterface::STATUS_UNSUPPORTED_MEDIA_TYPE,
-            self::problem(self::request('POST', '/api/v1/users', 'email=a', 'application/x-www-form-urlencoded'))
+            self::problem(
+                self::request(
+                    RequestMethodInterface::METHOD_POST,
+                    '/api/v1/users',
+                    'email=a',
+                    'application/x-www-form-urlencoded',
+                ),
+            )
                 ->status,
         );
     }
@@ -168,7 +198,7 @@ final class ManagementContractTest extends TestCase
     public function testAResponseMustBeOneTheOperationDescribes(): void
     {
         $delete = self::contract()->operationFor(
-            self::request('DELETE', '/api/v1/users/6f1c8a52-1b1e-4c8e-9d38-0f2b3d7c9e10'),
+            self::request(RequestMethodInterface::METHOD_DELETE, '/api/v1/users/6f1c8a52-1b1e-4c8e-9d38-0f2b3d7c9e10'),
         );
         self::assertNotNull($delete);
         self::contract()->validateResponse($delete, new Response(status: StatusCodeInterface::STATUS_NO_CONTENT));

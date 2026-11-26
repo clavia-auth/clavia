@@ -42,6 +42,7 @@ use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
 use DateTimeImmutable;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -416,7 +417,7 @@ final class ConsentTest extends AcceptanceTestCase
     {
         $this->adminToken();
 
-        $created = $this->api('POST', '/api/v1/clients', [
+        $created = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/clients', [
             'name' => 'Partner',
             'client_type' => 'public',
             'grant_types' => ['authorization_code'],
@@ -433,16 +434,16 @@ final class ConsentTest extends AcceptanceTestCase
         $path = '/api/v1/clients/' . (string) $body['client_id'];
         self::assertSame(
             StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
-            $this->api('PATCH', $path, ['is_first_party' => true])->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_PATCH, $path, ['is_first_party' => true])->getStatusCode(),
         );
-        self::assertFalse(self::document($this->api('GET', $path))['is_first_party']);
+        self::assertFalse(self::document($this->api(RequestMethodInterface::METHOD_GET, $path))['is_first_party']);
     }
 
     public function testTheDefaultRegistrationIsFirstParty(): void
     {
         $this->adminToken();
 
-        $created = self::document($this->api('POST', '/api/v1/clients', [
+        $created = self::document($this->api(RequestMethodInterface::METHOD_POST, '/api/v1/clients', [
             'client_type' => 'public',
             'grant_types' => ['authorization_code'],
             'response_types' => ['code'],
@@ -464,7 +465,7 @@ final class ConsentTest extends AcceptanceTestCase
         $this->adminToken();
         $consents = '/api/v1/users/' . $user->id->value . '/consents';
 
-        $listed = $this->api('GET', $consents);
+        $listed = $this->api(RequestMethodInterface::METHOD_GET, $consents);
 
         self::assertSame(StatusCodeInterface::STATUS_OK, $listed->getStatusCode(), (string) $listed->getBody());
         $document = self::document($listed);
@@ -478,13 +479,19 @@ final class ConsentTest extends AcceptanceTestCase
 
         self::assertSame(
             StatusCodeInterface::STATUS_NO_CONTENT,
-            $this->api('DELETE', $consents . '/' . self::THIRD_PARTY_CLIENT_ID)->getStatusCode(),
+            $this->api(
+                RequestMethodInterface::METHOD_DELETE,
+                $consents . '/' . self::THIRD_PARTY_CLIENT_ID,
+            )->getStatusCode(),
         );
         self::assertSame(
             StatusCodeInterface::STATUS_NO_CONTENT,
-            $this->api('DELETE', $consents . '/' . self::THIRD_PARTY_CLIENT_ID)->getStatusCode(),
+            $this->api(
+                RequestMethodInterface::METHOD_DELETE,
+                $consents . '/' . self::THIRD_PARTY_CLIENT_ID,
+            )->getStatusCode(),
         );
-        self::assertSame([], self::document($this->api('GET', $consents)));
+        self::assertSame([], self::document($this->api(RequestMethodInterface::METHOD_GET, $consents)));
         // Withdrawn: the application has to ask again.
         $this->consentState($this->asThirdParty('openid email'));
     }
@@ -494,10 +501,13 @@ final class ConsentTest extends AcceptanceTestCase
         $this->adminToken();
         $unknown = '/api/v1/users/00000000-0000-4000-8000-000000000999/consents';
 
-        self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $this->api('GET', $unknown)->getStatusCode());
         self::assertSame(
             StatusCodeInterface::STATUS_NOT_FOUND,
-            $this->api('DELETE', $unknown . '/spa')->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_GET, $unknown)->getStatusCode(),
+        );
+        self::assertSame(
+            StatusCodeInterface::STATUS_NOT_FOUND,
+            $this->api(RequestMethodInterface::METHOD_DELETE, $unknown . '/spa')->getStatusCode(),
         );
     }
 
@@ -505,7 +515,7 @@ final class ConsentTest extends AcceptanceTestCase
     {
         $this->adminToken();
 
-        $created = $this->api('POST', '/api/v1/resource-servers', [
+        $created = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/resource-servers', [
             'identifier' => 'https://strict.test/',
             'name' => 'Strict',
             'allow_skipping_consent' => false,
@@ -514,7 +524,7 @@ final class ConsentTest extends AcceptanceTestCase
         self::assertFalse(self::document($created)['allow_skipping_consent']);
 
         $patched = $this->api(
-            'PATCH',
+            RequestMethodInterface::METHOD_PATCH,
             '/api/v1/resource-servers/' . (string) self::document($created)['id'],
             ['allow_skipping_consent' => true],
         );
@@ -526,10 +536,14 @@ final class ConsentTest extends AcceptanceTestCase
         $this->adminToken();
         $id = $this->managementApi()->id->value;
 
-        $response = $this->api('PATCH', '/api/v1/resource-servers/' . $id, ['allow_skipping_consent' => false]);
+        $response = $this->api(
+            RequestMethodInterface::METHOD_PATCH,
+            '/api/v1/resource-servers/' . $id,
+            ['allow_skipping_consent' => false],
+        );
 
         self::assertSame(StatusCodeInterface::STATUS_CONFLICT, $response->getStatusCode());
-        $read = self::document($this->api('GET', '/api/v1/resource-servers/' . $id));
+        $read = self::document($this->api(RequestMethodInterface::METHOD_GET, '/api/v1/resource-servers/' . $id));
         self::assertTrue($read['allow_skipping_consent']);
     }
 

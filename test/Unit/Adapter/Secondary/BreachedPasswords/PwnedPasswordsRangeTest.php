@@ -20,6 +20,7 @@ use ClaviaTest\Support\Contract\BreachedPasswordsContract;
 use ClaviaTest\Support\Fake\FakeHttpClient;
 use ClaviaTest\Support\Fake\PwnedPasswordsService;
 use ClaviaTest\Support\RecordingLogger;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use GuzzleHttp\Exception\ConnectException;
 use Laminas\Diactoros\RequestFactory;
@@ -70,7 +71,7 @@ final class PwnedPasswordsRangeTest extends BreachedPasswordsContract
         self::assertCount(1, $this->http->requests);
         $request = $this->http->requests[0];
         $hash = PwnedPasswordsRange::hashOf('password123');
-        self::assertSame('GET', $request->getMethod());
+        self::assertSame(RequestMethodInterface::METHOD_GET, $request->getMethod());
         self::assertSame('https://api.pwnedpasswords.com/range/' . substr($hash, 0, 5), (string) $request->getUri());
         self::assertSame('true', $request->getHeaderLine('Add-Padding'));
         self::assertStringNotContainsString(substr($hash, 5), self::wire($request));

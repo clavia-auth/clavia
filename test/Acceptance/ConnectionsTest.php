@@ -37,6 +37,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use DateTimeImmutable;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 
 /**
@@ -250,17 +251,21 @@ final class ConnectionsTest extends AcceptanceTestCase
             'is_first_party' => false,
         ];
 
-        $listed = $this->api('POST', self::CLIENTS, $new + ['connections' => ['password']]);
+        $listed = $this->api(
+            RequestMethodInterface::METHOD_POST,
+            self::CLIENTS,
+            $new + ['connections' => ['password']],
+        );
         self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $listed->getStatusCode());
 
-        $created = $this->api('POST', self::CLIENTS, $new);
+        $created = $this->api(RequestMethodInterface::METHOD_POST, self::CLIENTS, $new);
         self::assertSame(StatusCodeInterface::STATUS_CREATED, $created->getStatusCode(), (string) $created->getBody());
         $client = self::json($created);
         self::assertSame([], $client['connections']);
         self::assertSame(
             StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
             $this->api(
-                'PUT',
+                RequestMethodInterface::METHOD_PUT,
                 self::CLIENTS . '/' . (string) $client['client_id'] . '/connections',
                 ['connections' => ['password']],
             )->getStatusCode(),
@@ -273,7 +278,7 @@ final class ConnectionsTest extends AcceptanceTestCase
     {
         $this->adminToken();
 
-        $created = $this->api('POST', self::CLIENTS, [
+        $created = $this->api(RequestMethodInterface::METHOD_POST, self::CLIENTS, [
             'client_type' => 'public',
             'grant_types' => ['authorization_code'],
             'response_types' => ['code'],
@@ -287,7 +292,7 @@ final class ConnectionsTest extends AcceptanceTestCase
     public function testTheConnectionsOfAnApplicationAreReplacedWhole(): void
     {
         $this->adminToken();
-        $id = (string) self::json($this->api('POST', self::CLIENTS, [
+        $id = (string) self::json($this->api(RequestMethodInterface::METHOD_POST, self::CLIENTS, [
             'client_type' => 'public',
             'grant_types' => ['authorization_code'],
             'response_types' => ['code'],
@@ -295,16 +300,30 @@ final class ConnectionsTest extends AcceptanceTestCase
             'connections' => ['password'],
         ]))['client_id'];
 
-        $replaced = $this->api('PUT', self::CLIENTS . '/' . $id . '/connections', ['connections' => ['google']]);
+        $replaced = $this->api(
+            RequestMethodInterface::METHOD_PUT,
+            self::CLIENTS . '/' . $id . '/connections',
+            ['connections' => ['google']],
+        );
 
         self::assertSame(StatusCodeInterface::STATUS_OK, $replaced->getStatusCode(), (string) $replaced->getBody());
         self::assertSame(['google'], self::json($replaced));
-        self::assertSame(['google'], self::json($this->api('GET', self::CLIENTS . '/' . $id))['connections']);
+        self::assertSame(
+            ['google'],
+            self::json($this->api(RequestMethodInterface::METHOD_GET, self::CLIENTS . '/' . $id))['connections'],
+        );
         self::assertSame(
             StatusCodeInterface::STATUS_NOT_FOUND,
-            $this->api('PUT', self::CLIENTS . '/' . $id . '/connections', ['connections' => ['saml']])->getStatusCode(),
+            $this->api(
+                RequestMethodInterface::METHOD_PUT,
+                self::CLIENTS . '/' . $id . '/connections',
+                ['connections' => ['saml']],
+            )->getStatusCode(),
         );
-        self::assertSame(['google'], self::json($this->api('GET', self::CLIENTS . '/' . $id))['connections']);
+        self::assertSame(
+            ['google'],
+            self::json($this->api(RequestMethodInterface::METHOD_GET, self::CLIENTS . '/' . $id))['connections'],
+        );
     }
 
     // ── Connections, through the Management API ─────────────────────────────────
@@ -313,7 +332,7 @@ final class ConnectionsTest extends AcceptanceTestCase
     {
         $this->adminToken();
 
-        $listed = $this->api('GET', self::CONNECTIONS);
+        $listed = $this->api(RequestMethodInterface::METHOD_GET, self::CONNECTIONS);
 
         self::assertSame(StatusCodeInterface::STATUS_OK, $listed->getStatusCode(), (string) $listed->getBody());
         $connections = self::json($listed);
@@ -335,7 +354,7 @@ final class ConnectionsTest extends AcceptanceTestCase
 
         $this->bootWithGoogle();
         $this->adminToken();
-        $google = self::json($this->api('GET', self::CONNECTIONS . '/google'));
+        $google = self::json($this->api(RequestMethodInterface::METHOD_GET, self::CONNECTIONS . '/google'));
         self::assertTrue($google['configured']);
         self::assertTrue($google['usable']);
     }
@@ -344,7 +363,7 @@ final class ConnectionsTest extends AcceptanceTestCase
     {
         $this->adminToken();
 
-        $patched = $this->api('PATCH', self::CONNECTIONS . '/github', [
+        $patched = $this->api(RequestMethodInterface::METHOD_PATCH, self::CONNECTIONS . '/github', [
             'is_enabled' => false,
             'is_domain_connection' => true,
             'display_name' => 'GitHub (staff)',
@@ -358,12 +377,16 @@ final class ConnectionsTest extends AcceptanceTestCase
         self::assertFalse($body['usable']);
         self::assertSame(
             StatusCodeInterface::STATUS_NOT_FOUND,
-            $this->api('PATCH', self::CONNECTIONS . '/saml', ['is_enabled' => true])->getStatusCode(),
+            $this->api(
+                RequestMethodInterface::METHOD_PATCH,
+                self::CONNECTIONS . '/saml',
+                ['is_enabled' => true],
+            )->getStatusCode(),
         );
         // Creating one needs a strategy and a display name: the contract is strict.
         self::assertSame(
             StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
-            $this->api('POST', self::CONNECTIONS, ['name' => 'x'])->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_POST, self::CONNECTIONS, ['name' => 'x'])->getStatusCode(),
         );
     }
 
@@ -371,7 +394,7 @@ final class ConnectionsTest extends AcceptanceTestCase
     {
         $this->adminToken(['read:users']);
 
-        $response = $this->api('GET', self::CONNECTIONS);
+        $response = $this->api(RequestMethodInterface::METHOD_GET, self::CONNECTIONS);
 
         self::assertSame(StatusCodeInterface::STATUS_FORBIDDEN, $response->getStatusCode());
         self::assertStringContainsString('scope="read:connections"', $response->getHeaderLine('WWW-Authenticate'));
@@ -381,7 +404,7 @@ final class ConnectionsTest extends AcceptanceTestCase
     {
         $this->adminToken();
 
-        $created = $this->api('POST', self::CONNECTIONS, [
+        $created = $this->api(RequestMethodInterface::METHOD_POST, self::CONNECTIONS, [
             'name' => 'gitlab',
             'display_name' => 'GitLab',
             'strategy' => 'social',
@@ -390,24 +413,25 @@ final class ConnectionsTest extends AcceptanceTestCase
         self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $created->getStatusCode());
         self::assertSame(
             StatusCodeInterface::STATUS_CONFLICT,
-            $this->api('DELETE', self::CONNECTIONS . '/google')->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_DELETE, self::CONNECTIONS . '/google')->getStatusCode(),
         );
         self::assertSame(
             StatusCodeInterface::STATUS_CONFLICT,
-            $this->api('DELETE', self::CONNECTIONS . '/password')->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_DELETE, self::CONNECTIONS . '/password')->getStatusCode(),
         );
-        self::assertSame(StatusCodeInterface::STATUS_CONFLICT, $this->api('POST', self::CONNECTIONS, [
+        $again = $this->api(RequestMethodInterface::METHOD_POST, self::CONNECTIONS, [
             'name' => 'password',
             'display_name' => 'Again',
             'strategy' => 'database',
-        ])->getStatusCode());
+        ]);
+        self::assertSame(StatusCodeInterface::STATUS_CONFLICT, $again->getStatusCode());
     }
 
     public function testAConnectionNameIsPlain(): void
     {
         $this->adminToken();
 
-        $response = $this->api('POST', self::CONNECTIONS, [
+        $response = $this->api(RequestMethodInterface::METHOD_POST, self::CONNECTIONS, [
             'name' => 'Staff Pool!',
             'display_name' => 'Staff',
             'strategy' => 'database',
@@ -424,7 +448,7 @@ final class ConnectionsTest extends AcceptanceTestCase
         $this->makePool();
 
         self::assertSame('staff', $this->makeUser('jane@clavia.dev', 'staff')['connection']);
-        self::assertSame('password', self::json($this->api('POST', self::USERS, [
+        self::assertSame('password', self::json($this->api(RequestMethodInterface::METHOD_POST, self::USERS, [
             'email' => 'x@clavia.dev',
             'password' => 'a-good-password',
         ]))['connection']);
@@ -439,11 +463,12 @@ final class ConnectionsTest extends AcceptanceTestCase
         $second = $this->makeUser('jane@clavia.dev', 'staff');
 
         self::assertNotSame($first['id'], $second['id']);
-        self::assertSame(StatusCodeInterface::STATUS_CONFLICT, $this->api('POST', self::USERS, [
+        $taken = $this->api(RequestMethodInterface::METHOD_POST, self::USERS, [
             'email' => 'jane@clavia.dev',
             'password' => 'a-good-password',
             'connection' => 'staff',
-        ])->getStatusCode());
+        ]);
+        self::assertSame(StatusCodeInterface::STATUS_CONFLICT, $taken->getStatusCode());
     }
 
     public function testAUserIsNotCreatedInAnExternalConnection(): void
@@ -457,7 +482,7 @@ final class ConnectionsTest extends AcceptanceTestCase
                 'Not A Name' => StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
             ] as $connection => $status
         ) {
-            self::assertSame($status, $this->api('POST', self::USERS, [
+            self::assertSame($status, $this->api(RequestMethodInterface::METHOD_POST, self::USERS, [
                 'email' => 'x@clavia.dev',
                 'password' => 'a-good-password',
                 'connection' => $connection,
@@ -511,7 +536,7 @@ final class ConnectionsTest extends AcceptanceTestCase
         $this->makePool();
         $this->makeUser('jane@clavia.dev', 'staff');
 
-        $response = $this->api('DELETE', self::CONNECTIONS . '/staff');
+        $response = $this->api(RequestMethodInterface::METHOD_DELETE, self::CONNECTIONS . '/staff');
 
         self::assertSame(StatusCodeInterface::STATUS_CONFLICT, $response->getStatusCode());
         self::assertStringContainsString('1 account belongs', (string) $response->getBody());
@@ -526,16 +551,18 @@ final class ConnectionsTest extends AcceptanceTestCase
 
         self::assertSame(
             StatusCodeInterface::STATUS_NO_CONTENT,
-            $this->api('DELETE', self::CONNECTIONS . '/staff')->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_DELETE, self::CONNECTIONS . '/staff')->getStatusCode(),
         );
 
         self::assertSame(
             StatusCodeInterface::STATUS_NOT_FOUND,
-            $this->api('GET', self::CONNECTIONS . '/staff')->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_GET, self::CONNECTIONS . '/staff')->getStatusCode(),
         );
         self::assertSame(
             ['password'],
-            self::json($this->api('GET', self::CLIENTS . '/' . self::TEST_CLIENT_ID))['connections'],
+            self::json(
+                $this->api(RequestMethodInterface::METHOD_GET, self::CLIENTS . '/' . self::TEST_CLIENT_ID),
+            )['connections'],
         );
     }
 
@@ -548,8 +575,13 @@ final class ConnectionsTest extends AcceptanceTestCase
         $this->link($user, 'google', 'g-1', 'u@g.test');
         $identities = self::USERS . '/' . $user->id->value . '/identities';
 
-        self::assertSame('password', self::json($this->api('GET', self::USERS . '/' . $user->id->value))['connection']);
-        $listed = self::json($this->api('GET', $identities));
+        self::assertSame(
+            'password',
+            self::json(
+                $this->api(RequestMethodInterface::METHOD_GET, self::USERS . '/' . $user->id->value),
+            )['connection'],
+        );
+        $listed = self::json($this->api(RequestMethodInterface::METHOD_GET, $identities));
         self::assertCount(1, $listed);
         self::assertSame('google', self::at($listed, 0, 'connection'));
         self::assertSame('g-1', self::at($listed, 0, 'subject'));
@@ -557,12 +589,12 @@ final class ConnectionsTest extends AcceptanceTestCase
 
         self::assertSame(
             StatusCodeInterface::STATUS_NO_CONTENT,
-            $this->api('DELETE', $identities . '/google')->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_DELETE, $identities . '/google')->getStatusCode(),
         );
-        self::assertSame([], self::json($this->api('GET', $identities)));
+        self::assertSame([], self::json($this->api(RequestMethodInterface::METHOD_GET, $identities)));
         self::assertSame(
             StatusCodeInterface::STATUS_NOT_FOUND,
-            $this->api('DELETE', $identities . '/google')->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_DELETE, $identities . '/google')->getStatusCode(),
         );
     }
 
@@ -578,7 +610,10 @@ final class ConnectionsTest extends AcceptanceTestCase
         $this->container()->get(UserRepository::class)->save($external);
         $this->link($external, 'google', 'g-2', null);
 
-        $response = $this->api('DELETE', self::USERS . '/' . $external->id->value . '/identities/google');
+        $response = $this->api(
+            RequestMethodInterface::METHOD_DELETE,
+            self::USERS . '/' . $external->id->value . '/identities/google',
+        );
 
         self::assertSame(StatusCodeInterface::STATUS_CONFLICT, $response->getStatusCode());
         self::assertStringContainsString('only way in', (string) $response->getBody());
@@ -652,7 +687,7 @@ final class ConnectionsTest extends AcceptanceTestCase
 
     private function makePool(string $name = 'staff'): void
     {
-        $created = $this->api('POST', self::CONNECTIONS, [
+        $created = $this->api(RequestMethodInterface::METHOD_POST, self::CONNECTIONS, [
             'name' => $name,
             'display_name' => ucfirst($name),
             'strategy' => 'database',
@@ -664,7 +699,7 @@ final class ConnectionsTest extends AcceptanceTestCase
     /** @return array<array-key, mixed> */
     private function makeUser(string $email, string $connection, string $password = 'a-good-password'): array
     {
-        $created = $this->api('POST', self::USERS, [
+        $created = $this->api(RequestMethodInterface::METHOD_POST, self::USERS, [
             'email' => $email,
             'password' => $password,
             'connection' => $connection,

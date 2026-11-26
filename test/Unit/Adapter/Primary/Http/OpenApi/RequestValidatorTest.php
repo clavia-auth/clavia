@@ -20,6 +20,7 @@ use Clavia\Adapter\Primary\Http\OpenApi\Validation\RequestRejected;
 use Clavia\Adapter\Primary\Http\OpenApi\Validation\RequestValidator;
 use Clavia\Adapter\Primary\Http\OpenApi\Validation\UnsupportedMediaType;
 use Clavia\Adapter\Primary\Http\OpenApi\Validation\Violation;
+use Fig\Http\Message\RequestMethodInterface;
 use Laminas\Diactoros\ServerRequest;
 use Laminas\Diactoros\StreamFactory;
 use PHPUnit\Framework\TestCase;
@@ -106,7 +107,9 @@ final class RequestValidatorTest extends TestCase
         // NDJSON is not JSON: the operation reads it line by line, and the validator leaves it whole.
         $lines = "{\"email\":\"ada@example.com\"}\nnot json at all\n";
 
-        $validated = self::validator()->validate(self::request('POST', '/v2/imports', $lines, 'application/x-ndjson'));
+        $validated = self::validator()->validate(
+            self::request(RequestMethodInterface::METHOD_POST, '/v2/imports', $lines, 'application/x-ndjson'),
+        );
 
         self::assertSame($lines, $validated->body);
         self::assertTrue($validated->hasBody);
@@ -117,7 +120,7 @@ final class RequestValidatorTest extends TestCase
         $form = 'grant_type=authorization_code&code=a%2Bb+c&redirect_uri=https%3A%2F%2Fapp.example%2Fcb';
 
         $validated = self::validator()->validate(
-            self::request('POST', '/v2/token', $form, 'application/x-www-form-urlencoded'),
+            self::request(RequestMethodInterface::METHOD_POST, '/v2/token', $form, 'application/x-www-form-urlencoded'),
         );
 
         self::assertEquals((object) [
@@ -137,7 +140,12 @@ final class RequestValidatorTest extends TestCase
         foreach ($refused as $form => $case) {
             try {
                 self::validator()->validate(
-                    self::request('POST', '/v2/token', $form, 'application/x-www-form-urlencoded'),
+                    self::request(
+                        RequestMethodInterface::METHOD_POST,
+                        '/v2/token',
+                        $form,
+                        'application/x-www-form-urlencoded',
+                    ),
                 );
                 self::fail($case . ' was accepted.');
             } catch (RequestDoesNotMatch $mismatch) {
@@ -146,7 +154,7 @@ final class RequestValidatorTest extends TestCase
         }
 
         $machine = self::validator()->validate(self::request(
-            'POST',
+            RequestMethodInterface::METHOD_POST,
             '/v2/token',
             'grant_type=client_credentials&scope=read%3Areports',
             'application/x-www-form-urlencoded; charset=utf-8',
@@ -159,7 +167,7 @@ final class RequestValidatorTest extends TestCase
     {
         try {
             self::validator()->validate(self::request(
-                'POST',
+                RequestMethodInterface::METHOD_POST,
                 '/v2/token',
                 'grant_type=client_credentials&scope=a&scope=b',
                 'application/x-www-form-urlencoded',
@@ -175,7 +183,7 @@ final class RequestValidatorTest extends TestCase
         $this->expectException(UnsupportedMediaType::class);
 
         self::validator()->validate(self::request(
-            'POST',
+            RequestMethodInterface::METHOD_POST,
             '/v2/token',
             'grant_type=client_credentials',
             'application/x-www-form-urlencoded; charset=iso-8859-1',
@@ -186,20 +194,28 @@ final class RequestValidatorTest extends TestCase
     {
         $this->expectException(UnsupportedMediaType::class);
 
-        self::validator()->validate(self::request('POST', '/v2/token', '{"grant_type":"client_credentials"}'));
+        self::validator()->validate(
+            self::request(RequestMethodInterface::METHOD_POST, '/v2/token', '{"grant_type":"client_credentials"}'),
+        );
     }
 
     public function testAnOpaqueBodyOfAnotherMediaTypeIsUnsupported(): void
     {
         $this->expectException(UnsupportedMediaType::class);
 
-        self::validator()->validate(self::request('POST', '/v2/imports', '{"email":"a@example.com"}'));
+        self::validator()->validate(
+            self::request(RequestMethodInterface::METHOD_POST, '/v2/imports', '{"email":"a@example.com"}'),
+        );
     }
 
     public function testAValidRequestComesBackDecoded(): void
     {
         $validated = self::validator()->validate(
-            self::request('GET', '/v2/items?limit=10&tag=a&tag=b&ids=1,2&active=true', headers: ['X-Tenant' => 'acme']),
+            self::request(
+                RequestMethodInterface::METHOD_GET,
+                '/v2/items?limit=10&tag=a&tag=b&ids=1,2&active=true',
+                headers: ['X-Tenant' => 'acme'],
+            ),
         );
 
         self::assertSame('GET /items', (string) $validated->operation);
@@ -214,10 +230,10 @@ final class RequestValidatorTest extends TestCase
 
     public function testAConcretePathWinsOverATemplatedOne(): void
     {
-        $latest = self::validator()->validate(self::request('GET', '/v2/items/latest'));
+        $latest = self::validator()->validate(self::request(RequestMethodInterface::METHOD_GET, '/v2/items/latest'));
         self::assertSame('GET /items/latest', (string) $latest->operation);
 
-        $byId = self::validator()->validate(self::request('GET', '/v2/items/42'));
+        $byId = self::validator()->validate(self::request(RequestMethodInterface::METHOD_GET, '/v2/items/42'));
         self::assertSame('GET /items/{id}', (string) $byId->operation);
         self::assertSame(42, $byId->parameter(ParameterLocation::Path, 'id'));
     }
@@ -225,18 +241,19 @@ final class RequestValidatorTest extends TestCase
     public function testAPathOutsideTheServerOrWithAnotherMethodIsNoOperation(): void
     {
         $requests = [
-            ['GET', '/items'],
-            ['GET', '/v2/items/'],
-            ['HEAD', '/v2/items'],
+            [RequestMethodInterface::METHOD_GET, '/items'],
+            [RequestMethodInterface::METHOD_GET, '/v2/items/'],
+            [RequestMethodInterface::METHOD_HEAD, '/v2/items'],
             ['get', '/v2/items'],
-            ['PUT', '/v2/items/1'],
+            [RequestMethodInterface::METHOD_PUT, '/v2/items/1'],
         ];
         foreach ($requests as [$method, $path]) {
             try {
                 self::validator()->validate(self::request($method, $path));
                 self::fail(sprintf('%s %s was matched.', $method, $path));
             } catch (OperationNotFound $missing) {
-                self::assertSame($method === 'PUT' || $method === 'HEAD' || $method === 'get', $missing->pathIsKnown);
+                $known = [RequestMethodInterface::METHOD_PUT, RequestMethodInterface::METHOD_HEAD, 'get'];
+                self::assertSame(in_array($method, $known, true), $missing->pathIsKnown);
             }
         }
     }
@@ -244,7 +261,11 @@ final class RequestValidatorTest extends TestCase
     public function testEveryParameterViolationIsReported(): void
     {
         $violations = self::rejected(
-            self::request('GET', '/v2/items?limit=0&active=yes&sort=name', headers: ['X-Tenant' => 'a']),
+            self::request(
+                RequestMethodInterface::METHOD_GET,
+                '/v2/items?limit=0&active=yes&sort=name',
+                headers: ['X-Tenant' => 'a'],
+            ),
             RequestDoesNotMatch::class,
         );
 
@@ -260,7 +281,7 @@ final class RequestValidatorTest extends TestCase
     {
         self::assertSame(
             ['header x-tenant: Is required.'],
-            self::rejected(self::request('GET', '/v2/items'), RequestDoesNotMatch::class),
+            self::rejected(self::request(RequestMethodInterface::METHOD_GET, '/v2/items'), RequestDoesNotMatch::class),
         );
     }
 
@@ -271,7 +292,7 @@ final class RequestValidatorTest extends TestCase
                 ['query limit: Must be an integer.'],
                 self::rejected(
                     self::request(
-                        'GET',
+                        RequestMethodInterface::METHOD_GET,
                         '/v2/items?limit=' . rawurlencode($notAnInteger),
                         headers: ['X-Tenant' => 'acme'],
                     ),
@@ -287,7 +308,11 @@ final class RequestValidatorTest extends TestCase
         self::assertSame(
             ['query limit: Is sent more than once.'],
             self::rejected(
-                self::request('GET', '/v2/items?limit=1&limit=2', headers: ['X-Tenant' => 'acme']),
+                self::request(
+                    RequestMethodInterface::METHOD_GET,
+                    '/v2/items?limit=1&limit=2',
+                    headers: ['X-Tenant' => 'acme'],
+                ),
                 MalformedRequest::class,
             ),
         );
@@ -297,19 +322,24 @@ final class RequestValidatorTest extends TestCase
     {
         self::assertSame(
             ['path id: Is not valid UTF-8.'],
-            self::rejected(self::request('GET', '/v2/items/%FF'), MalformedRequest::class),
+            self::rejected(self::request(RequestMethodInterface::METHOD_GET, '/v2/items/%FF'), MalformedRequest::class),
         );
     }
 
     public function testTheBodyIsParsedAndValidated(): void
     {
-        $validated = self::validator()->validate(self::request('POST', '/v2/items', '{"name":"a"}'));
+        $validated = self::validator()->validate(
+            self::request(RequestMethodInterface::METHOD_POST, '/v2/items', '{"name":"a"}'),
+        );
         self::assertTrue($validated->hasBody);
         self::assertInstanceOf(stdClass::class, $validated->body);
 
         self::assertSame(
             ['body /name: Is required.', 'body /id: Is read-only: it cannot be sent.', 'body /x: Is not allowed.'],
-            self::rejected(self::request('POST', '/v2/items', '{"id":"1","x":2}'), RequestDoesNotMatch::class),
+            self::rejected(
+                self::request(RequestMethodInterface::METHOD_POST, '/v2/items', '{"id":"1","x":2}'),
+                RequestDoesNotMatch::class,
+            ),
         );
     }
 
@@ -317,7 +347,7 @@ final class RequestValidatorTest extends TestCase
     {
         self::assertSame(
             ['body: A body is required.'],
-            self::rejected(self::request('POST', '/v2/items'), RequestDoesNotMatch::class),
+            self::rejected(self::request(RequestMethodInterface::METHOD_POST, '/v2/items'), RequestDoesNotMatch::class),
         );
     }
 
@@ -325,7 +355,10 @@ final class RequestValidatorTest extends TestCase
     {
         self::assertSame(
             ['body: This operation takes no body.'],
-            self::rejected(self::request('DELETE', '/v2/items/1', '{}'), RequestDoesNotMatch::class),
+            self::rejected(
+                self::request(RequestMethodInterface::METHOD_DELETE, '/v2/items/1', '{}'),
+                RequestDoesNotMatch::class,
+            ),
         );
     }
 
@@ -333,7 +366,10 @@ final class RequestValidatorTest extends TestCase
     {
         self::assertSame(
             ['body: Is not valid JSON.'],
-            self::rejected(self::request('POST', '/v2/items', '{"name":'), MalformedRequest::class),
+            self::rejected(
+                self::request(RequestMethodInterface::METHOD_POST, '/v2/items', '{"name":'),
+                MalformedRequest::class,
+            ),
         );
     }
 
@@ -345,12 +381,20 @@ final class RequestValidatorTest extends TestCase
             ['{"name":"a"}', 'application/json; charset=iso-8859-1'],
         ];
         foreach ($refused as [$body, $contentType]) {
-            self::rejected(self::request('POST', '/v2/items', $body, $contentType), UnsupportedMediaType::class);
+            self::rejected(
+                self::request(RequestMethodInterface::METHOD_POST, '/v2/items', $body, $contentType),
+                UnsupportedMediaType::class,
+            );
         }
 
         // Parameters are allowed, and the type is case-insensitive.
         $accepted = self::validator()->validate(
-            self::request('POST', '/v2/items', '{"name":"a"}', 'Application/JSON; charset=UTF-8'),
+            self::request(
+                RequestMethodInterface::METHOD_POST,
+                '/v2/items',
+                '{"name":"a"}',
+                'Application/JSON; charset=UTF-8',
+            ),
         );
         self::assertTrue($accepted->hasBody);
     }

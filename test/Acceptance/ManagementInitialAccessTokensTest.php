@@ -18,6 +18,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 
 /**
@@ -38,7 +39,11 @@ final class ManagementInitialAccessTokensTest extends AcceptanceTestCase
         $this->freezeClock('2026-01-15T10:00:00Z');
         $this->adminToken();
 
-        $issued = $this->api('POST', self::TOKENS, ['description' => 'Acme partner portal', 'max_uses' => 5]);
+        $issued = $this->api(
+            RequestMethodInterface::METHOD_POST,
+            self::TOKENS,
+            ['description' => 'Acme partner portal', 'max_uses' => 5],
+        );
 
         self::assertSame(StatusCodeInterface::STATUS_CREATED, $issued->getStatusCode(), (string) $issued->getBody());
         $document = self::document($issued);
@@ -65,11 +70,17 @@ final class ManagementInitialAccessTokensTest extends AcceptanceTestCase
     {
         $clock = $this->freezeClock('2026-01-15T10:00:00Z');
         $this->adminToken();
-        $short = self::document($this->api('POST', self::TOKENS, ['description' => 'Short', 'expires_in' => 60]));
-        $this->api('POST', self::TOKENS, ['description' => 'Long']);
+        $short = self::document(
+            $this->api(
+                RequestMethodInterface::METHOD_POST,
+                self::TOKENS,
+                ['description' => 'Short', 'expires_in' => 60],
+            ),
+        );
+        $this->api(RequestMethodInterface::METHOD_POST, self::TOKENS, ['description' => 'Long']);
         $clock->advance(120);
 
-        $listed = self::document($this->api('GET', self::TOKENS));
+        $listed = self::document($this->api(RequestMethodInterface::METHOD_GET, self::TOKENS));
 
         self::assertSame(2, $listed['total']);
         self::assertIsArray($listed['items']);
@@ -84,21 +95,26 @@ final class ManagementInitialAccessTokensTest extends AcceptanceTestCase
         ksort($states);
         self::assertSame(['Long' => 'active', 'Short' => 'expired'], $states);
         self::assertIsString($short['token']);
-        self::assertStringNotContainsString($short['token'], (string) $this->api('GET', self::TOKENS)->getBody());
+        self::assertStringNotContainsString(
+            $short['token'],
+            (string) $this->api(RequestMethodInterface::METHOD_GET, self::TOKENS)->getBody(),
+        );
     }
 
     public function testARevokedTokenSaysSoAndRevokingItAgainChangesNothing(): void
     {
         $this->adminToken();
-        $id = self::document($this->api('POST', self::TOKENS, ['description' => 'Partner']))['id'];
+        $id = self::document(
+            $this->api(RequestMethodInterface::METHOD_POST, self::TOKENS, ['description' => 'Partner']),
+        )['id'];
         self::assertIsString($id);
 
-        $revoked = $this->api('DELETE', self::TOKENS . '/' . $id);
-        $again = $this->api('DELETE', self::TOKENS . '/' . $id);
+        $revoked = $this->api(RequestMethodInterface::METHOD_DELETE, self::TOKENS . '/' . $id);
+        $again = $this->api(RequestMethodInterface::METHOD_DELETE, self::TOKENS . '/' . $id);
 
         self::assertSame(StatusCodeInterface::STATUS_NO_CONTENT, $revoked->getStatusCode());
         self::assertSame(StatusCodeInterface::STATUS_NO_CONTENT, $again->getStatusCode());
-        $items = self::document($this->api('GET', self::TOKENS))['items'];
+        $items = self::document($this->api(RequestMethodInterface::METHOD_GET, self::TOKENS))['items'];
         self::assertIsArray($items);
         self::assertIsArray($items[0]);
         self::assertSame('revoked', $items[0]['state']);
@@ -113,7 +129,10 @@ final class ManagementInitialAccessTokensTest extends AcceptanceTestCase
     {
         $this->adminToken();
 
-        $response = $this->api('DELETE', self::TOKENS . '/0b0f5a3e-8f2c-4d1a-9b7e-3c2d1e0f9a8b');
+        $response = $this->api(
+            RequestMethodInterface::METHOD_DELETE,
+            self::TOKENS . '/0b0f5a3e-8f2c-4d1a-9b7e-3c2d1e0f9a8b',
+        );
 
         self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $response->getStatusCode());
     }
@@ -126,7 +145,7 @@ final class ManagementInitialAccessTokensTest extends AcceptanceTestCase
     {
         $this->adminToken();
 
-        $response = $this->api('POST', self::TOKENS, $body);
+        $response = $this->api(RequestMethodInterface::METHOD_POST, self::TOKENS, $body);
 
         self::assertSame(
             StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
@@ -153,14 +172,20 @@ final class ManagementInitialAccessTokensTest extends AcceptanceTestCase
     {
         $this->adminToken(['read:initial_access_tokens']);
 
-        self::assertSame(StatusCodeInterface::STATUS_OK, $this->api('GET', self::TOKENS)->getStatusCode());
         self::assertSame(
-            StatusCodeInterface::STATUS_FORBIDDEN,
-            $this->api('POST', self::TOKENS, ['description' => 'x'])->getStatusCode(),
+            StatusCodeInterface::STATUS_OK,
+            $this->api(RequestMethodInterface::METHOD_GET, self::TOKENS)->getStatusCode(),
         );
         self::assertSame(
             StatusCodeInterface::STATUS_FORBIDDEN,
-            $this->api('DELETE', self::TOKENS . '/0b0f5a3e-8f2c-4d1a-9b7e-3c2d1e0f9a8b')->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_POST, self::TOKENS, ['description' => 'x'])->getStatusCode(),
+        );
+        self::assertSame(
+            StatusCodeInterface::STATUS_FORBIDDEN,
+            $this->api(
+                RequestMethodInterface::METHOD_DELETE,
+                self::TOKENS . '/0b0f5a3e-8f2c-4d1a-9b7e-3c2d1e0f9a8b',
+            )->getStatusCode(),
         );
     }
 

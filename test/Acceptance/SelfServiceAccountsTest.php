@@ -27,6 +27,7 @@ use ClaviaTest\Support\LoginFixtures;
 use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -319,7 +320,7 @@ final class SelfServiceAccountsTest extends AcceptanceTestCase
     {
         $this->adminToken();
 
-        $changed = $this->api('PATCH', '/api/v1/connections/password', [
+        $changed = $this->api(RequestMethodInterface::METHOD_PATCH, '/api/v1/connections/password', [
             'allow_sign_up' => true,
             'require_verified_email' => true,
         ]);
@@ -334,7 +335,11 @@ final class SelfServiceAccountsTest extends AcceptanceTestCase
     {
         $this->adminToken();
 
-        $refused = $this->api('PATCH', '/api/v1/connections/google', ['allow_sign_up' => true]);
+        $refused = $this->api(
+            RequestMethodInterface::METHOD_PATCH,
+            '/api/v1/connections/google',
+            ['allow_sign_up' => true],
+        );
 
         self::assertSame(
             StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,

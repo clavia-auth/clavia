@@ -19,6 +19,7 @@ use ClaviaTest\Support\DpopClient;
 use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -39,7 +40,7 @@ final class DpopRequiredTest extends AcceptanceTestCase
     {
         $this->adminToken();
 
-        $created = $this->api('POST', self::CLIENTS, [
+        $created = $this->api(RequestMethodInterface::METHOD_POST, self::CLIENTS, [
             'name' => 'Banking',
             'redirect_uris' => ['https://bank.test/cb'],
             'grant_types' => ['authorization_code'],
@@ -50,17 +51,19 @@ final class DpopRequiredTest extends AcceptanceTestCase
         self::assertTrue(self::document($created)['dpop_bound_access_tokens']);
         $path = self::CLIENTS . '/' . rawurlencode((string) self::document($created)['client_id']);
 
-        $patched = $this->api('PATCH', $path, ['dpop_bound_access_tokens' => false]);
+        $patched = $this->api(RequestMethodInterface::METHOD_PATCH, $path, ['dpop_bound_access_tokens' => false]);
 
         self::assertFalse(self::document($patched)['dpop_bound_access_tokens']);
-        self::assertFalse(self::document($this->api('GET', $path))['dpop_bound_access_tokens']);
+        self::assertFalse(
+            self::document($this->api(RequestMethodInterface::METHOD_GET, $path))['dpop_bound_access_tokens'],
+        );
     }
 
     public function testItIsOffByDefault(): void
     {
         $this->adminToken();
 
-        $created = $this->api('POST', self::CLIENTS, [
+        $created = $this->api(RequestMethodInterface::METHOD_POST, self::CLIENTS, [
             'name' => 'Ordinary',
             'redirect_uris' => ['https://app.test/cb'],
             'grant_types' => ['authorization_code'],
@@ -125,11 +128,13 @@ final class DpopRequiredTest extends AcceptanceTestCase
     /** @param callable(string): ResponseInterface $send */
     private function withProof(DpopClient $client, callable $send): ResponseInterface
     {
-        $first = $send($client->proof('POST', self::TOKEN));
+        $first = $send($client->proof(RequestMethodInterface::METHOD_POST, self::TOKEN));
         if ((self::json($first)['error'] ?? null) !== 'use_dpop_nonce') {
             return $first;
         }
 
-        return $send($client->proof('POST', self::TOKEN, $first->getHeaderLine('DPoP-Nonce')));
+        return $send(
+            $client->proof(RequestMethodInterface::METHOD_POST, self::TOKEN, $first->getHeaderLine('DPoP-Nonce')),
+        );
     }
 }

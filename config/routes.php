@@ -96,6 +96,7 @@ use Clavia\Adapter\Primary\Http\Shared\HealthHandler;
 use Clavia\Adapter\Primary\Http\Shared\MetricsHandler;
 use Clavia\Configuration\ClientRegistration;
 use Clavia\Configuration\Settings;
+use Fig\Http\Message\RequestMethodInterface;
 use Mezzio\Application;
 use Psr\Container\ContainerInterface;
 
@@ -105,6 +106,9 @@ use Psr\Container\ContainerInterface;
  * setting turns off has no route at all, so its paths are the same 404 as any other.
  */
 return static function (Application $app, ContainerInterface $container): void {
+    // A page and its form, or an endpoint OpenID Connect lets a client call either way.
+    $getAndPost = [RequestMethodInterface::METHOD_GET, RequestMethodInterface::METHOD_POST];
+
     /** @var Settings $settings */
     $settings = $container->get(Settings::class);
 
@@ -113,7 +117,7 @@ return static function (Application $app, ContainerInterface $container): void {
     $app->get('/metrics', MetricsHandler::class, 'ops.metrics');
 
     // ── /oauth2/* — the authorization server. Callers authenticate as clients. ──
-    $app->route('/oauth2/authorize', AuthorizeHandler::class, ['GET', 'POST'], 'oauth2.authorize');
+    $app->route('/oauth2/authorize', AuthorizeHandler::class, $getAndPost, 'oauth2.authorize');
     $app->post('/oauth2/token', TokenHandler::class, 'oauth2.token');
     $app->post('/oauth2/par', PushedAuthorizationRequestHandler::class, 'oauth2.par');
     $app->post('/oauth2/introspect', IntrospectionHandler::class, 'oauth2.introspect');
@@ -125,7 +129,11 @@ return static function (Application $app, ContainerInterface $container): void {
         $app->route(
             '/oauth2/register/{client_id}',
             ClientConfigurationHandler::class,
-            ['GET', 'PUT', 'DELETE'],
+            [
+                RequestMethodInterface::METHOD_GET,
+                RequestMethodInterface::METHOD_PUT,
+                RequestMethodInterface::METHOD_DELETE,
+            ],
             'oauth2.register.client',
         );
     }
@@ -138,9 +146,9 @@ return static function (Application $app, ContainerInterface $container): void {
     // ── /oidc/* — OpenID Connect. The JWKS is public; userinfo takes a bearer access
     // token, on GET and POST (OIDC Core §5.3.1). ──
     $app->get('/oidc/jwks.json', JwksHandler::class, 'oidc.jwks');
-    $app->route('/oidc/userinfo', UserInfoHandler::class, ['GET', 'POST'], 'oidc.userinfo');
+    $app->route('/oidc/userinfo', UserInfoHandler::class, $getAndPost, 'oidc.userinfo');
     // RP-Initiated Logout 1.0 §2: the end-session endpoint answers GET and POST.
-    $app->route('/oidc/logout', EndSessionHandler::class, ['GET', 'POST'], 'oidc.logout');
+    $app->route('/oidc/logout', EndSessionHandler::class, $getAndPost, 'oidc.logout');
 
     // ── /auth/* — the interactive sign-in. The browser authenticates with its session
     // cookie; every state change is a POST, and logout has no GET on purpose. ──
@@ -156,44 +164,39 @@ return static function (Application $app, ContainerInterface $container): void {
     $app->post('/auth/logout', LogoutHandler::class, 'auth.logout');
     $app->post('/auth/theme', ThemeHandler::class, 'auth.theme');
     // The second step of a sign-in, and the account holder's own two-factor settings.
-    $app->route('/auth/mfa', MfaChallengeHandler::class, ['GET', 'POST'], 'auth.mfa');
+    $app->route('/auth/mfa', MfaChallengeHandler::class, $getAndPost, 'auth.mfa');
     if ($settings->passkeysEnabled) {
         $app->post('/auth/mfa/passkey', MfaChallengeHandler::class, 'auth.mfa.passkey');
         // Signing in with a passkey, from the login page's autofill or its button.
         $app->post('/auth/passkey', PasskeySignInHandler::class, 'auth.passkey');
     }
-    $app->route('/auth/mfa/enroll', MfaSettingsHandler::class, ['GET', 'POST'], 'auth.mfa.enroll');
+    $app->route('/auth/mfa/enroll', MfaSettingsHandler::class, $getAndPost, 'auth.mfa.enroll');
     $app->post('/auth/mfa/enroll/confirm', MfaSettingsHandler::class, 'auth.mfa.enroll.confirm');
     $app->post('/auth/mfa/enroll/continue', MfaSettingsHandler::class, 'auth.mfa.enroll.continue');
     $app->post('/auth/mfa/disable', MfaSettingsHandler::class, 'auth.mfa.disable');
     // The account holder's passkeys: the list, a new one, and renaming or removing one.
     if ($settings->passkeysEnabled) {
-        $app->route('/auth/passkeys', PasskeysHandler::class, ['GET', 'POST'], 'auth.passkeys');
+        $app->route('/auth/passkeys', PasskeysHandler::class, $getAndPost, 'auth.passkeys');
         $app->post('/auth/passkeys/new', PasskeysHandler::class, 'auth.passkeys.new');
         $app->post('/auth/passkeys/{passkey_id}/name', PasskeysHandler::class, 'auth.passkeys.name');
         $app->post('/auth/passkeys/{passkey_id}/remove', PasskeysHandler::class, 'auth.passkeys.remove');
     }
     // Whether an application may act as the signed-in person: the question, and the answer.
-    $app->route('/auth/consent', ConsentHandler::class, ['GET', 'POST'], 'auth.consent');
-    $app->route('/auth/device', DeviceHandler::class, ['GET', 'POST'], 'auth.device');
+    $app->route('/auth/consent', ConsentHandler::class, $getAndPost, 'auth.consent');
+    $app->route('/auth/device', DeviceHandler::class, $getAndPost, 'auth.device');
     // Signing in with a code or a link sent by email: the login page's email form starts
     // it; the code is typed back in the browser that asked, the link opens anywhere and
     // signs in only on the POST from the page it opens on.
     $app->post('/auth/passwordless/start', PasswordlessStartHandler::class, 'auth.passwordless.start');
-    $app->route('/auth/passwordless/code', PasswordlessCodeHandler::class, ['GET', 'POST'], 'auth.passwordless.code');
-    $app->route(
-        '/auth/passwordless/verify',
-        PasswordlessLinkHandler::class,
-        ['GET', 'POST'],
-        'auth.passwordless.verify',
-    );
+    $app->route('/auth/passwordless/code', PasswordlessCodeHandler::class, $getAndPost, 'auth.passwordless.code');
+    $app->route('/auth/passwordless/verify', PasswordlessLinkHandler::class, $getAndPost, 'auth.passwordless.verify');
     // Self-service accounts: creating one, proving its address, choosing a new password.
     // Every link mailed opens on a page that asks, and changes something only on the POST
     // from it (docs/design/self-service-accounts.md).
-    $app->route('/auth/signup', SignUpHandler::class, ['GET', 'POST'], 'auth.signup');
-    $app->route('/auth/verify-email', VerifyEmailHandler::class, ['GET', 'POST'], 'auth.verify-email');
-    $app->route('/auth/password/forgot', PasswordForgotHandler::class, ['GET', 'POST'], 'auth.password.forgot');
-    $app->route('/auth/password/reset', PasswordResetHandler::class, ['GET', 'POST'], 'auth.password.reset');
+    $app->route('/auth/signup', SignUpHandler::class, $getAndPost, 'auth.signup');
+    $app->route('/auth/verify-email', VerifyEmailHandler::class, $getAndPost, 'auth.verify-email');
+    $app->route('/auth/password/forgot', PasswordForgotHandler::class, $getAndPost, 'auth.password.forgot');
+    $app->route('/auth/password/reset', PasswordResetHandler::class, $getAndPost, 'auth.password.reset');
     // Signing in through an external provider: out, then back. Both are navigations (GET);
     // the callback's path is the redirect URI registered at the provider.
     $app->get('/auth/social/{provider:[a-z][a-z0-9-]*}', ExternalSignInHandler::class, 'auth.social');
@@ -207,11 +210,15 @@ return static function (Application $app, ContainerInterface $container): void {
     // every route, through ManagementApiMiddleware, which also checks each request
     // against docs/openapi/management-api.yaml. Never the session cookie. ──
     $management = static fn (string $handler): array => [ManagementApiMiddleware::class, $handler];
-    $app->route('/api/v1/users', $management(UsersHandler::class), ['GET', 'POST'], 'api.users');
+    $app->route('/api/v1/users', $management(UsersHandler::class), $getAndPost, 'api.users');
     $app->route(
         '/api/v1/users/{user_id}',
         $management(UserHandler::class),
-        ['GET', 'PATCH', 'DELETE'],
+        [
+            RequestMethodInterface::METHOD_GET,
+            RequestMethodInterface::METHOD_PATCH,
+            RequestMethodInterface::METHOD_DELETE,
+        ],
         'api.user',
     );
     $app->delete('/api/v1/users/{user_id}/mfa', $management(UserMfaHandler::class), 'api.user.mfa');
@@ -223,7 +230,7 @@ return static function (Application $app, ContainerInterface $container): void {
     $app->route(
         '/api/v1/users/{user_id}/roles',
         $management(UserRolesHandler::class),
-        ['GET', 'PUT'],
+        [RequestMethodInterface::METHOD_GET, RequestMethodInterface::METHOD_PUT],
         'api.user.roles',
     );
     $app->get(
@@ -244,7 +251,7 @@ return static function (Application $app, ContainerInterface $container): void {
     $app->route(
         '/api/v1/users/{user_id}/sessions',
         $management(UserSessionsHandler::class),
-        ['GET', 'DELETE'],
+        [RequestMethodInterface::METHOD_GET, RequestMethodInterface::METHOD_DELETE],
         'api.user.sessions',
     );
     $app->delete(
@@ -268,11 +275,15 @@ return static function (Application $app, ContainerInterface $container): void {
         $management(UserPasskeysHandler::class),
         'api.user.passkey',
     );
-    $app->route('/api/v1/clients', $management(ClientsHandler::class), ['GET', 'POST'], 'api.clients');
+    $app->route('/api/v1/clients', $management(ClientsHandler::class), $getAndPost, 'api.clients');
     $app->route(
         '/api/v1/clients/{client_id}',
         $management(ClientHandler::class),
-        ['GET', 'PATCH', 'DELETE'],
+        [
+            RequestMethodInterface::METHOD_GET,
+            RequestMethodInterface::METHOD_PATCH,
+            RequestMethodInterface::METHOD_DELETE,
+        ],
         'api.client',
     );
     $app->post(
@@ -290,26 +301,34 @@ return static function (Application $app, ContainerInterface $container): void {
         $management(ConnectionMetadataRefreshHandler::class),
         'api.connection.refresh-metadata',
     );
-    $app->route('/api/v1/connections', $management(ConnectionsHandler::class), ['GET', 'POST'], 'api.connections');
+    $app->route('/api/v1/connections', $management(ConnectionsHandler::class), $getAndPost, 'api.connections');
     $app->route(
         '/api/v1/connections/{name}',
         $management(ConnectionHandler::class),
-        ['GET', 'PATCH', 'DELETE'],
+        [
+            RequestMethodInterface::METHOD_GET,
+            RequestMethodInterface::METHOD_PATCH,
+            RequestMethodInterface::METHOD_DELETE,
+        ],
         'api.connection',
     );
     $app->route(
         '/api/v1/resource-servers',
         $management(ResourceServersHandler::class),
-        ['GET', 'POST'],
+        $getAndPost,
         'api.resource-servers',
     );
     $app->route(
         '/api/v1/resource-servers/{resource_server_id}',
         $management(ResourceServerHandler::class),
-        ['GET', 'PATCH', 'DELETE'],
+        [
+            RequestMethodInterface::METHOD_GET,
+            RequestMethodInterface::METHOD_PATCH,
+            RequestMethodInterface::METHOD_DELETE,
+        ],
         'api.resource-server',
     );
-    $app->route('/api/v1/roles', $management(RolesHandler::class), ['GET', 'POST'], 'api.roles');
+    $app->route('/api/v1/roles', $management(RolesHandler::class), $getAndPost, 'api.roles');
     $app->get('/api/v1/signing-keys', $management(SigningKeysHandler::class), 'api.signing-keys');
     $app->post('/api/v1/signing-keys/rotate', $management(SigningKeysHandler::class), 'api.signing-keys.rotate');
     $app->get('/api/v1/saml-keys', $management(SamlKeysHandler::class), 'api.saml-keys');
@@ -317,32 +336,36 @@ return static function (Application $app, ContainerInterface $container): void {
     $app->route(
         '/api/v1/initial-access-tokens',
         $management(InitialAccessTokensHandler::class),
-        ['GET', 'POST'],
+        $getAndPost,
         'api.initial-access-tokens',
     );
     $app->route(
         '/api/v1/initial-access-tokens/{initial_access_token_id}',
         $management(InitialAccessTokenHandler::class),
-        ['DELETE'],
+        [RequestMethodInterface::METHOD_DELETE],
         'api.initial-access-token',
     );
     $app->route(
         '/api/v1/provisioning-tokens',
         $management(ProvisioningTokensHandler::class),
-        ['GET', 'POST'],
+        $getAndPost,
         'api.provisioning-tokens',
     );
     $app->route(
         '/api/v1/provisioning-tokens/{provisioning_token_id}',
         $management(ProvisioningTokenHandler::class),
-        ['GET', 'DELETE'],
+        [RequestMethodInterface::METHOD_GET, RequestMethodInterface::METHOD_DELETE],
         'api.provisioning-token',
     );
-    $app->route('/api/v1/webhooks', $management(WebhooksHandler::class), ['GET', 'POST'], 'api.webhooks');
+    $app->route('/api/v1/webhooks', $management(WebhooksHandler::class), $getAndPost, 'api.webhooks');
     $app->route(
         '/api/v1/webhooks/{webhook_id}',
         $management(WebhookHandler::class),
-        ['GET', 'PATCH', 'DELETE'],
+        [
+            RequestMethodInterface::METHOD_GET,
+            RequestMethodInterface::METHOD_PATCH,
+            RequestMethodInterface::METHOD_DELETE,
+        ],
         'api.webhook',
     );
     $app->post(
@@ -360,19 +383,23 @@ return static function (Application $app, ContainerInterface $container): void {
     $app->post('/api/v1/jobs/users-exports', $management(UserExportsHandler::class), 'api.jobs.users-exports');
     $app->get('/api/v1/jobs/{job_id}', $management(UserJobHandler::class), 'api.job');
     $app->get('/api/v1/jobs/{job_id}/output', $management(UserJobOutputHandler::class), 'api.job.output');
-    $app->route('/api/v1/audit-events', $management(AuditEventsHandler::class), ['GET'], 'api.audit-events');
+    $app->route(
+        '/api/v1/audit-events',
+        $management(AuditEventsHandler::class),
+        [RequestMethodInterface::METHOD_GET],
+        'api.audit-events',
+    );
     $app->route(
         '/api/v1/roles/{role_id}',
         $management(RoleHandler::class),
-        ['GET', 'PATCH', 'DELETE'],
+        [
+            RequestMethodInterface::METHOD_GET,
+            RequestMethodInterface::METHOD_PATCH,
+            RequestMethodInterface::METHOD_DELETE,
+        ],
         'api.role',
     );
-    $app->route(
-        '/api/v1/roles/{role_id}/users',
-        $management(RoleUsersHandler::class),
-        ['GET', 'POST'],
-        'api.role.users',
-    );
+    $app->route('/api/v1/roles/{role_id}/users', $management(RoleUsersHandler::class), $getAndPost, 'api.role.users');
     $app->delete(
         '/api/v1/roles/{role_id}/users/{user_id}',
         $management(RoleUsersHandler::class),
@@ -389,18 +416,28 @@ return static function (Application $app, ContainerInterface $container): void {
         $scim(ScimCatalogueHandler::class),
         'scim.catalogue',
     );
-    $app->route('/scim/v2/Users', $scim(ScimUsersHandler::class), ['GET', 'POST'], 'scim.users');
+    $app->route('/scim/v2/Users', $scim(ScimUsersHandler::class), $getAndPost, 'scim.users');
     $app->route(
         '/scim/v2/Users/{id}',
         $scim(ScimUserHandler::class),
-        ['GET', 'PUT', 'PATCH', 'DELETE'],
+        [
+            RequestMethodInterface::METHOD_GET,
+            RequestMethodInterface::METHOD_PUT,
+            RequestMethodInterface::METHOD_PATCH,
+            RequestMethodInterface::METHOD_DELETE,
+        ],
         'scim.user',
     );
-    $app->route('/scim/v2/Groups', $scim(ScimGroupsHandler::class), ['GET', 'POST'], 'scim.groups');
+    $app->route('/scim/v2/Groups', $scim(ScimGroupsHandler::class), $getAndPost, 'scim.groups');
     $app->route(
         '/scim/v2/Groups/{id}',
         $scim(ScimGroupHandler::class),
-        ['GET', 'PUT', 'PATCH', 'DELETE'],
+        [
+            RequestMethodInterface::METHOD_GET,
+            RequestMethodInterface::METHOD_PUT,
+            RequestMethodInterface::METHOD_PATCH,
+            RequestMethodInterface::METHOD_DELETE,
+        ],
         'scim.group',
     );
     // Offered by no directory this is for (§1): 501, as RFC 7644 §3.12 answers a missing feature.
@@ -408,7 +445,13 @@ return static function (Application $app, ContainerInterface $container): void {
     $app->route(
         '/scim/v2/Me',
         $scim(ScimNotImplementedHandler::class),
-        ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+        [
+            RequestMethodInterface::METHOD_GET,
+            RequestMethodInterface::METHOD_POST,
+            RequestMethodInterface::METHOD_PUT,
+            RequestMethodInterface::METHOD_PATCH,
+            RequestMethodInterface::METHOD_DELETE,
+        ],
         'scim.me',
     );
     // Anything else under the prefix is a SCIM 404, behind the token like the rest: a caller
@@ -416,7 +459,13 @@ return static function (Application $app, ContainerInterface $container): void {
     $app->route(
         '/scim/v2[/{path:.*}]',
         $scim(ScimNotFoundHandler::class),
-        ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+        [
+            RequestMethodInterface::METHOD_GET,
+            RequestMethodInterface::METHOD_POST,
+            RequestMethodInterface::METHOD_PUT,
+            RequestMethodInterface::METHOD_PATCH,
+            RequestMethodInterface::METHOD_DELETE,
+        ],
         'scim.not-found',
     );
 };

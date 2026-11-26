@@ -14,6 +14,7 @@ namespace Clavia\Adapter\Primary\Http\Management;
 use Clavia\Application\Management\Users\ReadUserPasskeys;
 use Clavia\Application\Management\Users\RemoveUserPasskey;
 use Clavia\Domain\Identity\UserId;
+use Fig\Http\Message\RequestMethodInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -39,9 +40,9 @@ final readonly class UserPasskeysHandler implements RequestHandlerInterface
         $user = UserId::fromString($management->path('user_id'));
 
         switch ($request->getMethod()) {
-            case 'GET':
+            case RequestMethodInterface::METHOD_GET:
                 return $this->responder->jsonList(array_map(ManagementViews::passkey(...), ($this->read)($user)));
-            case 'DELETE':
+            case RequestMethodInterface::METHOD_DELETE:
                 ($this->remove)($user, $management->path('passkey_id'));
 
                 return $this->responder->noContent();

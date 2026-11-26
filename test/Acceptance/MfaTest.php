@@ -28,6 +28,7 @@ use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\TestStorage;
 use DateTimeImmutable;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -408,11 +409,17 @@ final class MfaTest extends AcceptanceTestCase
         $this->adminToken();
         $path = '/api/v1/users/' . $user->id->value;
 
-        self::assertTrue(self::document($this->api('GET', $path))['mfa_enrolled']);
-        self::assertSame(StatusCodeInterface::STATUS_NO_CONTENT, $this->api('DELETE', $path . '/mfa')->getStatusCode());
-        self::assertFalse(self::document($this->api('GET', $path))['mfa_enrolled']);
+        self::assertTrue(self::document($this->api(RequestMethodInterface::METHOD_GET, $path))['mfa_enrolled']);
+        self::assertSame(
+            StatusCodeInterface::STATUS_NO_CONTENT,
+            $this->api(RequestMethodInterface::METHOD_DELETE, $path . '/mfa')->getStatusCode(),
+        );
+        self::assertFalse(self::document($this->api(RequestMethodInterface::METHOD_GET, $path))['mfa_enrolled']);
         // Idempotent: the caller asked for it to be off, and it is off.
-        self::assertSame(StatusCodeInterface::STATUS_NO_CONTENT, $this->api('DELETE', $path . '/mfa')->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_NO_CONTENT,
+            $this->api(RequestMethodInterface::METHOD_DELETE, $path . '/mfa')->getStatusCode(),
+        );
         self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $this->submitLogin()->getStatusCode());
         self::assertNotNull($this->cookie(self::SESSION_COOKIE));
     }
@@ -424,13 +431,19 @@ final class MfaTest extends AcceptanceTestCase
 
         self::assertSame(
             StatusCodeInterface::STATUS_FORBIDDEN,
-            $this->api('DELETE', '/api/v1/users/' . $user->id->value . '/mfa')->getStatusCode(),
+            $this->api(
+                RequestMethodInterface::METHOD_DELETE,
+                '/api/v1/users/' . $user->id->value . '/mfa',
+            )->getStatusCode(),
         );
 
         $this->adminToken();
         self::assertSame(
             StatusCodeInterface::STATUS_NOT_FOUND,
-            $this->api('DELETE', '/api/v1/users/00000000-0000-4000-8000-000000000000/mfa')->getStatusCode(),
+            $this->api(
+                RequestMethodInterface::METHOD_DELETE,
+                '/api/v1/users/00000000-0000-4000-8000-000000000000/mfa',
+            )->getStatusCode(),
         );
     }
 

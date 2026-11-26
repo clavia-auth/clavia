@@ -13,6 +13,7 @@ namespace ClaviaTest\Acceptance;
 
 use Clavia\Configuration\Version;
 use ClaviaTest\Support\AcceptanceTestCase;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Log\LogLevel;
@@ -42,10 +43,10 @@ final class PipelineTest extends AcceptanceTestCase
 
     public function testAKnownPathAnswersOnlyTheMethodsItDeclares(): void
     {
-        $response = $this->request('POST', '/healthz');
+        $response = $this->request(RequestMethodInterface::METHOD_POST, '/healthz');
 
         self::assertSame(StatusCodeInterface::STATUS_METHOD_NOT_ALLOWED, $response->getStatusCode());
-        self::assertSame('GET', $response->getHeaderLine('Allow'));
+        self::assertSame(RequestMethodInterface::METHOD_GET, $response->getHeaderLine('Allow'));
         self::assertSame(['detail' => 'Method Not Allowed'], self::json($response));
     }
 
@@ -53,11 +54,11 @@ final class PipelineTest extends AcceptanceTestCase
     {
         self::assertSame(
             StatusCodeInterface::STATUS_METHOD_NOT_ALLOWED,
-            $this->request('HEAD', '/healthz')->getStatusCode(),
+            $this->request(RequestMethodInterface::METHOD_HEAD, '/healthz')->getStatusCode(),
         );
         self::assertSame(
             StatusCodeInterface::STATUS_METHOD_NOT_ALLOWED,
-            $this->request('OPTIONS', '/healthz')->getStatusCode(),
+            $this->request(RequestMethodInterface::METHOD_OPTIONS, '/healthz')->getStatusCode(),
         );
     }
 

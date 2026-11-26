@@ -22,6 +22,7 @@ use Clavia\Application\OAuth2\Consent\ConsentGiven;
 use Clavia\Application\OAuth2\Consent\DecideConsent;
 use Clavia\Application\OAuth2\Consent\DescribeConsent;
 use Clavia\Domain\Authentication\LocalPath;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -55,7 +56,7 @@ final readonly class ConsentHandler implements RequestHandlerInterface
     #[\Override]
     public function handle(ServerRequestInterface $request): ResponseInterface
     {
-        $isPost = $request->getMethod() === 'POST';
+        $isPost = $request->getMethod() === RequestMethodInterface::METHOD_POST;
         $form = RequestParameterReader::form($request);
         $handle = ($isPost ? $form->get('state') : RequestParameterReader::query($request)->get('state')) ?? '';
 

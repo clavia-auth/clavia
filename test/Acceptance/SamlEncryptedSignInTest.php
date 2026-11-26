@@ -34,6 +34,7 @@ use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\Saml\TestIdentityProvider as Idp;
 use DOMDocument;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -111,7 +112,7 @@ final class SamlEncryptedSignInTest extends AcceptanceTestCase
         $refused = $this->finish(self::answering($requestId, $cbc), $relayState);
 
         self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $refused->getStatusCode(), 'GCM by default.');
-        $this->api('DELETE', '/api/v1/connections/acme');
+        $this->api(RequestMethodInterface::METHOD_DELETE, '/api/v1/connections/acme');
         $this->clearCookies();
         $this->registerSaml(['require_gcm' => false]);
         [$requestId, $relayState] = $this->start();
@@ -256,7 +257,7 @@ final class SamlEncryptedSignInTest extends AcceptanceTestCase
     /** @param array<string, mixed> $options */
     private function registerSaml(array $options): void
     {
-        $created = $this->api('POST', '/api/v1/connections', [
+        $created = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/connections', [
             'name' => 'acme',
             'display_name' => 'Acme staff',
             'strategy' => 'saml',

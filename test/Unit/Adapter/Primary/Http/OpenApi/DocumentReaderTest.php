@@ -14,6 +14,7 @@ namespace ClaviaTest\Unit\Adapter\Primary\Http\OpenApi;
 use Clavia\Adapter\Primary\Http\OpenApi\Document;
 use Clavia\Adapter\Primary\Http\OpenApi\InvalidDocument;
 use Clavia\Adapter\Primary\Http\OpenApi\ParameterLocation;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -327,7 +328,7 @@ final class DocumentReaderTest extends TestCase
             ]],
         ]));
 
-        self::assertNotNull($document->match('POST', '/token'));
+        self::assertNotNull($document->match(RequestMethodInterface::METHOD_POST, '/token'));
     }
 
     public function testTheManagementApiDocumentLoads(): void

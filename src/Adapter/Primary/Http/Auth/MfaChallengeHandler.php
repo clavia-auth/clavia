@@ -24,6 +24,7 @@ use Clavia\Application\Authentication\Mfa\SecondFactorOutcome;
 use Clavia\Application\Authentication\Mfa\SecondFactorPage;
 use Clavia\Application\Authentication\Mfa\SecondFactorRejected;
 use Clavia\Application\Authentication\SignIn\SignedIn;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -63,7 +64,7 @@ final readonly class MfaChallengeHandler implements RequestHandlerInterface
             return $this->backToLogin();
         }
 
-        if ($request->getMethod() !== 'POST') {
+        if ($request->getMethod() !== RequestMethodInterface::METHOD_POST) {
             return $this->page($request, $challenge, $page);
         }
 

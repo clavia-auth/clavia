@@ -19,6 +19,7 @@ use Clavia\Application\Management\Connections\SamlMetadataRefused;
 use Clavia\Domain\Connection\Connection;
 use Clavia\Domain\Connection\Saml\SamlOptions;
 use Clavia\Domain\Shared\InvalidValue;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
@@ -44,8 +45,10 @@ final readonly class ConnectionsHandler implements RequestHandlerInterface
         $body = ManagementRequest::of($request)->body;
 
         return match ($request->getMethod()) {
-            'GET' => $this->responder->jsonList(array_map(ManagementViews::connection(...), $this->read->all())),
-            'POST' => $this->create($body),
+            RequestMethodInterface::METHOD_GET => $this->responder->jsonList(
+                array_map(ManagementViews::connection(...), $this->read->all()),
+            ),
+            RequestMethodInterface::METHOD_POST => $this->create($body),
             default => throw new LogicException('Routed with a method the handler does not serve.'),
         };
     }

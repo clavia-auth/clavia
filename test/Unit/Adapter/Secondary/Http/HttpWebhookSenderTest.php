@@ -16,6 +16,7 @@ use Clavia\Adapter\Secondary\Http\OutboundUrlPolicy;
 use Clavia\Domain\Shared\Url;
 use Clavia\Domain\Webhook\DeliveryFailure;
 use ClaviaTest\Support\Fake\FakeHttpClient;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use GuzzleHttp\Exception\ConnectException;
 use Laminas\Diactoros\RequestFactory;
@@ -43,7 +44,7 @@ final class HttpWebhookSenderTest extends TestCase
         self::assertNull($outcome->failure);
         self::assertSame(StatusCodeInterface::STATUS_NO_CONTENT, $outcome->statusCode);
         $request = $http->requests[0];
-        self::assertSame('POST', $request->getMethod());
+        self::assertSame(RequestMethodInterface::METHOD_POST, $request->getMethod());
         self::assertSame('event-1', $request->getHeaderLine('webhook-id'));
         self::assertSame('Clavia', $request->getHeaderLine('User-Agent'));
         self::assertSame('{"type":"user.created"}', (string) $request->getBody());

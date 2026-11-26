@@ -30,6 +30,7 @@ use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use DateTimeImmutable;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 
 /**
@@ -50,7 +51,11 @@ final class ManagementStepUpTest extends AcceptanceTestCase
     {
         $this->requireMfa();
 
-        $response = $this->api('GET', '/api/v1/users', token: $this->personToken([M::Password]));
+        $response = $this->api(
+            RequestMethodInterface::METHOD_GET,
+            '/api/v1/users',
+            token: $this->personToken([M::Password]),
+        );
 
         self::assertSame(StatusCodeInterface::STATUS_UNAUTHORIZED, $response->getStatusCode());
         self::assertSame(
@@ -69,7 +74,7 @@ final class ManagementStepUpTest extends AcceptanceTestCase
 
         self::assertSame(
             StatusCodeInterface::STATUS_OK,
-            $this->api('GET', '/api/v1/users', token: $token)->getStatusCode(),
+            $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/users', token: $token)->getStatusCode(),
         );
     }
 
@@ -78,7 +83,11 @@ final class ManagementStepUpTest extends AcceptanceTestCase
         // RFC 9470 §3: asking for a stronger sign-in first spares the client a useless new scope.
         $this->requireMfa();
 
-        $response = $this->api('GET', '/api/v1/users', token: $this->personToken([M::Password], 'read:roles'));
+        $response = $this->api(
+            RequestMethodInterface::METHOD_GET,
+            '/api/v1/users',
+            token: $this->personToken([M::Password], 'read:roles'),
+        );
 
         self::assertSame('insufficient_user_authentication', self::json($response)['error']);
     }
@@ -88,14 +97,21 @@ final class ManagementStepUpTest extends AcceptanceTestCase
         $this->requireMfa();
         $this->adminToken();
 
-        self::assertSame(StatusCodeInterface::STATUS_OK, $this->api('GET', '/api/v1/users')->getStatusCode());
+        self::assertSame(
+            StatusCodeInterface::STATUS_OK,
+            $this->api(RequestMethodInterface::METHOD_GET, '/api/v1/users')->getStatusCode(),
+        );
     }
 
     public function testWithThePolicyOptionalOneFactorIsEnough(): void
     {
         $this->managementApi();
 
-        $response = $this->api('GET', '/api/v1/users', token: $this->personToken([M::Password]));
+        $response = $this->api(
+            RequestMethodInterface::METHOD_GET,
+            '/api/v1/users',
+            token: $this->personToken([M::Password]),
+        );
 
         self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode());
     }

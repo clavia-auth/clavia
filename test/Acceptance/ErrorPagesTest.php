@@ -14,6 +14,7 @@ namespace ClaviaTest\Acceptance;
 use Clavia\Adapter\Primary\Http\Shared\PageRenderer;
 use ClaviaTest\Support\AcceptanceTestCase;
 use ClaviaTest\Support\OAuth2Fixtures;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Mezzio\Template\TemplateRendererInterface;
 use Psr\Http\Message\ResponseInterface;
@@ -35,7 +36,7 @@ final class ErrorPagesTest extends AcceptanceTestCase
 
     public function testABrowserMeetingAnUnknownAddressGetsAPage(): void
     {
-        $response = $this->browse('GET', '/nothing-here');
+        $response = $this->browse(RequestMethodInterface::METHOD_GET, '/nothing-here');
 
         self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $response->getStatusCode());
         $this->assertIsAPage($response);
@@ -44,7 +45,7 @@ final class ErrorPagesTest extends AcceptanceTestCase
 
     public function testAProgramMeetingAnUnknownAddressGetsJson(): void
     {
-        $response = $this->request('GET', '/nothing-here', ['Accept' => '*/*']);
+        $response = $this->request(RequestMethodInterface::METHOD_GET, '/nothing-here', ['Accept' => '*/*']);
 
         self::assertSame(StatusCodeInterface::STATUS_NOT_FOUND, $response->getStatusCode());
         self::assertSame(['detail' => 'Not Found'], self::json($response));
@@ -52,7 +53,7 @@ final class ErrorPagesTest extends AcceptanceTestCase
 
     public function testTheMissingPathIsNotPrintedBack(): void
     {
-        $response = $this->browse('GET', '/%3Cscript%3Ealert(1)%3C%2Fscript%3E');
+        $response = $this->browse(RequestMethodInterface::METHOD_GET, '/%3Cscript%3Ealert(1)%3C%2Fscript%3E');
 
         self::assertStringNotContainsString('script', (string) $response->getBody());
     }
@@ -61,20 +62,20 @@ final class ErrorPagesTest extends AcceptanceTestCase
 
     public function testABrowserUsingTheWrongMethodGetsAPageAndTheAllowedMethods(): void
     {
-        $response = $this->browse('GET', '/auth/logout');
+        $response = $this->browse(RequestMethodInterface::METHOD_GET, '/auth/logout');
 
         self::assertSame(StatusCodeInterface::STATUS_METHOD_NOT_ALLOWED, $response->getStatusCode());
-        self::assertSame('POST', $response->getHeaderLine('Allow'));
+        self::assertSame(RequestMethodInterface::METHOD_POST, $response->getHeaderLine('Allow'));
         $this->assertIsAPage($response);
         self::assertStringContainsString('This page cannot be opened this way', (string) $response->getBody());
     }
 
     public function testAProgramUsingTheWrongMethodGetsJsonAndTheAllowedMethods(): void
     {
-        $response = $this->request('GET', '/oauth2/token');
+        $response = $this->request(RequestMethodInterface::METHOD_GET, '/oauth2/token');
 
         self::assertSame(StatusCodeInterface::STATUS_METHOD_NOT_ALLOWED, $response->getStatusCode());
-        self::assertSame('POST', $response->getHeaderLine('Allow'));
+        self::assertSame(RequestMethodInterface::METHOD_POST, $response->getHeaderLine('Allow'));
         self::assertSame(['detail' => 'Method Not Allowed'], self::json($response));
     }
 
@@ -89,10 +90,9 @@ final class ErrorPagesTest extends AcceptanceTestCase
         $this->publicClient();
         [, $challenge] = $this->makePkcePair();
 
-        $response = $this->browse('GET', '/oauth2/authorize?' . http_build_query($this->authorizeParams(
-            $challenge,
-            ['redirect_uri' => 'https://attacker.test/steal'],
-        )));
+        $stolen = ['redirect_uri' => 'https://attacker.test/steal'];
+        $query = http_build_query($this->authorizeParams($challenge, $stolen));
+        $response = $this->browse(RequestMethodInterface::METHOD_GET, '/oauth2/authorize?' . $query);
 
         $body = (string) $response->getBody();
         self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
@@ -110,10 +110,8 @@ final class ErrorPagesTest extends AcceptanceTestCase
     {
         [, $challenge] = $this->makePkcePair();
 
-        $response = $this->browse('GET', '/oauth2/authorize?' . http_build_query($this->authorizeParams(
-            $challenge,
-            ['client_id' => 'no-such-client'],
-        )));
+        $query = http_build_query($this->authorizeParams($challenge, ['client_id' => 'no-such-client']));
+        $response = $this->browse(RequestMethodInterface::METHOD_GET, '/oauth2/authorize?' . $query);
 
         self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         $this->assertIsAPage($response);
@@ -149,7 +147,7 @@ final class ErrorPagesTest extends AcceptanceTestCase
     {
         $this->failingRoute();
 
-        $response = $this->browse('GET', '/boom');
+        $response = $this->browse(RequestMethodInterface::METHOD_GET, '/boom');
 
         $body = (string) $response->getBody();
         $reference = $response->getHeaderLine('X-Error-Reference');
@@ -166,7 +164,7 @@ final class ErrorPagesTest extends AcceptanceTestCase
     {
         $this->failingRoute();
 
-        $response = $this->request('GET', '/boom', ['Accept' => 'application/json']);
+        $response = $this->request(RequestMethodInterface::METHOD_GET, '/boom', ['Accept' => 'application/json']);
 
         self::assertSame(StatusCodeInterface::STATUS_INTERNAL_SERVER_ERROR, $response->getStatusCode());
         self::assertSame('Internal Server Error', (string) $response->getBody());
@@ -193,7 +191,7 @@ final class ErrorPagesTest extends AcceptanceTestCase
         $this->container()->setService(PageRenderer::class, new PageRenderer($broken));
         $this->failingRoute();
 
-        $response = $this->browse('GET', '/boom');
+        $response = $this->browse(RequestMethodInterface::METHOD_GET, '/boom');
 
         self::assertSame(StatusCodeInterface::STATUS_INTERNAL_SERVER_ERROR, $response->getStatusCode());
         self::assertSame('Internal Server Error', (string) $response->getBody());

@@ -15,6 +15,7 @@ use ClaviaTest\Support\AcceptanceTestCase;
 use ClaviaTest\Support\MachineFixtures;
 use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -32,36 +33,45 @@ final class ConflictsTest extends AcceptanceTestCase
     {
         $this->adminToken();
         $role = ['name' => 'Zebra auditors', 'description' => 'Reads the trail.'];
-        $this->api('POST', '/api/v1/roles', $role);
+        $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/roles', $role);
 
-        self::assertConflictWithout('Zebra auditors', $this->api('POST', '/api/v1/roles', $role));
+        self::assertConflictWithout(
+            'Zebra auditors',
+            $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/roles', $role),
+        );
     }
 
     public function testATakenConnectionNameIsNotRepeated(): void
     {
         $this->adminToken();
         $pool = ['name' => 'zebra-pool', 'display_name' => 'Zebras', 'strategy' => 'database'];
-        $this->api('POST', '/api/v1/connections', $pool);
+        $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/connections', $pool);
 
-        self::assertConflictWithout('zebra-pool', $this->api('POST', '/api/v1/connections', $pool));
+        self::assertConflictWithout(
+            'zebra-pool',
+            $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/connections', $pool),
+        );
     }
 
     public function testATakenApiIdentifierIsNotRepeated(): void
     {
         $this->adminToken();
         $api = ['name' => 'Zebras', 'identifier' => 'https://zebras.example/api'];
-        $this->api('POST', '/api/v1/resource-servers', $api);
+        $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/resource-servers', $api);
 
-        self::assertConflictWithout('zebras.example', $this->api('POST', '/api/v1/resource-servers', $api));
+        self::assertConflictWithout(
+            'zebras.example',
+            $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/resource-servers', $api),
+        );
     }
 
     public function testATakenAddressIsNotRepeated(): void
     {
         $this->adminToken();
         $account = ['email' => 'zebra@example.com', 'password' => 'a-good-password'];
-        $this->api('POST', '/api/v1/users', $account);
+        $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/users', $account);
 
-        $response = $this->api('POST', '/api/v1/users', $account);
+        $response = $this->api(RequestMethodInterface::METHOD_POST, '/api/v1/users', $account);
 
         self::assertConflictWithout('zebra@example.com', $response);
         self::assertStringNotContainsString(

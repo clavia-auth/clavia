@@ -1286,8 +1286,10 @@ someone else's or names something deleted gives the same "expired" page.
 
 ### HTTP adapters
 
-- **Status codes are named**: `Fig\Http\Message\StatusCodeInterface::STATUS_NOT_FOUND`, never `404`,
-  in the adapters and the tests alike (the domain and the application hold none).
+- **Status codes and methods are named**: `Fig\Http\Message\StatusCodeInterface::STATUS_NOT_FOUND`,
+  never `404`, and `RequestMethodInterface::METHOD_POST`, never `'POST'`, in the adapters, the routes
+  and the tests alike. The domain and the application import no vendor: they hold no status, and the
+  one method they name (a DPoP proof's `htm` at the token and PAR endpoints) stays a literal.
 - **Parameters** are read with `RequestParameterReader`, never `getQueryParams()` or
   `getParsedBody()`, which keep the last of repeated values and rewrite names.
 - **Cookies** are read from the `Cookie` header (`RequestCookies`, every value kept) and written

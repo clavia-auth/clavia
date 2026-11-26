@@ -36,6 +36,7 @@ use ClaviaTest\Support\Fake\InMemoryAccessTokenRepository;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use DateTimeImmutable;
+use Fig\Http\Message\RequestMethodInterface;
 use PHPUnit\Framework\TestCase;
 
 final class ReadUserInfoTest extends TestCase
@@ -77,7 +78,7 @@ final class ReadUserInfoTest extends TestCase
 
         self::assertSame(
             ['sub' => $this->user->id->value, 'name' => 'Ada', 'updated_at' => $this->clock->now()->getTimestamp()],
-            ($this->readUserInfo)(PresentedCredentials::bearer('t-1'), 'GET'),
+            ($this->readUserInfo)(PresentedCredentials::bearer('t-1'), RequestMethodInterface::METHOD_GET),
         );
     }
 
@@ -122,7 +123,7 @@ final class ReadUserInfoTest extends TestCase
         $this->token('t-1', 'profile');
 
         try {
-            ($this->readUserInfo)(PresentedCredentials::bearer('t-1'), 'GET');
+            ($this->readUserInfo)(PresentedCredentials::bearer('t-1'), RequestMethodInterface::METHOD_GET);
             self::fail('The token was accepted.');
         } catch (BearerTokenError $error) {
             self::assertSame(BearerErrorCode::InsufficientScope, $error->error);
@@ -157,7 +158,7 @@ final class ReadUserInfoTest extends TestCase
     private function assertRefused(BearerErrorCode $expected, string $token): void
     {
         try {
-            ($this->readUserInfo)(PresentedCredentials::bearer($token), 'GET');
+            ($this->readUserInfo)(PresentedCredentials::bearer($token), RequestMethodInterface::METHOD_GET);
             self::fail('The token was accepted.');
         } catch (BearerTokenError $error) {
             self::assertSame($expected, $error->error);

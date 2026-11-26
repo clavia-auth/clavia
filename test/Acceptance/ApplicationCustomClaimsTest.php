@@ -41,6 +41,7 @@ use ClaviaTest\Support\ManagementFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use ClaviaTest\Support\OidcFixtures;
 use DateTimeImmutable;
+use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 
 /**
@@ -67,7 +68,7 @@ final class ApplicationCustomClaimsTest extends AcceptanceTestCase
 
         $tokens = $this->completeFlow('openid email');
         $idToken = $this->verifiedIdToken($tokens['id_token'])['claims'];
-        $userinfo = self::json($this->request('GET', '/oidc/userinfo', [
+        $userinfo = self::json($this->request(RequestMethodInterface::METHOD_GET, '/oidc/userinfo', [
             'Authorization' => 'Bearer ' . (string) $tokens['access_token'],
         ]));
 
@@ -94,16 +95,16 @@ final class ApplicationCustomClaimsTest extends AcceptanceTestCase
         $this->publicClient();
         $path = '/api/v1/clients/' . self::TEST_CLIENT_ID;
 
-        $set = $this->api('PATCH', $path, ['claims' => [
+        $set = $this->api(RequestMethodInterface::METHOD_PATCH, $path, ['claims' => [
             ['name' => 'tenant', 'source' => 'app_metadata.tenant', 'in' => ['userinfo', 'id_token']],
         ]]);
         self::assertSame(StatusCodeInterface::STATUS_OK, $set->getStatusCode(), (string) $set->getBody());
         self::assertSame(
             [['name' => 'tenant', 'source' => 'app_metadata.tenant', 'in' => ['id_token', 'userinfo']]],
-            self::document($this->api('GET', $path))['claims'],
+            self::document($this->api(RequestMethodInterface::METHOD_GET, $path))['claims'],
         );
 
-        $entries = $this->api('PATCH', $path, ['claims' => [
+        $entries = $this->api(RequestMethodInterface::METHOD_PATCH, $path, ['claims' => [
             ['name' => 'roles', 'source' => 'roles', 'in' => ['id_token']],
             ['name' => 'fine', 'source' => 'email', 'in' => ['id_token']],
             ['name' => 'email', 'source' => 'email', 'in' => ['userinfo']],
@@ -112,7 +113,7 @@ final class ApplicationCustomClaimsTest extends AcceptanceTestCase
         $pointers = array_column((array) self::document($entries)['errors'], 'pointer');
         self::assertSame(['/claims/0', '/claims/2'], $pointers);
 
-        $accessToken = $this->api('PATCH', $path, ['claims' => [
+        $accessToken = $this->api(RequestMethodInterface::METHOD_PATCH, $path, ['claims' => [
             ['name' => 'plan', 'source' => 'email', 'in' => ['access_token']],
         ]]);
         self::assertSame(
@@ -122,9 +123,9 @@ final class ApplicationCustomClaimsTest extends AcceptanceTestCase
         );
 
         $partner = $this->thirdPartyClient();
-        $refused = $this->api('PATCH', '/api/v1/clients/' . $partner->id->value, ['claims' => [
-            ['name' => 'plan', 'source' => 'app_metadata.plan', 'in' => ['id_token']],
-        ]]);
+        $refused = $this->api(RequestMethodInterface::METHOD_PATCH, '/api/v1/clients/' . $partner->id->value, [
+            'claims' => [['name' => 'plan', 'source' => 'app_metadata.plan', 'in' => ['id_token']]],
+        ]);
         self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $refused->getStatusCode());
         self::assertTrue($this->container()->get(ClientRepository::class)->find($partner->id)?->claims->isEmpty());
     }
