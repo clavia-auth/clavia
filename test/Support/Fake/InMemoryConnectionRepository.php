@@ -73,7 +73,7 @@ final class InMemoryConnectionRepository implements ConnectionRepository
     public function add(Connection $connection): void
     {
         if (isset($this->connections[$connection->name->value])) {
-            throw new AlreadyExists(sprintf("A connection named '%s' already exists.", $connection->name->value));
+            throw new AlreadyExists('A connection with this name already exists.');
         }
 
         $this->connections[$connection->name->value] = $connection;

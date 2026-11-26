@@ -89,7 +89,7 @@ final readonly class PhpDbConnectionRepository implements ConnectionRepository
         } catch (Throwable $failure) {
             throw Constraint::isUniqueViolation($failure, 'connections_pkey')
                 ? new AlreadyExists(
-                    sprintf("A connection named '%s' already exists.", $connection->name->value),
+                    'A connection with this name already exists.',
                     0,
                     $failure,
                 )

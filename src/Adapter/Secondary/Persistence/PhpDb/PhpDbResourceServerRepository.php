@@ -69,7 +69,7 @@ final readonly class PhpDbResourceServerRepository implements ResourceServerRepo
         } catch (Throwable $failure) {
             throw Constraint::isUniqueViolation($failure, 'uq_resource_servers_identifier')
                 ? new AlreadyExists(
-                    sprintf("An API is already registered as '%s'.", $resourceServer->identifier->value),
+                    'An API is already registered with this identifier.',
                     0,
                     $failure,
                 )

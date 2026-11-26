@@ -59,9 +59,7 @@ final class InMemoryResourceServerRepository implements ResourceServerRepository
         }
         $other = $this->findByIdentifier($resourceServer->identifier);
         if ($other !== null && ! $other->id->equals($resourceServer->id)) {
-            throw new AlreadyExists(
-                sprintf("An API is already registered as '%s'.", $resourceServer->identifier->value),
-            );
+            throw new AlreadyExists('An API is already registered with this identifier.');
         }
 
         $this->resourceServers[$resourceServer->id->value] = $resourceServer;
