@@ -47,6 +47,7 @@ COPY --from=app migrations ./migrations
 COPY --from=app public ./public
 COPY --from=app src ./src
 COPY --from=app templates ./templates
+COPY --from=app translations ./translations
 COPY --from=app docs/openapi ./docs/openapi
 RUN chmod -R a+rX,go-w /app
 

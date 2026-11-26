@@ -82,6 +82,19 @@ final class DeploymentKitTest extends TestCase
         }
     }
 
+    /**
+     * The image carries every directory the server reads when it runs: one missing is a release that
+     * cannot start (a language without its catalogue is refused at boot) or cannot render a page.
+     */
+    public function testTheImageCarriesEveryDirectoryTheServerReads(): void
+    {
+        $dockerfile = self::read('docker/php/Dockerfile');
+
+        foreach (['bin', 'config', 'migrations', 'public', 'src', 'templates', 'translations', 'docs/openapi'] as $path) {
+            self::assertStringContainsString(sprintf('COPY --from=app %s ./%s', $path, $path), $dockerfile, $path);
+        }
+    }
+
     public function testThereAreSecurityRulesToCompare(): void
     {
         self::assertGreaterThan(10, iterator_count(self::securityRules()), 'The development Caddyfile changed shape.');
