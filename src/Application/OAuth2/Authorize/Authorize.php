@@ -34,6 +34,7 @@ use Clavia\Domain\OAuth2\MaxAge;
 use Clavia\Domain\OAuth2\OAuth2Error;
 use Clavia\Domain\OAuth2\Prompt;
 use Clavia\Domain\OAuth2\PushedAuthorizationRequest;
+use Clavia\Domain\OAuth2\UiLocales;
 use Clavia\Domain\Rbac\RoleRepository;
 use Clavia\Domain\ResourceServer\ResourceServer;
 use Clavia\Domain\Shared\Clock;
@@ -165,7 +166,7 @@ final readonly class Authorize
             }
             $handle = $this->secrets->token();
             $returnTo = $this->resume($request, $resumed, $client, $pushed);
-            $this->loginStates->put($handle, new LoginState($returnTo, $client->id));
+            $this->loginStates->put($handle, new LoginState($returnTo, $client->id, self::uiLocales($request)));
 
             return new LoginRequired($handle);
         }
@@ -352,11 +353,16 @@ final readonly class Authorize
         // Without a session (the development auto-login) there is nothing to raise.
         $session = $endUser->session;
         $resumed = $this->resume($request, $request->parameters, $client, $pushed);
-        $challenge = $session === null ? null : ($this->beginStepUp)($session, $requirement, $resumed, $client->id);
+        $languages = self::uiLocales($request);
+        $challenge = $session === null
+            ? null
+            : ($this->beginStepUp)($session, $requirement, $resumed, $client->id, $languages);
         if ($challenge !== null) {
             return new StepUpRequired($challenge);
         }
-        $enrolment = $session === null ? null : ($this->beginEnrolment)($session, $requirement, $resumed, $client->id);
+        $enrolment = $session === null
+            ? null
+            : ($this->beginEnrolment)($session, $requirement, $resumed, $client->id, $languages);
         if ($enrolment !== null) {
             return new EnrolmentRequired($enrolment);
         }
@@ -398,8 +404,19 @@ final readonly class Authorize
             $client->id,
             $scope,
             $target?->id,
+            self::uiLocales($request),
         ));
 
         return new ConsentRequired($handle);
+    }
+
+    /**
+     * The languages the request asks its pages in (OpenID Connect Core §3.1.2.1), recorded where it is held
+     * so the pages it goes through can read them; a pushed request's own, since its parameters are the
+     * request's here. A hint: whatever it says, nothing is refused for it.
+     */
+    private static function uiLocales(AuthorizationRequest $request): UiLocales
+    {
+        return UiLocales::fromString($request->parameters->get('ui_locales'));
     }
 }

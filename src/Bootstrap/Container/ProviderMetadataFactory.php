@@ -40,6 +40,7 @@ final class ProviderMetadataFactory
             $issueToken->supportedAuthMethods(),
             [$algorithm],
             $settings->clientRegistration !== ClientRegistration::Off,
+            $settings->languages,
         );
     }
 }

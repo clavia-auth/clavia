@@ -18,6 +18,7 @@ use Clavia\Domain\Authentication\MfaChallenge;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
+use Clavia\Domain\OAuth2\UiLocales;
 use Clavia\Domain\Shared\InvalidValue;
 use JsonException;
 use ValueError;
@@ -74,6 +75,7 @@ final readonly class RedisMfaChallengeStore implements MfaChallengeStore
             // A step-up's session and requirement; empty for a sign-in.
             'step_up_of' => $challenge->stepUpOf ?? '',
             'acr_values' => implode(' ', $challenge->requirement?->acrValues() ?? []),
+            'ui_locales' => $challenge->uiLocales->toString(),
         ]);
         $client->expire($key, $lifetimeSeconds);
         $client->exec();
@@ -114,6 +116,7 @@ final readonly class RedisMfaChallengeStore implements MfaChallengeStore
                 max(0, (int) ($fields['attempts'] ?? '0')),
                 $stepUpOf,
                 $stepUpOf === null ? null : AuthenticationRequirement::fromAcrValues($fields['acr_values'] ?? ''),
+                UiLocales::fromString($fields['ui_locales'] ?? null),
             );
         } catch (JsonException | InvalidValue | ValueError) {
             // An entry this code cannot read is an entry that is not there.

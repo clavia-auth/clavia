@@ -20,6 +20,7 @@ use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
 use Clavia\Domain\Authentication\Session;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\UserRepository;
+use Clavia\Domain\OAuth2\UiLocales;
 use Clavia\Domain\Shared\SecretGenerator;
 
 /**
@@ -46,7 +47,8 @@ final readonly class BeginEnrolmentOnTheWay
     }
 
     /**
-     * @param string $nextUrl The request to resume: a local path.
+     * @param string         $nextUrl   The request to resume: a local path.
+     * @param UiLocales|null $uiLocales The languages the request asked its pages in, for the enrolment pages.
      *
      * @return non-empty-string|null The login state's handle; null when this person may not enrol on the
      *                               way: an enrolled factor would be enough, or the address is unverified,
@@ -57,6 +59,7 @@ final readonly class BeginEnrolmentOnTheWay
         AuthenticationRequirement $requirement,
         string $nextUrl,
         ?ClientId $clientId,
+        ?UiLocales $uiLocales = null,
     ): ?string {
         if (! $requirement->accepts(AuthenticationLevel::Mfa)) {
             return null;
@@ -72,7 +75,7 @@ final readonly class BeginEnrolmentOnTheWay
         }
 
         $handle = $this->secrets->token();
-        $this->loginStates->put($handle, new LoginState($nextUrl, $clientId));
+        $this->loginStates->put($handle, new LoginState($nextUrl, $clientId, $uiLocales));
 
         return $handle;
     }

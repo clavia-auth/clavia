@@ -14,6 +14,7 @@ namespace ClaviaTest\Support\Contract;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Domain\Authentication\LoginState;
 use Clavia\Domain\Client\ClientId;
+use Clavia\Domain\OAuth2\UiLocales;
 use PHPUnit\Framework\Attributes\Test;
 
 /**
@@ -80,5 +81,16 @@ trait LoginStateStoreContract
 
         self::assertNull($this->loginStates()->get('handle-1'));
         self::assertSame('/b', $this->loginStates()->get('handle-2')?->nextUrl);
+    }
+
+    /** docs/design/translated-sign-in-pages.md §5.2: the pages a held request goes through read them here. */
+    #[Test]
+    public function theLanguagesTheRequestAskedForAreKept(): void
+    {
+        $this->loginStates()->put('handle-1', new LoginState('/a', null, UiLocales::fromString('fr-CA fr')));
+        $this->loginStates()->put('handle-2', new LoginState('/b'));
+
+        self::assertSame(['fr-CA', 'fr'], $this->loginStates()->get('handle-1')?->uiLocales->tags);
+        self::assertSame([], $this->loginStates()->get('handle-2')?->uiLocales->tags);
     }
 }

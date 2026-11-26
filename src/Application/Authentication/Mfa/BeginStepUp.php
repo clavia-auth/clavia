@@ -16,6 +16,7 @@ use Clavia\Domain\Authentication\AuthenticationRequirement;
 use Clavia\Domain\Authentication\MfaChallenge;
 use Clavia\Domain\Authentication\Session;
 use Clavia\Domain\Client\ClientId;
+use Clavia\Domain\OAuth2\UiLocales;
 use Clavia\Domain\Shared\SecretGenerator;
 
 /**
@@ -37,7 +38,8 @@ final readonly class BeginStepUp
     }
 
     /**
-     * @param string $nextUrl Where the browser goes once the session is raised: a local path.
+     * @param string         $nextUrl   Where the browser goes once the session is raised: a local path.
+     * @param UiLocales|null $uiLocales The languages the request asked its pages in, for the step's page.
      *
      * @return non-empty-string|null The challenge's handle; null when no factor the person holds reaches
      *                               any level the requirement accepts.
@@ -47,8 +49,9 @@ final readonly class BeginStepUp
         AuthenticationRequirement $requirement,
         string $nextUrl,
         ?ClientId $clientId,
+        ?UiLocales $uiLocales = null,
     ): ?string {
-        $challenge = MfaChallenge::stepUp($session, $requirement, $nextUrl, $clientId);
+        $challenge = MfaChallenge::stepUp($session, $requirement, $nextUrl, $clientId, $uiLocales);
         if (! $this->secondFactors->offeredFor($challenge)->any()) {
             return null;
         }

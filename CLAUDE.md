@@ -1315,7 +1315,10 @@ someone else's or names something deleted gives the same "expired" page.
   `$this->t('login.submit')` in a template, `$this->emphasised('key', $values, 'email')` for a sentence
   with one value in bold, `Message::of('key', $values)` in a page class (an `HtmlPage`'s title, heading,
   error, or a variable: they take a `Message`, never text), worded by `PageRenderer` in the page's language
-  (`LanguageChoice`: `Accept-Language` among `CLAVIA_LANGUAGES`, else `CLAVIA_DEFAULT_LANGUAGE`), which
+  (`LanguageChoice`: the held request's `ui_locales`, then `Accept-Language`, among `CLAVIA_LANGUAGES`,
+  else `CLAVIA_DEFAULT_LANGUAGE`; `UiLocales`, recorded on the `LoginState`, `PendingConsent` or
+  `MfaChallenge` that holds the request, pushed or not, and read back by `HeldLanguages` from the page's
+  `state` or the `clavia_mfa` cookie; a malformed tag is dropped, never refused), which
   `<html lang>` and `Content-Language` state. Messages are ICU MessageFormat, read through the
   `Messages` port (`IcuMessages`); a value is an argument, never part of a pattern, and a message holds
   no markup. `CatalogueTest` keeps every translation complete and every key used. The standard OpenID

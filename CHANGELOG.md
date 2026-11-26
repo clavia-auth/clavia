@@ -14,6 +14,11 @@ All notable changes to Clavia are written here, for the people who run it. The f
   an API's permissions keep their operator's words. A refused password is worded from its reason, with
   the policy's bounds.
 
+- **`ui_locales`** (#183, OpenID Connect Core §3.1.2.1): an application asking for a language gets it
+  on every page of the sign-in it starts (login, second factor, step-up, enrolment, consent), pushed or
+  not, before the browser's `Accept-Language`. A tag that is not offered or not well formed is passed
+  over, never refused. Discovery names the languages offered (`ui_locales_supported`).
+
 - **The sign-in pages in French** (#181, the first of #24): the login page and the error pages follow
   the browser's `Accept-Language`, among the offered languages, and say so in `<html lang>` and
   `Content-Language`. Messages live in `translations/*.arb` (ICU MessageFormat), which `CatalogueTest`

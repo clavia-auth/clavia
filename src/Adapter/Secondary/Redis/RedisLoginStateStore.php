@@ -14,6 +14,7 @@ namespace Clavia\Adapter\Secondary\Redis;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Domain\Authentication\LoginState;
 use Clavia\Domain\Client\ClientId;
+use Clavia\Domain\OAuth2\UiLocales;
 use Clavia\Domain\Shared\InvalidValue;
 use JsonException;
 
@@ -38,7 +39,11 @@ final readonly class RedisLoginStateStore implements LoginStateStore
             Keys::forSecret(self::PREFIX, $handle),
             LoginState::LIFETIME_SECONDS,
             json_encode(
-                ['next_url' => $state->nextUrl, 'client_id' => $state->clientId?->value],
+                [
+                    'next_url' => $state->nextUrl,
+                    'client_id' => $state->clientId?->value,
+                    'ui_locales' => $state->uiLocales->toString(),
+                ],
                 JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES,
             ),
         );
@@ -68,8 +73,15 @@ final readonly class RedisLoginStateStore implements LoginStateStore
             /** @var mixed $clientId */
             $clientId = $data['client_id'] ?? null;
 
+            /** @var mixed $uiLocales */
+            $uiLocales = $data['ui_locales'] ?? null;
+
             return is_string($nextUrl)
-                ? new LoginState($nextUrl, is_string($clientId) ? ClientId::fromString($clientId) : null)
+                ? new LoginState(
+                    $nextUrl,
+                    is_string($clientId) ? ClientId::fromString($clientId) : null,
+                    UiLocales::fromString(is_string($uiLocales) ? $uiLocales : null),
+                )
                 : null;
         } catch (JsonException | InvalidValue) {
             // An entry this code cannot read is an entry that is not there.

@@ -179,6 +179,7 @@ use Clavia\Application\Authentication\External\ResolveExternalAccount;
 use Clavia\Application\Authentication\External\Saml\BeginSamlSignIn;
 use Clavia\Application\Authentication\External\Saml\CompleteSamlSignIn;
 use Clavia\Application\Authentication\External\Saml\ReceiveSamlResponse;
+use Clavia\Application\Authentication\HeldLanguages;
 use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
 use Clavia\Application\Authentication\LoginThrottle;
 use Clavia\Application\Authentication\Mfa\BeginEnrolmentOnTheWay;
@@ -872,6 +873,7 @@ final class ConfigProvider
                     // Primary adapter: HTTP
                     HealthHandler::class => Container\HealthHandlerFactory::class,
                     LanguageChoice::class => Container\LanguageChoiceFactory::class,
+                    HeldLanguages::class => Container\HeldLanguagesFactory::class,
                     Languages::class => Container\LanguagesFactory::class,
                     IcuMessages::class => Container\IcuMessagesFactory::class,
                     MetricsHandler::class => Container\MetricsHandlerFactory::class,

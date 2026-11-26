@@ -18,6 +18,7 @@ use Clavia\Domain\Authentication\MfaChallenge;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
+use Clavia\Domain\OAuth2\UiLocales;
 use PHPUnit\Framework\Attributes\Test;
 
 /**
@@ -143,5 +144,21 @@ trait MfaChallengeStoreContract
             [AuthenticationMethod::Password],
             ConnectionName::defaultPool(),
         );
+    }
+
+    #[Test]
+    public function theLanguagesTheRequestAskedForAreKept(): void
+    {
+        $challenge = $this->aChallenge(null);
+        $this->challenges()->open('handle-1', new MfaChallenge(
+            $challenge->userId,
+            $challenge->nextUrl,
+            null,
+            $challenge->firstFactor,
+            $challenge->connection,
+            uiLocales: UiLocales::fromString('fr'),
+        ), 300);
+
+        self::assertSame(['fr'], $this->challenges()->find('handle-1')?->uiLocales->tags);
     }
 }

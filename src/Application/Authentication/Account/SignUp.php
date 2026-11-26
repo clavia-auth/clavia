@@ -130,6 +130,7 @@ final readonly class SignUp
             self::nextUrl($pending),
             $clientId,
             $request->currentSessionId,
+            $pending?->uiLocales,
         );
     }
 

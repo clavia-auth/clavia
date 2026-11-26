@@ -15,6 +15,7 @@ use Clavia\Application\Port\ConsentStateStore;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Consent\PendingConsent;
 use Clavia\Domain\Identity\UserId;
+use Clavia\Domain\OAuth2\UiLocales;
 use Clavia\Domain\ResourceServer\ResourceServerId;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\ScopeSet;
@@ -48,6 +49,7 @@ final readonly class RedisConsentStateStore implements ConsentStateStore
                     'client_id' => $pending->clientId->value,
                     'scope' => $pending->scope->toString(),
                     'resource_server_id' => $pending->resourceServerId?->value,
+                    'ui_locales' => $pending->uiLocales->toString(),
                 ],
                 JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES,
             ),
@@ -106,6 +108,8 @@ final readonly class RedisConsentStateStore implements ConsentStateStore
             $scope = $data['scope'] ?? null;
             /** @var mixed $resourceServerId */
             $resourceServerId = $data['resource_server_id'] ?? null;
+            /** @var mixed $uiLocales */
+            $uiLocales = $data['ui_locales'] ?? null;
             if (
                 ! is_string($resumeAt)
                 || ! is_string($redirectUri)
@@ -124,6 +128,7 @@ final readonly class RedisConsentStateStore implements ConsentStateStore
                 ClientId::fromString($clientId),
                 ScopeSet::fromString($scope),
                 is_string($resourceServerId) ? ResourceServerId::fromString($resourceServerId) : null,
+                UiLocales::fromString(is_string($uiLocales) ? $uiLocales : null),
             );
         } catch (JsonException | InvalidValue) {
             // An entry this code cannot read is an entry that is not there.

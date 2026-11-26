@@ -182,6 +182,8 @@ final readonly class CompleteSamlSignIn
         if (! $account instanceof User) {
             return $refuse($account);
         }
+        // The languages its request asked for, read before the login page's handle goes.
+        $uiLocales = $pending->loginState === null ? null : $this->loginStates->get($pending->loginState)?->uiLocales;
         if ($pending->loginState !== null) {
             $this->loginStates->forget($pending->loginState);
         }
@@ -193,6 +195,7 @@ final readonly class CompleteSamlSignIn
             $pending->nextUrl,
             $pending->clientId,
             $callback->currentSessionId,
+            $uiLocales,
         );
     }
 

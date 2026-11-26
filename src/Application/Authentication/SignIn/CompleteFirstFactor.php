@@ -20,6 +20,7 @@ use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
+use Clavia\Domain\OAuth2\UiLocales;
 use Clavia\Domain\Shared\SecretGenerator;
 
 /**
@@ -61,12 +62,14 @@ final readonly class CompleteFirstFactor
         string $nextUrl,
         ?ClientId $clientId,
         #[\SensitiveParameter] ?string $replacing,
+        ?UiLocales $uiLocales = null,
     ): SignedIn|SecondFactorRequired {
         if ($this->factors->find($userId)?->isConfirmed() === true || ($this->passkeys?->countOf($userId) ?? 0) > 0) {
             $handle = $this->secrets->token();
             $this->challenges->open(
                 $handle,
-                new MfaChallenge($userId, $nextUrl, $clientId, $firstFactor, $connection),
+                // The second factor's page speaks the language the request asked for.
+                new MfaChallenge($userId, $nextUrl, $clientId, $firstFactor, $connection, uiLocales: $uiLocales),
                 $this->challengeLifetimeSeconds,
             );
 

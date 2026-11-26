@@ -62,6 +62,7 @@ final readonly class ProviderMetadata
      * @param list<ClientAuthMethod> $tokenAuthMethods  How a client may authenticate there.
      * @param list<SigningAlgorithm> $signingAlgorithms What ID tokens are signed with.
      * @param bool                   $registration      Whether `/oauth2/register` exists (RFC 7591).
+     * @param list<string>           $uiLocales         The languages the sign-in pages are offered in.
      */
     public function __construct(
         private string $issuer,
@@ -70,6 +71,7 @@ final readonly class ProviderMetadata
         private array $tokenAuthMethods,
         private array $signingAlgorithms,
         private bool $registration = false,
+        private array $uiLocales = [],
     ) {
     }
 
@@ -128,6 +130,8 @@ final readonly class ProviderMetadata
             'device_authorization_endpoint' => $this->issuer . self::DEVICE_AUTHORIZATION_ENDPOINT,
             'claim_types_supported' => ['normal'],
             'claims_supported' => self::CLAIMS,
+            // Discovery §3: what `ui_locales` may ask for, the languages offered (CLAVIA_LANGUAGES).
+            'ui_locales_supported' => $this->uiLocales,
             // OIDC Core §3.1.2.1; Discovery has no default for it, so it is always stated.
             'prompt_values_supported' => Prompt::SUPPORTED,
             'claims_parameter_supported' => false,

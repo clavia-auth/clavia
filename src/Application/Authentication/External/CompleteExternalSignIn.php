@@ -122,6 +122,8 @@ final readonly class CompleteExternalSignIn
         }
 
         // The login page's handle has done its job, as after a password.
+        // The languages its request asked for, read before the login page's handle goes.
+        $uiLocales = $pending->loginState === null ? null : $this->loginStates->get($pending->loginState)?->uiLocales;
         if ($pending->loginState !== null) {
             $this->loginStates->forget($pending->loginState);
         }
@@ -133,6 +135,7 @@ final readonly class CompleteExternalSignIn
             $pending->nextUrl,
             $pending->clientId,
             $callback->currentSessionId,
+            $uiLocales,
         );
     }
 }

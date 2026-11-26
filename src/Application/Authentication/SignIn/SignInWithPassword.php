@@ -106,6 +106,7 @@ final readonly class SignInWithPassword
             $nextUrl,
             $pending?->clientId,
             $attempt->currentSessionId,
+            $pending?->uiLocales,
         );
     }
 
