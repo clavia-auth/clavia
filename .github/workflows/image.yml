@@ -1,16 +1,14 @@
 name: Image
 
 # The container image a release publishes is built here too, without pushing it, whenever something
-# that goes into it changes: a release then never meets a Dockerfile that was not built before.
+# that goes into it changes in a pull request: a release then never meets a Dockerfile that was not
+# built before. Every push to main builds it as well and publishes it as `:edge`
+# (docs/design/end-to-end-scenarios.md §9, slice 4), what the dashboard's end-to-end workflow runs
+# against. `edge` is not a release (docs/RELEASING.md).
 on:
+  # Every push to main: `edge` follows main, whatever part of it changed.
   push:
     branches: [main]
-    paths:
-      - 'docker/php/**'
-      - 'composer.json'
-      - 'composer.lock'
-      - '.github/workflows/image.yml'
-      - '.github/workflows/release.yml'
   pull_request:
     paths:
       - 'docker/php/**'
@@ -22,6 +20,8 @@ on:
 permissions:
   contents: read
 
+# The third-party actions of the edge job, which holds `packages: write`, are pinned to a commit (the
+# version is in the comment), as in release.yml; Dependabot's weekly `github-actions` update moves them.
 jobs:
   build:
     name: Production image builds and starts
@@ -39,6 +39,8 @@ jobs:
           load: true
           push: false
           tags: clavia:ci
+          # Handed to the edge job, which then pushes this build rather than making another.
+          cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max' || '' }}
 
       # The application is in the image and starts: the console boots the container and reads its
       # configuration from the environment, and the Management API's contract is part of it.
@@ -47,3 +49,50 @@ jobs:
           docker run --rm -e CLAVIA_ROOT_DOMAIN=ci.test clavia:ci php bin/clavia config
           docker run --rm clavia:ci test -f /app/docs/openapi/management-api.yaml
           docker run --rm clavia:ci sh -c '! test -e /app/vendor/bin/phpunit'
+
+  # `ghcr.io/clavia-auth/clavia:edge`: main as it is, for other repositories' CI. Only from a push to
+  # main, never from a pull request, so nothing unreviewed is published under a name another
+  # repository then trusts; with this repository's own GITHUB_TOKEN, and only after the image starts.
+  edge:
+    name: Publish edge
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    # A newer push to main supersedes an older one still publishing: edge never goes backwards.
+    concurrency:
+      group: image-edge
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tags and labels
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ghcr.io/${{ github.repository }}
+          # `edge` moves with main; `sha-<commit>` names this build for good, to trace or pin one.
+          tags: |
+            type=raw,value=edge
+            type=sha,format=short
+
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: docker/php
+          build-contexts: app=.
+          target: production
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
