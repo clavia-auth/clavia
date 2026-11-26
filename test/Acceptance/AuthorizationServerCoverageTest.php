@@ -22,27 +22,6 @@ use Mezzio\Router\RouteCollector;
  */
 final class AuthorizationServerCoverageTest extends AcceptanceTestCase
 {
-    /**
-     * Routed, not yet described: the next slice of #93 (#171) documents them, and empties this list.
-     *
-     * @var list<string>
-     */
-    private const array PENDING = [
-        'GET /.well-known/oauth-authorization-server',
-        'GET /.well-known/openid-configuration',
-        'GET /oauth2/authorize',
-        'POST /oauth2/authorize',
-        'POST /oauth2/register',
-        'GET /oauth2/register/{client_id}',
-        'PUT /oauth2/register/{client_id}',
-        'DELETE /oauth2/register/{client_id}',
-        'GET /oidc/jwks.json',
-        'GET /oidc/userinfo',
-        'POST /oidc/userinfo',
-        'GET /oidc/logout',
-        'POST /oidc/logout',
-    ];
-
     public function testEveryRouteIsAnOperationAndEveryOperationARoute(): void
     {
         // Every route there can be: registration's exist only when it is on.
@@ -62,7 +41,6 @@ final class AuthorizationServerCoverageTest extends AcceptanceTestCase
             }
         }
 
-        self::assertSame([], array_values(array_intersect($described, self::PENDING)), 'Described: no longer pending.');
-        self::assertEqualsCanonicalizing($routed, [...$described, ...self::PENDING]);
+        self::assertEqualsCanonicalizing($routed, $described);
     }
 }
