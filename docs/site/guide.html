@@ -165,8 +165,11 @@
     </article>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/marked@15.0.12/lib/marked.umd.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
+  <!-- Pinned, and held to their hashes (Subresource Integrity): a changed file on the CDN does not run. -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@15.0.12/lib/marked.umd.js"
+    integrity="sha384-fGlgqlm/GUgiVEyV6lvBJbxjprBPT1g0VoE9o/FjCWntEwOQYGqANQdFeFlqbObP" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"
+    integrity="sha384-JEyTNhjM6R1ElGoJns4U2Ln4ofPcqzSsynQkmEc/KGy6336qAZl70tDLufbkla+3" crossorigin="anonymous"></script>
   <script>
     (async () => {
       const article = document.getElementById('guide');

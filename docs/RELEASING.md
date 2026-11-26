@@ -102,7 +102,7 @@ docker buildx build docker/php --target production --build-context app=. -t clav
 `.github/workflows/docs.yml` runs when the Release workflow succeeds on a tag, and publishes the
 Management API reference and its guides to GitHub Pages:
 
-- the page is `docs/site/index.html`, Scalar (pinned) over the release's
+- the page is `docs/site/index.html`, Scalar (pinned, and held to its SRI hash) over the release's
   `docs/openapi/management-api.yaml`, with a bar naming the release and offering the others. The
   page and its scripts are taken from `main`, the document from the tag, so a fix to the page
   reaches every release published after it, and each release shows its own API;
@@ -115,6 +115,14 @@ Management API reference and its guides to GitHub Pages:
   for the newest stable release. A pre-release, or an older release published later, never moves
   the root. `versions.json` lists every release, newest first, for the page's picker;
 - nothing is published for a tag the Release workflow refused.
+
+The three scripts the pages load (Scalar, marked, DOMPurify) are pinned to a version and held to a
+Subresource Integrity hash: a file changed on the CDN does not run. A new version comes with its new
+hash, which `ApiReferencePageTest` requires:
+
+```bash
+curl -sL https://cdn.jsdelivr.net/npm/<package>@<version>/<file> | openssl dgst -sha384 -binary | openssl base64 -A
+```
 
 To publish a release by hand (a release made before the workflow existed, or after a fix to the
 page): **Actions → Docs → Run workflow**, with the tag (`v0.3.0`). Running it again for a published

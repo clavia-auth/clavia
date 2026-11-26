@@ -33,6 +33,21 @@ final class ApiReferencePageTest extends TestCase
         );
     }
 
+    /** A changed file on the CDN must not run: a version bump comes with its new hash. */
+    public function testEveryScriptFromElsewhereIsHeldToItsHash(): void
+    {
+        foreach (['index.html', 'guide.html'] as $file) {
+            $page = (string) file_get_contents(__DIR__ . '/../../../docs/site/' . $file);
+            preg_match_all('/<script\b[^>]*\bsrc="[^"]+"[^>]*>/', $page, $scripts);
+
+            self::assertNotEmpty($scripts[0], $file);
+            foreach ($scripts[0] as $script) {
+                self::assertMatchesRegularExpression('#\bintegrity="sha384-[A-Za-z0-9+/]{64}"#', $script, $file);
+                self::assertStringContainsString('crossorigin="anonymous"', $script, $file);
+            }
+        }
+    }
+
     public function testItRendersTheDocumentBesideItAndNamesTheRelease(): void
     {
         $page = self::page();
