@@ -53,6 +53,8 @@ final class ApiReferencePageTest extends TestCase
         $page = self::page();
 
         self::assertStringContainsString("url: './management-api.yaml'", $page);
+        self::assertStringContainsString("url: './authorization-server.yaml'", $page);
+        self::assertStringContainsString('{{AUTHORIZATION_SERVER}}', $page, 'An older release shows one document.');
         self::assertStringContainsString('{{RELEASE}}', $page);
         self::assertStringContainsString('{{ROOT}}versions.json', $page);
     }
@@ -60,8 +62,21 @@ final class ApiReferencePageTest extends TestCase
     public function testCodeSamplesNeverNameARealHost(): void
     {
         // The reader's own domain, through a server variable whose default is reserved (RFC 2606).
-        self::assertStringContainsString("url: 'https://management.{domain}'", self::page());
+        self::assertStringContainsString('url: `https://${host}.{domain}`', self::page());
+        self::assertStringContainsString("servers: server('management')", self::page());
+        self::assertStringContainsString("servers: server('auth')", self::page());
         self::assertStringContainsString("default: 'example.com'", self::page());
+    }
+
+    /** Each document under its own slug: the guides' deep links name it (`#authorization-server/…`). */
+    public function testEachDocumentHasTheSlugTheGuidesLinkTo(): void
+    {
+        self::assertStringContainsString("slug: 'management-api'", self::page());
+        self::assertStringContainsString("slug: 'authorization-server'", self::page());
+        self::assertStringContainsString(
+            "'../#authorization-server'",
+            (string) file_get_contents(__DIR__ . '/../../../docs/site/guide.html'),
+        );
     }
 
     private static function page(): string

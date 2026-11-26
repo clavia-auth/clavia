@@ -34,8 +34,9 @@ generate one key per client instance and keep it as long as its tokens.
 
 ## Getting a bound token
 
-At the token endpoint the server also asks for its own nonce, so a proof can't be made in advance.
-The first request, with a proof but no nonce, is refused:
+At the token endpoint ([`POST /oauth2/token`](../openapi/authorization-server.yaml#tag/tokens/POST/oauth2/token)) the server also
+asks for its own nonce, so a proof can't be made in advance. The first request, with a proof but no
+nonce, is refused:
 
 ```http
 POST /oauth2/token HTTP/1.1

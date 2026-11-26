@@ -100,12 +100,15 @@ docker buildx build docker/php --target production --build-context app=. -t clav
 ## 6. The API reference
 
 `.github/workflows/docs.yml` runs when the Release workflow succeeds on a tag, and publishes the
-Management API reference and its guides to GitHub Pages:
+API references and the guides to GitHub Pages:
 
 - the page is `docs/site/index.html`, Scalar (pinned, and held to its SRI hash) over the release's
-  `docs/openapi/management-api.yaml`, with a bar naming the release and offering the others. The
-  page and its scripts are taken from `main`, the document from the tag, so a fix to the page
-  reaches every release published after it, and each release shows its own API;
+  `docs/openapi/management-api.yaml` and `docs/openapi/authorization-server.yaml`, one switcher
+  between them, each with its own server (`management.{domain}`, `auth.{domain}`), and a bar
+  naming the release and offering the others. The page and its scripts are taken from `main`, the
+  documents from the tag, so a fix to the page reaches every release published after it, and each
+  release shows its own APIs. A release from before the authorization server's document (#93)
+  shows the Management API's alone;
 - the guides are the tag's `docs/guides`, each rendered by `docs/site/guide.html` (marked and
   DOMPurify, pinned) at `/vX.Y.Z/guides/<name>.html`, beside its Markdown, in the order
   `docs/guides/README.md` lists them. The reference's bar and introduction link them. A release
@@ -131,8 +134,9 @@ release replaces that release's directory, and nothing else.
 To preview the page from a branch, with no tag and no workflow:
 
 ```bash
-docs/site/build.sh dev docs/openapi/management-api.yaml /tmp/clavia-docs "" docs/guides
-cd /tmp/clavia-docs && python3 -m http.server 8080   # the page loads its document over HTTP
+docs/site/build.sh dev docs/openapi/management-api.yaml /tmp/clavia-docs "" docs/guides \
+  docs/openapi/authorization-server.yaml
+cd /tmp/clavia-docs && python3 -m http.server 8080   # the page loads its documents over HTTP
 ```
 
 **The first time**, in the repository's settings, **Pages → Build and deployment**: source

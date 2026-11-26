@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
-# Builds one release of the Management API reference, and its guides, into a directory:
+# Builds one release of the API references, and the guides, into a directory:
 #
-#   docs/site/build.sh <release> <management-api.yaml> <out-dir> [root] [guides-dir]
+#   docs/site/build.sh <release> <management-api.yaml> <out-dir> [root] [guides-dir] [authorization-server.yaml]
 #
 # <release> is the server release shown on the page (0.3.0, or `dev` for a preview); [root] is the
 # path from <out-dir> to the site's root, where versions.json and the icon live ("" for the root
 # itself, "../" for /vX.Y.Z/). [guides-dir] holds the release's guides (docs/guides): README.md lists
 # them in order, and each becomes <out-dir>/guides/<name>.html beside its Markdown. Without it (a
 # release from before the guides), the reference is built alone and links to none.
+# [authorization-server.yaml] is the authorization server's document (#93), shown beside the
+# Management API's through Scalar's document switcher; without it (a release from before it), the page
+# has the Management API's alone.
 #
 # Nothing is installed or compiled: the pages load Scalar, marked and DOMPurify, pinned, from
 # jsDelivr. The Docs workflow runs this; to preview locally:
 #
 #   docs/site/build.sh dev docs/openapi/management-api.yaml /tmp/clavia-docs "" docs/guides \
+#     docs/openapi/authorization-server.yaml \
 #     && php -S localhost:8080 -t /tmp/clavia-docs
 set -euo pipefail
 
@@ -21,11 +25,14 @@ spec="${2:?path to management-api.yaml}"
 out="${3:?output directory}"
 root="${4:-}"
 guides="${5:-}"
+authorization_server="${6:-}"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 [[ "${release}" =~ ^([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?|dev)$ ]] || { echo "Not a release: ${release}" >&2; exit 1; }
 [[ "${root}" =~ ^(\.\./)*$ ]] || { echo "Not a path to the root: ${root}" >&2; exit 1; }
 [ -z "${guides}" ] || [ -f "${guides}/README.md" ] || { echo "No README.md in ${guides}" >&2; exit 1; }
+[ -z "${authorization_server}" ] || [ -f "${authorization_server}" ] \
+  || { echo "No such document: ${authorization_server}" >&2; exit 1; }
 
 # Fills a template's {{NAME}} placeholders from NAME=value arguments, values taken literally (through
 # the environment: awk would read escapes in a -v value).
@@ -55,11 +62,18 @@ fill() {
 }
 
 mkdir -p "${out}"
+with_authorization_server=false
+if [ -n "${authorization_server}" ]; then
+  with_authorization_server=true
+  cp "${authorization_server}" "${out}/authorization-server.yaml"
+fi
 if [ -n "${guides}" ]; then
-  fill "${here}/index.html" "RELEASE=${release}" "ROOT=${root}" > "${out}/index.html"
+  fill "${here}/index.html" "RELEASE=${release}" "ROOT=${root}" \
+    "AUTHORIZATION_SERVER=${with_authorization_server}" > "${out}/index.html"
 else
   # No guides for this release: the lines that link to them go.
-  grep -v 'data-guides' "${here}/index.html" | fill /dev/stdin "RELEASE=${release}" "ROOT=${root}" > "${out}/index.html"
+  grep -v 'data-guides' "${here}/index.html" | fill /dev/stdin "RELEASE=${release}" "ROOT=${root}" \
+    "AUTHORIZATION_SERVER=${with_authorization_server}" > "${out}/index.html"
 fi
 cp "${spec}" "${out}/management-api.yaml"
 cp "${here}/../../public/auth/static/clavia-icon.svg" "${out}/clavia-icon.svg"

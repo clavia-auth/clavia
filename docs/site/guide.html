@@ -182,7 +182,7 @@
       article.replaceChildren(DOMPurify.sanitize(html, { RETURN_DOM_FRAGMENT: true }));
 
       // Links written for GitHub, made to work here: another guide (x.md) is its page (x.html), the
-      // index (README.md) is this directory, and the OpenAPI document is the reference.
+      // index (README.md) is this directory, and an OpenAPI document is its reference.
       for (const link of article.querySelectorAll('a[href]')) {
         const href = link.getAttribute('href');
         if (/^[a-z]+:/i.test(href) || href.startsWith('#')) {
@@ -192,6 +192,12 @@
         const [path, fragment] = href.split('#');
         let target = path;
         if (path === '../openapi/management-api.yaml') target = '../';
+        // The authorization server's document is the reference's second source: Scalar's deep link
+        // is its slug, then the operation's own (#authorization-server/tag/tokens/POST/oauth2/token).
+        else if (path === '../openapi/authorization-server.yaml') {
+          link.setAttribute('href', '../#authorization-server' + (fragment === undefined ? '' : '/' + fragment));
+          continue;
+        }
         else if (path === 'README.md') target = './';
         else if (path.endsWith('.md')) target = path.slice(0, -3) + '.html';
         link.setAttribute('href', target + (fragment === undefined ? '' : '#' + fragment));

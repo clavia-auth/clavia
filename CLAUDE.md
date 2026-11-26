@@ -116,7 +116,7 @@ src/
 templates/                  server-rendered pages: layout/, auth/, error/, partial/
 migrations/                 NNNN_name.sql, forward only
 docs/openapi/               management-api.yaml, the Management API's contract
-docs/site/                  the published API reference: Scalar over that document, and the guides (docs.yml)
+docs/site/                  the published API references: Scalar over both documents, and the guides (docs.yml)
 docs/guides/                the Management API guides, for callers: tokens, scopes, errors, paging, DPoP, registration
 docs/SECURITY-REVIEW.md     review of every adapter against the invariants
 docs/RELEASING.md           how a release is made: changelog, version, tag, the Release workflow
@@ -859,7 +859,9 @@ shapes and order (client authentication before the grant). It is kept true by te
   document's enums, and the token request has one schema per grant;
 - `OpenApiDocumentationTest` and `OpenApiExamplesTest`, as for the Management API.
 
-A new endpoint, a grant, a refusal code or a header is a change to this document too.
+A new endpoint, a grant, a refusal code or a header is a change to this document too. It is published
+beside the Management API's reference (Scalar's switcher, `#authorization-server/…`), from the
+same tag, and the guides link its operations (`ManagementGuidesTest` checks each link lands on one).
 
 ### Bulk jobs on the users
 

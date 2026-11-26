@@ -44,8 +44,9 @@ further registrations; the clients it registered keep working.
 
 ## 2. The partner registers
 
-They post their application's metadata to the registration endpoint, the initial access token as a
-bearer token:
+They post their application's metadata to the registration endpoint
+([`POST /oauth2/register`](../openapi/authorization-server.yaml#tag/registration/POST/oauth2/register)), the initial access token as
+a bearer token:
 
 ```bash
 curl -s https://auth.example.com/oauth2/register \
@@ -126,7 +127,8 @@ A refused registration spends no use of the token.
 ## 3. The partner manages their client
 
 The registration access token, sent as a bearer token to `registration_client_uri`, lets the
-partner manage that one client ([RFC 7592](https://www.rfc-editor.org/rfc/rfc7592)):
+partner manage that one client ([RFC 7592](https://www.rfc-editor.org/rfc/rfc7592); every operation
+in the [reference](../openapi/authorization-server.yaml#tag/registration)):
 
 - **`GET`** reads its metadata, without the secret.
 - **`PUT`** replaces its metadata. The body includes `client_id`, and states every member: a member

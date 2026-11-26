@@ -29,6 +29,7 @@ final class ManagementGuidesTest extends TestCase
 {
     private const string GUIDES = __DIR__ . '/../../../docs/guides';
     private const string DOCUMENT = __DIR__ . '/../../../docs/openapi/management-api.yaml';
+    private const string AUTHORIZATION_SERVER = __DIR__ . '/../../../docs/openapi/authorization-server.yaml';
     private const string PAGE = __DIR__ . '/../../../docs/site/guide.html';
 
     /** Hosts a guide may name: the reader's own (example.com), a partner's, and the specifications. */
@@ -66,22 +67,49 @@ final class ManagementGuidesTest extends TestCase
         self::assertSame(self::listed(), $linked, 'info.description links every guide, in order.');
     }
 
+    /** An operation a guide names is in the document of its host: `/api/v1` or the authorization server's. */
     #[DataProvider('guides')]
     public function testEachOperationNamedExists(string $guide): void
     {
-        $document = Yaml::parseFile(self::DOCUMENT);
-        self::assertIsArray($document);
-        /** @var array<string, array<string, mixed>> $paths */
-        $paths = $document['paths'];
-        $operation = '#\b(GET|POST|PUT|PATCH|DELETE) (/api/v1/[A-Za-z0-9_/{}.-]*[A-Za-z0-9_}])#';
+        $operation = '#\b(GET|POST|PUT|PATCH|DELETE) '
+            . '(/(?:api/v1|oauth2|oidc|\.well-known)/[A-Za-z0-9_/{}.-]*[A-Za-z0-9_}])#';
         preg_match_all($operation, self::text($guide), $named, PREG_SET_ORDER);
 
         foreach ($named as [, $method, $path]) {
+            $paths = self::paths(str_starts_with($path, '/api/v1/') ? self::DOCUMENT : self::AUTHORIZATION_SERVER);
             self::assertArrayHasKey(
                 strtolower($method),
                 $paths[$path] ?? [],
                 sprintf('%s.md names %s %s, which the document does not have.', $guide, $method, $path),
             );
+        }
+    }
+
+    /**
+     * A link into the authorization server's reference lands on a tag it has, or an operation of that
+     * tag: `#tag/<tag>` or `#tag/<tag>/<METHOD>/<path>`, as Scalar names them.
+     */
+    #[DataProvider('guides')]
+    public function testLinksIntoTheAuthorizationServersReferenceLandOnSomething(string $guide): void
+    {
+        preg_match_all('#\(\.\./openapi/authorization-server\.yaml(?:\#([^)]*))?\)#', self::text($guide), $links);
+        $document = Yaml::parseFile(self::AUTHORIZATION_SERVER);
+        self::assertIsArray($document);
+        /** @var list<array{name: string}> $declared */
+        $declared = $document['tags'];
+        $tags = array_column($declared, 'name');
+
+        foreach ($links[1] as $fragment) {
+            if ($fragment === '') {
+                continue;
+            }
+            self::assertSame(1, preg_match('#^tag/([a-z-]+)(?:/([A-Z]+)(/.+))?$#D', $fragment, $target), $fragment);
+            self::assertContains($target[1], $tags, $guide . '.md links a tag the reference lacks.');
+            if (isset($target[2])) {
+                $operation = self::paths(self::AUTHORIZATION_SERVER)[$target[3]][strtolower($target[2])] ?? null;
+                self::assertIsArray($operation, $guide . '.md links ' . $fragment . ', which is no operation.');
+                self::assertSame([$target[1]], $operation['tags'] ?? null, $fragment . ' is under another tag.');
+            }
         }
     }
 
@@ -196,6 +224,15 @@ final class ManagementGuidesTest extends TestCase
             )),
             $headings[1],
         );
+    }
+
+    /** @return array<string, array<string, mixed>> A document's paths. */
+    private static function paths(string $document): array
+    {
+        $parsed = Yaml::parseFile($document);
+        self::assertIsArray($parsed);
+        /** @var array<string, array<string, mixed>> */
+        return $parsed['paths'];
     }
 
     private static function text(string $guide): string
