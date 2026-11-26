@@ -74,6 +74,7 @@ final readonly class SignUpHandler implements RequestHandlerInterface
             $loginState,
             ClientAddress::of($request),
             RequestCookies::first($request, $this->cookies->sessionCookieName),
+            $this->responder->language($request),
         ));
         if ($outcome instanceof CheckYourInbox) {
             return $this->responder->page($request, AccountPages::checkInbox($outcome->email, 'sign-up', $loginState));

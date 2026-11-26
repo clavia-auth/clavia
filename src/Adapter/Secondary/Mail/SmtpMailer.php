@@ -11,9 +11,8 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Secondary\Mail;
 
-use Clavia\Application\Port\Mailer;
 use Clavia\Application\Port\MailUnavailable;
-use Clavia\Application\Port\OutgoingMail;
+use Clavia\Application\Port\RenderedMail;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 use Symfony\Component\Mailer\Transport\Smtp\EsmtpTransport;
@@ -29,7 +28,7 @@ use Symfony\Component\Mime\Exception\RfcComplianceException;
  * Plain text only: a sign-in email carries a code or a link and nothing to render, and a
  * message without HTML has no remote images to track who opened it.
  */
-final readonly class SmtpMailer implements Mailer
+final readonly class SmtpMailer implements MailTransport
 {
     public function __construct(
         private TransportInterface $transport,
@@ -76,7 +75,7 @@ final readonly class SmtpMailer implements Mailer
     }
 
     #[\Override]
-    public function send(OutgoingMail $mail): void
+    public function deliver(RenderedMail $mail): void
     {
         try {
             $this->transport->send(

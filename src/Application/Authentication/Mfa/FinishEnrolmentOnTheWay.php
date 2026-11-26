@@ -17,6 +17,7 @@ use Clavia\Application\Port\LoginStateStore;
 use Clavia\Domain\Authentication\AuthenticationLevel;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Identity\UserRepository;
+use Clavia\Domain\Shared\Language;
 
 /**
  * Raise the session of someone who has just confirmed their first authenticator app on the
@@ -39,7 +40,8 @@ final readonly class FinishEnrolmentOnTheWay
     }
 
     /**
-     * @param list<AuthenticationMethod> $added What the enrolled factor adds to `amr`.
+     * @param list<AuthenticationMethod> $added    What the enrolled factor adds to `amr`.
+     * @param Language|null              $language The page's language: what the owner's notice is in.
      *
      * @return non-empty-string|null The raised session's new identifier; null when nothing was raised.
      */
@@ -47,6 +49,7 @@ final readonly class FinishEnrolmentOnTheWay
         #[\SensitiveParameter] ?string $sessionId,
         #[\SensitiveParameter] ?string $loginState,
         array $added,
+        ?Language $language = null,
     ): ?string {
         if ($loginState === null || $loginState === '' || $this->loginStates->get($loginState) === null) {
             return null;
@@ -64,7 +67,7 @@ final readonly class FinishEnrolmentOnTheWay
 
         $raised = $this->sessions->stepUp($sessionId, $session->sid, $added);
         if ($raised !== null) {
-            $this->mail->secondFactorEnrolled($user->email);
+            $this->mail->secondFactorEnrolled($user->email, $language);
         }
 
         return $raised;

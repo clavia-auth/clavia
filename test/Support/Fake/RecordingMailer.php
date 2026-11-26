@@ -14,6 +14,8 @@ namespace ClaviaTest\Support\Fake;
 use Clavia\Application\Port\Mailer;
 use Clavia\Application\Port\MailUnavailable;
 use Clavia\Application\Port\OutgoingMail;
+use Clavia\Application\Port\RenderedMail;
+use ClaviaTest\Support\TestMail;
 
 /**
  * A mailer that keeps what it is given — or, told to, refuses it as an unreachable SMTP
@@ -48,5 +50,13 @@ final class RecordingMailer implements Mailer
     public function last(): ?OutgoingMail
     {
         return $this->sent === [] ? null : $this->sent[array_key_last($this->sent)];
+    }
+
+    /** The last mail as the shipped catalogues word it, or null when nothing was sent. */
+    public function lastRendered(): ?RenderedMail
+    {
+        $last = $this->last();
+
+        return $last === null ? null : TestMail::render($last);
     }
 }

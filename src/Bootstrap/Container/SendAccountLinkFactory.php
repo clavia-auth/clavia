@@ -18,6 +18,7 @@ use Clavia\Application\Port\AccountLinkStore;
 use Clavia\Application\Port\AttemptCounter;
 use Clavia\Application\Port\Mailer;
 use Clavia\Configuration\Settings;
+use Clavia\Domain\Shared\Languages;
 use Clavia\Domain\Shared\SecretGenerator;
 use Psr\Container\ContainerInterface;
 
@@ -37,6 +38,8 @@ final class SendAccountLinkFactory
         $secrets = $container->get(SecretGenerator::class);
         /** @var Settings $settings */
         $settings = $container->get(Settings::class);
+        /** @var Languages $languages */
+        $languages = $container->get(Languages::class);
 
         $limit = $settings->accountEmailSendLimit;
         $verification = $settings->verificationLinkLifetime;
@@ -51,6 +54,7 @@ final class SendAccountLinkFactory
             $secrets,
             $verification,
             $reset,
+            $languages,
         );
     }
 }

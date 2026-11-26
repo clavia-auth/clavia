@@ -15,6 +15,7 @@ use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
 use Clavia\Adapter\Primary\Http\Shared\PageRenderer;
 use Clavia\Adapter\Primary\Http\Shared\RequestCookies;
 use Clavia\Adapter\Primary\Http\Shared\SetCookie;
+use Clavia\Domain\Shared\Language;
 use Clavia\Domain\Shared\SecretGenerator;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
@@ -38,6 +39,12 @@ final readonly class AuthPageResponder
         private SecretGenerator $secrets,
         private AuthCookies $cookies,
     ) {
+    }
+
+    /** The language this request's pages are in, and so the mail a person causes from them. */
+    public function language(ServerRequestInterface $request): Language
+    {
+        return $this->pages->language($request);
     }
 
     /**

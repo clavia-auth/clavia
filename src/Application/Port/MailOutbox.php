@@ -14,16 +14,17 @@ namespace Clavia\Application\Port;
 /**
  * The last messages the development mail backend "sent": kept so a developer — or a
  * test — can read the code or the link without a mail server. Never used in production,
- * where the settings refuse the console backend.
+ * where the settings refuse the console backend. It keeps a mail as it was sent, worded in its
+ * language.
  */
 interface MailOutbox
 {
-    public function record(OutgoingMail $mail): void;
+    public function record(RenderedMail $mail): void;
 
     /**
      * @param positive-int $limit
      *
-     * @return list<OutgoingMail> Newest first.
+     * @return list<RenderedMail> Newest first.
      */
     public function recent(int $limit): array;
 }

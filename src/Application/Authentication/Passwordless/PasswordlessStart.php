@@ -11,21 +11,25 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Authentication\Passwordless;
 
+use Clavia\Domain\Shared\Language;
+
 /**
  * Someone asking on the login page for a code or a link to be sent to an address.
  */
 final readonly class PasswordlessStart
 {
     /**
-     * @param string      $mode          `code` or `link`, as submitted.
-     * @param string      $clientAddress Where the request came from, for the send limit.
-     * @param string|null $loginState    The opaque handle of the pending authorization request, if any.
+     * @param string        $mode          `code` or `link`, as submitted.
+     * @param string        $clientAddress Where the request came from, for the send limit.
+     * @param string|null   $loginState    The opaque handle of the pending authorization request, if any.
+     * @param Language|null $language      The page's language: what the mail is in.
      */
     public function __construct(
         public string $email,
         public string $mode,
         public string $clientAddress,
         #[\SensitiveParameter] public ?string $loginState = null,
+        public ?Language $language = null,
     ) {
     }
 }

@@ -11,15 +11,18 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Authentication\SignIn;
 
+use Clavia\Domain\Shared\Language;
+
 /**
  * Someone typing an email and a password on the login page.
  */
 final readonly class PasswordSignIn
 {
     /**
-     * @param string      $clientAddress    Where the request came from, for throttling.
-     * @param string|null $loginState       The opaque handle of the pending authorization request, if any.
-     * @param string|null $currentSessionId The session the browser already holds, if any — ended on success.
+     * @param string        $clientAddress    Where the request came from, for throttling.
+     * @param string|null   $loginState       The opaque handle of the pending authorization request, if any.
+     * @param string|null   $currentSessionId The session the browser already holds, if any — ended on success.
+     * @param Language|null $language         The page's language: what a verification mail it causes is in.
      */
     public function __construct(
         public string $email,
@@ -27,6 +30,7 @@ final readonly class PasswordSignIn
         public string $clientAddress,
         #[\SensitiveParameter] public ?string $loginState = null,
         #[\SensitiveParameter] public ?string $currentSessionId = null,
+        public ?Language $language = null,
     ) {
     }
 }

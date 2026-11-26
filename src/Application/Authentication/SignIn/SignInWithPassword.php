@@ -83,7 +83,7 @@ final readonly class SignInWithPassword
         if (! $user->isEmailVerified() && $this->access->requiresVerifiedEmail($user->connection)) {
             $this->refused($attempt, $clientId, SignInRefusal::EmailNotVerified, $user);
             $loginState = $attempt->loginState === null || $attempt->loginState === '' ? null : $attempt->loginState;
-            $this->verificationLinks->verification($user, $loginState, $attempt->clientAddress);
+            $this->verificationLinks->verification($user, $loginState, $attempt->clientAddress, $attempt->language);
 
             return new EmailVerificationRequired($user->email);
         }

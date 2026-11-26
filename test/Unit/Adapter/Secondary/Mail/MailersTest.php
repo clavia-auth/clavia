@@ -15,7 +15,7 @@ use Clavia\Adapter\Secondary\Mail\NoMailer;
 use Clavia\Adapter\Secondary\Mail\OutboxMailer;
 use Clavia\Adapter\Secondary\Mail\SmtpMailer;
 use Clavia\Application\Port\MailUnavailable;
-use Clavia\Application\Port\OutgoingMail;
+use Clavia\Application\Port\RenderedMail;
 use ClaviaTest\Support\Fake\InMemoryMailOutbox;
 use ClaviaTest\Support\Fake\RecordingTransport;
 use ClaviaTest\Support\RecordingLogger;
@@ -33,7 +33,7 @@ final class MailersTest extends TestCase
 
         self::assertFalse($mailer->canSend());
         $this->expectException(MailUnavailable::class);
-        $mailer->send(self::mail());
+        $mailer->deliver(self::mail());
     }
 
     public function testTheConsoleBackendKeepsAndLogsEachMessage(): void
@@ -42,7 +42,7 @@ final class MailersTest extends TestCase
         $logger = new RecordingLogger();
         $mailer = new OutboxMailer($outbox, $logger);
 
-        $mailer->send(self::mail());
+        $mailer->deliver(self::mail());
 
         self::assertTrue($mailer->canSend());
         self::assertSame('Your sign-in code is 123456', $outbox->recent(1)[0]->text ?? null);
@@ -54,7 +54,7 @@ final class MailersTest extends TestCase
         $transport = new RecordingTransport();
         $mailer = new SmtpMailer($transport, new Address('no-reply@acme.com'), new NullLogger());
 
-        $mailer->send(self::mail());
+        $mailer->deliver(self::mail());
 
         $sent = $transport->sent[0] ?? null;
         self::assertInstanceOf(Email::class, $sent);
@@ -72,7 +72,7 @@ final class MailersTest extends TestCase
         $mailer = new SmtpMailer($transport, new Address('no-reply@acme.com'), $logger);
 
         try {
-            $mailer->send(self::mail());
+            $mailer->deliver(self::mail());
             self::fail('A refused message was reported as sent.');
         } catch (MailUnavailable $unavailable) {
             self::assertInstanceOf(TransportException::class, $unavailable->getPrevious());
@@ -97,8 +97,8 @@ final class MailersTest extends TestCase
         self::assertStringStartsWith('smtps://', (string) $implicit);
     }
 
-    private static function mail(): OutgoingMail
+    private static function mail(): RenderedMail
     {
-        return new OutgoingMail('jane@example.com', 'Your sign-in code for acme.com', 'Your sign-in code is 123456');
+        return new RenderedMail('jane@example.com', 'Your sign-in code for acme.com', 'Your sign-in code is 123456');
     }
 }

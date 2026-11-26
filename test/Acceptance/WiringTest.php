@@ -12,8 +12,10 @@ declare(strict_types=1);
 namespace ClaviaTest\Acceptance;
 
 use Clavia\Application\Metrics\CountingMailer;
+use Clavia\Adapter\Secondary\Mail\MailTransport;
 use Clavia\Adapter\Secondary\Mail\NoMailer;
 use Clavia\Adapter\Secondary\Mail\OutboxMailer;
+use Clavia\Adapter\Secondary\Mail\RenderedMailer;
 use Clavia\Adapter\Secondary\Mail\SmtpMailer;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use Clavia\Application\Port\IdentityProviders;
@@ -79,13 +81,17 @@ final class WiringTest extends AcceptanceTestCase
         self::assertInstanceOf(SmtpMailer::class, $this->backend());
     }
 
-    /** The backend behind the mailer, which counts what it sends (#23). */
-    private function backend(): Mailer
+    /**
+     * The backend behind the mailer, which counts what it sends (#23) and words it in the mail's
+     * language first (#184).
+     */
+    private function backend(): MailTransport
     {
         $mailer = $this->container()->get(Mailer::class);
         self::assertInstanceOf(CountingMailer::class, $mailer);
+        self::assertInstanceOf(RenderedMailer::class, $mailer->mailer);
 
-        return $mailer->mailer;
+        return $mailer->mailer->transport;
     }
 
     public function testASigningAlgorithmNoKeyCanProduceIsRefused(): void

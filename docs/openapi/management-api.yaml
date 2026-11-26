@@ -371,6 +371,10 @@ paths:
         password or address changes. Choosing a password verifies the address and ends every
         session of the account.
 
+        The mail is in the language of the account's profile (`locale`), matched among the
+        languages the deployment offers (`fr-CA` finds `fr`), else in the deployment's default
+        language (`CLAVIA_DEFAULT_LANGUAGE`).
+
         Unlike the public form, the caller is told how it went. Mail counts against the
         account send limit per address and per client address, so a user cannot be flooded.
         Only an account in a pool has a password; a deactivated account is refused.

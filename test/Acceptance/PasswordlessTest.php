@@ -14,7 +14,7 @@ namespace ClaviaTest\Acceptance;
 use Clavia\Application\Authentication\Mfa\TotpSeeds;
 use Clavia\Application\Port\Mailer;
 use Clavia\Application\Port\MailOutbox;
-use Clavia\Application\Port\OutgoingMail;
+use Clavia\Application\Port\RenderedMail;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\LocalPath;
 use Clavia\Domain\Authentication\Mfa\MfaFactor;
@@ -530,7 +530,7 @@ final class PasswordlessTest extends AcceptanceTestCase
         return $this->container()->get(MailOutbox::class);
     }
 
-    private function lastMail(): OutgoingMail
+    private function lastMail(): RenderedMail
     {
         $mail = $this->outbox()->recent(1)[0] ?? null;
         self::assertNotNull($mail, 'Nothing was sent.');
@@ -538,14 +538,14 @@ final class PasswordlessTest extends AcceptanceTestCase
         return $mail;
     }
 
-    private static function codeIn(OutgoingMail $mail): string
+    private static function codeIn(RenderedMail $mail): string
     {
         self::assertSame(1, preg_match('/\b(\d{6})\b/', $mail->text, $match), $mail->text);
 
         return $match[1];
     }
 
-    private static function tokenIn(OutgoingMail $mail): string
+    private static function tokenIn(RenderedMail $mail): string
     {
         $link = '~https://auth\.clavia\.test/auth/passwordless/verify\?token=([A-Za-z0-9_-]+)~';
         self::assertSame(1, preg_match($link, $mail->text, $match), $mail->text);

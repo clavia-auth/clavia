@@ -13,7 +13,7 @@ namespace ClaviaTest\Acceptance;
 
 use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Port\MailOutbox;
-use Clavia\Application\Port\OutgoingMail;
+use Clavia\Application\Port\RenderedMail;
 use Clavia\Domain\Audit\AuditEventType;
 use Clavia\Domain\Audit\AuditLog;
 use Clavia\Domain\Audit\AuditQuery;
@@ -393,7 +393,7 @@ final class SelfServiceAccountsTest extends AcceptanceTestCase
     }
 
     /** Open the link, then press "Confirm my address" on the page it opens on. */
-    private function followVerificationLink(OutgoingMail $mail): ResponseInterface
+    private function followVerificationLink(RenderedMail $mail): ResponseInterface
     {
         $link = self::linkIn($mail);
 
@@ -420,7 +420,7 @@ final class SelfServiceAccountsTest extends AcceptanceTestCase
         return $this->container()->get(MailOutbox::class);
     }
 
-    private function lastMail(): OutgoingMail
+    private function lastMail(): RenderedMail
     {
         $mail = $this->outbox()->recent(1)[0] ?? null;
         self::assertNotNull($mail, 'Nothing was sent.');
@@ -429,7 +429,7 @@ final class SelfServiceAccountsTest extends AcceptanceTestCase
     }
 
     /** The link's path and query, as the browser would request it from this server. */
-    private static function linkIn(OutgoingMail $mail): string
+    private static function linkIn(RenderedMail $mail): string
     {
         self::assertSame(1, preg_match('#https://[^/\s]+(/auth/[a-z/-]+\?token=[A-Za-z0-9_-]+)#', $mail->text, $match));
 

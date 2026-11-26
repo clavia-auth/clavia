@@ -33,6 +33,7 @@ use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
 use ClaviaTest\Support\Fake\RecordingMailer;
 use ClaviaTest\Support\Fake\SeededRandomSource;
+use ClaviaTest\Support\TestMail;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -66,8 +67,8 @@ final class SendPasswordLinkTest extends TestCase
         $outcome = $this->send($mailer)($user->id, '192.0.2.1');
 
         self::assertEquals(new PasswordLinkSent(invitation: true), $outcome);
-        self::assertStringContainsString('invited', (string) $mailer->last()?->subject);
-        self::assertStringContainsString('/auth/password/reset?token=', (string) $mailer->last()?->text);
+        self::assertStringContainsString('invited', (string) $mailer->lastRendered()?->subject);
+        self::assertStringContainsString('/auth/password/reset?token=', (string) $mailer->lastRendered()?->text);
         self::assertCount(1, $this->links->tokens());
         $recorded = $this->events->ofType(PasswordLinkSentEvent::class);
         self::assertCount(1, $recorded);
@@ -83,7 +84,7 @@ final class SendPasswordLinkTest extends TestCase
         $outcome = $this->send($mailer)($user->id, '192.0.2.1');
 
         self::assertEquals(new PasswordLinkSent(invitation: false), $outcome);
-        self::assertStringContainsString('new password', (string) $mailer->last()?->subject);
+        self::assertStringContainsString('new password', (string) $mailer->lastRendered()?->subject);
         self::assertFalse($this->events->ofType(PasswordLinkSentEvent::class)[0]->invitation);
     }
 
@@ -187,6 +188,7 @@ final class SendPasswordLinkTest extends TestCase
                 new SecretGenerator(new SeededRandomSource(7)),
                 86400,
                 1800,
+                TestMail::languages(),
             ),
             $mailer,
             $this->events,

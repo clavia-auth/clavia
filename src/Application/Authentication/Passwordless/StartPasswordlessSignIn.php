@@ -24,6 +24,7 @@ use Clavia\Domain\Authentication\PasswordlessMode;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Shared\InvalidValue;
+use Clavia\Domain\Shared\Languages;
 use Clavia\Domain\Shared\RandomSource;
 use Clavia\Domain\Shared\SecretGenerator;
 
@@ -44,6 +45,8 @@ final readonly class StartPasswordlessSignIn
     /**
      * @param positive-int $codeLifetimeSeconds `CLAVIA_PASSWORDLESS_CODE_LIFETIME`.
      * @param positive-int $linkLifetimeSeconds `CLAVIA_PASSWORDLESS_LINK_LIFETIME`.
+     * @param Languages    $languages           What the mail's language is chosen among: the page's,
+     *                                          else the default.
      */
     public function __construct(
         private ConnectionAccess $access,
@@ -58,6 +61,7 @@ final readonly class StartPasswordlessSignIn
         private RandomSource $random,
         private int $codeLifetimeSeconds,
         private int $linkLifetimeSeconds,
+        private Languages $languages,
     ) {
     }
 
@@ -89,14 +93,17 @@ final readonly class StartPasswordlessSignIn
         // Re-validated even though it came from this server's own store.
         $nextUrl = LocalPath::orDefault($target?->nextUrl)->value;
         $handle = $this->secrets->token();
+        $language = $request->language !== null && $this->languages->has($request->language)
+            ? $request->language
+            : $this->languages->default;
         if ($mode === PasswordlessMode::Code) {
             $code = OneTimeCode::generate($this->random);
             $challenge = PasswordlessChallenge::forCode($email, $handle, $code, $nextUrl, $clientId, $loginState);
-            $message = $this->mail->code($email, $code);
+            $message = $this->mail->code($email, $code, $language);
             $lifetime = $this->codeLifetimeSeconds;
         } else {
             $challenge = PasswordlessChallenge::forLink($email, $nextUrl, $clientId, $loginState);
-            $message = $this->mail->link($email, $handle);
+            $message = $this->mail->link($email, $handle, $language);
             $lifetime = $this->linkLifetimeSeconds;
         }
 

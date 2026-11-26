@@ -63,7 +63,12 @@ final readonly class PasswordForgotHandler implements RequestHandlerInterface
             );
         }
 
-        $outcome = ($this->request)($email, $loginState, ClientAddress::of($request));
+        $outcome = ($this->request)(
+            $email,
+            $loginState,
+            ClientAddress::of($request),
+            $this->responder->language($request),
+        );
         if ($outcome instanceof CheckYourInbox) {
             return $this->responder->page($request, AccountPages::checkInbox($outcome->email, 'reset', $loginState));
         }

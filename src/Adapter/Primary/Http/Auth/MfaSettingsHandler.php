@@ -165,6 +165,7 @@ final readonly class MfaSettingsHandler implements RequestHandlerInterface
                 RequestCookies::first($request, $this->cookies->sessionCookieName),
                 $onTheWay->loginState,
                 SecondFactors::APP,
+                $this->responder->language($request),
             );
 
             return $this->responder->page(

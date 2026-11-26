@@ -11,16 +11,15 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Secondary\Mail;
 
-use Clavia\Application\Port\Mailer;
 use Clavia\Application\Port\MailUnavailable;
-use Clavia\Application\Port\OutgoingMail;
+use Clavia\Application\Port\RenderedMail;
 
 /**
  * `CLAVIA_EMAIL_BACKEND=none`: this deployment sends no mail. Every connection that
  * depends on mail is then unusable — not offered, not accepted — instead of failing
  * when someone asks for a code.
  */
-final readonly class NoMailer implements Mailer
+final readonly class NoMailer implements MailTransport
 {
     #[\Override]
     public function canSend(): bool
@@ -29,7 +28,7 @@ final readonly class NoMailer implements Mailer
     }
 
     #[\Override]
-    public function send(OutgoingMail $mail): void
+    public function deliver(RenderedMail $mail): void
     {
         throw new MailUnavailable('This deployment sends no mail (CLAVIA_EMAIL_BACKEND=none).');
     }

@@ -57,6 +57,7 @@ use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
 use ClaviaTest\Support\Fake\RecordingMailer;
 use ClaviaTest\Support\Fake\SeededRandomSource;
+use ClaviaTest\Support\TestMail;
 use PHPUnit\Framework\TestCase;
 
 final class SignInWithPasswordTest extends TestCase
@@ -131,6 +132,7 @@ final class SignInWithPasswordTest extends TestCase
                 new SecretGenerator(new SeededRandomSource(4)),
                 86400,
                 1800,
+                TestMail::languages(),
             ),
             $this->clock,
         );

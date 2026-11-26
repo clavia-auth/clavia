@@ -11,15 +11,20 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Authentication\Account;
 
+use Clavia\Application\Port\MailContent;
+use Clavia\Application\Port\MailKind;
 use Clavia\Application\Port\OutgoingMail;
+use Clavia\Domain\Shared\Language;
 
 /**
- * The words of the account emails: the verification link, the reset link, the invitation
- * an operator sends, and the notice sent to an address somebody tried to sign up with again.
+ * The account emails: the verification link, the reset link, the invitation an operator sends, the
+ * notice sent to an address somebody tried to sign up with again, and the one that a second factor was
+ * set up. What each carries, in the language it is for; their words are the catalogue's
+ * (`mail.*` in `translations/`, docs/design/translated-sign-in-pages.md §4).
  *
- * Plain text, short, and saying what the link is good for and for how long. Each ends by
- * telling someone who did not ask that ignoring it is safe — which it is: a link does
- * nothing until it is followed and confirmed.
+ * Plain text, short, and saying what the link is good for and for how long. Each ends by telling
+ * someone who did not ask that ignoring it is safe — which it is: a link does nothing until it is
+ * followed and confirmed.
  */
 final readonly class AccountMail
 {
@@ -50,38 +55,22 @@ final readonly class AccountMail
      * @param non-empty-string $email
      * @param non-empty-string $token The link's secret.
      */
-    public function verification(string $email, #[\SensitiveParameter] string $token): OutgoingMail
+    public function verification(string $email, #[\SensitiveParameter] string $token, Language $language): OutgoingMail
     {
-        return new OutgoingMail(
-            $email,
-            sprintf('Confirm your email address for %s', $this->site),
-            sprintf(
-                "Open this link to confirm that this address is yours:\n\n%s\n\n"
-                . "It works once and expires in %s.\n\n"
-                . "If you did not create an account, ignore this email.\n",
-                $this->url(self::VERIFY_PATH, $token),
-                self::duration($this->verificationLifetimeSeconds),
-            ),
-        );
+        return $this->mail($email, $language, MailKind::Verification, [
+            'link' => $this->url(self::VERIFY_PATH, $token),
+        ], $this->verificationLifetimeSeconds);
     }
 
     /**
      * @param non-empty-string $email
      * @param non-empty-string $token The link's secret.
      */
-    public function reset(string $email, #[\SensitiveParameter] string $token): OutgoingMail
+    public function reset(string $email, #[\SensitiveParameter] string $token, Language $language): OutgoingMail
     {
-        return new OutgoingMail(
-            $email,
-            sprintf('Choose a new password for %s', $this->site),
-            sprintf(
-                "Open this link to choose a new password:\n\n%s\n\n"
-                . "It works once and expires in %s. Choosing a new password signs you out everywhere.\n\n"
-                . "If you did not ask for this, ignore this email: your password stays as it is.\n",
-                $this->url(self::RESET_PATH, $token),
-                self::duration($this->resetLifetimeSeconds),
-            ),
-        );
+        return $this->mail($email, $language, MailKind::Reset, [
+            'link' => $this->url(self::RESET_PATH, $token),
+        ], $this->resetLifetimeSeconds);
     }
 
     /**
@@ -91,67 +80,41 @@ final readonly class AccountMail
      * @param non-empty-string $email
      * @param non-empty-string $token The link's secret.
      */
-    public function invitation(string $email, #[\SensitiveParameter] string $token): OutgoingMail
+    public function invitation(string $email, #[\SensitiveParameter] string $token, Language $language): OutgoingMail
     {
-        return new OutgoingMail(
-            $email,
-            sprintf('You have been invited to %s', $this->site),
-            sprintf(
-                "An account has been created for you on %s. Open this link to choose its password:\n\n%s\n\n"
-                . "It works once and expires in %s.\n\n"
-                . "If you were not expecting this, ignore this email: no one can sign in to the account without it.\n",
-                $this->site,
-                $this->url(self::RESET_PATH, $token),
-                self::duration($this->resetLifetimeSeconds),
-            ),
-        );
+        return $this->mail($email, $language, MailKind::Invitation, [
+            'link' => $this->url(self::RESET_PATH, $token),
+        ], $this->resetLifetimeSeconds);
     }
 
     /**
-     * What the owner of an address gets when somebody tries to create an account with it
-     * again: no link, nothing to spend, only where to go if it was them.
+     * The notice for an address that already has an account: no link that changes anything, only the
+     * way to a reset the owner asks for themselves.
      *
      * @param non-empty-string $email
      */
-    public function addressTaken(string $email): OutgoingMail
+    public function addressTaken(string $email, Language $language): OutgoingMail
     {
-        return new OutgoingMail(
-            $email,
-            sprintf('You already have an account on %s', $this->site),
-            sprintf(
-                "Someone tried to create an account on %s with this address, which already has one.\n\n"
-                . "If it was you, sign in instead. If you have forgotten your password, choose a new one here:\n\n"
-                . "%s\n\n"
-                . "If it was not you, ignore this email: nothing has changed.\n",
-                $this->site,
-                rtrim($this->issuer, '/') . self::FORGOT_PATH,
-            ),
-        );
+        return $this->mail($email, $language, MailKind::AddressTaken, [
+            'link' => rtrim($this->issuer, '/') . self::FORGOT_PATH,
+        ]);
     }
 
     /**
-     * What the owner of an account gets when a second factor was set up on the way to an
-     * application requiring one: if it was not them, someone holds their password.
+     * The notice that a second factor was set up on the way to an application: if it was not the
+     * owner, someone knows the password, and a reset signs every session out.
      *
      * @param non-empty-string $email
      */
-    public function secondFactorEnrolled(string $email): OutgoingMail
+    public function secondFactorEnrolled(string $email, Language $language): OutgoingMail
     {
-        return new OutgoingMail(
-            $email,
-            sprintf('Two-factor authentication was turned on for your %s account', $this->site),
-            sprintf(
-                "An authenticator app was set up as a second factor for your account on %s.\n\n"
-                . "If it was you, there is nothing to do.\n\n"
-                . "If it was not you, someone knows your password. Choose a new one here, which signs out "
-                . "every session:\n\n%s\n",
-                $this->site,
-                rtrim($this->issuer, '/') . self::FORGOT_PATH,
-            ),
-        );
+        return $this->mail($email, $language, MailKind::SecondFactorEnrolled, [
+            'link' => rtrim($this->issuer, '/') . self::FORGOT_PATH,
+        ]);
     }
 
     /**
+     * @param non-empty-string $path
      * @param non-empty-string $token
      */
     public function url(string $path, #[\SensitiveParameter] string $token): string
@@ -160,16 +123,22 @@ final readonly class AccountMail
             . http_build_query(['token' => $token], '', '&', PHP_QUERY_RFC3986);
     }
 
-    /** Whole minutes, or hours from two hours on, rounded up. */
-    private static function duration(int $seconds): string
-    {
-        if ($seconds >= 7200) {
-            $hours = intdiv($seconds + 3599, 3600);
-
-            return $hours . ' hours';
-        }
-        $minutes = intdiv($seconds + 59, 60);
-
-        return $minutes === 1 ? '1 minute' : $minutes . ' minutes';
+    /**
+     * @param non-empty-string                $email
+     * @param array<non-empty-string, string> $values
+     * @param positive-int|null               $lifetimeSeconds
+     */
+    private function mail(
+        string $email,
+        Language $language,
+        MailKind $kind,
+        #[\SensitiveParameter] array $values,
+        ?int $lifetimeSeconds = null,
+    ): OutgoingMail {
+        return new OutgoingMail(
+            $email,
+            new MailContent($kind, ['site' => $this->site, ...$values], $lifetimeSeconds),
+            $language,
+        );
     }
 }

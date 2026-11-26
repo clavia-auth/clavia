@@ -15,6 +15,7 @@ use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Identity\UserRepository;
+use Clavia\Domain\Shared\Language;
 
 /**
  * Mail a reset link to every active account with an address, in the pools the application
@@ -37,13 +38,15 @@ final readonly class RequestPasswordReset
     }
 
     /**
-     * @param string|null $loginState    The login page's handle the form carried.
-     * @param string      $clientAddress Where the request came from (`REMOTE_ADDR`).
+     * @param string|null   $loginState    The login page's handle the form carried.
+     * @param string        $clientAddress Where the request came from (`REMOTE_ADDR`).
+     * @param Language|null $language      The page's language: what the mail is in.
      */
     public function __invoke(
         string $email,
         #[\SensitiveParameter] ?string $loginState,
         string $clientAddress,
+        ?Language $language = null,
     ): CheckYourInbox|ResetUnavailable|SignUpRefused {
         $loginState = $loginState === null || $loginState === '' ? null : $loginState;
         $clientId = $loginState === null ? null : $this->loginStates->get($loginState)?->clientId;
@@ -59,7 +62,7 @@ final readonly class RequestPasswordReset
         foreach ($pools as $pool) {
             $user = $this->users->findByEmail($pool, $email);
             if ($user !== null && $user->isActive()) {
-                $this->links->reset($user, $loginState, $clientAddress);
+                $this->links->reset($user, $loginState, $clientAddress, $language);
             }
         }
 
