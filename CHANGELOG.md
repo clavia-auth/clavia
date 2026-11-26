@@ -63,6 +63,12 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ### Fixed
 
+- **The sign-in pages' static files are versioned** (`auth.css?v=…`, by content) and revalidated
+  (`Cache-Control: no-cache` in both Caddyfiles): after an upgrade a browser no longer pairs the new
+  pages with a stylesheet it cached before, which left the language switcher and the theme toggle
+  unstyled. The switcher, the toggle, the links and the login form's spacing are restyled to match the
+  dashboard.
+
 - **The version reported** by `/healthz` and `bin/clavia --version` is the release's: 0.2.0 to 0.4.0
   reported `0.1.0`.
 - **The image's files are readable by PHP-FPM's workers** whatever the permissions of the checkout it

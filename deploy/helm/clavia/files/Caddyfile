@@ -135,6 +135,9 @@ http:// {
 	# The sign-in pages' stylesheet, script and icon. Files only: nothing under this prefix ever
 	# reaches PHP.
 	handle /auth/static/* {
+		# Kept, but revalidated (ETag) on every use: the pages' markup and these files change together
+		# at an upgrade, and a browser guessing a lifetime would pair new markup with an old stylesheet.
+		header Cache-Control "no-cache"
 		root * /app/public
 		file_server
 	}

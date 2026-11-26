@@ -161,7 +161,11 @@ final class PasskeyRegistrationTest extends AcceptanceTestCase
         );
         $module = '#<script type="module" src="([^"]+)"></script>#';
         self::assertSame(1, preg_match($module, (string) $create->getBody(), $src));
-        self::assertSame('/auth/static/passkeys.js', html_entity_decode($src[1], ENT_QUOTES | ENT_HTML5));
+        self::assertMatchesRegularExpression(
+            '#^/auth/static/passkeys\\.js\\?v=[0-9a-f]{12}$#D',
+            html_entity_decode($src[1], ENT_QUOTES | ENT_HTML5),
+            'The module, versioned by its content.',
+        );
         self::assertSame(
             'publickey-credentials-create=(self), publickey-credentials-get=(self)',
             $create->getHeaderLine('Permissions-Policy'),
