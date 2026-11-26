@@ -28,6 +28,8 @@ releases() {
 }
 latest=$(releases | grep -v -- - | head -n 1 || true)
 if [ "${version}" = "${latest}" ]; then
-  cp "${built}/root/"* "${pages}/"
+  # The root follows the newest stable release, its guides included: those of the release before go.
+  rm -rf "${pages:?}/guides"
+  cp -R "${built}/root/." "${pages}/"
 fi
 releases | jq -R . | jq -s --arg latest "${latest}" '{latest: $latest, versions: .}' > "${pages}/versions.json"

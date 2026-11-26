@@ -8,6 +8,11 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ### Added
 
+- **Guides for the Management API** (#98), published with the reference: getting a token (a machine
+  client, or a person signing in), scopes and roles, errors and stepping up, paging and search,
+  DPoP-bound tokens, and registering clients with an initial access token. The reference's bar and
+  introduction link them, and each release keeps its own.
+
 - **Prometheus metrics** (#23): tokens issued, sign-ins, sign-in refusals by reason, OAuth errors by
   code, mail sent and failed, and request latency by route, at `/metrics` on the internal listener
   (Caddy's port 8081, never `auth.*` or `management.*`), shared by every process through Redis. New

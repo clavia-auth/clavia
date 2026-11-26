@@ -100,17 +100,29 @@ docker buildx build docker/php --target production --build-context app=. -t clav
 ## 6. The API reference
 
 `.github/workflows/docs.yml` runs when the Release workflow succeeds on a tag, and publishes the
-Management API reference to GitHub Pages:
+Management API reference and its guides to GitHub Pages:
 
-- the page is `docs/site/index.html`, Scalar (pinned) over the release's
+- the page is `docs/site/index.html`, Scalar (pinned, and held to its SRI hash) over the release's
   `docs/openapi/management-api.yaml`, with a bar naming the release and offering the others. The
   page and its scripts are taken from `main`, the document from the tag, so a fix to the page
   reaches every release published after it, and each release shows its own API;
+- the guides are the tag's `docs/guides`, each rendered by `docs/site/guide.html` (marked and
+  DOMPurify, pinned) at `/vX.Y.Z/guides/<name>.html`, beside its Markdown, in the order
+  `docs/guides/README.md` lists them. The reference's bar and introduction link them. A release
+  from before the guides is built without them, and its bar has no Guides link;
 - `docs/site/build.sh` builds a release and `docs/site/publish.sh` places it on the `gh-pages`
   branch: `/vX.Y.Z/` for the release, replaced whole if it is published again, and the site's root
   for the newest stable release. A pre-release, or an older release published later, never moves
   the root. `versions.json` lists every release, newest first, for the page's picker;
 - nothing is published for a tag the Release workflow refused.
+
+The three scripts the pages load (Scalar, marked, DOMPurify) are pinned to a version and held to a
+Subresource Integrity hash: a file changed on the CDN does not run. A new version comes with its new
+hash, which `ApiReferencePageTest` requires:
+
+```bash
+curl -sL https://cdn.jsdelivr.net/npm/<package>@<version>/<file> | openssl dgst -sha384 -binary | openssl base64 -A
+```
 
 To publish a release by hand (a release made before the workflow existed, or after a fix to the
 page): **Actions → Docs → Run workflow**, with the tag (`v0.3.0`). Running it again for a published
@@ -119,7 +131,7 @@ release replaces that release's directory, and nothing else.
 To preview the page from a branch, with no tag and no workflow:
 
 ```bash
-docs/site/build.sh dev docs/openapi/management-api.yaml /tmp/clavia-docs
+docs/site/build.sh dev docs/openapi/management-api.yaml /tmp/clavia-docs "" docs/guides
 cd /tmp/clavia-docs && python3 -m http.server 8080   # the page loads its document over HTTP
 ```
 

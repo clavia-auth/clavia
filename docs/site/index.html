@@ -8,7 +8,8 @@
   <link rel="icon" href="{{ROOT}}clavia-icon.svg" type="image/svg+xml">
   <!--
     The Management API reference, rendered by Scalar from management-api.yaml beside this file.
-    Built by docs/site/build.sh, which fills in the release and the path to the site's root;
+    Built by docs/site/build.sh, which fills in the release and the path to the site's root, and
+    drops the Guides link for a release without guides (guide.html renders them);
     published by .github/workflows/docs.yml. See docs/RELEASING.md.
   -->
   <style>
@@ -95,6 +96,7 @@
   <header class="clavia-bar">
     <a class="brand" href="{{ROOT}}"><img src="{{ROOT}}clavia-icon.svg" alt="">Clavia</a>
     <span class="muted hide-narrow">Management API</span>
+    <a class="muted" href="guides/" data-guides>Guides</a>
     <span class="spacer"></span>
     <label class="muted hide-narrow" for="clavia-release">Release</label>
     <select id="clavia-release" aria-label="Clavia release">
@@ -104,7 +106,9 @@
   </header>
   <div id="app"></div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.77.0/dist/browser/standalone.js"></script>
+  <!-- Pinned, and held to its hash (Subresource Integrity): a changed file on the CDN does not run. -->
+  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.77.0/dist/browser/standalone.js"
+    integrity="sha384-+7ESN8b9Ljg46TCYKedZUlhF/wfZbOt78aV/DtoU3anEElh8Q2eXsyhQ9W5lAZD4" crossorigin="anonymous"></script>
   <script>
     Scalar.createApiReference('#app', {
       url: './management-api.yaml',

@@ -116,7 +116,8 @@ src/
 templates/                  server-rendered pages: layout/, auth/, error/, partial/
 migrations/                 NNNN_name.sql, forward only
 docs/openapi/               management-api.yaml, the Management API's contract
-docs/site/                  the published API reference: Scalar over that document (docs.yml)
+docs/site/                  the published API reference: Scalar over that document, and the guides (docs.yml)
+docs/guides/                the Management API guides, for callers: tokens, scopes, errors, paging, DPoP, registration
 docs/SECURITY-REVIEW.md     review of every adapter against the invariants
 docs/RELEASING.md           how a release is made: changelog, version, tag, the Release workflow
 docs/PRODUCTION.md          how a release is run: hosts, TLS, secrets, keys, first start, backups, upgrades
@@ -821,6 +822,14 @@ paths), never the server release. The Docs workflow publishes the reference (`do
 pinned) to GitHub Pages for each release, `/vX.Y.Z/` and the root following the newest stable one
 (`docs/RELEASING.md` §6).
 
+**The guides** (`docs/guides/*.md`, #98) come before the reference: getting a token, scopes and
+roles, errors and stepping up, paging and search, DPoP, registering clients. They are written for
+someone calling the API, and checked against a running server; `README.md` orders them, and the
+introduction (`info.description`) links each one. They are published with the reference, from the
+same tag (`docs/site/guide.html`). `ManagementGuidesTest` fails when one names an operation, a scope,
+a console command or a setting that does not exist, a real host, or a heading another lacks; a
+change to what a guide describes changes the guide.
+
 The validator is Clavia's own (`Adapter\Primary\Http\OpenApi`). What it cannot enforce, it
 refuses at load (unknown keywords, OpenAPI 3.1 forms, external references, non-JSON media
 types, unsupported parameter styles). It reports every violation, never repeats a value,
@@ -1353,8 +1362,8 @@ Tests state behaviour from the specifications, and name the RFC section where it
 2. Each new port has a double and a contract test, and each new adapter passes it.
 3. `composer check` is green: PHPCS, Psalm level 1, deptrac, PHPUnit.
 4. Public classes and every non-obvious decision are documented, with the RFC section cited.
-5. A change to the Management API is in the OpenAPI document; a change to discovery is in
-   `ProviderMetadata`.
+5. A change to the Management API is in the OpenAPI document, and in the guide that describes it
+   (`docs/guides`); a change to discovery is in `ProviderMetadata`.
 6. This file is updated when a rule, a flow or the architecture changes.
 
 ## Known issues and decisions
