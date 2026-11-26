@@ -61,6 +61,7 @@
     },
     "require-dev": {
         "aws/aws-sdk-php": "^3.407",
+        "behat/behat": "^4.1",
         "deptrac/deptrac": "^4.7",
         "google/auth": "^1.55",
         "phpunit/phpunit": "^13.4",
@@ -78,7 +79,8 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "ClaviaTest\\": "test/"
+            "ClaviaTest\\": "test/",
+            "ClaviaTest\\E2e\\": "test/e2e/"
         }
     },
     "config": {
@@ -99,10 +101,12 @@
         "static-analysis": "psalm --no-progress",
         "arch": "deptrac analyse --no-progress --fail-on-uncovered --report-uncovered",
         "test": "phpunit --colors=always",
-        "test-coverage": "phpunit --colors=always --coverage-html build/coverage"
+        "test-coverage": "phpunit --colors=always --coverage-html build/coverage",
+        "e2e": "behat --colors"
     },
     "scripts-descriptions": {
         "check": "Everything a change must pass: coding standard, static analysis, architecture rules, tests.",
-        "arch": "Enforce the hexagonal dependency rules (deptrac.yaml)."
+        "arch": "Enforce the hexagonal dependency rules (deptrac.yaml).",
+        "e2e": "The end-to-end scenarios, against the stack of test/e2e (start it with test/e2e/up.sh)."
     }
 }

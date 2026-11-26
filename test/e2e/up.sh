@@ -26,6 +26,9 @@ if [[ ! -f "${work}/certs/${domain}.pem" ]]; then
     "${domain}" "*.${domain}" >/dev/null 2>&1
 fi
 
+# The CA the certificate comes from, for the callers that trust it (verify.sh, the Behat suite).
+cp "$(mkcert -CAROOT)/rootCA.pem" "${work}/rootCA.pem"
+
 # The production Caddyfile, with this certificate in the two https sites and nothing else changed:
 # its rules are what is tested.
 sed -E 's#^(\{\$CLAVIA_CADDY_SCHEME:https\}://(auth|management)\.\{\$CLAVIA_ROOT_DOMAIN\} \{)$#\1\
