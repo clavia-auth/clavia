@@ -1,6 +1,7 @@
 # Management API guides
 
-Short guides to read before the [reference](../openapi/management-api.yaml). Each one is written for
+Short guides to read before the references: the [Management API's](../openapi/management-api.yaml),
+and the [authorization server's](../openapi/authorization-server.yaml), where tokens come from. Each one is written for
 someone calling the API of their own Clavia deployment. The examples use `example.com`; put your
 own `CLAVIA_ROOT_DOMAIN` in its place.
 
@@ -13,5 +14,7 @@ own `CLAVIA_ROOT_DOMAIN` in its place.
 
 Two hosts are involved in each guide:
 
-- `auth.example.com` issues tokens (`/oauth2/token`, `/oauth2/authorize`, `/oauth2/register`).
-- `management.example.com` serves the Management API, under `/api/v1/`.
+- `auth.example.com` issues tokens (`/oauth2/token`, `/oauth2/authorize`, `/oauth2/register`): the
+  [authorization server's reference](../openapi/authorization-server.yaml) describes each of its endpoints.
+- `management.example.com` serves the Management API, under `/api/v1/`: its
+  [reference](../openapi/management-api.yaml).

@@ -8,6 +8,12 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ### Added
 
+- **A reference for the authorization server** (#93), beside the Management API's: every endpoint an
+  application or an API calls on `auth.{domain}` (token, PAR, introspection, revocation, device code,
+  registration, userinfo, the JWKS, discovery, authorize and end session), its parameters, answers and
+  refusals, in `docs/openapi/authorization-server.yaml`, checked against what the server answers. The
+  guides link its operations.
+
 - **Guides for the Management API** (#98), published with the reference: getting a token (a machine
   client, or a person signing in), scopes and roles, errors and stepping up, paging and search,
   DPoP-bound tokens, and registering clients with an initial access token. The reference's bar and

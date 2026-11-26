@@ -44,7 +44,8 @@ however you run the console: `docker compose exec php php bin/clavia`, for insta
 Grants are written from the shell only. No endpoint writes them, because a token that could would
 be able to widen its own access.
 
-Then ask for a token. The client authenticates with HTTP Basic, and names the API in `audience`:
+Then ask for a token ([`POST /oauth2/token`](../openapi/authorization-server.yaml#tag/tokens/POST/oauth2/token)). The client
+authenticates with HTTP Basic, and names the API in `audience`:
 
 ```bash
 curl -s https://auth.example.com/oauth2/token \
@@ -91,8 +92,8 @@ dashboard.
 
 An application of your own can do what the dashboard does. It must be a first-party client: a
 third-party application never gets a token for the Management API. It sends the person to the
-authorization endpoint with PKCE, naming the API in `audience` and the permissions it needs in
-`scope`:
+authorization endpoint ([`GET /oauth2/authorize`](../openapi/authorization-server.yaml#tag/browser/GET/oauth2/authorize)) with PKCE,
+naming the API in `audience` and the permissions it needs in `scope`:
 
 ```text
 https://auth.example.com/oauth2/authorize?response_type=code

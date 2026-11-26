@@ -65,8 +65,15 @@ jobs:
             git archive "${TAG}" docs/guides | tar -x -C "${RUNNER_TEMP}/tag"
             guides="${RUNNER_TEMP}/tag/docs/guides"
           fi
-          docs/site/build.sh "${VERSION}" "${RUNNER_TEMP}/management-api.yaml" "${RUNNER_TEMP}/site/v${VERSION}" "../" "${guides}"
-          docs/site/build.sh "${VERSION}" "${RUNNER_TEMP}/management-api.yaml" "${RUNNER_TEMP}/site/root" "" "${guides}"
+          # The authorization server's document likewise (#93): a release from before it shows the
+          # Management API's alone.
+          authorization_server=""
+          if git cat-file -e "${TAG}:docs/openapi/authorization-server.yaml" 2>/dev/null; then
+            authorization_server="${RUNNER_TEMP}/authorization-server.yaml"
+            git show "${TAG}:docs/openapi/authorization-server.yaml" > "${authorization_server}"
+          fi
+          docs/site/build.sh "${VERSION}" "${RUNNER_TEMP}/management-api.yaml" "${RUNNER_TEMP}/site/v${VERSION}" "../" "${guides}" "${authorization_server}"
+          docs/site/build.sh "${VERSION}" "${RUNNER_TEMP}/management-api.yaml" "${RUNNER_TEMP}/site/root" "" "${guides}" "${authorization_server}"
 
       - name: Publish to gh-pages
         env:

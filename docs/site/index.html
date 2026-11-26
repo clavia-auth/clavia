@@ -3,14 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Clavia Management API · {{RELEASE}}</title>
-  <meta name="description" content="Reference of the Clavia Management API, for Clavia {{RELEASE}}.">
+  <title>Clavia API reference · {{RELEASE}}</title>
+  <meta name="description" content="Reference of the Clavia Management API and authorization server, for Clavia {{RELEASE}}.">
   <link rel="icon" href="{{ROOT}}clavia-icon.svg" type="image/svg+xml">
   <!--
-    The Management API reference, rendered by Scalar from management-api.yaml beside this file.
-    Built by docs/site/build.sh, which fills in the release and the path to the site's root, and
-    drops the Guides link for a release without guides (guide.html renders them);
-    published by .github/workflows/docs.yml. See docs/RELEASING.md.
+    The API references, rendered by Scalar from the documents beside this file: management-api.yaml,
+    and authorization-server.yaml for a release that has it (Scalar's document switcher, one server
+    each). Built by docs/site/build.sh, which fills in the release, the path to the site's root and
+    whether the second document is there, and drops the Guides link for a release without guides
+    (guide.html renders them); published by .github/workflows/docs.yml. See docs/RELEASING.md.
   -->
   <style>
     /*
@@ -95,7 +96,7 @@
 <body>
   <header class="clavia-bar">
     <a class="brand" href="{{ROOT}}"><img src="{{ROOT}}clavia-icon.svg" alt="">Clavia</a>
-    <span class="muted hide-narrow">Management API</span>
+    <span class="muted hide-narrow">API reference</span>
     <a class="muted" href="guides/" data-guides>Guides</a>
     <span class="spacer"></span>
     <label class="muted hide-narrow" for="clavia-release">Release</label>
@@ -110,8 +111,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.77.0/dist/browser/standalone.js"
     integrity="sha384-+7ESN8b9Ljg46TCYKedZUlhF/wfZbOt78aV/DtoU3anEElh8Q2eXsyhQ9W5lAZD4" crossorigin="anonymous"></script>
   <script>
-    Scalar.createApiReference('#app', {
-      url: './management-api.yaml',
+    const common = {
       theme: 'default',
       layout: 'modern',
       // A reference, not a workbench: no developer toolbar (shown on localhost by default), and no
@@ -125,15 +125,33 @@
       hideModels: true,
       withDefaultFonts: false,
       defaultHttpClient: { targetKey: 'shell', clientKey: 'curl' },
-      // Never a real host: the reader types their own domain.
-      servers: [{
-        url: 'https://management.{domain}',
-        description: 'Your Clavia deployment',
-        variables: { domain: { default: 'example.com', description: 'Your CLAVIA_ROOT_DOMAIN' } },
-      }],
+    };
+    // Never a real host: the reader types their own domain, and each document has its own host.
+    const domain = { default: 'example.com', description: 'Your CLAVIA_ROOT_DOMAIN' };
+    const server = (host) => [{ url: `https://${host}.{domain}`, description: 'Your Clavia deployment', variables: { domain } }];
+    const references = [{
+      ...common,
+      title: 'Management API',
+      slug: 'management-api',
+      url: './management-api.yaml',
+      default: true,
+      servers: server('management'),
       authentication: { preferredSecurityScheme: 'managementToken' },
       metaData: { title: 'Clavia Management API · {{RELEASE}}' },
-    });
+    }];
+    // A release from before the authorization server's document (#93) has the Management API's alone.
+    if ({{AUTHORIZATION_SERVER}}) {
+      references.push({
+        ...common,
+        title: 'Authorization server',
+        slug: 'authorization-server',
+        url: './authorization-server.yaml',
+        servers: server('auth'),
+        authentication: { preferredSecurityScheme: 'clientSecretBasic' },
+        metaData: { title: 'Clavia authorization server · {{RELEASE}}' },
+      });
+    }
+    Scalar.createApiReference('#app', references);
 
     // The release picker: every published release, newest first (versions.json, written by the
     // Docs workflow). Without it, the page still shows its own release.
