@@ -44,7 +44,7 @@ browser say; and keeps the catalogues complete by test.
 |---|---|---|
 | Message format | **ICU MessageFormat**, through `ext-intl`'s `MessageFormatter` (already in the image, ICU 78) | Plurals and selections done right per language ("0 compte" is singular in French, "0 accounts" plural in English), and the format translation tools (Weblate, Crowdin) know. Rejected: `sprintf` strings (no plurals, positional arguments translators reorder wrongly); gettext (`.po`, needs the gettext extension and compiled `.mo` files, plural rules per file) |
 | Library | **None new.** A small adapter over `MessageFormatter` and `Locale` | `symfony/translation` would do it, with a dependency tree for what is a lookup and a format call; laminas-i18n likewise. The adapter is about a hundred lines and passes a contract test, as every adapter does |
-| Catalogue files | **JSON, one per language**: `translations/en.json`, `translations/fr.json`, flat `"key": "ICU message"` | Data, not code: a translation contributed in a pull request cannot hide PHP, which a `return [...]` file could. Every translation tool reads flat JSON. Rejected: PHP arrays (executable), XLIFF (verbose for a few hundred messages) |
+| Catalogue files | **ARB (Application Resource Bundle), one per language**: `translations/en.arb`, `translations/fr.arb`. ARB is JSON: `"@@locale"`, then each `"key": "ICU message"`, and in the source language (English) an optional `"@key"` beside it with a `description` for translators and the `placeholders` the message takes (each with an `example`). A translation holds `@@locale` and messages only | Data, not code: a translation contributed in a pull request cannot hide PHP, which a `return [...]` file could. ARB is made for ICU MessageFormat, carries each message's context in the same file, and Weblate, Crowdin, Lokalise and Phrase read and write it, with no conversion. Rejected: PHP arrays (executable); flat JSON (no place for a translator's context); gettext PO as a source converted to JSON (its plural model, `msgid_plural` and `Plural-Forms`, conflicts with ICU's plurals inside a message; it expects the English text as `msgid` where we key; and the conversion would be a build step and a second copy of every message; MO, PO compiled for the `gettext` extension, would play no part); XLIFF (verbose for a few hundred messages) |
 | Keys | **Dotted, by page or mail and role**: `login.title`, `login.submit`, `mail.reset.subject`, `error.not_found.heading` | Stable when the English changes; groups what a translator sees together. Rejected: the English text as key (gettext style): a typo fix in English would orphan every translation |
 | Where words live | **Adapters only.** Pages: templates and page classes call the catalogue. Mail: the application says *which* mail, *to whom*, *in which language* and with *which values*; the catalogue words it | The application already holds the mail's English (`AccountMail`, `SignInMail`) and the consent screen's scope descriptions (`ScopeDescriptions`). Words are presentation; the application keeps intent. Rejected: a translator port the application calls with keys (puts message keys, a presentation concern, into use cases) |
 | The port | **`Application\Port\Messages`**: `text(Language, MessageKey, array $values): string`, implemented by `Adapter\Secondary\Messages\IcuMessages`; the mail adapter and the page renderer both reach it as a port | Two adapters need the same catalogue (the HTTP pages, primary; mail rendering, secondary) and adapters never call each other (`CLAUDE.md`, rule 4) |
@@ -94,7 +94,8 @@ composition root, which knows the catalogue files (as `SamlKeyReferences` checks
 - `PasswordRejected` carries a reason (`PolicyRefused` with the bounds, `Breached`) instead of English.
 
 **Adapters**
-- `Secondary\Messages\IcuMessages`: loads a catalogue on first use per language, formats with
+- `Secondary\Messages\IcuMessages`: loads a catalogue on first use per language (its messages; the `@`
+  entries are for translators and are skipped), formats with
   `MessageFormatter`, falls back as §2 says. A double, `FakeMessages`, returns `key{values}` so use-case
   tests read without a catalogue; both pass `MessagesContract`.
 - `Secondary\Mail\RenderedMailer`: the `Mailer` port; words a `MailContent` in its language and hands
@@ -103,7 +104,22 @@ composition root, which knows the catalogue files (as `SamlKeyReferences` checks
 - `Primary\Http\Shared\LanguageChoice`: the page's language from the cookie, the held request's
   `UiLocales`, `Accept-Language` and the default. `PageRenderer` sets `<html lang>`, `Content-Language`
   and the language the templates' `t()` helper uses.
-- `translations/en.json`, `translations/fr.json`.
+- `translations/en.arb` (the source: messages, and the `@` entries that describe them),
+  `translations/fr.arb` (messages only), and `translations/README.md`: how to add a language.
+
+```json
+{
+  "@@locale": "en",
+  "login.submit": "Sign in",
+  "@login.submit": {"description": "The button that submits the email and password."},
+  "login.signed_in_as": "Signed in as {email}.",
+  "@login.signed_in_as": {
+    "description": "Shown to someone already signed in.",
+    "placeholders": {"email": {"type": "String", "example": "ada@example.com"}}
+  },
+  "mail.reset.expires": "It works once and expires in {minutes, plural, one {# minute} other {# minutes}}."
+}
+```
 
 ## 5. Flows
 
@@ -150,7 +166,7 @@ composition root, which knows the catalogue files (as `SamlKeyReferences` checks
 
 ## 7. Security rules
 
-- **A translation is data.** Catalogues are JSON, read with `json_decode`, never included; a message
+- **A translation is data.** Catalogues are ARB, JSON read with `json_decode`, never included; a message
   is text, escaped where printed. A message holding HTML fails the catalogue test.
 - **A language is chosen from a closed list.** Cookie, `ui_locales` and `Accept-Language` only ever
   select one of the offered languages; nothing they say reaches a path, a file name or a page
@@ -169,7 +185,7 @@ composition root, which knows the catalogue files (as `SamlKeyReferences` checks
 | `LanguageTest`, `UiLocalesTest` (unit) | well-formed tags, normalisation, malformed tags dropped, at most ten |
 | `AcceptLanguageTest` (unit) | q-values, `*`, `q=0`, ranges beyond ten ignored, lookup (`fr-CA` → `fr`) |
 | `MessagesContract` (both the double and `IcuMessages`) | formatting, plurals, a missing key in the default language throws, in another falls back and logs |
-| `CatalogueTest` | every language has exactly the default's keys; each message parses with `MessageFormatter` for its language; the same arguments in each; no HTML; every key the templates and classes use exists, and every key exists in some use |
+| `CatalogueTest` | each file's `@@locale` is its name; every language has exactly the default's keys; each message parses with `MessageFormatter` for its language; the same arguments in each; no HTML; every key the templates and classes use exists, and every key exists in some use; in the source, an `@key` names a real message and its `placeholders` exactly the message's arguments; a translation holds no `@` entries but `@@locale` |
 | `TranslatedPagesTest` (acceptance) | each page in French by `Accept-Language`, by `ui_locales` (pushed and not), and by the switcher; precedence as §5.1; `<html lang>` and `Content-Language` |
 | `AuthPagesEscapingTest` | every page with hostile values, in both languages |
 | `TranslatedMailTest` (acceptance) | each mail in French when the page was; the operator's invitation in the profile's language |
@@ -179,9 +195,10 @@ composition root, which knows the catalogue files (as `SamlKeyReferences` checks
 ## 9. Slices
 
 1. **The catalogue and the language of a page.** `Language`, `Languages`, `Messages` and `IcuMessages`
-   with its double and contract, the settings, `LanguageChoice` from `Accept-Language` and the default,
-   `<html lang>`, `Content-Language`, the templates' `t()`, `CatalogueTest`; the layout, the login page
-   and the error pages in English and French. *Done when* the login page and the error pages answer
+   with its double and contract, ARB catalogues (`translations/en.arb`, `fr.arb`, and a README for
+   contributors), the settings, `LanguageChoice` from `Accept-Language` and the default, `<html lang>`,
+   `Content-Language`, the templates' `t()`, `CatalogueTest`; the layout, the login page and the error
+   pages in English and French, with a description wherever a message's wording is ambiguous. *Done when* the login page and the error pages answer
    `Accept-Language: fr` in French, and the catalogue test guards completeness.
 2. **Every page.** The remaining templates and page classes, `ScopeDescriptions` and
    `PasswordRejected` worded by the adapter, `ExternalSignInMessages` keyed; French for all.
