@@ -10,7 +10,9 @@
 name: clavia-e2e
 
 x-clavia: &clavia
-  image: clavia-e2e:local
+  # Built from this checkout, unless CLAVIA_E2E_IMAGE names one to run as it is (the dashboard's workflow runs
+  # ghcr.io/clavia-auth/clavia:edge): up.sh then builds nothing.
+  image: ${CLAVIA_E2E_IMAGE:-clavia-e2e:local}
   env_file: [e2e.env]
   networks: [clavia]
 
