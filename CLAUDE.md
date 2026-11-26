@@ -831,18 +831,20 @@ a console command or a setting that does not exist, a real host, or a heading an
 change to what a guide describes changes the guide.
 
 The validator is Clavia's own (`Adapter\Primary\Http\OpenApi`). What it cannot enforce, it
-refuses at load (unknown keywords, OpenAPI 3.1 forms, external references, non-JSON media
-types, unsupported parameter styles). It reports every violation, never repeats a value,
-coerces exactly (`"02"` is not an integer), and is strict where the specification is loose
-(undescribed query parameters, a body sent to an operation without one, a single value sent
-twice).
+refuses at load (unknown keywords, OpenAPI 3.1 forms, external references, unsupported parameter
+styles). A body is JSON; or a request's form (`application/x-www-form-urlencoded`, `FormBody`, #169),
+read as named strings, so only an `object` of `type: string` properties, or `allOf`/`anyOf`/`oneOf`
+of such, may describe one; or opaque bytes, `{type: string, format: binary}`. Any other media type
+is refused at load. It reports every violation, never repeats a value, coerces exactly (`"02"` is
+not an integer), and is strict where the specification is loose (undescribed query parameters, a
+body sent to an operation without one, a single value or a form field sent twice).
 
 ### Bulk jobs on the users
 
 `POST /api/v1/jobs/users-imports` (`create:users`, `?connection=` a pool) takes NDJSON, one account
 per line, at most 10,000 lines and 5 MiB, and only queues a `UserJob` (`QueueUserImport`): the
-body is opaque to the contract (`application/x-ndjson`, `{type: string, format: binary}`, the one
-non-JSON schema the validator takes), and nothing is read line by line in the request.
+body is opaque to the contract (`application/x-ndjson`, `{type: string, format: binary}`, the
+validator's opaque bytes), and nothing is read line by line in the request.
 `bin/clavia jobs:run` (`RunUserJobs`, every minute) claims queued jobs one by one (`FOR UPDATE SKIP
 LOCKED`, so workers never share one), and takes each line in its own transaction: `ImportLine`
 holds it to the API's rules for a new user, with a `password_hash` instead of a password (only a

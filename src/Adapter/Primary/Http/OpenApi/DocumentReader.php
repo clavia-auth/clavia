@@ -258,7 +258,7 @@ final class DocumentReader
         $node = $this->references->resolve($node);
         $node->allowOnly(['description', 'content', 'required']);
 
-        $content = $this->content($node->member('content'));
+        $content = $this->content($node->member('content'), request: true);
         if ($content->isEmpty()) {
             throw $node->member('content')->invalid('must describe at least one media type');
         }
@@ -314,12 +314,24 @@ final class DocumentReader
         return new Response($headers, $content === null ? new Content([]) : $this->content($content));
     }
 
-    private function content(Node $node): Content
+    /** @param bool $request A request body's content, where a form may be described. */
+    private function content(Node $node, bool $request = false): Content
     {
         $entries = [];
         foreach ($node->members() as $mediaTypeNode) {
             $range = $mediaTypeNode->name;
             $mediaType = MediaType::parse($range) ?? throw $mediaTypeNode->invalid('is not a media type');
+            if ($request && $mediaType->isForm()) {
+                // A form is named strings (WHATWG URL §5.1), so a schema can hold it only when every
+                // value it describes is a string: anything else could never match, or would need a
+                // coercion this validator refuses to guess (`"02"` is not an integer).
+                $mediaTypeNode->allowOnly(['schema', 'example', 'examples']);
+                $schema = $mediaTypeNode->optional('schema')
+                    ?? throw $mediaTypeNode->invalid('must have a schema: an object of string properties');
+                $this->formSchema($schema);
+                $entries[$range] = [$mediaType, $this->schemas->compile($schema)];
+                continue;
+            }
             if (! $mediaType->isJson()) {
                 // Any other body is opaque bytes, and said so: `{type: string, format: binary}` is
                 // the one schema this validator can enforce on it (it accepts any bytes). What the
@@ -347,6 +359,48 @@ final class DocumentReader
         }
 
         return new Content($entries);
+    }
+
+    /**
+     * Refuses a form's schema this validator cannot enforce: it must be an `object` whose properties
+     * are strings, or `allOf`, `anyOf` or `oneOf` of such objects (one schema per `grant_type`, sharing
+     * the client's fields). A property is `type: string`, never nullable, with any string keyword.
+     */
+    private function formSchema(Node $node): void
+    {
+        $node = $this->references->resolve($node);
+        $combined = false;
+        foreach (['allOf', 'anyOf', 'oneOf'] as $keyword) {
+            foreach ($node->optional($keyword)?->items() ?? [] as $member) {
+                $this->formSchema($member);
+                $combined = true;
+            }
+        }
+        if ($node->optional('not') !== null) {
+            throw $node->member('not')->invalid('cannot be enforced on a form');
+        }
+        $type = $node->stringMember('type');
+        if ($type === null && $combined && $node->optional('properties') === null) {
+            return;
+        }
+        if ($type !== Type::Object->value) {
+            throw $node->invalid('describes a form: it must be an object of string properties');
+        }
+        foreach ($node->optional('properties')?->members() ?? [] as $property) {
+            $this->formValue($property);
+        }
+        $additional = $node->optional('additionalProperties');
+        if ($additional !== null && ! is_bool($additional->value)) {
+            $this->formValue($additional);
+        }
+    }
+
+    private function formValue(Node $node): void
+    {
+        $resolved = $this->references->resolve($node);
+        if ($resolved->stringMember('type') !== Type::String->value || $resolved->boolMember('nullable', false)) {
+            throw $node->invalid('is a form value: it must be {type: string}, not nullable');
+        }
     }
 
     /**

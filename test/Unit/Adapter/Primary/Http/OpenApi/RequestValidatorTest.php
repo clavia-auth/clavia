@@ -69,6 +69,28 @@ final class RequestValidatorTest extends TestCase
           /items/latest:
             get:
               responses: {'200': {description: ok}}
+          /token:
+            post:
+              requestBody:
+                required: true
+                content:
+                  application/x-www-form-urlencoded:
+                    schema:
+                      oneOf:
+                        - type: object
+                          required: [grant_type, code]
+                          additionalProperties: false
+                          properties:
+                            grant_type: {type: string, enum: [authorization_code]}
+                            code: {type: string, minLength: 1}
+                            redirect_uri: {type: string}
+                        - type: object
+                          required: [grant_type]
+                          additionalProperties: false
+                          properties:
+                            grant_type: {type: string, enum: [client_credentials]}
+                            scope: {type: string}
+              responses: {'200': {description: ok}}
           /imports:
             post:
               requestBody:
@@ -88,6 +110,83 @@ final class RequestValidatorTest extends TestCase
 
         self::assertSame($lines, $validated->body);
         self::assertTrue($validated->hasBody);
+    }
+
+    public function testAFormComesBackAsAnObjectOfStrings(): void
+    {
+        $form = 'grant_type=authorization_code&code=a%2Bb+c&redirect_uri=https%3A%2F%2Fapp.example%2Fcb';
+
+        $validated = self::validator()->validate(
+            self::request('POST', '/v2/token', $form, 'application/x-www-form-urlencoded'),
+        );
+
+        self::assertEquals((object) [
+            'grant_type' => 'authorization_code',
+            'code' => 'a+b c',
+            'redirect_uri' => 'https://app.example/cb',
+        ], $validated->body);
+    }
+
+    public function testAFormIsHeldToTheAlternativeItsFieldsMatch(): void
+    {
+        $refused = [
+            'grant_type=authorization_code' => 'a code request without its code',
+            'grant_type=client_credentials&code=x' => 'a field the alternative does not take',
+            'grant_type=password&username=ada' => 'a grant no alternative describes',
+        ];
+        foreach ($refused as $form => $case) {
+            try {
+                self::validator()->validate(
+                    self::request('POST', '/v2/token', $form, 'application/x-www-form-urlencoded'),
+                );
+                self::fail($case . ' was accepted.');
+            } catch (RequestDoesNotMatch $mismatch) {
+                self::assertNotEmpty($mismatch->violations, $case);
+            }
+        }
+
+        $machine = self::validator()->validate(self::request(
+            'POST',
+            '/v2/token',
+            'grant_type=client_credentials&scope=read%3Areports',
+            'application/x-www-form-urlencoded; charset=utf-8',
+        ));
+        self::assertEquals((object) ['grant_type' => 'client_credentials', 'scope' => 'read:reports'], $machine->body);
+    }
+
+    /** RFC 6749 §3.1: a parameter sent twice is refused, never "the last one wins". */
+    public function testAFormFieldSentTwiceIsMalformed(): void
+    {
+        try {
+            self::validator()->validate(self::request(
+                'POST',
+                '/v2/token',
+                'grant_type=client_credentials&scope=a&scope=b',
+                'application/x-www-form-urlencoded',
+            ));
+            self::fail('A repeated field was accepted.');
+        } catch (MalformedRequest $malformed) {
+            self::assertEquals([Violation::inBody('/scope', 'Is sent more than once.')], $malformed->violations);
+        }
+    }
+
+    public function testAFormIsUtf8(): void
+    {
+        $this->expectException(UnsupportedMediaType::class);
+
+        self::validator()->validate(self::request(
+            'POST',
+            '/v2/token',
+            'grant_type=client_credentials',
+            'application/x-www-form-urlencoded; charset=iso-8859-1',
+        ));
+    }
+
+    public function testJsonIsNoForm(): void
+    {
+        $this->expectException(UnsupportedMediaType::class);
+
+        self::validator()->validate(self::request('POST', '/v2/token', '{"grant_type":"client_credentials"}'));
     }
 
     public function testAnOpaqueBodyOfAnotherMediaTypeIsUnsupported(): void

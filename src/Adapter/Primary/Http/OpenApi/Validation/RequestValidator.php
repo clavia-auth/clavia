@@ -28,8 +28,8 @@ use Psr\Http\Message\ServerRequestInterface;
  * In order, each step reporting everything it finds:
  *
  *  1. the operation — none: {@see OperationNotFound};
- *  2. what can be read at all — percent-encoding, repeated single values, JSON syntax:
- *     {@see MalformedRequest};
+ *  2. what can be read at all — percent-encoding, repeated single values, JSON syntax, a form
+ *     field sent twice: {@see MalformedRequest};
  *  3. the body's media type: {@see UnsupportedMediaType};
  *  4. everything the document says — required parameters present, no query parameter
  *     it does not describe, every value and the body valid against its schema:
@@ -194,6 +194,22 @@ final readonly class RequestValidator
                 'The body must be %s.',
                 implode(' or ', $requestBody->content->mediaTypes()),
             ));
+        }
+        if ($entry[0]->isForm()) {
+            if ($mediaType->charset !== null && $mediaType->charset !== 'utf-8') {
+                throw new UnsupportedMediaType('A form is UTF-8 (WHATWG URL §5.1).');
+            }
+            $form = FormBody::read($raw);
+            if ($form->malformed !== []) {
+                array_push($malformed, ...$form->malformed);
+
+                return [true, null, []];
+            }
+            $violations = $entry[1] === null
+                ? []
+                : SchemaValidator::validate($form->values, $entry[1], Direction::Request);
+
+            return [true, $form->values, Violation::fromSchema(Location::Body, null, $violations)];
         }
         if ($mediaType->charset !== null && $mediaType->charset !== 'utf-8') {
             throw new UnsupportedMediaType('A JSON body is UTF-8 (RFC 8259 §8.1).');

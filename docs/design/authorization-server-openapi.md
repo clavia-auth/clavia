@@ -1,6 +1,6 @@
 # Design: An OpenAPI document for the authorization server's endpoints
 
-**Status:** proposed · **Date:** 2026-11-26 · **Issue:** clavia-auth/clavia#93 (part of #94) ·
+**Status:** agreed · **Date:** 2026-11-26 · **Issue:** clavia-auth/clavia#93 (part of #94) ·
 **Specifications:** RFC 6749 (§3.1, §3.2, §4, §5), RFC 7009 (revocation), RFC 7591 and 7592 (client
 registration and management), RFC 7662 (introspection), RFC 8414 and OpenID Connect Discovery 1.0
 (metadata), RFC 8628 (device authorization), RFC 9126 (PAR), RFC 9449 (DPoP), OpenID Connect Core 1.0

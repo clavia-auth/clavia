@@ -55,6 +55,12 @@ final readonly class MediaType
         return $this->type === 'application' && ($this->subtype === 'json' || str_ends_with($this->subtype, '+json'));
     }
 
+    /** `application/x-www-form-urlencoded` (WHATWG URL §5): a request body of named strings. */
+    public function isForm(): bool
+    {
+        return $this->type === 'application' && $this->subtype === 'x-www-form-urlencoded';
+    }
+
     /** Whether this range covers `$type`. */
     public function covers(self $type): bool
     {
