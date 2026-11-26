@@ -17,20 +17,20 @@
 ?>
 <?php $this->placeholder('subtitle')->captureStart() ?>
 <?php if ($stage === 'confirm'): ?>
-      <p class="subtitle">Confirm that <strong><?= $this->escapeHtml($email) ?></strong> is your address.</p>
+      <p class="subtitle"><?= $this->emphasised('account.verify.subtitle', ['email' => $email], 'email') ?></p>
 <?php elseif ($stage === 'verified'): ?>
-      <p class="subtitle"><strong><?= $this->escapeHtml($email) ?></strong> is confirmed. You can sign in now.</p>
+      <p class="subtitle"><?= $this->emphasised('account.verified.subtitle', ['email' => $email], 'email') ?></p>
 <?php else: ?>
-      <p class="subtitle">Sign in to get a new one.</p>
+      <p class="subtitle"><?= $this->escapeHtml($this->t('account.invalid_link.subtitle')) ?></p>
 <?php endif ?>
 <?php $this->placeholder('subtitle')->captureEnd() ?>
 <?php if ($stage === 'confirm'): ?>
     <form method="post" action="/auth/verify-email">
 <?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => '']) ?>
       <input type="hidden" name="token" value="<?= $this->escapeHtmlAttr($token) ?>">
-      <button type="submit" autofocus>Confirm my address</button>
+      <button type="submit" autofocus><?= $this->escapeHtml($this->t('account.verify.submit')) ?></button>
     </form>
-    <p class="hint">If you did not create an account, close this page.</p>
+    <p class="hint"><?= $this->escapeHtml($this->t('account.verify.not_you')) ?></p>
 <?php else: ?>
-    <p><a class="button" href="<?= $this->escapeHtmlAttr($loginHref) ?>">Sign in</a></p>
+    <p><a class="button" href="<?= $this->escapeHtmlAttr($loginHref) ?>"><?= $this->escapeHtml($this->t('account.sign_in')) ?></a></p>
 <?php endif ?>

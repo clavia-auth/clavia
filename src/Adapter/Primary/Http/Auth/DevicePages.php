@@ -23,14 +23,13 @@ final class DevicePages
 {
     public const string PATH = '/auth/device';
 
-    public const string INVALID_CODE = 'That code is not valid or has expired. Check the device and try again.';
+    public const string INVALID_CODE = 'device.error.invalid_code';
 
-    public const string TOO_MANY_CODES = 'Too many codes were not valid. Wait a few minutes before trying again.';
+    public const string TOO_MANY_CODES = 'device.error.too_many_codes';
 
-    public const string STRONGER_SIGN_IN = 'This application requires two-factor authentication, which this account '
-        . 'cannot give yet. Set it up from your account, then try the code again.';
+    public const string STRONGER_SIGN_IN = 'device.error.stronger_sign_in';
 
-    public const string NO_PERMISSION = 'You do not have permission to use this API, so the device was refused.';
+    public const string NO_PERMISSION = 'device.error.no_permission';
 
     private function __construct()
     {
@@ -38,13 +37,13 @@ final class DevicePages
 
     public static function entry(
         string $userCode = '',
-        Message|string|null $error = null,
+        ?Message $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): HtmlPage {
         return new HtmlPage(
             template: 'auth::device',
-            title: 'Connect a device',
-            heading: 'Connect a device',
+            title: Message::of('device.entry.title'),
+            heading: Message::of('device.entry.title'),
             returnTo: self::PATH,
             variables: ['stage' => 'entry', 'userCode' => $userCode],
             error: $error,
@@ -56,16 +55,15 @@ final class DevicePages
     {
         return new HtmlPage(
             template: 'auth::device',
-            title: 'Allow this device',
-            heading: 'Allow this device?',
+            title: Message::of('device.review.title'),
+            heading: Message::of('device.review.heading'),
             returnTo: self::address($review->userCode),
             variables: [
                 'stage' => 'review',
                 'userCode' => $review->userCode,
                 'clientName' => $review->clientName,
                 'email' => $review->email,
-                'oidcScopes' => $review->oidcScopes,
-                'api' => $review->api,
+                'scopes' => ScopeWording::of($review->oidcScopes, $review->api),
             ],
         );
     }
@@ -74,11 +72,11 @@ final class DevicePages
     {
         return new HtmlPage(
             template: 'auth::device',
-            title: $approved ? 'Device connected' : 'Device refused',
-            heading: $approved ? 'Device connected' : 'Device refused',
+            title: Message::of($approved ? 'device.done.connected' : 'device.done.refused'),
+            heading: Message::of($approved ? 'device.done.connected' : 'device.done.refused'),
             returnTo: self::PATH,
             variables: ['stage' => 'done', 'approved' => $approved],
-            error: $noPermission ? self::NO_PERMISSION : null,
+            error: $noPermission ? Message::of(self::NO_PERMISSION) : null,
         );
     }
 

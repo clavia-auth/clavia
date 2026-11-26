@@ -7,7 +7,7 @@
  * @var Laminas\View\Renderer\PhpRenderer $this
  * @var string $csrfToken
  * @var string $email
- * @var list<array{id: string, name: string, synced: bool, createdAt: string, lastUsedAt: string|null}> $passkeys
+ * @var list<array{id: string, name: string, synced: bool, createdAt: int, lastUsedAt: int|null}> $passkeys Dates as timestamps.
  * @var bool   $canAddAnother
  * @var int    $limit
  */
@@ -16,25 +16,22 @@
       <p class="subtitle"><?= $this->escapeHtml($email) ?></p>
 <?php $this->placeholder('subtitle')->captureEnd() ?>
 <?php if ($passkeys === []): ?>
-    <p class="hint">
-      A passkey lives on your phone, your computer or a security key, and proves it is you with your
-      fingerprint, your face or your PIN. It works only on this site, so it cannot be phished.
-    </p>
+    <p class="hint"><?= $this->escapeHtml($this->t('passkeys.none')) ?></p>
 <?php else: ?>
     <ul class="passkeys">
 <?php foreach ($passkeys as $passkey): ?>
       <li>
         <strong><?= $this->escapeHtml($passkey['name']) ?></strong>
-        <span class="hint"><?= $passkey['synced'] ? 'Synced across your devices' : 'On one device' ?> · added <?= $this->escapeHtml($passkey['createdAt']) ?><?php if ($passkey['lastUsedAt'] !== null): ?> · last used <?= $this->escapeHtml($passkey['lastUsedAt']) ?><?php endif ?></span>
+        <span class="hint"><?= $this->escapeHtml($this->t($passkey['synced'] ? 'passkeys.synced' : 'passkeys.one_device')) ?> · <?= $this->escapeHtml($this->t('passkeys.added', ['added' => $passkey['createdAt']])) ?><?php if ($passkey['lastUsedAt'] !== null): ?> · <?= $this->escapeHtml($this->t('passkeys.last_used', ['used' => $passkey['lastUsedAt']])) ?><?php endif ?></span>
         <form method="post" action="/auth/passkeys/<?= $this->escapeHtmlAttr(rawurlencode($passkey['id'])) ?>/name" class="inline">
 <?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => '']) ?>
-          <label for="name-<?= $this->escapeHtmlAttr($passkey['id']) ?>">New name</label>
+          <label for="name-<?= $this->escapeHtmlAttr($passkey['id']) ?>"><?= $this->escapeHtml($this->t('passkeys.new_name')) ?></label>
           <input id="name-<?= $this->escapeHtmlAttr($passkey['id']) ?>" name="name" type="text" required maxlength="64" value="<?= $this->escapeHtmlAttr($passkey['name']) ?>">
-          <button type="submit" class="secondary">Rename</button>
+          <button type="submit" class="secondary"><?= $this->escapeHtml($this->t('passkeys.rename')) ?></button>
         </form>
         <form method="post" action="/auth/passkeys/<?= $this->escapeHtmlAttr(rawurlencode($passkey['id'])) ?>/remove">
 <?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => '']) ?>
-          <button type="submit" class="danger">Remove</button>
+          <button type="submit" class="danger"><?= $this->escapeHtml($this->t('passkeys.remove')) ?></button>
         </form>
       </li>
 <?php endforeach ?>
@@ -43,8 +40,8 @@
 <?php if ($canAddAnother): ?>
     <form method="post" action="/auth/passkeys/new">
 <?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => '']) ?>
-      <button type="submit">Add a passkey</button>
+      <button type="submit"><?= $this->escapeHtml($this->t('passkeys.add.title')) ?></button>
     </form>
 <?php else: ?>
-    <p class="hint">This account has <?= $this->escapeHtml((string) $limit) ?> passkeys, as many as it may.</p>
+    <p class="hint"><?= $this->escapeHtml($this->t('passkeys.at_limit', ['limit' => $limit])) ?></p>
 <?php endif ?>

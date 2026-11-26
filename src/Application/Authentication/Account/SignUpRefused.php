@@ -17,13 +17,13 @@ namespace Clavia\Application\Authentication\Account;
 final readonly class SignUpRefused
 {
     /**
-     * @param string $email  What was typed, to fill the form again.
-     * @param string $detail The policy's words for {@see SignUpFailure::PasswordRejected}, or ''.
+     * @param string               $email    What was typed, to fill the form again.
+     * @param PasswordRefusal|null $password Why, for {@see SignUpFailure::PasswordRejected}; null otherwise.
      */
     public function __construct(
         public SignUpFailure $reason,
         public string $email,
-        public string $detail = '',
+        public ?PasswordRefusal $password = null,
     ) {
     }
 }

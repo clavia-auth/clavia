@@ -131,6 +131,7 @@ use Clavia\Adapter\Primary\Http\Scim\ServiceProviderConfigHandler;
 use Clavia\Adapter\Primary\Http\Shared\AuditContextMiddleware;
 use Clavia\Adapter\Primary\Http\Shared\BearerChallenger;
 use Clavia\Adapter\Primary\Http\Shared\ErrorResponder;
+use Clavia\Adapter\Primary\Http\Shared\Emphasise;
 use Clavia\Adapter\Primary\Http\Shared\HealthHandler;
 use Clavia\Adapter\Primary\Http\Shared\LanguageChoice;
 use Clavia\Adapter\Primary\Http\Shared\PageLanguage;
@@ -957,11 +958,14 @@ final class ConfigProvider
             // The server-rendered pages: `layout::page`, `auth::login`, `error::page`,
             // `partial::field`…
             // laminas-view's PhpRenderer, through Mezzio's TemplateRendererInterface.
-            // The templates' helpers beside laminas-view's own: t() words a message (docs/design/
-            // translated-sign-in-pages.md).
+            // The templates' helpers beside laminas-view's own: t() words a message, emphasised() one with
+            // a value in bold (docs/design/translated-sign-in-pages.md).
             'view_helpers' => [
-                'aliases' => ['t' => Translate::class],
-                'factories' => [Translate::class => Container\TranslateFactory::class],
+                'aliases' => ['t' => Translate::class, 'emphasised' => Emphasise::class],
+                'factories' => [
+                    Translate::class => Container\TranslateFactory::class,
+                    Emphasise::class => Container\EmphasiseFactory::class,
+                ],
             ],
             'templates' => [
                 'extension' => 'phtml',

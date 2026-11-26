@@ -21,6 +21,7 @@ use Clavia\Adapter\Primary\Http\Auth\PasswordlessPages;
 use Clavia\Adapter\Primary\Http\Oidc\EndSessionHandler;
 use Clavia\Adapter\Primary\Http\Shared\ErrorPage;
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
+use Clavia\Adapter\Primary\Http\Shared\Message;
 use Clavia\Application\Authentication\External\ExternalProviderOption;
 use Clavia\Application\Authentication\LoginPage\SignInMethods;
 use Clavia\Application\Authentication\Mfa\EnrolmentOnTheWay;
@@ -58,19 +59,33 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
 {
     private const string HOSTILE = '"\'><script>alert(1)</script><img src=x onerror=alert(2)>';
 
+    /** In every language offered: a translation is worded around the same values, escaped the same way. */
     #[DataProvider('pages')]
     public function testAHostileValueIsNeverPrintedAsMarkup(HtmlPage $page): void
     {
         /** @var AuthPageResponder $responder */
         $responder = $this->container()->get(AuthPageResponder::class);
 
-        $html = (string) $responder->page(new ServerRequest(), $page)->getBody();
+        foreach (['en', 'fr'] as $language) {
+            $request = new ServerRequest(headers: ['Accept-Language' => $language]);
+            $html = (string) $responder->page($request, $page)->getBody();
 
-        // A page may load this server's own module; it never prints the hostile one.
-        self::assertStringNotContainsString('<script>alert', $html);
-        self::assertStringNotContainsString('<img src=x', $html);
-        self::assertStringNotContainsString('"\'>', $html);
-        self::assertStringContainsString('&lt;script&gt;', $html);
+            self::assertStringContainsString('<html lang="' . $language . '"', $html);
+            // A page may load this server's own module; it never prints the hostile one.
+            self::assertStringNotContainsString('<script>alert', $html, $language);
+            self::assertStringNotContainsString('<img src=x', $html, $language);
+            self::assertStringNotContainsString('"\'>', $html, $language);
+            self::assertStringContainsString('&lt;script&gt;', $html, $language);
+        }
+    }
+
+    /**
+     * A message carrying the hostile value: where a page's words come from, the value is an argument,
+     * the only way anything a request sent reaches them.
+     */
+    private static function message(): Message
+    {
+        return Message::of('external.error.not_available', ['provider' => self::HOSTILE]);
     }
 
     /** @return iterable<string, array{HtmlPage}> */
@@ -82,15 +97,15 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
                 [],
                 new SignInMethods(true, true, [new ExternalProviderOption(self::HOSTILE, self::HOSTILE)], true, true),
                 self::HOSTILE,
-                self::HOSTILE,
+                self::message(),
                 StatusCodeInterface::STATUS_UNAUTHORIZED,
             ),
         ];
         yield 'the signed-in page' => [LoginPages::signedIn(self::HOSTILE)];
         yield 'the layout: title, heading and return address' => [new HtmlPage(
             template: 'auth::login',
-            title: self::HOSTILE,
-            heading: self::HOSTILE,
+            title: self::message(),
+            heading: self::message(),
             returnTo: self::HOSTILE,
             variables: [
                 'loginState' => '',
@@ -103,14 +118,14 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
                 'forgotHref' => '',
                 'passkeyOptions' => null,
             ],
-            error: self::HOSTILE,
+            error: self::message(),
         )];
         yield 'the form with a passkey: state, email, error and options' => [LoginPages::form(
             self::HOSTILE,
             [],
             new SignInMethods(true, false, [], false, false, true),
             self::HOSTILE,
-            self::HOSTILE,
+            self::message(),
             StatusCodeInterface::STATUS_UNAUTHORIZED,
             new AssertionOptions(
                 self::HOSTILE,
@@ -131,7 +146,7 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
                 [],
                 true,
                 self::HOSTILE,
-                self::HOSTILE,
+                self::message(),
                 StatusCodeInterface::STATUS_BAD_REQUEST,
             ),
         ];
@@ -146,7 +161,7 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
             AccountPages::confirmEmail(
                 self::HOSTILE,
                 self::HOSTILE,
-                self::HOSTILE,
+                self::message(),
                 StatusCodeInterface::STATUS_BAD_REQUEST,
             ),
         ];
@@ -154,13 +169,18 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
             AccountPages::emailVerified(self::HOSTILE, self::HOSTILE),
         ];
         yield 'the forgot form: state, address and error' => [
-            AccountPages::forgot(self::HOSTILE, self::HOSTILE, self::HOSTILE, StatusCodeInterface::STATUS_BAD_REQUEST),
+            AccountPages::forgot(
+                self::HOSTILE,
+                self::HOSTILE,
+                self::message(),
+                StatusCodeInterface::STATUS_BAD_REQUEST,
+            ),
         ];
         yield 'the reset form: address, token and error' => [
             AccountPages::resetForm(
                 self::HOSTILE,
                 self::HOSTILE,
-                self::HOSTILE,
+                self::message(),
                 StatusCodeInterface::STATUS_BAD_REQUEST,
             ),
         ];
@@ -171,12 +191,16 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
             MfaPages::challenge(
                 new SecondFactorPage([], true, false),
                 null,
-                self::HOSTILE,
+                self::message(),
                 StatusCodeInterface::STATUS_UNAUTHORIZED,
             ),
         ];
         yield 'a step-up, for an application named by an operator' => [
-            MfaPages::challenge(new SecondFactorPage([], true, false, true, true, self::HOSTILE), null, self::HOSTILE),
+            MfaPages::challenge(
+                new SecondFactorPage([], true, false, true, true, self::HOSTILE),
+                null,
+                self::message(),
+            ),
         ];
         yield 'the second step with a passkey: error and options' => [MfaPages::challenge(
             new SecondFactorPage([], false, true),
@@ -193,13 +217,13 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
                 [],
                 300,
             ),
-            self::HOSTILE,
+            self::message(),
             StatusCodeInterface::STATUS_UNAUTHORIZED,
         )];
         yield 'the code page: address and error' => [
             PasswordlessPages::code(
                 new PasswordlessPrompt(self::HOSTILE, []),
-                self::HOSTILE,
+                self::message(),
                 StatusCodeInterface::STATUS_UNAUTHORIZED,
             ),
         ];
@@ -208,7 +232,7 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
             PasswordlessPages::linkConfirm(
                 new PasswordlessPrompt(self::HOSTILE, []),
                 self::HOSTILE,
-                self::HOSTILE,
+                self::message(),
                 StatusCodeInterface::STATUS_BAD_REQUEST,
             ),
         ];
@@ -221,21 +245,21 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
                 [],
             ),
             self::HOSTILE,
-            self::HOSTILE,
+            self::message(),
             StatusCodeInterface::STATUS_BAD_REQUEST,
         )];
         yield 'the expired consent screen' => [new HtmlPage(
             template: 'auth::consent-expired',
-            title: self::HOSTILE,
-            heading: self::HOSTILE,
-            error: self::HOSTILE,
+            title: self::message(),
+            heading: self::message(),
+            error: self::message(),
         )];
         yield 'the two-factor settings: email' => [MfaPages::settings(new MfaStatus(self::HOSTILE, true, 3, 2))];
         yield 'the two-factor settings, off: email' => [MfaPages::settings(new MfaStatus(self::HOSTILE, false, 0))];
         yield 'the set-up page: seed and error' => [
             MfaPages::setUp(
                 new TotpEnrollment(self::HOSTILE, 'otpauth://totp/' . rawurlencode(self::HOSTILE)),
-                self::HOSTILE,
+                self::message(),
             ),
         ];
         yield 'the recovery codes' => [MfaPages::recoveryCodes([self::HOSTILE, 'abcd-efgh-jkmn'])];
@@ -266,7 +290,7 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
                 )],
                 10,
             ),
-            self::HOSTILE,
+            self::message(),
             StatusCodeInterface::STATUS_BAD_REQUEST,
         )];
         yield 'the page that makes a passkey: address, names and options' => [PasskeyPages::create(
@@ -284,7 +308,7 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
                 [],
                 300,
             ),
-            self::HOSTILE,
+            self::message(),
         )];
         yield 'the recovery codes of a first passkey' => [PasskeyPages::recoveryCodes([self::HOSTILE, 'abcd-efgh'])];
         yield 'the sign-out confirmation: client name and carried fields' => [
@@ -297,9 +321,9 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
         ];
         yield 'an error page: message, advice and reference' => [
             new ErrorPage(
-                self::HOSTILE,
-                self::HOSTILE,
-                self::HOSTILE,
+                self::message(),
+                self::message(),
+                self::message(),
                 self::HOSTILE,
             )->toHtmlPage(StatusCodeInterface::STATUS_BAD_REQUEST),
         ];

@@ -14,17 +14,17 @@
 ?>
 <?php $this->placeholder('subtitle')->captureStart() ?>
 <?php if ($requiresVerification): ?>
-      <p class="subtitle">We will send you a link to confirm your address before you sign in.</p>
+      <p class="subtitle"><?= $this->escapeHtml($this->t('account.sign_up.subtitle_verify')) ?></p>
 <?php else: ?>
-      <p class="subtitle">Then continue to the application that sent you here.</p>
+      <p class="subtitle"><?= $this->escapeHtml($this->t('account.sign_up.subtitle')) ?></p>
 <?php endif ?>
 <?php $this->placeholder('subtitle')->captureEnd() ?>
     <form method="post" action="/auth/signup" autocomplete="on" novalidate>
 <?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => $loginState]) ?>
-<?= $this->partial('partial::field', ['name' => 'email', 'label' => 'Email', 'type' => 'email', 'autocomplete' => 'email', 'value' => $email, 'autofocus' => true]) ?>
-<?= $this->partial('partial::field', ['name' => 'password', 'label' => 'Password', 'type' => 'password', 'autocomplete' => 'new-password', 'value' => '', 'autofocus' => false]) ?>
-      <p class="hint">At least 8 characters.</p>
+<?= $this->partial('partial::field', ['name' => 'email', 'label' => $this->t('login.email'), 'type' => 'email', 'autocomplete' => 'email', 'value' => $email, 'autofocus' => true]) ?>
+<?= $this->partial('partial::field', ['name' => 'password', 'label' => $this->t('login.password'), 'type' => 'password', 'autocomplete' => 'new-password', 'value' => '', 'autofocus' => false]) ?>
+      <p class="hint"><?= $this->escapeHtml($this->t('account.password_hint', ['min' => $passwordMinLength])) ?></p>
 
-      <button type="submit">Create account</button>
+      <button type="submit"><?= $this->escapeHtml($this->t('account.sign_up.submit')) ?></button>
     </form>
-    <p class="hint">Already have an account? <a href="<?= $this->escapeHtmlAttr($loginHref) ?>">Sign in</a></p>
+    <p class="hint"><?= $this->escapeHtml($this->t('account.sign_up.have_account')) ?> <a href="<?= $this->escapeHtmlAttr($loginHref) ?>"><?= $this->escapeHtml($this->t('account.sign_in')) ?></a></p>

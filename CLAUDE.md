@@ -1312,13 +1312,15 @@ someone else's or names something deleted gives the same "expired" page.
   One stylesheet (`public/auth/static/auth.css`), light and dark through custom properties; the
   theme toggle is a POST setting a cookie.
 - **Words come from the catalogue** (`translations/*.arb`, docs/design/translated-sign-in-pages.md):
-  `$this->t('login.submit')` in a template, `Message::of('key', $values)` in a page class (an
-  `HtmlPage`'s title, heading, error, or a variable), worded by `PageRenderer` in the page's language
+  `$this->t('login.submit')` in a template, `$this->emphasised('key', $values, 'email')` for a sentence
+  with one value in bold, `Message::of('key', $values)` in a page class (an `HtmlPage`'s title, heading,
+  error, or a variable: they take a `Message`, never text), worded by `PageRenderer` in the page's language
   (`LanguageChoice`: `Accept-Language` among `CLAVIA_LANGUAGES`, else `CLAVIA_DEFAULT_LANGUAGE`), which
   `<html lang>` and `Content-Language` state. Messages are ICU MessageFormat, read through the
   `Messages` port (`IcuMessages`); a value is an argument, never part of a pattern, and a message holds
-  no markup. `CatalogueTest` keeps every translation complete and every key used. Pages not yet worded
-  through it pass text (#182 converts them).
+  no markup. `CatalogueTest` keeps every translation complete and every key used. The standard OpenID
+  Connect scopes are worded by the page (`ScopeWording`); an API's permissions keep their operator's
+  words. `AuthPagesEscapingTest` renders every page in every language.
 - **Every printed value is escaped** with `escapeHtml()` or `escapeHtmlAttr()`: laminas-view does
   not escape on its own. `AuthPagesEscapingTest` renders every page with hostile values; a new
   page or variable gets a case there.

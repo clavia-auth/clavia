@@ -123,7 +123,7 @@ final readonly class LoginHandler implements RequestHandlerInterface
         ServerRequestInterface $request,
         ?string $loginState,
         string $email,
-        Message|string $error,
+        Message $error,
         int $status,
     ): ResponseInterface {
         return $this->loginForm->render($request, $loginState, $email, $error, $status);

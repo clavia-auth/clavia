@@ -101,7 +101,7 @@ final readonly class PasswordlessCodeHandler implements RequestHandlerInterface
                 $request,
                 PasswordlessPages::code(
                     $outcome->prompt,
-                    PasswordlessPages::INVALID_CODE,
+                    Message::of(PasswordlessPages::INVALID_CODE),
                     StatusCodeInterface::STATUS_UNAUTHORIZED,
                 ),
             );

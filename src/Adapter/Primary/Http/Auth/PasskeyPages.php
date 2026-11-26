@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
+use Clavia\Adapter\Primary\Http\Shared\Message;
 use Clavia\Application\Authentication\Mfa\EnrolmentOnTheWay;
 use Clavia\Application\Authentication\Passkey\AccountPasskeys;
 use Clavia\Application\Authentication\Passkey\AssertionOptions;
@@ -36,16 +37,15 @@ final class PasskeyPages
 
     public const string SCRIPT = '/auth/static/passkeys.js';
 
-    public const string START_AGAIN = 'That did not work. Try adding the passkey again.';
+    public const string START_AGAIN = 'passkeys.error.start_again';
 
-    public const string ALREADY_REGISTERED = 'That passkey is already registered.';
+    public const string ALREADY_REGISTERED = 'passkeys.error.already_registered';
 
-    public const string INVALID_NAME = 'A passkey needs a name of one to 64 characters.';
+    public const string INVALID_NAME = 'passkeys.error.invalid_name';
 
-    public const string NOT_FOUND = 'That passkey is not on this account any more.';
+    public const string NOT_FOUND = 'passkeys.error.not_found';
 
-    public const string LAST_WAY_IN = 'This passkey is the only way into your account. '
-        . 'Choose a password first, then remove it.';
+    public const string LAST_WAY_IN = 'passkeys.error.last_way_in';
 
     private function __construct()
     {
@@ -54,13 +54,13 @@ final class PasskeyPages
     /** The account's passkeys, and the way to add, rename or remove one. */
     public static function list(
         AccountPasskeys $passkeys,
-        ?string $error = null,
+        ?Message $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): HtmlPage {
         return new HtmlPage(
             template: 'auth::passkeys',
-            title: 'Passkeys',
-            heading: 'Passkeys',
+            title: Message::of('passkeys.title'),
+            heading: Message::of('passkeys.title'),
             returnTo: self::PATH,
             variables: [
                 'email' => $passkeys->email,
@@ -76,14 +76,14 @@ final class PasskeyPages
     /** The page where the browser makes the passkey, from the options of an open ceremony. */
     public static function create(
         RegistrationOptions $options,
-        ?string $error = null,
+        ?Message $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
         ?EnrolmentOnTheWay $onTheWay = null,
     ): HtmlPage {
         return new HtmlPage(
             template: 'auth::passkey-new',
-            title: 'Add a passkey',
-            heading: 'Add a passkey',
+            title: Message::of('passkeys.add.title'),
+            heading: Message::of('passkeys.add.title'),
             variables: [
                 'email' => $options->userName,
                 'options' => json_encode(self::creationOptions($options), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
@@ -108,8 +108,8 @@ final class PasskeyPages
     {
         return new HtmlPage(
             template: 'auth::passkey-codes',
-            title: 'Recovery codes',
-            heading: 'Your passkey is ready',
+            title: Message::of('mfa.codes.title'),
+            heading: Message::of('passkeys.codes.heading'),
             variables: ['codes' => $codes, 'loginState' => $onTheWay->loginState ?? ''],
             wide: true,
             formOrigins: $onTheWay === null ? [] : $onTheWay->formOrigins,
@@ -184,7 +184,7 @@ final class PasskeyPages
     }
 
     /**
-     * @return array{id: string, name: string, synced: bool, createdAt: string, lastUsedAt: string|null}
+     * @return array{id: string, name: string, synced: bool, createdAt: int, lastUsedAt: int|null}
      */
     private static function row(DescribedPasskey $passkey): array
     {
@@ -192,8 +192,9 @@ final class PasskeyPages
             'id' => $passkey->id,
             'name' => $passkey->name,
             'synced' => $passkey->synced,
-            'createdAt' => $passkey->createdAt->format('j M Y'),
-            'lastUsedAt' => $passkey->lastUsedAt?->format('j M Y'),
+            // Timestamps: the page's language words them ({added, date, medium}).
+            'createdAt' => $passkey->createdAt->getTimestamp(),
+            'lastUsedAt' => $passkey->lastUsedAt?->getTimestamp(),
         ];
     }
 }

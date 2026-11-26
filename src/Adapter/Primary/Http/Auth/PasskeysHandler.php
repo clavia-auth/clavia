@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Primary\Http\Auth;
 
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
+use Clavia\Adapter\Primary\Http\Shared\Message;
 use Clavia\Adapter\Primary\Http\Shared\RequestCookies;
 use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\Authentication\Mfa\DescribeEnrolmentOnTheWay;
@@ -121,7 +122,7 @@ final readonly class PasskeysHandler implements RequestHandlerInterface
     private function list(
         ServerRequestInterface $request,
         Session $session,
-        ?string $error = null,
+        ?Message $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): ResponseInterface {
         $passkeys = ($this->describe)($session->userId);
@@ -204,9 +205,9 @@ final readonly class PasskeysHandler implements RequestHandlerInterface
         return PasskeyPages::list(
             $passkeys,
             match ($outcome) {
-                PasskeyNotAdded::AlreadyRegistered => PasskeyPages::ALREADY_REGISTERED,
-                PasskeyNotAdded::InvalidName => PasskeyPages::INVALID_NAME,
-                PasskeyNotAdded::CeremonyGone, PasskeyNotAdded::Rejected => PasskeyPages::START_AGAIN,
+                PasskeyNotAdded::AlreadyRegistered => Message::of(PasskeyPages::ALREADY_REGISTERED),
+                PasskeyNotAdded::InvalidName => Message::of(PasskeyPages::INVALID_NAME),
+                PasskeyNotAdded::CeremonyGone, PasskeyNotAdded::Rejected => Message::of(PasskeyPages::START_AGAIN),
             },
             StatusCodeInterface::STATUS_BAD_REQUEST,
         );
@@ -222,19 +223,19 @@ final readonly class PasskeysHandler implements RequestHandlerInterface
             PasskeyChange::NotFound => $this->list(
                 $request,
                 $session,
-                PasskeyPages::NOT_FOUND,
+                Message::of(PasskeyPages::NOT_FOUND),
                 StatusCodeInterface::STATUS_NOT_FOUND,
             ),
             PasskeyChange::InvalidName => $this->list(
                 $request,
                 $session,
-                PasskeyPages::INVALID_NAME,
+                Message::of(PasskeyPages::INVALID_NAME),
                 StatusCodeInterface::STATUS_BAD_REQUEST,
             ),
             PasskeyChange::LastWayIn => $this->list(
                 $request,
                 $session,
-                PasskeyPages::LAST_WAY_IN,
+                Message::of(PasskeyPages::LAST_WAY_IN),
                 StatusCodeInterface::STATUS_CONFLICT,
             ),
             default => $this->signInFirst(),
@@ -251,8 +252,8 @@ final readonly class PasskeysHandler implements RequestHandlerInterface
         );
     }
 
-    private static function limit(PasskeyLimitReached $reached): string
+    private static function limit(PasskeyLimitReached $reached): Message
     {
-        return sprintf('This account already has %d passkeys, as many as it may. Remove one first.', $reached->limit);
+        return Message::of('passkeys.error.limit', ['limit' => $reached->limit]);
     }
 }

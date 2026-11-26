@@ -2,29 +2,36 @@
 ?>
 <?php $this->placeholder('subtitle')->captureStart() ?>
 <?php if ($stepUp): ?>
-      <p class="subtitle"><?= $application === null ? 'This sign-in' : $this->escapeHtml($application) ?> needs one more step to confirm it is you.</p>
+      <p class="subtitle"><?= $this->escapeHtml($application === null
+          ? $this->t('mfa.challenge.step_up')
+          : $this->t('mfa.challenge.step_up_application', ['application' => $application])) ?></p>
 <?php endif ?>
 <?php if ($passkeyOptions !== null): ?>
-      <p class="subtitle">Use your passkey<?= $authenticatorApp ? ', or enter the six-digit code from your app' : '' ?>.<?= $recoveryCode ? ' A recovery code works too.' : '' ?></p>
+      <p class="subtitle"><?= $this->escapeHtml($this->t(match (true) {
+          $authenticatorApp && $recoveryCode => 'mfa.challenge.passkey_app_recovery',
+          $authenticatorApp => 'mfa.challenge.passkey_app',
+          $recoveryCode => 'mfa.challenge.passkey_recovery',
+          default => 'mfa.challenge.passkey',
+      })) ?></p>
 <?php elseif ($authenticatorApp): ?>
-      <p class="subtitle">Enter the six-digit code from your app<?= $recoveryCode ? ', or one of your recovery codes' : '' ?>.</p>
+      <p class="subtitle"><?= $this->escapeHtml($this->t($recoveryCode ? 'mfa.challenge.app_recovery' : 'mfa.challenge.app')) ?></p>
 <?php else: ?>
-      <p class="subtitle">Enter one of your recovery codes.</p>
+      <p class="subtitle"><?= $this->escapeHtml($this->t('mfa.challenge.recovery')) ?></p>
 <?php endif ?>
 <?php $this->placeholder('subtitle')->captureEnd() ?>
 <?php if ($passkeyOptions !== null): ?>
     <form method="post" action="/auth/mfa/passkey" data-webauthn-get="<?= $this->escapeHtmlAttr($passkeyOptions) ?>">
 <?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => '']) ?>
       <input type="hidden" name="credential" value="">
-      <p class="hint" data-webauthn-failed hidden>Your browser did not use the passkey.<?= $codeField ? ' Try again, or use a code.' : ' Try again.' ?></p>
-      <button type="submit" data-webauthn-start hidden>Use a passkey</button>
+      <p class="hint" data-webauthn-failed hidden><?= $this->escapeHtml($this->t($codeField ? 'mfa.challenge.passkey_failed_code' : 'mfa.challenge.passkey_failed')) ?></p>
+      <button type="submit" data-webauthn-start hidden><?= $this->escapeHtml($this->t('mfa.challenge.use_passkey')) ?></button>
     </form>
 <?php endif ?>
 <?php if ($codeField): ?>
     <form method="post" action="/auth/mfa" autocomplete="off" novalidate>
 <?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => '']) ?>
-<?= $this->partial('partial::code-field', ['label' => $authenticatorApp ? 'Code' : 'Recovery code']) ?>
+<?= $this->partial('partial::code-field', ['label' => $this->t($authenticatorApp ? 'mfa.code' : 'mfa.recovery_code')]) ?>
 
-      <button type="submit"<?php if ($passkeyOptions !== null): ?> class="secondary"<?php endif ?>>Continue</button>
+      <button type="submit"<?php if ($passkeyOptions !== null): ?> class="secondary"<?php endif ?>><?= $this->escapeHtml($this->t('mfa.continue')) ?></button>
     </form>
 <?php endif ?>

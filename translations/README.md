@@ -23,7 +23,8 @@ Messages are [ICU MessageFormat](https://unicode-org.github.io/icu/userguide/for
   sentence needs it.
 - A plural gives the forms the language has (`one`, `other`; some languages have `few` or `many`
   too). French counts 0 as singular, which ICU knows.
-- A message is text: no HTML, no entities. Emphasis is the page's business.
+- A message is text: no HTML, no entities. Emphasis is the page's business: when a page shows a
+  value in bold (`{email}`), it is still an argument, and the whole sentence stays one message.
 - An apostrophe followed by `{`, `}` or `#` starts quoted text in ICU. Write `l'{provider}` as
   `l''{provider}`, or rephrase.
 

@@ -92,8 +92,8 @@ final readonly class SignUp
         }
         try {
             $password = PasswordPolicy::accept($request->password);
-        } catch (InvalidValue $refusal) {
-            return new SignUpRefused(SignUpFailure::PasswordRejected, $email, $refusal->getMessage());
+        } catch (InvalidValue) {
+            return new SignUpRefused(SignUpFailure::PasswordRejected, $email, PasswordRefusal::Policy);
         }
 
         $subject = 'sign-up-address:' . $request->clientAddress;
@@ -101,10 +101,9 @@ final readonly class SignUp
             return new SignUpRefused(SignUpFailure::TooManySignUps, $email);
         }
         $this->counter->increment($subject, self::WINDOW_SECONDS);
-        try {
-            $password = $this->passwords->accept($password);
-        } catch (InvalidValue $refusal) {
-            return new SignUpRefused(SignUpFailure::PasswordRejected, $email, $refusal->getMessage());
+        $password = $this->passwords->screen($password);
+        if ($password instanceof PasswordRefusal) {
+            return new SignUpRefused(SignUpFailure::PasswordRejected, $email, $password);
         }
 
         // Hashed whether or not an account is made, so the time taken says nothing either.

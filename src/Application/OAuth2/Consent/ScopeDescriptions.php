@@ -11,24 +11,18 @@ declare(strict_types=1);
 
 namespace Clavia\Application\OAuth2\Consent;
 
-use Clavia\Domain\Oidc\OidcScope;
 use Clavia\Domain\ResourceServer\Permission;
 use Clavia\Domain\ResourceServer\ResourceServer;
 use Clavia\Domain\Shared\ScopeSet;
 
 /**
- * What a requested scope means, in the words a person is shown: the OIDC scopes as the
- * server describes them, an API's permissions as the API does. The consent screen and the
- * device page put the same question.
+ * The scopes a request asks for, as the consent screen and the device page put the question: the
+ * OpenID Connect scopes by their value alone, which the page words in the person's language
+ * (docs/design/translated-sign-in-pages.md), and an API's permissions as the API describes them, in the
+ * words its operator wrote.
  */
 final class ScopeDescriptions
 {
-    private const array OIDC_SCOPES = [
-        OidcScope::OPENID => 'Sign you in and know who you are',
-        OidcScope::PROFILE => 'See your profile: your name, picture and locale',
-        OidcScope::EMAIL => 'See your email address',
-    ];
-
     private function __construct()
     {
     }
@@ -40,7 +34,8 @@ final class ScopeDescriptions
     {
         $lines = [];
         foreach ($requested->intersect($supportedScopes) as $scope) {
-            $lines[] = new ScopeLine($scope->value, self::OIDC_SCOPES[$scope->value] ?? $scope->value);
+            // The value stands for its description: wording it is the page's.
+            $lines[] = new ScopeLine($scope->value, $scope->value);
         }
 
         return $lines;

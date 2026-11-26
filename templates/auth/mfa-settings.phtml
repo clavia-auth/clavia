@@ -17,62 +17,54 @@
 <?php $this->placeholder('subtitle')->captureStart() ?>
       <p class="subtitle"><?= $this->escapeHtml($email) ?></p>
 <?php if ($onTheWay): ?>
-      <p class="subtitle"><?= $application === null ? 'This sign-in' : $this->escapeHtml($application) ?> requires two-factor authentication. Set it up to continue.</p>
+      <p class="subtitle"><?= $this->escapeHtml($application === null
+          ? $this->t('mfa.settings.required')
+          : $this->t('mfa.settings.required_application', ['application' => $application])) ?></p>
 <?php endif ?>
 <?php $this->placeholder('subtitle')->captureEnd() ?>
 <?php if ($enabled): ?>
-    <p class="status status-on">On</p>
+    <p class="status status-on"><?= $this->escapeHtml($this->t('mfa.settings.on')) ?></p>
     <p class="hint">
-      Signing in asks for a code from your authenticator app.
-<?php if ($recoveryCodesLeft > 0): ?>
-      You have <?= $this->escapeHtml((string) $recoveryCodesLeft) ?> unused recovery <?= $recoveryCodesLeft === 1 ? 'code' : 'codes' ?>.
-<?php else: ?>
-      You have no recovery codes left — turn two-factor authentication off and on again to get new ones.
-<?php endif ?>
+      <?= $this->escapeHtml($this->t('mfa.settings.on_hint')) ?>
+      <?= $this->escapeHtml($this->t('mfa.settings.recovery_left', ['count' => $recoveryCodesLeft])) ?>
     </p>
     <form method="post" action="/auth/mfa/disable">
 <?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => '']) ?>
-      <button type="submit" class="danger">Turn off</button>
+      <button type="submit" class="danger"><?= $this->escapeHtml($this->t('mfa.settings.turn_off')) ?></button>
     </form>
 <?php else: ?>
 <?php if (($passkeys ?? 0) > 0): ?>
-    <p class="status status-on">On, with a passkey</p>
-    <p class="hint">
-      You can also use a code from an authenticator app such as Google Authenticator,
-      1Password or Aegis.
-    </p>
+    <p class="status status-on"><?= $this->escapeHtml($this->t('mfa.settings.on_with_passkey')) ?></p>
+    <p class="hint"><?= $this->escapeHtml($this->t('mfa.settings.also_app')) ?></p>
 <?php else: ?>
-    <p class="status status-off">Off</p>
-    <p class="hint">
-      Add a second step to your sign-in: a code from an authenticator app such as
-      Google Authenticator, 1Password or Aegis, or a passkey.
-    </p>
+    <p class="status status-off"><?= $this->escapeHtml($this->t('mfa.settings.off')) ?></p>
+    <p class="hint"><?= $this->escapeHtml($this->t('mfa.settings.off_hint')) ?></p>
 <?php endif ?>
     <form method="post" action="/auth/mfa/enroll">
 <?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => $loginState]) ?>
-      <button type="submit"><?= $onTheWay ? 'Set up an authenticator app' : 'Set up' ?></button>
+      <button type="submit"><?= $this->escapeHtml($this->t($onTheWay ? 'mfa.settings.set_up_app' : 'mfa.settings.set_up')) ?></button>
     </form>
 <?php endif ?>
 <?php if ($passkeys !== null): ?>
-    <h2 class="section">Passkeys</h2>
+    <h2 class="section"><?= $this->escapeHtml($this->t('mfa.settings.passkeys')) ?></h2>
     <p class="hint">
 <?php if ($passkeys === 0): ?>
-      Sign in with your fingerprint, your face or a security key instead of a code.
+      <?= $this->escapeHtml($this->t('mfa.settings.passkeys_none')) ?>
 <?php else: ?>
-      You have <?= $this->escapeHtml((string) $passkeys) ?> <?= $passkeys === 1 ? 'passkey' : 'passkeys' ?>. Signing in asks for one.
+      <?= $this->escapeHtml($this->t('mfa.settings.passkey_count', ['count' => $passkeys])) ?>
 <?php if (! $enabled): ?>
-      You have <?= $this->escapeHtml((string) $recoveryCodesLeft) ?> unused recovery <?= $recoveryCodesLeft === 1 ? 'code' : 'codes' ?>.
+      <?= $this->escapeHtml($this->t('mfa.settings.recovery_count', ['count' => $recoveryCodesLeft])) ?>
 <?php endif ?>
 <?php endif ?>
     </p>
 <?php if ($onTheWay): ?>
     <form method="post" action="/auth/passkeys/new">
 <?= $this->partial('partial::csrf', ['csrfToken' => $csrfToken, 'loginState' => $loginState]) ?>
-      <button type="submit" class="secondary">Add a passkey instead</button>
+      <button type="submit" class="secondary"><?= $this->escapeHtml($this->t('mfa.settings.add_passkey_instead')) ?></button>
     </form>
 <?php else: ?>
     <form method="get" action="/auth/passkeys">
-      <button type="submit" class="secondary">Manage passkeys</button>
+      <button type="submit" class="secondary"><?= $this->escapeHtml($this->t('mfa.settings.manage_passkeys')) ?></button>
     </form>
 <?php endif ?>
 <?php endif ?>

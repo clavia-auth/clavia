@@ -34,6 +34,8 @@ final readonly class PasswordScreen
     }
 
     /**
+     * For a caller that reports refusals in its own words (the Management API's `422`).
+     *
      * @return non-empty-string
      *
      * @throws InvalidValue When the policy refuses the password, or it is known to have leaked.
@@ -41,17 +43,37 @@ final readonly class PasswordScreen
     public function accept(#[\SensitiveParameter] string $password): string
     {
         $accepted = PasswordPolicy::accept($password);
-
-        try {
-            $breached = $this->breaches->isBreached($accepted);
-        } catch (BreachCheckUnavailable) {
-            // Fail open (see above).
-            $breached = false;
-        }
-        if ($breached) {
+        if ($this->breached($accepted)) {
             throw new InvalidValue(self::BREACHED);
         }
 
         return $accepted;
+    }
+
+    /**
+     * For a sign-in page, which words a refusal in the person's language: the password accepted, or why
+     * not.
+     *
+     * @return non-empty-string|PasswordRefusal
+     */
+    public function screen(#[\SensitiveParameter] string $password): string|PasswordRefusal
+    {
+        try {
+            $accepted = PasswordPolicy::accept($password);
+        } catch (InvalidValue) {
+            return PasswordRefusal::Policy;
+        }
+
+        return $this->breached($accepted) ? PasswordRefusal::Breached : $accepted;
+    }
+
+    private function breached(#[\SensitiveParameter] string $password): bool
+    {
+        try {
+            return $this->breaches->isBreached($password);
+        } catch (BreachCheckUnavailable) {
+            // Fail open (see above).
+            return false;
+        }
     }
 }

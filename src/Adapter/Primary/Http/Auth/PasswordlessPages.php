@@ -25,11 +25,11 @@ final class PasswordlessPages
 {
     public const string CODE_PATH = '/auth/passwordless/code';
 
-    public const string INVALID_CODE = 'That code is not valid.';
+    public const string INVALID_CODE = 'passwordless.error.invalid_code';
 
-    public const string INVALID_LINK = 'This sign-in link is not valid or has expired.';
+    public const string INVALID_LINK = 'passwordless.error.invalid_link';
 
-    public const string ACCOUNT_DISABLED = 'This account is disabled.';
+    public const string ACCOUNT_DISABLED = 'passwordless.error.account_disabled';
 
     private function __construct()
     {
@@ -37,13 +37,13 @@ final class PasswordlessPages
 
     public static function code(
         PasswordlessPrompt $prompt,
-        Message|string|null $error = null,
+        ?Message $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): HtmlPage {
         return new HtmlPage(
             template: 'auth::passwordless-code',
-            title: 'Check your email',
-            heading: 'Check your email',
+            title: Message::of('account.check_inbox.title'),
+            heading: Message::of('account.check_inbox.title'),
             returnTo: self::CODE_PATH,
             variables: ['email' => $prompt->email],
             error: $error,
@@ -59,8 +59,8 @@ final class PasswordlessPages
     {
         return new HtmlPage(
             template: 'auth::passwordless-link',
-            title: 'Check your email',
-            heading: 'Check your email',
+            title: Message::of('account.check_inbox.title'),
+            heading: Message::of('account.check_inbox.title'),
             returnTo: '/auth/login',
             variables: ['stage' => 'sent', 'email' => $email, 'token' => ''],
         );
@@ -74,13 +74,13 @@ final class PasswordlessPages
     public static function linkConfirm(
         PasswordlessPrompt $prompt,
         #[\SensitiveParameter] string $token,
-        Message|string|null $error = null,
+        ?Message $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): HtmlPage {
         return new HtmlPage(
             template: 'auth::passwordless-link',
-            title: 'Sign in',
-            heading: 'Sign in?',
+            title: Message::of('login.title'),
+            heading: Message::of('passwordless.confirm.heading'),
             returnTo: self::linkAddress($token),
             variables: ['stage' => 'confirm', 'email' => $prompt->email, 'token' => $token],
             error: $error,
@@ -96,8 +96,10 @@ final class PasswordlessPages
     {
         return new HtmlPage(
             template: 'auth::passwordless-link',
-            title: 'Sign-in failed',
-            heading: $reason === PasswordlessFailure::InvalidLink ? 'Link not valid' : 'Could not sign you in',
+            title: Message::of('passwordless.failed.title'),
+            heading: $reason === PasswordlessFailure::InvalidLink
+                ? Message::of('account.invalid_link.title')
+                : Message::of('passwordless.failed.heading'),
             returnTo: '/auth/login',
             variables: ['stage' => 'failed', 'email' => '', 'token' => ''],
             error: self::message($reason),
@@ -106,15 +108,15 @@ final class PasswordlessPages
     }
 
     /** What the person is told, for every way a passwordless sign-in can stop. */
-    public static function message(PasswordlessFailure $reason): Message|string
+    public static function message(PasswordlessFailure $reason): Message
     {
         return match ($reason) {
             PasswordlessFailure::InvalidRequest => Message::of(LoginPages::INVALID_EMAIL),
             PasswordlessFailure::NotAvailable => Message::of(LoginPages::EMAIL_UNAVAILABLE),
             PasswordlessFailure::TooManyEmails => Message::of(LoginPages::TOO_MANY_EMAILS),
             PasswordlessFailure::MailUnavailable => Message::of(LoginPages::MAIL_UNAVAILABLE),
-            PasswordlessFailure::Expired, PasswordlessFailure::InvalidLink => self::INVALID_LINK,
-            PasswordlessFailure::AccountDisabled => self::ACCOUNT_DISABLED,
+            PasswordlessFailure::Expired, PasswordlessFailure::InvalidLink => Message::of(self::INVALID_LINK),
+            PasswordlessFailure::AccountDisabled => Message::of(self::ACCOUNT_DISABLED),
         };
     }
 

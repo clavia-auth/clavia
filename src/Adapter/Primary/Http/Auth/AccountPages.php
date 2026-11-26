@@ -14,7 +14,9 @@ namespace Clavia\Adapter\Primary\Http\Auth;
 use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
 use Clavia\Adapter\Primary\Http\Shared\Message;
 use Clavia\Application\Authentication\Account\AccountMail;
+use Clavia\Application\Authentication\Account\PasswordRefusal;
 use Clavia\Application\Authentication\Account\SignUpFailure;
+use Clavia\Domain\Identity\PasswordPolicy;
 use Fig\Http\Message\StatusCodeInterface;
 
 /**
@@ -31,16 +33,15 @@ final class AccountPages
 
     public const string FORGOT_PATH = '/auth/password/forgot';
 
-    public const string INVALID_LINK =
-        'This link is not valid any more. It may have been used already, or have expired.';
+    public const string INVALID_LINK = 'account.error.invalid_link';
 
-    public const string SIGN_UP_UNAVAILABLE = 'Creating an account is not available for this application.';
+    public const string SIGN_UP_UNAVAILABLE = 'account.error.sign_up_unavailable';
 
-    public const string TOO_MANY_SIGN_UPS = 'Too many accounts were created from here. Try again in an hour.';
+    public const string TOO_MANY_SIGN_UPS = 'account.error.too_many_sign_ups';
 
-    public const string ADDRESS_TAKEN = 'This address already has an account. Sign in, or reset your password.';
+    public const string ADDRESS_TAKEN = 'account.error.address_taken';
 
-    public const string RESET_UNAVAILABLE = 'Resetting a password is not available for this application.';
+    public const string RESET_UNAVAILABLE = 'account.error.reset_unavailable';
 
     private function __construct()
     {
@@ -54,18 +55,19 @@ final class AccountPages
         array $formOrigins,
         bool $requiresVerification,
         string $email = '',
-        Message|string|null $error = null,
+        ?Message $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): HtmlPage {
         return new HtmlPage(
             template: 'auth::signup',
-            title: 'Create an account',
-            heading: 'Create an account',
+            title: Message::of('account.sign_up.title'),
+            heading: Message::of('account.sign_up.title'),
             returnTo: self::withState(self::SIGN_UP_PATH, $loginState),
             variables: [
                 'loginState' => $loginState ?? '',
                 'email' => $email,
                 'requiresVerification' => $requiresVerification,
+                'passwordMinLength' => PasswordPolicy::MIN_LENGTH,
                 'loginHref' => self::withState('/auth/login', $loginState),
             ],
             error: $error,
@@ -75,14 +77,26 @@ final class AccountPages
     }
 
     /** The sign-up form refused for a reason the person can act on. */
-    public static function signUpMessage(SignUpFailure $reason, string $detail): Message|string
+    public static function signUpMessage(SignUpFailure $reason, ?PasswordRefusal $password): Message
     {
         return match ($reason) {
             SignUpFailure::InvalidEmail => Message::of(LoginPages::INVALID_EMAIL),
-            SignUpFailure::PasswordRejected => $detail,
-            SignUpFailure::NotAvailable => self::SIGN_UP_UNAVAILABLE,
-            SignUpFailure::TooManySignUps => self::TOO_MANY_SIGN_UPS,
-            SignUpFailure::AddressTaken => self::ADDRESS_TAKEN,
+            SignUpFailure::PasswordRejected => self::passwordMessage($password ?? PasswordRefusal::Policy),
+            SignUpFailure::NotAvailable => Message::of(self::SIGN_UP_UNAVAILABLE),
+            SignUpFailure::TooManySignUps => Message::of(self::TOO_MANY_SIGN_UPS),
+            SignUpFailure::AddressTaken => Message::of(self::ADDRESS_TAKEN),
+        };
+    }
+
+    /** A refused password, worded with the policy's own bounds: the page never repeats the password. */
+    public static function passwordMessage(PasswordRefusal $reason): Message
+    {
+        return match ($reason) {
+            PasswordRefusal::Policy => Message::of('account.error.password_policy', [
+                'min' => PasswordPolicy::MIN_LENGTH,
+                'max' => PasswordPolicy::MAX_BYTES,
+            ]),
+            PasswordRefusal::Breached => Message::of('account.error.password_breached'),
         };
     }
 
@@ -107,8 +121,8 @@ final class AccountPages
     {
         return new HtmlPage(
             template: 'auth::check-inbox',
-            title: 'Check your email',
-            heading: 'Check your email',
+            title: Message::of('account.check_inbox.title'),
+            heading: Message::of('account.check_inbox.title'),
             returnTo: self::withState('/auth/login', $loginState),
             variables: [
                 'email' => $email,
@@ -122,13 +136,13 @@ final class AccountPages
     public static function confirmEmail(
         string $email,
         #[\SensitiveParameter] string $token,
-        Message|string|null $error = null,
+        ?Message $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): HtmlPage {
         return new HtmlPage(
             template: 'auth::verify-email',
-            title: 'Confirm your email address',
-            heading: 'Confirm your email address',
+            title: Message::of('account.verify.title'),
+            heading: Message::of('account.verify.title'),
             returnTo: self::linkAddress(AccountMail::VERIFY_PATH, $token),
             variables: ['stage' => 'confirm', 'email' => $email, 'token' => $token, 'loginHref' => '/auth/login'],
             error: $error,
@@ -140,8 +154,8 @@ final class AccountPages
     {
         return new HtmlPage(
             template: 'auth::verify-email',
-            title: 'Email address confirmed',
-            heading: 'Email address confirmed',
+            title: Message::of('account.verified.title'),
+            heading: Message::of('account.verified.title'),
             returnTo: self::withState('/auth/login', $loginState),
             variables: [
                 'stage' => 'verified',
@@ -157,11 +171,11 @@ final class AccountPages
     {
         return new HtmlPage(
             template: 'auth::verify-email',
-            title: 'Link not valid',
-            heading: 'Link not valid',
+            title: Message::of('account.invalid_link.title'),
+            heading: Message::of('account.invalid_link.title'),
             returnTo: '/auth/login',
             variables: ['stage' => 'failed', 'email' => '', 'token' => '', 'loginHref' => '/auth/login'],
-            error: self::INVALID_LINK,
+            error: Message::of(self::INVALID_LINK),
             status: StatusCodeInterface::STATUS_BAD_REQUEST,
         );
     }
@@ -169,13 +183,13 @@ final class AccountPages
     public static function forgot(
         ?string $loginState,
         string $email = '',
-        Message|string|null $error = null,
+        ?Message $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): HtmlPage {
         return new HtmlPage(
             template: 'auth::password-forgot',
-            title: 'Reset your password',
-            heading: 'Reset your password',
+            title: Message::of('account.forgot.title'),
+            heading: Message::of('account.forgot.title'),
             returnTo: self::withState(self::FORGOT_PATH, $loginState),
             variables: [
                 'loginState' => $loginState ?? '',
@@ -191,15 +205,21 @@ final class AccountPages
     public static function resetForm(
         string $email,
         #[\SensitiveParameter] string $token,
-        Message|string|null $error = null,
+        ?Message $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): HtmlPage {
         return new HtmlPage(
             template: 'auth::password-reset',
-            title: 'Choose a new password',
-            heading: 'Choose a new password',
+            title: Message::of('account.reset.title'),
+            heading: Message::of('account.reset.title'),
             returnTo: self::linkAddress(AccountMail::RESET_PATH, $token),
-            variables: ['stage' => 'form', 'email' => $email, 'token' => $token, 'loginHref' => '/auth/login'],
+            variables: [
+                'stage' => 'form',
+                'email' => $email,
+                'token' => $token,
+                'loginHref' => '/auth/login',
+                'passwordMinLength' => PasswordPolicy::MIN_LENGTH,
+            ],
             error: $error,
             status: $status,
         );
@@ -209,13 +229,14 @@ final class AccountPages
     {
         return new HtmlPage(
             template: 'auth::password-reset',
-            title: 'Password changed',
-            heading: 'Password changed',
+            title: Message::of('account.password_changed.title'),
+            heading: Message::of('account.password_changed.title'),
             returnTo: self::withState('/auth/login', $loginState),
             variables: [
                 'stage' => 'changed',
                 'email' => $email,
                 'token' => '',
+                'passwordMinLength' => PasswordPolicy::MIN_LENGTH,
                 'loginHref' => self::withState('/auth/login', $loginState),
             ],
         );

@@ -1,15 +1,19 @@
 {
   "@@locale": "en",
-
   "layout.secured_by": "Secured by",
-  "@layout.secured_by": {"description": "Footer of every page, followed by the product name, Clavia."},
+  "@layout.secured_by": {
+    "description": "Footer of every page, followed by the product name, Clavia."
+  },
   "layout.theme.label": "Colour scheme",
-  "@layout.theme.label": {"description": "Accessible name of the three buttons that force light or dark colours."},
+  "@layout.theme.label": {
+    "description": "Accessible name of the three buttons that force light or dark colours."
+  },
   "layout.theme.auto": "Auto",
-  "@layout.theme.auto": {"description": "Colour scheme button: follow the device's setting."},
+  "@layout.theme.auto": {
+    "description": "Colour scheme button: follow the device's setting."
+  },
   "layout.theme.light": "Light",
   "layout.theme.dark": "Dark",
-
   "error.not_found.title": "Page not found",
   "error.not_found.message": "There is nothing at this address.",
   "error.not_found.advice": "Check the link, or go back to the application that sent you here.",
@@ -23,41 +27,60 @@
   "error.authorization_refused.message": "The application that sent you here made a request this server cannot accept.",
   "error.authorization_refused.advice": "Close this page and go back to the application; if it keeps happening, tell whoever runs it.",
   "error.detail_label": "Details for the application's developer",
-  "@error.detail_label": {"description": "Label above a technical description that stays in English, for developers."},
+  "@error.detail_label": {
+    "description": "Label above a technical description that stays in English, for developers."
+  },
   "error.reference_label": "Reference",
-  "@error.reference_label": {"description": "Label above a code to quote to support: an error code or a log reference."},
-
+  "@error.reference_label": {
+    "description": "Label above a code to quote to support: an error code or a log reference."
+  },
   "login.title": "Sign in",
-  "@login.title": {"description": "Title and heading of the sign-in page."},
+  "@login.title": {
+    "description": "Title and heading of the sign-in page."
+  },
   "login.subtitle": "Continue to the application that sent you here.",
   "login.email": "Email",
-  "@login.email": {"description": "Label of the email address field."},
+  "@login.email": {
+    "description": "Label of the email address field."
+  },
   "login.password": "Password",
   "login.submit": "Sign in",
-  "@login.submit": {"description": "The button that submits the email and password."},
+  "@login.submit": {
+    "description": "The button that submits the email and password."
+  },
   "login.forgot_password": "Forgot your password?",
   "login.or": "or",
-  "@login.or": {"description": "Between two ways of signing in, on a dividing line."},
+  "@login.or": {
+    "description": "Between two ways of signing in, on a dividing line."
+  },
   "login.email_code": "Email me a code",
-  "@login.email_code": {"description": "Button: send a six-digit sign-in code to the address typed."},
+  "@login.email_code": {
+    "description": "Button: send a six-digit sign-in code to the address typed."
+  },
   "login.email_link": "Email me a sign-in link",
   "login.continue_with": "Continue with {provider}",
   "@login.continue_with": {
     "description": "A link that signs in through another service.",
-    "placeholders": {"provider": {"type": "String", "example": "Google"}}
+    "placeholders": {
+      "provider": {
+        "type": "String",
+        "example": "Google"
+      }
+    }
   },
   "login.new_here": "New here?",
-  "@login.new_here": {"description": "Followed by a link to create an account."},
+  "@login.new_here": {
+    "description": "Followed by a link to create an account."
+  },
   "login.sign_up": "Create an account",
   "login.no_method": "No sign-in method is available for this application. Go back to it and contact its administrator.",
   "login.passkey.submit": "Sign in with a passkey",
   "login.passkey.failed": "Your browser did not use the passkey. Try again, or sign in another way.",
   "login.signed_in.title": "Signed in",
-  "@login.signed_in.title": {"description": "Browser tab title for someone already signed in."},
+  "@login.signed_in.title": {
+    "description": "Browser tab title for someone already signed in."
+  },
   "login.signed_in.heading": "You are signed in",
-  "login.signed_in.as": "as",
-  "@login.signed_in.as": {"description": "Under the heading \"You are signed in\", followed by the person's email address in bold."},
-  "login.signed_in.go_back": "Go back to the application that sent you here — it will pick this sign-in up.",
   "login.sign_out": "Sign out",
   "login.error.invalid_credentials": "Incorrect email or password.",
   "login.error.expired_form": "Your session expired. Please try again.",
@@ -65,5 +88,468 @@
   "login.error.invalid_email": "Enter the email address to sign in with.",
   "login.error.email_unavailable": "Email sign-in is not available for this application.",
   "login.error.too_many_emails": "Too many sign-in emails were sent. Try again in an hour.",
-  "login.error.mail_unavailable": "Email sign-in is not available right now. Try again later."
+  "login.error.mail_unavailable": "Email sign-in is not available right now. Try again later.",
+  "login.signed_in.subtitle": "As {email}. Go back to the application that sent you here — it will pick this sign-in up.",
+  "@login.signed_in.subtitle": {
+    "description": "Under the heading \"You are signed in\"; the address is shown in bold.",
+    "placeholders": {
+      "email": {
+        "type": "String",
+        "example": "ada@example.com"
+      }
+    }
+  },
+  "account.sign_in": "Sign in",
+  "@account.sign_in": {
+    "description": "A link or button that leads to the sign-in page."
+  },
+  "account.back_to_sign_in": "Back to sign in",
+  "account.password_hint": "At least {min, plural, one {# character} other {# characters}}.",
+  "@account.password_hint": {
+    "description": "Under a new password field.",
+    "placeholders": {
+      "min": {
+        "type": "int",
+        "example": 8
+      }
+    }
+  },
+  "account.sign_up.title": "Create an account",
+  "account.sign_up.subtitle": "Then continue to the application that sent you here.",
+  "account.sign_up.subtitle_verify": "We will send you a link to confirm your address before you sign in.",
+  "account.sign_up.submit": "Create account",
+  "@account.sign_up.submit": {
+    "description": "Button that submits the sign-up form."
+  },
+  "account.sign_up.have_account": "Already have an account?",
+  "@account.sign_up.have_account": {
+    "description": "Followed by a link to sign in."
+  },
+  "account.check_inbox.title": "Check your email",
+  "account.check_inbox.sign_up": "We sent a link to {email}. Open it to confirm your address, then sign in.",
+  "@account.check_inbox.sign_up": {
+    "placeholders": {
+      "email": {
+        "type": "String",
+        "example": "ada@example.com"
+      }
+    }
+  },
+  "account.check_inbox.reset": "If {email} has an account here, we sent it a link to choose a new password.",
+  "@account.check_inbox.reset": {
+    "description": "Shown whether or not the address has an account: it must not say which.",
+    "placeholders": {
+      "email": {
+        "type": "String",
+        "example": "ada@example.com"
+      }
+    }
+  },
+  "account.check_inbox.unverified": "Confirm {email} before signing in: we sent it a new link.",
+  "@account.check_inbox.unverified": {
+    "placeholders": {
+      "email": {
+        "type": "String",
+        "example": "ada@example.com"
+      }
+    }
+  },
+  "account.check_inbox.nothing_arrived": "Nothing arrived? Check your spam folder.",
+  "account.verify.title": "Confirm your email address",
+  "account.verify.subtitle": "Confirm that {email} is your address.",
+  "@account.verify.subtitle": {
+    "placeholders": {
+      "email": {
+        "type": "String",
+        "example": "ada@example.com"
+      }
+    }
+  },
+  "account.verify.submit": "Confirm my address",
+  "account.verify.not_you": "If you did not create an account, close this page.",
+  "account.verified.title": "Email address confirmed",
+  "account.verified.subtitle": "{email} is confirmed. You can sign in now.",
+  "@account.verified.subtitle": {
+    "placeholders": {
+      "email": {
+        "type": "String",
+        "example": "ada@example.com"
+      }
+    }
+  },
+  "account.invalid_link.title": "Link not valid",
+  "account.invalid_link.subtitle": "Sign in to get a new one.",
+  "account.forgot.title": "Reset your password",
+  "account.forgot.subtitle": "Enter your address and we will email you a link to choose a new password.",
+  "account.forgot.submit": "Email me a link",
+  "account.reset.title": "Choose a new password",
+  "account.reset.subtitle": "For {email}. Choosing a new password signs you out everywhere.",
+  "@account.reset.subtitle": {
+    "placeholders": {
+      "email": {
+        "type": "String",
+        "example": "ada@example.com"
+      }
+    }
+  },
+  "account.reset.new_password": "New password",
+  "account.reset.submit": "Change password",
+  "account.password_changed.title": "Password changed",
+  "account.password_changed.subtitle": "You are signed out everywhere. Sign in as {email} with your new password.",
+  "@account.password_changed.subtitle": {
+    "placeholders": {
+      "email": {
+        "type": "String",
+        "example": "ada@example.com"
+      }
+    }
+  },
+  "account.error.invalid_link": "This link is not valid any more. It may have been used already, or have expired.",
+  "account.error.sign_up_unavailable": "Creating an account is not available for this application.",
+  "account.error.too_many_sign_ups": "Too many accounts were created from here. Try again in an hour.",
+  "account.error.address_taken": "This address already has an account. Sign in, or reset your password.",
+  "account.error.reset_unavailable": "Resetting a password is not available for this application.",
+  "account.error.password_policy": "A password has at least {min, plural, one {# character} other {# characters}} and at most {max} bytes.",
+  "@account.error.password_policy": {
+    "placeholders": {
+      "min": {
+        "type": "int",
+        "example": 8
+      },
+      "max": {
+        "type": "int",
+        "example": 1024
+      }
+    }
+  },
+  "account.error.password_breached": "This password has appeared in a data breach. Choose another one.",
+  "mfa.title": "Two-factor authentication",
+  "mfa.continue": "Continue",
+  "mfa.code": "Code",
+  "@mfa.code": {
+    "description": "Label of the field for the six-digit code from an authenticator app."
+  },
+  "mfa.recovery_code": "Recovery code",
+  "mfa.challenge.heading_confirm": "Confirm it is you",
+  "mfa.challenge.heading_app": "Check your authenticator",
+  "mfa.challenge.step_up": "This sign-in needs one more step to confirm it is you.",
+  "mfa.challenge.step_up_application": "{application} needs one more step to confirm it is you.",
+  "@mfa.challenge.step_up_application": {
+    "description": "An application already signed in to asks for a second factor.",
+    "placeholders": {
+      "application": {
+        "type": "String",
+        "example": "Acme Reports"
+      }
+    }
+  },
+  "mfa.challenge.passkey_app_recovery": "Use your passkey, or enter the six-digit code from your app. A recovery code works too.",
+  "mfa.challenge.passkey_app": "Use your passkey, or enter the six-digit code from your app.",
+  "mfa.challenge.passkey_recovery": "Use your passkey. A recovery code works too.",
+  "mfa.challenge.passkey": "Use your passkey.",
+  "mfa.challenge.app_recovery": "Enter the six-digit code from your app, or one of your recovery codes.",
+  "mfa.challenge.app": "Enter the six-digit code from your app.",
+  "mfa.challenge.recovery": "Enter one of your recovery codes.",
+  "mfa.challenge.passkey_failed_code": "Your browser did not use the passkey. Try again, or use a code.",
+  "mfa.challenge.passkey_failed": "Your browser did not use the passkey. Try again.",
+  "mfa.challenge.use_passkey": "Use a passkey",
+  "mfa.settings.required": "This sign-in requires two-factor authentication. Set it up to continue.",
+  "mfa.settings.required_application": "{application} requires two-factor authentication. Set it up to continue.",
+  "@mfa.settings.required_application": {
+    "placeholders": {
+      "application": {
+        "type": "String",
+        "example": "Acme Reports"
+      }
+    }
+  },
+  "mfa.settings.on": "On",
+  "@mfa.settings.on": {
+    "description": "Status of two-factor authentication (feminine in French: l'authentification)."
+  },
+  "mfa.settings.off": "Off",
+  "mfa.settings.on_with_passkey": "On, with a passkey",
+  "mfa.settings.on_hint": "Signing in asks for a code from your authenticator app.",
+  "mfa.settings.recovery_left": "{count, plural, =0 {You have no recovery codes left — turn two-factor authentication off and on again to get new ones.} one {You have # unused recovery code.} other {You have # unused recovery codes.}}",
+  "@mfa.settings.recovery_left": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": 9
+      }
+    }
+  },
+  "mfa.settings.recovery_count": "{count, plural, one {You have # unused recovery code.} other {You have # unused recovery codes.}}",
+  "@mfa.settings.recovery_count": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": 9
+      }
+    }
+  },
+  "mfa.settings.turn_off": "Turn off",
+  "mfa.settings.also_app": "You can also use a code from an authenticator app such as Google Authenticator, 1Password or Aegis.",
+  "mfa.settings.off_hint": "Add a second step to your sign-in: a code from an authenticator app such as Google Authenticator, 1Password or Aegis, or a passkey.",
+  "mfa.settings.set_up_app": "Set up an authenticator app",
+  "mfa.settings.set_up": "Set up",
+  "mfa.settings.passkeys": "Passkeys",
+  "mfa.settings.passkeys_none": "Sign in with your fingerprint, your face or a security key instead of a code.",
+  "mfa.settings.passkey_count": "{count, plural, one {You have # passkey. Signing in asks for it.} other {You have # passkeys. Signing in asks for one.}}",
+  "@mfa.settings.passkey_count": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": 2
+      }
+    }
+  },
+  "mfa.settings.add_passkey_instead": "Add a passkey instead",
+  "mfa.settings.manage_passkeys": "Manage passkeys",
+  "mfa.set_up.title": "Set up two-factor authentication",
+  "mfa.set_up.heading": "Scan this code",
+  "mfa.set_up.subtitle": "Open your authenticator app and add an account by scanning.",
+  "mfa.set_up.cant_scan": "Can't scan? Enter this key instead:",
+  "mfa.set_up.code_label": "Then enter the code your app shows",
+  "mfa.set_up.turn_on": "Turn on",
+  "mfa.codes.title": "Recovery codes",
+  "mfa.codes.heading": "Two-factor authentication is on",
+  "mfa.codes.subtitle": "Save these recovery codes somewhere safe. Each one signs you in once if you lose your authenticator — and this is the only time they are shown.",
+  "mfa.codes.done": "Done",
+  "mfa.error.invalid_code": "That code is not valid.",
+  "mfa.error.invalid_passkey": "That passkey did not work. Try again, or use a code.",
+  "mfa.error.invalid_setup_code": "That code is not valid. Check your device clock and try again.",
+  "mfa.error.encryption_unavailable": "Two-factor authentication cannot be set up on this server yet: CLAVIA_SECRET_ENCRYPTION_KEY is not configured.",
+  "@mfa.error.encryption_unavailable": {
+    "description": "Read by whoever deploys the server; the setting's name stays as it is."
+  },
+  "passkeys.title": "Passkeys",
+  "passkeys.none": "A passkey lives on your phone, your computer or a security key, and proves it is you with your fingerprint, your face or your PIN. It works only on this site, so it cannot be phished.",
+  "passkeys.synced": "Synced across your devices",
+  "passkeys.one_device": "On one device",
+  "passkeys.added": "added {added, date, medium}",
+  "@passkeys.added": {
+    "description": "Lower case: it follows \"Synced across your devices ·\".",
+    "placeholders": {
+      "added": {
+        "type": "int",
+        "example": 1768471200
+      }
+    }
+  },
+  "passkeys.last_used": "last used {used, date, medium}",
+  "@passkeys.last_used": {
+    "placeholders": {
+      "used": {
+        "type": "int",
+        "example": 1768471200
+      }
+    }
+  },
+  "passkeys.new_name": "New name",
+  "passkeys.rename": "Rename",
+  "passkeys.remove": "Remove",
+  "passkeys.at_limit": "This account has {limit} passkeys, as many as it may.",
+  "@passkeys.at_limit": {
+    "placeholders": {
+      "limit": {
+        "type": "int",
+        "example": 10
+      }
+    }
+  },
+  "passkeys.add.title": "Add a passkey",
+  "passkeys.add.name": "Name it",
+  "@passkeys.add.name": {
+    "description": "Label of the field naming a new passkey (feminine in French: la clé)."
+  },
+  "passkeys.add.optional": "(optional)",
+  "passkeys.add.name_example": "Work laptop",
+  "@passkeys.add.name_example": {
+    "description": "Example shown in the empty name field."
+  },
+  "passkeys.add.unsupported": "This browser cannot make a passkey.",
+  "passkeys.add.failed": "Your browser did not make the passkey. Try again.",
+  "passkeys.add.submit": "Create passkey",
+  "passkeys.add.cancel": "Cancel",
+  "passkeys.codes.heading": "Your passkey is ready",
+  "passkeys.codes.subtitle": "Save these recovery codes somewhere safe. Each one signs you in once if you lose your passkey — and this is the only time they are shown.",
+  "passkeys.error.start_again": "That did not work. Try adding the passkey again.",
+  "passkeys.error.already_registered": "That passkey is already registered.",
+  "passkeys.error.invalid_name": "A passkey needs a name of one to 64 characters.",
+  "passkeys.error.not_found": "That passkey is not on this account any more.",
+  "passkeys.error.last_way_in": "This passkey is the only way into your account. Choose a password first, then remove it.",
+  "passkeys.error.limit": "This account already has {limit} passkeys, as many as it may. Remove one first.",
+  "@passkeys.error.limit": {
+    "placeholders": {
+      "limit": {
+        "type": "int",
+        "example": 10
+      }
+    }
+  },
+  "passwordless.confirm.heading": "Sign in?",
+  "passwordless.failed.title": "Sign-in failed",
+  "passwordless.failed.heading": "Could not sign you in",
+  "passwordless.start_again": "Start again",
+  "passwordless.code.subtitle": "We sent a six-digit code to {email}. Type it here — it only works in this browser.",
+  "@passwordless.code.subtitle": {
+    "placeholders": {
+      "email": {
+        "type": "String",
+        "example": "ada@example.com"
+      }
+    }
+  },
+  "passwordless.link.sent": "We sent a sign-in link to {email}. Open it on any device.",
+  "@passwordless.link.sent": {
+    "placeholders": {
+      "email": {
+        "type": "String",
+        "example": "ada@example.com"
+      }
+    }
+  },
+  "passwordless.link.confirm": "This link signs you in as {email}.",
+  "@passwordless.link.confirm": {
+    "placeholders": {
+      "email": {
+        "type": "String",
+        "example": "ada@example.com"
+      }
+    }
+  },
+  "passwordless.link.ask_again": "Ask for a new one from the sign-in page.",
+  "@passwordless.link.ask_again": {
+    "description": "Followed by a link to start again."
+  },
+  "passwordless.link.not_you": "If you did not ask for this link, close this page.",
+  "passwordless.error.invalid_code": "That code is not valid.",
+  "passwordless.error.invalid_link": "This sign-in link is not valid or has expired.",
+  "passwordless.error.account_disabled": "This account is disabled.",
+  "consent.title": "Allow access",
+  "consent.heading": "Allow access?",
+  "consent.subtitle": "{application} wants to access your account, {email}.",
+  "@consent.subtitle": {
+    "description": "The application's name is shown in bold.",
+    "placeholders": {
+      "application": {
+        "type": "String",
+        "example": "Acme Reports"
+      },
+      "email": {
+        "type": "String",
+        "example": "ada@example.com"
+      }
+    }
+  },
+  "consent.asking": "It is asking to:",
+  "@consent.asking": {
+    "description": "Followed by a list of what the application may do (feminine in French: l'application)."
+  },
+  "consent.api_intro": "On {api}, acting as you:",
+  "@consent.api_intro": {
+    "description": "Followed by an API's permissions; the API's name is shown in bold.",
+    "placeholders": {
+      "api": {
+        "type": "String",
+        "example": "Reports API"
+      }
+    }
+  },
+  "consent.scope.openid": "Sign you in and know who you are",
+  "@consent.scope.openid": {
+    "description": "What the openid scope lets an application do, completing \"It is asking to:\"."
+  },
+  "consent.scope.profile": "See your profile: your name, picture and locale",
+  "consent.scope.email": "See your email address",
+  "consent.scope.offline_access": "Stay connected when you are not using it",
+  "@consent.scope.offline_access": {
+    "description": "The offline_access scope: refresh tokens. Completes \"It is asking to:\" about the application."
+  },
+  "consent.allow": "Allow",
+  "consent.deny": "Don't allow",
+  "consent.withdraw_later": "You can withdraw this later; the application will then have to ask again.",
+  "consent.expired.title": "Request expired",
+  "consent.expired.hint": "Nothing was shared with the application. Go back to it and sign in again.",
+  "consent.error.expired": "This request has expired. Please start again from the application.",
+  "device.entry.title": "Connect a device",
+  "device.entry.subtitle": "Enter the code shown on the device.",
+  "device.review.title": "Allow this device",
+  "device.review.heading": "Allow this device?",
+  "device.review.code": "Code {code}. It is asking to:",
+  "@device.review.code": {
+    "description": "The code the device shows; followed by what it may do (masculine in French: l'appareil).",
+    "placeholders": {
+      "code": {
+        "type": "String",
+        "example": "BCDF-GHJK"
+      }
+    }
+  },
+  "device.review.warning": "Only allow a device you are setting up yourself: anyone who has this code could be asking.",
+  "device.done.connected": "Device connected",
+  "device.done.refused": "Device refused",
+  "device.done.connected_hint": "You can go back to the device now.",
+  "device.done.refused_hint": "The device was not given access. You can close this page.",
+  "device.error.invalid_code": "That code is not valid or has expired. Check the device and try again.",
+  "device.error.too_many_codes": "Too many codes were not valid. Wait a few minutes before trying again.",
+  "device.error.stronger_sign_in": "This application requires two-factor authentication, which this account cannot give yet. Set it up from your account, then try the code again.",
+  "device.error.no_permission": "You do not have permission to use this API, so the device was refused.",
+  "logout.title": "Sign out",
+  "logout.heading": "Sign out?",
+  "logout.asks": "{application} asks to sign you out of this server.",
+  "@logout.asks": {
+    "description": "The application's name is shown in bold.",
+    "placeholders": {
+      "application": {
+        "type": "String",
+        "example": "Acme Reports"
+      }
+    }
+  },
+  "logout.about_to": "You are about to sign out of this server.",
+  "logout.not_meant": "If you did not mean to sign out, close this page: nothing has changed.",
+  "saml.unreadable.title": "This sign-in could not be read",
+  "saml.unreadable.message": "Your identity provider sent something that is not a sign-in response.",
+  "saml.unreadable.advice": "Go back to the application and sign in again.",
+  "external.error.not_available": "Sign-in with {provider} is not available for this application.",
+  "@external.error.not_available": {
+    "placeholders": {
+      "provider": {
+        "type": "String",
+        "example": "Google"
+      }
+    }
+  },
+  "external.error.cancelled": "Sign-in with {provider} was cancelled or failed.",
+  "@external.error.cancelled": {
+    "placeholders": {
+      "provider": {
+        "type": "String",
+        "example": "Google"
+      }
+    }
+  },
+  "external.error.another_browser": "That sign-in did not start in this browser. Please try again.",
+  "external.error.expired": "That sign-in link has expired. Please try again.",
+  "external.error.provider_failed": "Could not complete sign-in with {provider}.",
+  "@external.error.provider_failed": {
+    "placeholders": {
+      "provider": {
+        "type": "String",
+        "example": "Google"
+      }
+    }
+  },
+  "external.error.no_verified_email": "Your {provider} account has no verified email address, so it cannot be used to sign in here.",
+  "@external.error.no_verified_email": {
+    "placeholders": {
+      "provider": {
+        "type": "String",
+        "example": "GitHub"
+      }
+    }
+  },
+  "external.error.address_already_used": "An account with this email address already exists. Sign in with your password to continue."
 }

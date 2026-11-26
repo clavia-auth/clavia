@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Auth;
 
+use Clavia\Adapter\Primary\Http\Shared\Message;
 use Clavia\Adapter\Primary\Http\Shared\RequestCookies;
 use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\Authentication\EndUser;
@@ -140,7 +141,7 @@ final readonly class MfaSettingsHandler implements RequestHandlerInterface
                     $request,
                     MfaPages::settings(
                         $status,
-                        MfaPages::ENCRYPTION_UNAVAILABLE,
+                        Message::of(MfaPages::ENCRYPTION_UNAVAILABLE),
                         StatusCodeInterface::STATUS_SERVICE_UNAVAILABLE,
                         $onTheWay,
                     ),
@@ -183,7 +184,7 @@ final readonly class MfaSettingsHandler implements RequestHandlerInterface
                 $request,
                 MfaPages::setUp(
                     $enrollment,
-                    MfaPages::INVALID_SETUP_CODE,
+                    Message::of(MfaPages::INVALID_SETUP_CODE),
                     StatusCodeInterface::STATUS_UNAUTHORIZED,
                     $onTheWay,
                 ),

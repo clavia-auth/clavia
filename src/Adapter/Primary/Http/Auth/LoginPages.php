@@ -59,7 +59,7 @@ final class LoginPages
         array $formOrigins,
         SignInMethods $methods,
         ?string $email = null,
-        Message|string|null $error = null,
+        ?Message $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
         ?AssertionOptions $passkey = null,
     ): HtmlPage {

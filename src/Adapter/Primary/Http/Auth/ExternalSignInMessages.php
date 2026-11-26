@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Auth;
 
+use Clavia\Adapter\Primary\Http\Shared\Message;
 use Clavia\Application\Authentication\External\ExternalSignInFailure;
 use Clavia\Application\Authentication\External\ExternalSignInRefused;
 
@@ -27,29 +28,25 @@ final class ExternalSignInMessages
     {
     }
 
-    public static function notAvailable(string $provider): string
+    public static function notAvailable(string $provider): Message
     {
-        return sprintf('Sign-in with %s is not available for this application.', $provider);
+        return Message::of('external.error.not_available', ['provider' => $provider]);
     }
 
-    public static function for(ExternalSignInRefused $refused): string
+    public static function for(ExternalSignInRefused $refused): Message
     {
-        $provider = $refused->providerLabel;
+        $provider = ['provider' => $refused->providerLabel];
 
         return match ($refused->reason) {
-            ExternalSignInFailure::Cancelled => sprintf('Sign-in with %s was cancelled or failed.', $provider),
-            ExternalSignInFailure::StartedInAnotherBrowser => 'That sign-in did not start in this browser. '
-                . 'Please try again.',
-            ExternalSignInFailure::Expired => 'That sign-in link has expired. Please try again.',
-            ExternalSignInFailure::ProviderFailed => sprintf('Could not complete sign-in with %s.', $provider),
-            ExternalSignInFailure::NoVerifiedEmail => sprintf(
-                'Your %s account has no verified email address, so it cannot be used to sign in here.',
-                $provider,
-            ),
-            ExternalSignInFailure::AddressAlreadyUsed => 'An account with this email address already exists. '
-                . 'Sign in with your password to continue.',
-            ExternalSignInFailure::AccountDisabled => 'This account is disabled.',
-            ExternalSignInFailure::NotAvailable, ExternalSignInFailure::NotProvisioned => self::notAvailable($provider),
+            ExternalSignInFailure::Cancelled => Message::of('external.error.cancelled', $provider),
+            ExternalSignInFailure::StartedInAnotherBrowser => Message::of('external.error.another_browser'),
+            ExternalSignInFailure::Expired => Message::of('external.error.expired'),
+            ExternalSignInFailure::ProviderFailed => Message::of('external.error.provider_failed', $provider),
+            ExternalSignInFailure::NoVerifiedEmail => Message::of('external.error.no_verified_email', $provider),
+            ExternalSignInFailure::AddressAlreadyUsed => Message::of('external.error.address_already_used'),
+            ExternalSignInFailure::AccountDisabled => Message::of(PasswordlessPages::ACCOUNT_DISABLED),
+            ExternalSignInFailure::NotAvailable,
+            ExternalSignInFailure::NotProvisioned => self::notAvailable($refused->providerLabel),
         };
     }
 }

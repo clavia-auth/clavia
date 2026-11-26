@@ -1,0 +1,33 @@
+<?php
+/**
+ * What a consent or a device approval asks for: the OpenID Connect scopes, worded in the page's
+ * language, then an API's permissions, in its operator's words. Each shows its value beside it, for
+ * whoever reads scopes.
+ *
+ * Variables (from Clavia\Adapter\Primary\Http\Auth\ScopeWording):
+ * @var Laminas\View\Renderer\PhpRenderer $this
+ * @var list<array{value: string, key: string|null, text: string}> $oidc
+ * @var array{name: string, permissions: list<array{value: string, key: null, text: string}>}|null $api
+ */
+?>
+<?php if ($oidc !== []): ?>
+    <ul class="scopes">
+<?php foreach ($oidc as $scope): ?>
+      <li>
+        <span class="scope-description"><?= $this->escapeHtml($scope['key'] === null ? $scope['text'] : $this->t($scope['key'])) ?></span>
+        <code class="scope-value"><?= $this->escapeHtml($scope['value']) ?></code>
+      </li>
+<?php endforeach ?>
+    </ul>
+<?php endif ?>
+<?php if ($api !== null): ?>
+    <p class="hint"><?= $this->emphasised('consent.api_intro', ['api' => $api['name']], 'api') ?></p>
+    <ul class="scopes">
+<?php foreach ($api['permissions'] as $permission): ?>
+      <li>
+        <span class="scope-description"><?= $this->escapeHtml($permission['text']) ?></span>
+        <code class="scope-value"><?= $this->escapeHtml($permission['value']) ?></code>
+      </li>
+<?php endforeach ?>
+    </ul>
+<?php endif ?>

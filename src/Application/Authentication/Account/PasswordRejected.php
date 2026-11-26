@@ -16,11 +16,8 @@ namespace Clavia\Application\Authentication\Account;
  */
 final readonly class PasswordRejected
 {
-    /**
-     * @param string $detail The policy's words.
-     */
     public function __construct(
-        public string $detail,
+        public PasswordRefusal $reason,
     ) {
     }
 }
