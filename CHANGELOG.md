@@ -14,6 +14,10 @@ All notable changes to Clavia are written here, for the people who run it. The f
   an API's permissions keep their operator's words. A refused password is worded from its reason, with
   the policy's bounds.
 
+- **A language switcher** (#185, the last of #24) in every page's footer, beside the colour scheme:
+  the person's choice (`POST /auth/language`, a `clavia_language` cookie for a year) outranks what the
+  application asks for and what the browser says.
+
 - **`ui_locales`** (#183, OpenID Connect Core §3.1.2.1): an application asking for a language gets it
   on every page of the sign-in it starts (login, second factor, step-up, enrolment, consent), pushed or
   not, before the browser's `Accept-Language`. A tag that is not offered or not well formed is passed

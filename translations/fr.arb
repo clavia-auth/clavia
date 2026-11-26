@@ -5,6 +5,7 @@
   "layout.theme.auto": "Auto",
   "layout.theme.light": "Clair",
   "layout.theme.dark": "Sombre",
+  "layout.language.label": "Langue",
   "error.not_found.title": "Page introuvable",
   "error.not_found.message": "Il n'y a rien à cette adresse.",
   "error.not_found.advice": "Vérifiez le lien, ou revenez à l'application qui vous a envoyé ici.",
