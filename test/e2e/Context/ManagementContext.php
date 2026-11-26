@@ -63,6 +63,21 @@ final class ManagementContext implements Context
         $this->application = $this->createApplication($redirectUri, ['password']);
     }
 
+    #[Given('an application on a device without a browser')]
+    public function anApplicationOnADevice(): void
+    {
+        $created = $this->call(RequestMethodInterface::METHOD_POST, '/api/v1/clients', [
+            'name' => 'End to end device ' . bin2hex(random_bytes(4)),
+            'client_type' => 'public',
+            'token_endpoint_auth_method' => 'none',
+            'grant_types' => ['urn:ietf:params:oauth:grant-type:device_code'],
+            'response_types' => [],
+            'is_first_party' => true,
+            'connections' => ['password'],
+        ]);
+        $this->application = new Application((string) $created['client_id'], '');
+    }
+
     #[Given('a pool that takes sign-ups and requires a verified address')]
     public function aPoolThatTakesSignUps(): void
     {

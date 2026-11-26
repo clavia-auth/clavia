@@ -15,7 +15,9 @@ use Behat\Config\Formatter\PrettyFormatter;
 use Behat\Config\Profile;
 use Behat\Config\Suite;
 use ClaviaTest\E2e\Context\AccountContext;
+use ClaviaTest\E2e\Context\DeviceContext;
 use ClaviaTest\E2e\Context\HttpContext;
+use ClaviaTest\E2e\Context\MachineContext;
 use ClaviaTest\E2e\Context\MailContext;
 use ClaviaTest\E2e\Context\ManagementContext;
 use ClaviaTest\E2e\Context\RefreshContext;
@@ -32,6 +34,6 @@ return new Config()
             ->withSuite(
                 new Suite('default')
                     ->withPaths(__DIR__ . '/test/e2e/features')
-                    ->withContexts(HttpContext::class, ManagementContext::class, SignInContext::class, RefreshContext::class, MailContext::class, AccountContext::class),
+                    ->withContexts(HttpContext::class, ManagementContext::class, SignInContext::class, RefreshContext::class, MailContext::class, AccountContext::class, MachineContext::class, DeviceContext::class),
             ),
     );
