@@ -31,10 +31,14 @@ services:
       - php
     networks:
       - clavia-net
+    # As in production (deploy/compose/compose.yaml): /healthz on the internal listener, through
+    # Caddy to PHP-FPM, so healthy means serving. Not `caddy validate` on the mounted Caddyfile: a
+    # checkout replaces that file, the single-file mount keeps the deleted one, and the check failed
+    # while Caddy served on (it reads its configuration once, when it starts).
     healthcheck:
-      test: [ "CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile" ]
+      test: [ "CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/healthz" ]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
 
   # ── PHP-FPM — the application ────────────────────────────────
