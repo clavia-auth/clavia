@@ -129,6 +129,7 @@ final readonly class SignInWithPasskey
             $nextUrl,
             $clientId,
             $attempt->currentSessionId,
+            $pending?->uiLocales,
         );
     }
 

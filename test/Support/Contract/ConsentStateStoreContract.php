@@ -15,6 +15,7 @@ use Clavia\Application\Port\ConsentStateStore;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Consent\PendingConsent;
 use Clavia\Domain\Identity\UserId;
+use Clavia\Domain\OAuth2\UiLocales;
 use Clavia\Domain\ResourceServer\ResourceServerId;
 use Clavia\Domain\Shared\ScopeSet;
 use PHPUnit\Framework\Attributes\Test;
@@ -90,5 +91,23 @@ trait ConsentStateStoreContract
             ScopeSet::fromString('openid invoices:read'),
             $api === null ? null : ResourceServerId::fromString($api),
         );
+    }
+
+    #[Test]
+    public function theLanguagesTheRequestAskedForAreKept(): void
+    {
+        $pending = self::pendingConsent();
+        $this->consentStates()->park('handle-1', new PendingConsent(
+            $pending->resumeAt,
+            $pending->redirectUri,
+            $pending->state,
+            $pending->userId,
+            $pending->clientId,
+            $pending->scope,
+            $pending->resourceServerId,
+            UiLocales::fromString('fr en'),
+        ));
+
+        self::assertSame(['fr', 'en'], $this->consentStates()->find('handle-1')?->uiLocales->tags);
     }
 }

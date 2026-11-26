@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Domain\Authentication;
 
 use Clavia\Domain\Client\ClientId;
+use Clavia\Domain\OAuth2\UiLocales;
 
 /**
  * Where a browser sent to the login page goes once it has signed in.
@@ -35,15 +36,22 @@ final readonly class LoginState
      */
     public const int LIFETIME_SECONDS = 3600;
 
+    /** The languages the request asked its pages in (`ui_locales`); none if none. */
+    public UiLocales $uiLocales;
+
     /**
-     * @param string        $nextUrl  A same-origin path and query: the authorization request to resume.
-     * @param ClientId|null $clientId The application the sign-in is for, so the login page can offer
-     *                                only the ways of signing in that application enables; null for a
-     *                                page reached directly.
+     * @param string         $nextUrl   A same-origin path and query: the authorization request to resume.
+     * @param ClientId|null  $clientId  The application the sign-in is for, so the login page can offer
+     *                                  only the ways of signing in that application enables; null for a
+     *                                  page reached directly.
+     * @param UiLocales|null $uiLocales The languages the request asked its pages in: none when it asked for
+     *                                  none, or there was no request.
      */
     public function __construct(
         public string $nextUrl,
         public ?ClientId $clientId = null,
+        ?UiLocales $uiLocales = null,
     ) {
+        $this->uiLocales = $uiLocales ?? UiLocales::none();
     }
 }

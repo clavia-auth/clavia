@@ -12,8 +12,15 @@ declare(strict_types=1);
 namespace ClaviaTest\Unit\Adapter\Primary\Http\Shared;
 
 use Clavia\Adapter\Primary\Http\Shared\LanguageChoice;
+use Clavia\Application\Authentication\HeldLanguages;
+use Clavia\Domain\Authentication\LoginState;
+use Clavia\Domain\OAuth2\UiLocales;
 use Clavia\Domain\Shared\Language;
 use Clavia\Domain\Shared\Languages;
+use ClaviaTest\Support\Fake\FrozenClock;
+use ClaviaTest\Support\Fake\InMemoryConsentStateStore;
+use ClaviaTest\Support\Fake\InMemoryLoginStateStore;
+use ClaviaTest\Support\Fake\InMemoryMfaChallengeStore;
 use Laminas\Diactoros\ServerRequest;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -49,5 +56,24 @@ final class LanguageChoiceTest extends TestCase
         yield 'a malformed weight is skipped' => ['fr;q=high, en', 'en'];
         yield 'beyond ten ranges is not read' => ['a,b,c,d,e,f,g,h,i,j, fr', 'en'];
         yield 'spaces and case' => ['  FR-ca ; Q = 0.7 ', 'fr'];
+    }
+
+    /** docs/design/translated-sign-in-pages.md §5.1: what the request asked for, before the browser. */
+    public function testTheLanguagesTheHeldRequestAskedForComeFirst(): void
+    {
+        $clock = new FrozenClock();
+        $loginStates = new InMemoryLoginStateStore($clock);
+        $challenges = new InMemoryMfaChallengeStore($clock);
+        $loginStates->put('held', new LoginState('/oauth2/authorize', null, UiLocales::fromString('de fr-CA')));
+        $loginStates->put('unasked', new LoginState('/oauth2/authorize'));
+        $choice = new LanguageChoice(
+            Languages::of([Language::fromString('en'), Language::fromString('fr')], Language::fromString('en')),
+            new HeldLanguages($loginStates, new InMemoryConsentStateStore($clock), $challenges),
+        );
+        $english = ['Accept-Language' => 'en'];
+
+        self::assertSame('fr', $choice(new ServerRequest(uri: '/auth/login?state=held', headers: $english))->tag);
+        self::assertSame('en', $choice(new ServerRequest(uri: '/auth/login?state=unasked', headers: $english))->tag);
+        self::assertSame('en', $choice(new ServerRequest(uri: '/auth/login?state=unknown', headers: $english))->tag);
     }
 }

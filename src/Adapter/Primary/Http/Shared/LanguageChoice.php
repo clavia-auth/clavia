@@ -11,27 +11,41 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Shared;
 
+use Clavia\Adapter\Primary\Http\Auth\AuthCookies;
+use Clavia\Application\Authentication\HeldLanguages;
 use Clavia\Domain\Shared\Language;
 use Clavia\Domain\Shared\Languages;
 use Psr\Http\Message\ServerRequestInterface;
 
 /**
- * The language a page is shown in (docs/design/translated-sign-in-pages.md §5.1): what the browser asks
- * for in `Accept-Language` (RFC 9110 §12.5.4), by preference, matched against the offered languages
- * (RFC 4647 §3.4 lookup); otherwise the default. Only ever an offered language.
+ * The language a page is shown in (docs/design/translated-sign-in-pages.md §5.1), in order:
+ *
+ *  1. what the request the page serves asked for, `ui_locales` (OpenID Connect Core §3.1.2.1), recorded
+ *     where it is held ({@see HeldLanguages}): the login state or pending consent the page's `state`
+ *     names, or the second-factor challenge of its cookie;
+ *  2. what the browser asks for in `Accept-Language` (RFC 9110 §12.5.4), by preference;
+ *  3. the default.
+ *
+ * Each matched against the offered languages (RFC 4647 §3.4 lookup): only ever an offered language.
  */
 final readonly class LanguageChoice
 {
     /** A browser's list is short; a longer one is read no further than this. */
     private const int MAX_RANGES = 10;
 
-    public function __construct(private Languages $languages)
-    {
+    public function __construct(
+        private Languages $languages,
+        private ?HeldLanguages $held = null,
+    ) {
     }
 
     public function __invoke(ServerRequestInterface $request): Language
     {
-        foreach (self::ranges($request->getHeaderLine('Accept-Language')) as $range) {
+        $asked = $this->held === null ? [] : ($this->held)(
+            RequestParameterReader::queryAndForm($request)->get('state'),
+            RequestCookies::first($request, AuthCookies::MFA_CHALLENGE),
+        )->tags;
+        foreach ([...$asked, ...self::ranges($request->getHeaderLine('Accept-Language'))] as $range) {
             $language = $this->languages->lookup($range);
             if ($language !== null) {
                 return $language;

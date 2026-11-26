@@ -465,6 +465,7 @@ paths:
         - {$ref: '#/components/parameters/MaxAge'}
         - {$ref: '#/components/parameters/AcrValues'}
         - {$ref: '#/components/parameters/DpopJkt'}
+        - {$ref: '#/components/parameters/UiLocales'}
         - {$ref: '#/components/parameters/RequestUri'}
       responses:
         '302':
@@ -901,6 +902,15 @@ components:
       in: query
       description: Levels of authentication, space-separated, any one accepted (OpenID Connect Core §3.1.2.1).
       schema: {type: string}
+    UiLocales:
+      name: ui_locales
+      in: query
+      description: |
+        The languages the person's pages should be in, BCP 47 tags by preference, space-separated (OpenID
+        Connect Core §3.1.2.1): the first that is offered (`ui_locales_supported`) is used, before the
+        browser's own preference. A hint: malformed tags are dropped, at most ten kept, and nothing is
+        refused for it. A person's own choice on the pages outranks it.
+      schema: {type: string, example: 'fr-CA fr en'}
     DpopJkt:
       name: dpop_jkt
       in: query
@@ -1388,6 +1398,9 @@ components:
             acr_values:
               type: string
               description: The levels of authentication asked for, any one accepted.
+            ui_locales:
+              type: string
+              description: The languages the person's pages should be in, as at `/oauth2/authorize`.
             dpop_jkt:
               type: string
               description: The thumbprint of the key the code is to be bound to (RFC 9449 §10).
@@ -1600,6 +1613,7 @@ components:
         max_age: {type: string, pattern: '^[0-9]+$'}
         acr_values: {type: string}
         dpop_jkt: {type: string}
+        ui_locales: {type: string}
         request_uri: {type: string}
 
     EndSessionRequest:
@@ -1728,6 +1742,10 @@ components:
         claim_types_supported: {type: array, items: {type: string}}
         claims_supported: {type: array, items: {type: string}}
         prompt_values_supported: {type: array, items: {type: string}}
+        ui_locales_supported:
+          type: array
+          items: {type: string}
+          description: The languages the sign-in pages are offered in, for `ui_locales` (`CLAVIA_LANGUAGES`).
         claims_parameter_supported: {type: boolean}
         request_parameter_supported: {type: boolean}
         request_uri_parameter_supported: {type: boolean}
@@ -2049,6 +2067,7 @@ components:
         id_token_signing_alg_values_supported: [RS256]
         subject_types_supported: [public]
         authorization_response_iss_parameter_supported: true
+        ui_locales_supported: [en, fr]
     ClientMetadata:
       summary: Acme Reports registering itself
       value:

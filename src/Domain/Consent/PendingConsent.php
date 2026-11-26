@@ -13,6 +13,7 @@ namespace Clavia\Domain\Consent;
 
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Identity\UserId;
+use Clavia\Domain\OAuth2\UiLocales;
 use Clavia\Domain\ResourceServer\ResourceServerId;
 use Clavia\Domain\Shared\ScopeSet;
 
@@ -27,6 +28,9 @@ final readonly class PendingConsent
 {
     /** Long enough to read the screen, short enough that an abandoned one does not linger. */
     public const int LIFETIME_SECONDS = 600;
+
+    /** The languages the request asked its pages in (`ui_locales`); none if none. */
+    public UiLocales $uiLocales;
 
     /**
      * @param string                $resumeAt         A local path: the authorization request to send the
@@ -47,6 +51,8 @@ final readonly class PendingConsent
         public ClientId $clientId,
         public ScopeSet $scope,
         public ?ResourceServerId $resourceServerId,
+        ?UiLocales $uiLocales = null,
     ) {
+        $this->uiLocales = $uiLocales ?? UiLocales::none();
     }
 }

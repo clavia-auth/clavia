@@ -14,6 +14,7 @@ namespace Clavia\Domain\Authentication;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Identity\UserId;
+use Clavia\Domain\OAuth2\UiLocales;
 
 /**
  * The half-finished sign-in between a correct first factor and a correct second one — or,
@@ -31,6 +32,9 @@ use Clavia\Domain\Identity\UserId;
  */
 final readonly class MfaChallenge
 {
+    /** The languages the request being signed in for asked its pages in (`ui_locales`); none if none. */
+    public UiLocales $uiLocales;
+
     /**
      * @param string                     $nextUrl     A local path, already validated by {@see LocalPath}.
      * @param list<AuthenticationMethod> $firstFactor
@@ -48,7 +52,9 @@ final readonly class MfaChallenge
         public int $attempts = 0,
         public ?string $stepUpOf = null,
         public ?AuthenticationRequirement $requirement = null,
+        ?UiLocales $uiLocales = null,
     ) {
+        $this->uiLocales = $uiLocales ?? UiLocales::none();
     }
 
     /**
@@ -61,6 +67,7 @@ final readonly class MfaChallenge
         AuthenticationRequirement $requirement,
         string $nextUrl,
         ?ClientId $clientId,
+        ?UiLocales $uiLocales = null,
     ): self {
         return new self(
             $session->userId,
@@ -71,6 +78,7 @@ final readonly class MfaChallenge
             0,
             $session->sid,
             $requirement,
+            $uiLocales,
         );
     }
 
