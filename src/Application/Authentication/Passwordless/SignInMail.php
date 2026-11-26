@@ -11,15 +11,15 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Authentication\Passwordless;
 
+use Clavia\Application\Port\MailContent;
+use Clavia\Application\Port\MailKind;
 use Clavia\Application\Port\OutgoingMail;
 use Clavia\Domain\Authentication\OneTimeCode;
+use Clavia\Domain\Shared\Language;
 
 /**
- * The words of the two sign-in emails.
- *
- * Plain text, short, and saying what the secret is good for and for how long: once, for
- * a few minutes. Each ends by telling someone who did not ask that ignoring it is safe —
- * which it is, since nothing happens until the code is typed or the link confirmed.
+ * The passwordless sign-in emails: a six-digit code, or a link. What each carries, in the language it
+ * is for; their words are the catalogue's (`mail.passwordless_*` in `translations/`).
  */
 final readonly class SignInMail
 {
@@ -43,18 +43,16 @@ final readonly class SignInMail
     /**
      * @param non-empty-string $email
      */
-    public function code(string $email, OneTimeCode $code): OutgoingMail
+    public function code(string $email, OneTimeCode $code, Language $language): OutgoingMail
     {
         return new OutgoingMail(
             $email,
-            sprintf('Your sign-in code for %s', $this->site),
-            sprintf(
-                "Your sign-in code is %s\n\n"
-                . "Type it into the page that asked for it. It works once and expires in %s.\n\n"
-                . "If you did not ask for this, ignore this email.\n",
-                $code->value,
-                self::duration($this->codeLifetimeSeconds),
+            new MailContent(
+                MailKind::PasswordlessCode,
+                ['site' => $this->site, 'code' => $code->value],
+                $this->codeLifetimeSeconds,
             ),
+            $language,
         );
     }
 
@@ -62,18 +60,16 @@ final readonly class SignInMail
      * @param non-empty-string $email
      * @param non-empty-string $handle The link's secret.
      */
-    public function link(string $email, #[\SensitiveParameter] string $handle): OutgoingMail
+    public function link(string $email, #[\SensitiveParameter] string $handle, Language $language): OutgoingMail
     {
         return new OutgoingMail(
             $email,
-            sprintf('Sign in to %s', $this->site),
-            sprintf(
-                "Open this link to sign in:\n\n%s\n\n"
-                . "It works once and expires in %s.\n\n"
-                . "If you did not ask for this, ignore this email.\n",
-                $this->linkUrl($handle),
-                self::duration($this->linkLifetimeSeconds),
+            new MailContent(
+                MailKind::PasswordlessLink,
+                ['site' => $this->site, 'link' => $this->linkUrl($handle)],
+                $this->linkLifetimeSeconds,
             ),
+            $language,
         );
     }
 
@@ -84,13 +80,5 @@ final readonly class SignInMail
     {
         return rtrim($this->issuer, '/') . self::LINK_PATH . '?'
             . http_build_query(['token' => $handle], '', '&', PHP_QUERY_RFC3986);
-    }
-
-    /** Whole minutes, rounded up: a link valid for 90 seconds does not "expire in 1 minute". */
-    private static function duration(int $seconds): string
-    {
-        $minutes = intdiv($seconds + 59, 60);
-
-        return $minutes === 1 ? '1 minute' : $minutes . ' minutes';
     }
 }

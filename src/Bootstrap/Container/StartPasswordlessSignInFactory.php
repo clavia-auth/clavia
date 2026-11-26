@@ -22,6 +22,7 @@ use Clavia\Application\Port\Mailer;
 use Clavia\Application\Port\PasswordlessChallengeStore;
 use Clavia\Configuration\Settings;
 use Clavia\Domain\Client\ClientRepository;
+use Clavia\Domain\Shared\Languages;
 use Clavia\Domain\Shared\RandomSource;
 use Clavia\Domain\Shared\SecretGenerator;
 use Psr\Container\ContainerInterface;
@@ -52,6 +53,8 @@ final class StartPasswordlessSignInFactory
         $random = $container->get(RandomSource::class);
         /** @var Settings $settings */
         $settings = $container->get(Settings::class);
+        /** @var Languages $languages */
+        $languages = $container->get(Languages::class);
 
         $codeLifetime = $settings->passwordlessCodeLifetime;
         $linkLifetime = $settings->passwordlessLinkLifetime;
@@ -71,6 +74,7 @@ final class StartPasswordlessSignInFactory
             $random,
             $codeLifetime,
             $linkLifetime,
+            $languages,
         );
     }
 }

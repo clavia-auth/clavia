@@ -18,6 +18,8 @@ use Clavia\Application\Port\MailUnavailable;
 use Clavia\Domain\Identity\AccountLink;
 use Clavia\Domain\Identity\AccountLinkPurpose;
 use Clavia\Domain\Identity\User;
+use Clavia\Domain\Shared\Language;
+use Clavia\Domain\Shared\Languages;
 use Clavia\Domain\Shared\SecretGenerator;
 
 /**
@@ -36,6 +38,8 @@ final readonly class SendAccountLink
     /**
      * @param positive-int $verificationLifetimeSeconds `CLAVIA_VERIFICATION_LINK_LIFETIME`.
      * @param positive-int $resetLifetimeSeconds        `CLAVIA_RESET_LINK_LIFETIME`.
+     * @param Languages    $languages                   What a mail's language is chosen among: the page's,
+     *                                                  or the account's profile, else the default.
      */
     public function __construct(
         private AccountLinkStore $links,
@@ -45,23 +49,34 @@ final readonly class SendAccountLink
         private SecretGenerator $secrets,
         private int $verificationLifetimeSeconds,
         private int $resetLifetimeSeconds,
+        private Languages $languages,
     ) {
     }
 
     /**
      * @param non-empty-string|null $loginState The login page's handle, to return to its request.
+     * @param Language|null         $language   The language of the page the person used; the default without.
      */
-    public function verification(User $user, ?string $loginState, string $clientAddress): bool
-    {
-        return $this->send(AccountLink::verifyEmail($user, $loginState), $clientAddress) === Delivery::Sent;
+    public function verification(
+        User $user,
+        ?string $loginState,
+        string $clientAddress,
+        ?Language $language = null,
+    ): bool {
+        $link = AccountLink::verifyEmail($user, $loginState);
+
+        return $this->send($link, $clientAddress, $this->language($language)) === Delivery::Sent;
     }
 
     /**
      * @param non-empty-string|null $loginState The login page's handle, to return to its request.
+     * @param Language|null         $language   The language of the page the person used; the default without.
      */
-    public function reset(User $user, ?string $loginState, string $clientAddress): bool
+    public function reset(User $user, ?string $loginState, string $clientAddress, ?Language $language = null): bool
     {
-        return $this->send(AccountLink::resetPassword($user, $loginState), $clientAddress) === Delivery::Sent;
+        $link = AccountLink::resetPassword($user, $loginState);
+
+        return $this->send($link, $clientAddress, $this->language($language)) === Delivery::Sent;
     }
 
     /**
@@ -69,25 +84,36 @@ final readonly class SendAccountLink
      * it has none, and say how it went.
      *
      * The send limit counts against the address of the operator's request, as the same mail
-     * asked for on the public form would.
+     * asked for on the public form would. Nobody's page is involved, so the mail is in the language
+     * of the account's profile (`locale`, matched among the offered languages), else the default
+     * (docs/design/translated-sign-in-pages.md §5.3).
      */
     public function passwordLink(User $user, string $clientAddress): Delivery
     {
-        return $this->send(AccountLink::resetPassword($user, null), $clientAddress, $user->passwordHash() === null);
+        $locale = $user->profile()->locale;
+        $language = ($locale === null ? null : $this->languages->lookup($locale)) ?? $this->languages->default;
+
+        return $this->send(
+            AccountLink::resetPassword($user, null),
+            $clientAddress,
+            $language,
+            $user->passwordHash() === null,
+        );
     }
 
     /**
      * The notice for an address somebody tried to sign up with again, within the same limit.
      *
      * @param non-empty-string $email
+     * @param Language|null    $language The language of the page the person used; the default without.
      */
-    public function addressTaken(string $email, string $clientAddress): bool
+    public function addressTaken(string $email, string $clientAddress, ?Language $language = null): bool
     {
         if (! $this->sendLimit->allowOne(mb_strtolower($email), $clientAddress)) {
             return false;
         }
         try {
-            $this->mailer->send($this->mail->addressTaken($email));
+            $this->mailer->send($this->mail->addressTaken($email, $this->language($language)));
         } catch (MailUnavailable) {
             return false;
         }
@@ -103,18 +129,29 @@ final readonly class SendAccountLink
      * cannot be triggered by anyone without the password.
      *
      * @param non-empty-string $email
+     * @param Language|null    $language The language of the page the person used; the default without.
      */
-    public function secondFactorEnrolled(string $email): void
+    public function secondFactorEnrolled(string $email, ?Language $language = null): void
     {
         try {
-            $this->mailer->send($this->mail->secondFactorEnrolled($email));
+            $this->mailer->send($this->mail->secondFactorEnrolled($email, $this->language($language)));
         } catch (MailUnavailable) {
             // No mail backend, or it is down: the enrolment stands, and the audit trail has it.
         }
     }
 
-    private function send(AccountLink $link, string $clientAddress, bool $invitation = false): Delivery
+    /** The page's language when it is one offered; the default otherwise. */
+    private function language(?Language $language): Language
     {
+        return $language !== null && $this->languages->has($language) ? $language : $this->languages->default;
+    }
+
+    private function send(
+        AccountLink $link,
+        string $clientAddress,
+        Language $language,
+        bool $invitation = false,
+    ): Delivery {
         if (! $this->sendLimit->allowOne(mb_strtolower($link->email), $clientAddress)) {
             return Delivery::LimitReached;
         }
@@ -127,9 +164,9 @@ final readonly class SendAccountLink
         );
         try {
             $this->mailer->send(match (true) {
-                $verifying => $this->mail->verification($link->email, $token),
-                $invitation => $this->mail->invitation($link->email, $token),
-                default => $this->mail->reset($link->email, $token),
+                $verifying => $this->mail->verification($link->email, $token, $language),
+                $invitation => $this->mail->invitation($link->email, $token, $language),
+                default => $this->mail->reset($link->email, $token, $language),
             });
         } catch (MailUnavailable) {
             $this->links->claim($token);

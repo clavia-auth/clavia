@@ -11,15 +11,18 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Authentication\Account;
 
+use Clavia\Domain\Shared\Language;
+
 /**
  * What the sign-up form posted.
  */
 final readonly class SignUpRequest
 {
     /**
-     * @param string|null $loginState       The login page's handle the form carried.
-     * @param string      $clientAddress    Where the request came from (`REMOTE_ADDR`).
-     * @param string|null $currentSessionId The session the browser already holds, if any.
+     * @param string|null   $loginState       The login page's handle the form carried.
+     * @param string        $clientAddress    Where the request came from (`REMOTE_ADDR`).
+     * @param string|null   $currentSessionId The session the browser already holds, if any.
+     * @param Language|null $language         The page's language: what the mail it causes is in.
      */
     public function __construct(
         public string $email,
@@ -27,6 +30,7 @@ final readonly class SignUpRequest
         #[\SensitiveParameter] public ?string $loginState,
         public string $clientAddress,
         #[\SensitiveParameter] public ?string $currentSessionId,
+        public ?Language $language = null,
     ) {
     }
 }

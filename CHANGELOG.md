@@ -26,6 +26,12 @@ All notable changes to Clavia are written here, for the people who run it. The f
   refusals, in `docs/openapi/authorization-server.yaml`, checked against what the server answers. The
   guides link its operations.
 
+- **The mail in French** (#184, part of #24): verification, reset, invitation, the taken-address
+  notice, the second-factor notice and the passwordless code and link are in the language of the page
+  the person used, and an operator's `POST /api/v1/users/{id}/password-reset` in the account's profile
+  `locale` (else the default language). Their words moved to the catalogue (`mail.*`), durations
+  included.
+
 - **Guides for the Management API** (#98), published with the reference: getting a token (a machine
   client, or a person signing in), scopes and roles, errors and stepping up, paging and search,
   DPoP-bound tokens, and registering clients with an initial access token. The reference's bar and

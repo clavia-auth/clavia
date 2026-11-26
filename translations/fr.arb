@@ -213,5 +213,21 @@
   "external.error.expired": "Ce lien de connexion a expiré. Veuillez réessayer.",
   "external.error.provider_failed": "Impossible de terminer la connexion avec {provider}.",
   "external.error.no_verified_email": "Votre compte {provider} n'a pas d'adresse e-mail vérifiée : il ne peut donc pas servir à vous connecter ici.",
-  "external.error.address_already_used": "Un compte avec cette adresse e-mail existe déjà. Connectez-vous avec votre mot de passe pour continuer."
+  "external.error.address_already_used": "Un compte avec cette adresse e-mail existe déjà. Connectez-vous avec votre mot de passe pour continuer.",
+  "mail.duration.minutes": "{count, plural, one {# minute} other {# minutes}}",
+  "mail.duration.hours": "{count, plural, one {# heure} other {# heures}}",
+  "mail.verification.subject": "Confirmez votre adresse e-mail pour {site}",
+  "mail.verification.text": "Ouvrez ce lien pour confirmer que cette adresse est bien la vôtre :\n\n{link}\n\nIl ne sert qu'une fois et expire dans {expires}.\n\nSi vous n'avez pas créé de compte, ignorez cet e-mail.\n",
+  "mail.reset.subject": "Choisissez un nouveau mot de passe pour {site}",
+  "mail.reset.text": "Ouvrez ce lien pour choisir un nouveau mot de passe :\n\n{link}\n\nIl ne sert qu'une fois et expire dans {expires}. Choisir un nouveau mot de passe vous déconnecte partout.\n\nSi vous n'avez rien demandé, ignorez cet e-mail : votre mot de passe reste inchangé.\n",
+  "mail.invitation.subject": "Vous êtes invité sur {site}",
+  "mail.invitation.text": "Un compte a été créé pour vous sur {site}. Ouvrez ce lien pour choisir son mot de passe :\n\n{link}\n\nIl ne sert qu'une fois et expire dans {expires}.\n\nSi vous ne vous y attendiez pas, ignorez cet e-mail : personne ne peut se connecter au compte sans ce lien.\n",
+  "mail.address_taken.subject": "Vous avez déjà un compte sur {site}",
+  "mail.address_taken.text": "Quelqu'un a essayé de créer un compte sur {site} avec cette adresse, qui en a déjà un.\n\nSi c'était vous, connectez-vous plutôt. Si vous avez oublié votre mot de passe, choisissez-en un nouveau ici :\n\n{link}\n\nSi ce n'était pas vous, ignorez cet e-mail : rien n'a changé.\n",
+  "mail.second_factor_enrolled.subject": "La double authentification a été activée pour votre compte {site}",
+  "mail.second_factor_enrolled.text": "Une application d'authentification a été configurée comme second facteur pour votre compte sur {site}.\n\nSi c'était vous, il n'y a rien à faire.\n\nSi ce n'était pas vous, quelqu'un connaît votre mot de passe. Choisissez-en un nouveau ici, ce qui déconnecte toutes les sessions :\n\n{link}\n",
+  "mail.passwordless_code.subject": "Votre code de connexion pour {site}",
+  "mail.passwordless_code.text": "Votre code de connexion est {code}\n\nSaisissez-le dans la page qui l'a demandé. Il ne sert qu'une fois et expire dans {expires}.\n\nSi vous n'avez rien demandé, ignorez cet e-mail.\n",
+  "mail.passwordless_link.subject": "Se connecter à {site}",
+  "mail.passwordless_link.text": "Ouvrez ce lien pour vous connecter :\n\n{link}\n\nIl ne sert qu'une fois et expire dans {expires}.\n\nSi vous n'avez rien demandé, ignorez cet e-mail.\n"
 }

@@ -13,7 +13,7 @@ namespace ClaviaTest\Integration\Redis;
 
 use Clavia\Adapter\Secondary\Redis\RedisConnection;
 use Clavia\Adapter\Secondary\Redis\RedisMailOutbox;
-use Clavia\Application\Port\OutgoingMail;
+use Clavia\Application\Port\RenderedMail;
 use ClaviaTest\Support\IntegrationTestCase;
 use ClaviaTest\Support\TestEnvironment;
 
@@ -23,13 +23,13 @@ final class RedisMailOutboxTest extends IntegrationTestCase
     {
         $outbox = new RedisMailOutbox(new RedisConnection(TestEnvironment::redisUrl()));
         for ($i = 1; $i <= 55; ++$i) {
-            $outbox->record(new OutgoingMail('jane@example.com', 'Message ' . $i, "Line one\nLine é/" . $i));
+            $outbox->record(new RenderedMail('jane@example.com', 'Message ' . $i, "Line one\nLine é/" . $i));
         }
 
         $recent = $outbox->recent(3);
 
         self::assertSame(['Message 55', 'Message 54', 'Message 53'], array_map(
-            static fn (OutgoingMail $mail): string => $mail->subject,
+            static fn (RenderedMail $mail): string => $mail->subject,
             $recent,
         ));
         self::assertSame("Line one\nLine é/55", $recent[0]->text);
@@ -40,11 +40,11 @@ final class RedisMailOutboxTest extends IntegrationTestCase
     public function testAnEntryThatCannotBeReadIsSkipped(): void
     {
         $outbox = new RedisMailOutbox(new RedisConnection(TestEnvironment::redisUrl()));
-        $outbox->record(new OutgoingMail('jane@example.com', 'Kept', 'text'));
+        $outbox->record(new RenderedMail('jane@example.com', 'Kept', 'text'));
         $this->redis()->lPush('mail-outbox', '{', '{"to":"","subject":"x","text":""}');
 
         self::assertSame(['Kept'], array_map(
-            static fn (OutgoingMail $mail): string => $mail->subject,
+            static fn (RenderedMail $mail): string => $mail->subject,
             $outbox->recent(10),
         ));
     }

@@ -13,9 +13,11 @@ namespace Clavia\Bootstrap\Container;
 
 use Clavia\Adapter\Secondary\Mail\NoMailer;
 use Clavia\Adapter\Secondary\Mail\OutboxMailer;
+use Clavia\Adapter\Secondary\Mail\RenderedMailer;
 use Clavia\Adapter\Secondary\Mail\SmtpMailer;
 use Clavia\Application\Metrics\CountingMailer;
 use Clavia\Application\Port\Mailer;
+use Clavia\Application\Port\Messages;
 use Clavia\Application\Port\Metrics;
 use Clavia\Application\Port\MailOutbox;
 use Clavia\Configuration\EmailBackend;
@@ -39,13 +41,15 @@ final class MailerFactory
 
         /** @var Metrics $metrics */
         $metrics = $container->get(Metrics::class);
+        /** @var Messages $messages */
+        $messages = $container->get(Messages::class);
 
-        // Counted as it leaves, whichever way it goes.
-        return new CountingMailer(match ($settings->emailBackend) {
+        // Worded in the mail's language, then counted as it leaves, whichever way it goes.
+        return new CountingMailer(new RenderedMailer(match ($settings->emailBackend) {
             EmailBackend::None => new NoMailer(),
             EmailBackend::Console => new OutboxMailer(self::outbox($container), $logger),
             EmailBackend::Smtp => self::smtp($settings, $logger),
-        }, $metrics);
+        }, $messages), $metrics);
     }
 
     private static function outbox(ContainerInterface $container): MailOutbox

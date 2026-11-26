@@ -11,20 +11,22 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Port;
 
+use Clavia\Domain\Shared\Language;
+
 /**
- * One plain-text message to one recipient. The sender is the deployment's
- * (`CLAVIA_EMAIL_FROM`), set by the {@see Mailer}, never by the caller.
+ * One mail to one recipient: what it says ({@see MailContent}) and in which language, never its
+ * words, which the {@see Mailer} takes from the catalogue (docs/design/translated-sign-in-pages.md
+ * §4). The sender is the deployment's (`CLAVIA_EMAIL_FROM`), set by the mailer, never by the caller.
  */
 final readonly class OutgoingMail
 {
     /**
      * @param non-empty-string $to
-     * @param string           $subject One line.
      */
     public function __construct(
         public string $to,
-        public string $subject,
-        #[\SensitiveParameter] public string $text,
+        public MailContent $content,
+        public Language $language,
     ) {
     }
 }

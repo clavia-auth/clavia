@@ -104,6 +104,15 @@ final readonly class PageRenderer
         );
     }
 
+    /**
+     * The language a page for this request is shown in: what the mail a person causes from it is in too
+     * (docs/design/translated-sign-in-pages.md §5.3).
+     */
+    public function language(ServerRequestInterface $request): Language
+    {
+        return ($this->choice)($request);
+    }
+
     /** A page's message in its language. */
     private function word(Language $language, Message $message): string
     {

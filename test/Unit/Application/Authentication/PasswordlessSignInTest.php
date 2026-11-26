@@ -52,6 +52,7 @@ use ClaviaTest\Support\Fake\InMemoryTransactionManager;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
 use ClaviaTest\Support\Fake\RecordingMailer;
 use ClaviaTest\Support\Fake\SeededRandomSource;
+use ClaviaTest\Support\TestMail;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -126,6 +127,7 @@ final class PasswordlessSignInTest extends TestCase
             new SeededRandomSource(3),
             600,
             900,
+            TestMail::languages(),
         );
         $this->answer = new AnswerPasswordlessCode(
             $this->challenges,
@@ -146,7 +148,7 @@ final class PasswordlessSignInTest extends TestCase
         self::assertInstanceOf(PasswordlessCodeSent::class, $sent);
         self::assertSame('jane@example.com', $sent->prompt->email);
         self::assertSame(['https://app.example'], $sent->prompt->formOrigins);
-        $mail = $this->mailer->last();
+        $mail = $this->mailer->lastRendered();
         self::assertSame('jane@example.com', $mail?->to);
         self::assertSame('Your sign-in code for acme.com', $mail?->subject);
         self::assertStringContainsString('expires in 10 minutes', $mail?->text ?? '');
@@ -311,7 +313,7 @@ final class PasswordlessSignInTest extends TestCase
     /** The six digits in the last message. */
     private function code(): string
     {
-        self::assertSame(1, preg_match('/\b(\d{6})\b/', $this->mailer->last()?->text ?? '', $match));
+        self::assertSame(1, preg_match('/\b(\d{6})\b/', $this->mailer->lastRendered()?->text ?? '', $match));
 
         return $match[1];
     }
@@ -320,7 +322,7 @@ final class PasswordlessSignInTest extends TestCase
     private function token(): string
     {
         $link = '~^https://auth\.acme\.com/auth/passwordless/verify\?token=([A-Za-z0-9_-]+)$~m';
-        self::assertSame(1, preg_match($link, $this->mailer->last()?->text ?? '', $match));
+        self::assertSame(1, preg_match($link, $this->mailer->lastRendered()?->text ?? '', $match));
 
         return $match[1];
     }

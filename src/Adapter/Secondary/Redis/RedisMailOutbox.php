@@ -12,7 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Adapter\Secondary\Redis;
 
 use Clavia\Application\Port\MailOutbox;
-use Clavia\Application\Port\OutgoingMail;
+use Clavia\Application\Port\RenderedMail;
 use JsonException;
 
 /**
@@ -30,7 +30,7 @@ final readonly class RedisMailOutbox implements MailOutbox
     }
 
     #[\Override]
-    public function record(OutgoingMail $mail): void
+    public function record(RenderedMail $mail): void
     {
         $client = $this->redis->client();
         $client->multi();
@@ -63,7 +63,7 @@ final readonly class RedisMailOutbox implements MailOutbox
     }
 
     /** An entry this code cannot read is an entry that is not there. */
-    private static function decode(string $entry): ?OutgoingMail
+    private static function decode(string $entry): ?RenderedMail
     {
         try {
             /** @var mixed $fields */
@@ -84,6 +84,6 @@ final readonly class RedisMailOutbox implements MailOutbox
             return null;
         }
 
-        return new OutgoingMail($to, $subject, $text);
+        return new RenderedMail($to, $subject, $text);
     }
 }

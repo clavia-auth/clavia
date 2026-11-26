@@ -11,9 +11,8 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Secondary\Mail;
 
-use Clavia\Application\Port\Mailer;
 use Clavia\Application\Port\MailOutbox;
-use Clavia\Application\Port\OutgoingMail;
+use Clavia\Application\Port\RenderedMail;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -22,7 +21,7 @@ use Psr\Log\LoggerInterface;
  * the settings refuse this backend anywhere but development — and kept in the outbox,
  * where `bin/clavia mail:outbox` and the test suite read it.
  */
-final readonly class OutboxMailer implements Mailer
+final readonly class OutboxMailer implements MailTransport
 {
     public function __construct(
         private MailOutbox $outbox,
@@ -37,7 +36,7 @@ final readonly class OutboxMailer implements Mailer
     }
 
     #[\Override]
-    public function send(OutgoingMail $mail): void
+    public function deliver(RenderedMail $mail): void
     {
         $this->outbox->record($mail);
         $this->logger->info("Mail (console backend) to {to}: {subject}\n{text}", [

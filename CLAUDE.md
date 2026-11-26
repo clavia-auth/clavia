@@ -1429,7 +1429,12 @@ Tests state behaviour from the specifications, and name the RFC section where it
   replace it behind the same port.
 - **Mail** goes through Symfony Mailer's ESMTP transport (`smtp`, STARTTLS required unless turned
   off, SMTPS on 465), plus `console` (development) and `none`. No queue: a sign-in email is sent
-  while the person waits.
+  while the person waits. The application holds no mail's words (#184): `AccountMail` and
+  `SignInMail` build an `OutgoingMail` of a `MailContent` (which mail, its values, a lifetime) and a
+  `Language`; `RenderedMailer`, the `Mailer`, words it from the catalogue (`mail.*`, durations by
+  plural rules) and hands a `RenderedMail` to the backend, the mail adapter's own `MailTransport`. A
+  mail is in the page's language when a person caused it (`AuthPageResponder::language()`), in the
+  account's profile `locale` when an operator did, else the default; the outbox keeps it as sent.
 - **Libraries**: Mezzio (PSR-7/11/15, laminas-servicemanager, FastRoute) as the HTTP adapter;
   laminas-view for pages; symfony/console; Guzzle as the PSR-18 client; `web-token/jwt-library`
   for verification only; `web-auth/webauthn-lib` behind `PasskeyVerifier` (one adapter,

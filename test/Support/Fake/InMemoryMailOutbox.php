@@ -12,18 +12,18 @@ declare(strict_types=1);
 namespace ClaviaTest\Support\Fake;
 
 use Clavia\Application\Port\MailOutbox;
-use Clavia\Application\Port\OutgoingMail;
+use Clavia\Application\Port\RenderedMail;
 
 /**
  * The development outbox kept in an array.
  */
 final class InMemoryMailOutbox implements MailOutbox
 {
-    /** @var list<OutgoingMail> Newest first. */
+    /** @var list<RenderedMail> Newest first. */
     private array $mails = [];
 
     #[\Override]
-    public function record(OutgoingMail $mail): void
+    public function record(RenderedMail $mail): void
     {
         array_unshift($this->mails, $mail);
     }

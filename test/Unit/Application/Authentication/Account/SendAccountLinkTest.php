@@ -24,6 +24,7 @@ use ClaviaTest\Support\Fake\InMemoryAccountLinkStore;
 use ClaviaTest\Support\Fake\InMemoryAttemptCounter;
 use ClaviaTest\Support\Fake\RecordingMailer;
 use ClaviaTest\Support\Fake\SeededRandomSource;
+use ClaviaTest\Support\TestMail;
 use PHPUnit\Framework\TestCase;
 
 final class SendAccountLinkTest extends TestCase
@@ -52,6 +53,7 @@ final class SendAccountLinkTest extends TestCase
             new SecretGenerator(new SeededRandomSource(7)),
             86400,
             1800,
+            TestMail::languages(),
         );
         $this->user = User::register(
             UserId::fromString('6f1d6f0e-6b2a-4c9e-9d8a-3b1f2c4d5e6f'),
@@ -67,8 +69,9 @@ final class SendAccountLinkTest extends TestCase
 
         $token = $this->links->tokens()[0] ?? '';
         self::assertSame(AccountLinkPurpose::VerifyEmail, $this->links->find($token)?->purpose);
-        self::assertStringContainsString('/auth/verify-email?token=' . $token, (string) $this->mailer->last()?->text);
-        self::assertStringContainsString('24 hours', (string) $this->mailer->last()?->text);
+        $text = (string) $this->mailer->lastRendered()?->text;
+        self::assertStringContainsString('/auth/verify-email?token=' . $token, $text);
+        self::assertStringContainsString('24 hours', (string) $this->mailer->lastRendered()?->text);
     }
 
     public function testAResetLinkLivesItsOwnLifetime(): void
@@ -105,8 +108,8 @@ final class SendAccountLinkTest extends TestCase
         self::assertTrue($this->send->addressTaken('jane@example.com', '192.0.2.1'));
 
         self::assertSame([], $this->links->tokens());
-        self::assertStringNotContainsString('token=', (string) $this->mailer->last()?->text);
-        self::assertStringContainsString('/auth/password/forgot', (string) $this->mailer->last()?->text);
+        self::assertStringNotContainsString('token=', (string) $this->mailer->lastRendered()?->text);
+        self::assertStringContainsString('/auth/password/forgot', (string) $this->mailer->lastRendered()?->text);
     }
 
     public function testAnOperatorsLinkToAnAccountWithNoPasswordIsAnInvitation(): void
@@ -117,15 +120,16 @@ final class SendAccountLinkTest extends TestCase
 
         $token = $this->links->tokens()[0] ?? '';
         self::assertSame(AccountLinkPurpose::ResetPassword, $this->links->find($token)?->purpose);
-        self::assertStringContainsString('invited', (string) $this->mailer->last()?->subject);
-        self::assertStringContainsString('/auth/password/reset?token=' . $token, (string) $this->mailer->last()?->text);
+        self::assertStringContainsString('invited', (string) $this->mailer->lastRendered()?->subject);
+        $text = (string) $this->mailer->lastRendered()?->text;
+        self::assertStringContainsString('/auth/password/reset?token=' . $token, $text);
     }
 
     public function testAnOperatorsLinkToAnAccountWithAPasswordIsAReset(): void
     {
         self::assertSame(Delivery::Sent, $this->send->passwordLink($this->user, '192.0.2.1'));
 
-        self::assertStringContainsString('new password', (string) $this->mailer->last()?->subject);
+        self::assertStringContainsString('new password', (string) $this->mailer->lastRendered()?->subject);
     }
 
     public function testTheDeliveryTellsALimitFromAMailServerThatRefused(): void

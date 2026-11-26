@@ -551,5 +551,197 @@
       }
     }
   },
-  "external.error.address_already_used": "An account with this email address already exists. Sign in with your password to continue."
+  "external.error.address_already_used": "An account with this email address already exists. Sign in with your password to continue.",
+  "mail.duration.minutes": "{count, plural, one {# minute} other {# minutes}}",
+  "@mail.duration.minutes": {
+    "description": "How long a code or link works, in the sentence \"It works once and expires in …\".",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "10"
+      }
+    }
+  },
+  "mail.duration.hours": "{count, plural, one {# hour} other {# hours}}",
+  "@mail.duration.hours": {
+    "description": "How long a link works, when it is two hours or more.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "24"
+      }
+    }
+  },
+  "mail.verification.subject": "Confirm your email address for {site}",
+  "@mail.verification.subject": {
+    "description": "Subject of the mail sent after signing up. Plain text, one line.",
+    "placeholders": {
+      "site": {
+        "type": "String",
+        "example": "example.com"
+      }
+    }
+  },
+  "mail.verification.text": "Open this link to confirm that this address is yours:\n\n{link}\n\nIt works once and expires in {expires}.\n\nIf you did not create an account, ignore this email.\n",
+  "@mail.verification.text": {
+    "description": "Body of the mail sent after signing up: plain text, line breaks kept.",
+    "placeholders": {
+      "link": {
+        "type": "String",
+        "example": "https://auth.example.com/auth/verify-email?token=…"
+      },
+      "expires": {
+        "type": "String",
+        "example": "24 hours"
+      }
+    }
+  },
+  "mail.reset.subject": "Choose a new password for {site}",
+  "@mail.reset.subject": {
+    "description": "Subject of the mail with a link to choose a new password.",
+    "placeholders": {
+      "site": {
+        "type": "String",
+        "example": "example.com"
+      }
+    }
+  },
+  "mail.reset.text": "Open this link to choose a new password:\n\n{link}\n\nIt works once and expires in {expires}. Choosing a new password signs you out everywhere.\n\nIf you did not ask for this, ignore this email: your password stays as it is.\n",
+  "@mail.reset.text": {
+    "description": "Body of the password reset mail: plain text, line breaks kept.",
+    "placeholders": {
+      "link": {
+        "type": "String",
+        "example": "https://auth.example.com/auth/password/reset?token=…"
+      },
+      "expires": {
+        "type": "String",
+        "example": "60 minutes"
+      }
+    }
+  },
+  "mail.invitation.subject": "You have been invited to {site}",
+  "@mail.invitation.subject": {
+    "description": "Subject of the mail an operator sends to an account created without a password.",
+    "placeholders": {
+      "site": {
+        "type": "String",
+        "example": "example.com"
+      }
+    }
+  },
+  "mail.invitation.text": "An account has been created for you on {site}. Open this link to choose its password:\n\n{link}\n\nIt works once and expires in {expires}.\n\nIf you were not expecting this, ignore this email: no one can sign in to the account without it.\n",
+  "@mail.invitation.text": {
+    "description": "Body of the invitation mail: plain text, line breaks kept.",
+    "placeholders": {
+      "site": {
+        "type": "String",
+        "example": "example.com"
+      },
+      "link": {
+        "type": "String",
+        "example": "https://auth.example.com/auth/password/reset?token=…"
+      },
+      "expires": {
+        "type": "String",
+        "example": "60 minutes"
+      }
+    }
+  },
+  "mail.address_taken.subject": "You already have an account on {site}",
+  "@mail.address_taken.subject": {
+    "description": "Subject of the notice sent when someone signs up with an address that already has an account.",
+    "placeholders": {
+      "site": {
+        "type": "String",
+        "example": "example.com"
+      }
+    }
+  },
+  "mail.address_taken.text": "Someone tried to create an account on {site} with this address, which already has one.\n\nIf it was you, sign in instead. If you have forgotten your password, choose a new one here:\n\n{link}\n\nIf it was not you, ignore this email: nothing has changed.\n",
+  "@mail.address_taken.text": {
+    "description": "Body of that notice: plain text, line breaks kept. The link leads to the forgotten-password form.",
+    "placeholders": {
+      "site": {
+        "type": "String",
+        "example": "example.com"
+      },
+      "link": {
+        "type": "String",
+        "example": "https://auth.example.com/auth/password/forgot"
+      }
+    }
+  },
+  "mail.second_factor_enrolled.subject": "Two-factor authentication was turned on for your {site} account",
+  "@mail.second_factor_enrolled.subject": {
+    "description": "Subject of the notice sent when an authenticator app is set up on the way to an application.",
+    "placeholders": {
+      "site": {
+        "type": "String",
+        "example": "example.com"
+      }
+    }
+  },
+  "mail.second_factor_enrolled.text": "An authenticator app was set up as a second factor for your account on {site}.\n\nIf it was you, there is nothing to do.\n\nIf it was not you, someone knows your password. Choose a new one here, which signs out every session:\n\n{link}\n",
+  "@mail.second_factor_enrolled.text": {
+    "description": "Body of that notice: plain text, line breaks kept. The link leads to the forgotten-password form.",
+    "placeholders": {
+      "site": {
+        "type": "String",
+        "example": "example.com"
+      },
+      "link": {
+        "type": "String",
+        "example": "https://auth.example.com/auth/password/forgot"
+      }
+    }
+  },
+  "mail.passwordless_code.subject": "Your sign-in code for {site}",
+  "@mail.passwordless_code.subject": {
+    "description": "Subject of the mail carrying a six-digit sign-in code.",
+    "placeholders": {
+      "site": {
+        "type": "String",
+        "example": "example.com"
+      }
+    }
+  },
+  "mail.passwordless_code.text": "Your sign-in code is {code}\n\nType it into the page that asked for it. It works once and expires in {expires}.\n\nIf you did not ask for this, ignore this email.\n",
+  "@mail.passwordless_code.text": {
+    "description": "Body of that mail: plain text, line breaks kept.",
+    "placeholders": {
+      "code": {
+        "type": "String",
+        "example": "012345"
+      },
+      "expires": {
+        "type": "String",
+        "example": "10 minutes"
+      }
+    }
+  },
+  "mail.passwordless_link.subject": "Sign in to {site}",
+  "@mail.passwordless_link.subject": {
+    "description": "Subject of the mail carrying a sign-in link.",
+    "placeholders": {
+      "site": {
+        "type": "String",
+        "example": "example.com"
+      }
+    }
+  },
+  "mail.passwordless_link.text": "Open this link to sign in:\n\n{link}\n\nIt works once and expires in {expires}.\n\nIf you did not ask for this, ignore this email.\n",
+  "@mail.passwordless_link.text": {
+    "description": "Body of that mail: plain text, line breaks kept.",
+    "placeholders": {
+      "link": {
+        "type": "String",
+        "example": "https://auth.example.com/auth/passwordless/verify?token=…"
+      },
+      "expires": {
+        "type": "String",
+        "example": "2 minutes"
+      }
+    }
+  }
 }

@@ -31,8 +31,8 @@ final class CatalogueTest extends TestCase
     /** A message is text: a tag or an entity in it would be escaped, or worse, not. */
     private const string MARKUP = '/<[A-Za-z\/!]|&[A-Za-z#0-9]+;/';
 
-    /** Where the code names keys: the templates, and the HTTP adapter's pages. */
-    private const array USES = ['templates', 'src/Adapter/Primary/Http'];
+    /** Where the code names keys: the templates, the HTTP adapter's pages, and the mail it sends. */
+    private const array USES = ['templates', 'src/Adapter/Primary/Http', 'src/Adapter/Secondary/Mail'];
 
     #[DataProvider('languages')]
     public function testEachFileNamesItsLanguage(string $language): void

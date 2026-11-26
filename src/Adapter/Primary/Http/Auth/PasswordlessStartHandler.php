@@ -66,6 +66,7 @@ final readonly class PasswordlessStartHandler implements RequestHandlerInterface
             $form->get('mode') ?? '',
             ClientAddress::of($request),
             $loginState,
+            $this->responder->language($request),
         ));
 
         if ($outcome instanceof PasswordlessCodeSent) {

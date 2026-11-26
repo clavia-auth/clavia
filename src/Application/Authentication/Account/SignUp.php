@@ -114,7 +114,7 @@ final readonly class SignUp
             return $this->taken($existing ?? $this->users->findByEmail($pool->name, $email), $email, $pool, $request);
         }
 
-        $this->links->verification($user, $loginState, $request->clientAddress);
+        $this->links->verification($user, $loginState, $request->clientAddress, $request->language);
         if ($pool->requiresVerifiedEmail) {
             return new CheckYourInbox($email);
         }
@@ -171,7 +171,7 @@ final readonly class SignUp
         if (! $pool->requiresVerifiedEmail) {
             return new SignUpRefused(SignUpFailure::AddressTaken, $email);
         }
-        $this->links->addressTaken($owner->email, $request->clientAddress);
+        $this->links->addressTaken($owner->email, $request->clientAddress, $request->language);
         assert($email !== '');
 
         return new CheckYourInbox($email);

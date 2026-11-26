@@ -76,6 +76,7 @@ final readonly class LoginHandler implements RequestHandlerInterface
             ClientAddress::of($request),
             $loginState,
             RequestCookies::first($request, $this->cookies->sessionCookieName),
+            $this->responder->language($request),
         ));
 
         if ($outcome instanceof SecondFactorRequired) {

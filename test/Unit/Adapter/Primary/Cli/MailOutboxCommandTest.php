@@ -12,7 +12,7 @@ declare(strict_types=1);
 namespace ClaviaTest\Unit\Adapter\Primary\Cli;
 
 use Clavia\Adapter\Primary\Cli\MailOutboxCommand;
-use Clavia\Application\Port\OutgoingMail;
+use Clavia\Application\Port\RenderedMail;
 use ClaviaTest\Support\Fake\InMemoryMailOutbox;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Command\Command;
@@ -23,8 +23,8 @@ final class MailOutboxCommandTest extends TestCase
     public function testTheLastMessagesArePrintedNewestFirst(): void
     {
         $outbox = new InMemoryMailOutbox();
-        $outbox->record(new OutgoingMail('ada@example.com', 'Older', 'first'));
-        $outbox->record(new OutgoingMail('jane@example.com', 'Your sign-in code', "Your sign-in code is 123456\n"));
+        $outbox->record(new RenderedMail('ada@example.com', 'Older', 'first'));
+        $outbox->record(new RenderedMail('jane@example.com', 'Your sign-in code', "Your sign-in code is 123456\n"));
         $tester = new CommandTester(new MailOutboxCommand($outbox));
 
         self::assertSame(Command::SUCCESS, $tester->execute(['--limit' => '1']));
@@ -38,7 +38,7 @@ final class MailOutboxCommandTest extends TestCase
     public function testWhatAMessageSaysIsNotConsoleMarkup(): void
     {
         $outbox = new InMemoryMailOutbox();
-        $outbox->record(new OutgoingMail('jane@example.com', '<error>subject</error>', '<info>text</info>'));
+        $outbox->record(new RenderedMail('jane@example.com', '<error>subject</error>', '<info>text</info>'));
         $tester = new CommandTester(new MailOutboxCommand($outbox));
 
         $tester->execute([]);
