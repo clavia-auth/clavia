@@ -6,6 +6,17 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-27
+
+Small fixes to the sign-in pages and the guides. Nothing needs doing on upgrade: no migration, no new
+setting, no new scope.
+
+### Added
+
+- **A theme switch on the guides** (#216): a button in the guide pages' bar switches between light and
+  dark, and the API reference beside them follows the same choice. Without one, the pages follow the
+  system as before.
+
 ### Fixed
 
 - **A link under a sign-in form stands apart from it**: "Back to sign in" on the forgot-password and
@@ -572,7 +583,8 @@ forbids passing (a code flow with neither PKCE nor a `nonce`); see
 - Request objects (`request`, `request_uri`) and the `address` and `phone` scopes.
 - A queue for mail: a sign-in email is sent while the person waits.
 
-[Unreleased]: https://github.com/clavia-auth/clavia/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/clavia-auth/clavia/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/clavia-auth/clavia/releases/tag/v0.5.1
 [0.5.0]: https://github.com/clavia-auth/clavia/releases/tag/v0.5.0
 [0.4.0]: https://github.com/clavia-auth/clavia/releases/tag/v0.4.0
 [0.3.0]: https://github.com/clavia-auth/clavia/releases/tag/v0.3.0
