@@ -13,6 +13,8 @@ namespace Clavia\Application\Authentication\LoginPage;
 
 use Clavia\Application\Authentication\External\ExternalProviderOption;
 use Clavia\Application\Authentication\ResolveEndUser;
+use Clavia\Application\Authentication\SignIn\HeldSignInRequest;
+use Clavia\Application\Authentication\SignIn\SignInRequestExpired;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Domain\Client\Client;
@@ -62,6 +64,15 @@ final readonly class DescribeLoginPage
         }
 
         return new LoginPage(null, $this->formOrigins($loginState), $this->methods($loginState));
+    }
+
+    /**
+     * Whether the page names a held request that is gone (expired, spent, or never was): such a page
+     * offers no form, since no sign-in from it can finish what was started ({@see SignInRequestExpired}).
+     */
+    public function requestHasExpired(#[\SensitiveParameter] ?string $loginState): bool
+    {
+        return HeldSignInRequest::hasExpired($this->loginStates, $loginState);
     }
 
     /**

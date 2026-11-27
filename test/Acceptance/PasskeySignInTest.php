@@ -104,6 +104,27 @@ final class PasskeySignInTest extends AcceptanceTestCase
         self::assertNull($this->cookie('clavia_webauthn'));
     }
 
+    /** The request expired while the page was open: the passkey signs nobody in (#218). */
+    public function testAPasskeyAfterTheRequestExpiredSignsNobodyIn(): void
+    {
+        $authenticator = SoftwareAuthenticator::generate(CoseAlgorithm::ES256, synced: true);
+        $user = $this->user();
+        $this->passkeyOf($user, $authenticator);
+        $state = $this->storeLoginState('/oauth2/authorize?resume');
+        $page = $this->get('/auth/login', ['state' => $state]);
+        $this->forgetLoginState($state);
+
+        $response = $this->post('/auth/passkey', [
+            'credential' => $authenticator->authenticate($this->challengeFrom($page), $this->rp(), $user->id),
+            'state' => $state,
+            'csrf_token' => self::csrfTokenFrom($page),
+        ]);
+
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
+        self::assertStringContainsString('Sign-in expired', (string) $response->getBody());
+        self::assertNull($this->cookie('clavia_session'), 'Nobody was signed in.');
+    }
+
     public function testAPageReachedDirectlySignsInToo(): void
     {
         $authenticator = SoftwareAuthenticator::generate(CoseAlgorithm::EdDSA);

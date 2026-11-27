@@ -19,6 +19,7 @@ use Clavia\Application\Authentication\Passwordless\PasswordlessCodeSent;
 use Clavia\Application\Authentication\Passwordless\PasswordlessLinkSent;
 use Clavia\Application\Authentication\Passwordless\PasswordlessStart;
 use Clavia\Application\Authentication\Passwordless\StartPasswordlessSignIn;
+use Clavia\Application\Authentication\SignIn\SignInRequestExpired;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -69,6 +70,9 @@ final readonly class PasswordlessStartHandler implements RequestHandlerInterface
             $this->responder->language($request),
         ));
 
+        if ($outcome instanceof SignInRequestExpired) {
+            return $this->responder->page($request, LoginPages::expired());
+        }
         if ($outcome instanceof PasswordlessCodeSent) {
             return $this->responder->redirect(
                 PasswordlessPages::CODE_PATH,
@@ -95,6 +99,10 @@ final readonly class PasswordlessStartHandler implements RequestHandlerInterface
         Message $error,
         int $status,
     ): ResponseInterface {
+        if ($this->describe->requestHasExpired($loginState)) {
+            return $this->responder->page($request, LoginPages::expired());
+        }
+
         return $this->responder->page(
             $request,
             LoginPages::form(

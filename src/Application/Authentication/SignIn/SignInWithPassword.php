@@ -21,7 +21,6 @@ use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\Event\SignInRefusal;
 use Clavia\Domain\Authentication\Event\SignInRefused;
 use Clavia\Domain\Authentication\LocalPath;
-use Clavia\Domain\Authentication\LoginState;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Connection\ConnectionName;
@@ -68,7 +67,11 @@ final readonly class SignInWithPassword
 
     public function __invoke(PasswordSignIn $attempt): SignInOutcome
     {
-        $pending = $this->pending($attempt->loginState);
+        // A request that is gone is refused before any password is looked at: nothing to resume.
+        $pending = HeldSignInRequest::find($this->loginStates, $attempt->loginState);
+        if ($pending instanceof SignInRequestExpired) {
+            return $pending;
+        }
         $clientId = $pending?->clientId;
         $client = $clientId === null ? null : $this->clients->find($clientId);
         $pools = $this->access->pools($client);
@@ -108,11 +111,6 @@ final readonly class SignInWithPassword
             $attempt->currentSessionId,
             $pending?->uiLocales,
         );
-    }
-
-    private function pending(#[\SensitiveParameter] ?string $loginState): ?LoginState
-    {
-        return $loginState === null || $loginState === '' ? null : $this->loginStates->get($loginState);
     }
 
     /**

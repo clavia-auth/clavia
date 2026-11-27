@@ -21,6 +21,7 @@ use Clavia\Application\Authentication\Account\SignUp;
 use Clavia\Application\Authentication\Account\SignUpRefused;
 use Clavia\Application\Authentication\Account\SignUpRequest;
 use Clavia\Application\Authentication\SignIn\SecondFactorRequired;
+use Clavia\Application\Authentication\SignIn\SignInRequestExpired;
 use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
@@ -76,6 +77,9 @@ final readonly class SignUpHandler implements RequestHandlerInterface
             RequestCookies::first($request, $this->cookies->sessionCookieName),
             $this->responder->language($request),
         ));
+        if ($outcome instanceof SignInRequestExpired) {
+            return $this->responder->page($request, LoginPages::expired());
+        }
         if ($outcome instanceof CheckYourInbox) {
             return $this->responder->page($request, AccountPages::checkInbox($outcome->email, 'sign-up', $loginState));
         }
@@ -108,6 +112,10 @@ final readonly class SignUpHandler implements RequestHandlerInterface
         ?Message $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): ResponseInterface {
+        // A page for a request that is gone offers no form: an account made from it would sign in to nowhere.
+        if ($this->describe->requestHasExpired($loginState)) {
+            return $this->responder->page($request, LoginPages::expired());
+        }
         $page = ($this->describe)($loginState);
         if (! $page->available) {
             return $this->responder->page(

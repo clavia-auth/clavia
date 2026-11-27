@@ -77,6 +77,14 @@ trait LoginFixtures
         return $handle;
     }
 
+    /** Let a held request go, as its lifetime running out would: the page opened for it stays open. */
+    protected function forgetLoginState(string $handle): void
+    {
+        /** @var LoginStateStore $store */
+        $store = $this->container()->get(LoginStateStore::class);
+        $store->forget($handle);
+    }
+
     protected function loginState(string $handle): ?LoginState
     {
         /** @var LoginStateStore $store */

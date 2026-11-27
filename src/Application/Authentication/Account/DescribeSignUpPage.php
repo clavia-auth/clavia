@@ -41,4 +41,10 @@ final readonly class DescribeSignUpPage
 
         return new SignUpPage(true, $pool->requiresVerifiedEmail, $this->loginPage->formOrigins($loginState));
     }
+
+    /** Whether the page names a held request that is gone: then it offers no form. */
+    public function requestHasExpired(#[\SensitiveParameter] ?string $loginState): bool
+    {
+        return $this->loginPage->requestHasExpired($loginState);
+    }
 }

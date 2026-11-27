@@ -697,14 +697,79 @@ final class LoginTest extends AcceptanceTestCase
     }
 
     /**
-     * The handle can expire while the tab sits open; a correct password must still end
-     * somewhere legible — signed in, and told to go back to the application.
+     * A page opened for a request that is gone (expired, spent by another tab, or forged) offers no
+     * form: nothing typed there could finish what was started (#218).
      */
-    public function testSigningInWithAnExpiredStateLandsSomewhereThatSaysSo(): void
+    public function testThePageForAnExpiredRequestOffersNoForm(): void
+    {
+        $page = $this->get('/auth/login', ['state' => 'expired-or-forged']);
+
+        $body = (string) $page->getBody();
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $page->getStatusCode());
+        self::assertStringContainsString('Sign-in expired', $body);
+        self::assertStringContainsString('Go back to the application', $body);
+        self::assertStringNotContainsString('name="password"', $body);
+        self::assertStringNotContainsString('name="email"', $body);
+    }
+
+    /**
+     * The tab sat open past the request's lifetime: the right password signs nobody in. Signing in
+     * regardless used to land on "you are signed in" while the application never heard back.
+     */
+    public function testSigningInAfterTheRequestExpiredSignsNobodyIn(): void
+    {
+        $this->user();
+        $this->publicClient();
+        $state = $this->storeLoginState('/oauth2/authorize?x=y', self::TEST_CLIENT_ID);
+        $page = $this->get('/auth/login', ['state' => $state]);
+        $this->forgetLoginState($state);
+
+        $response = $this->post('/auth/login', [
+            'email' => self::TEST_USER_EMAIL,
+            'password' => self::TEST_USER_PASSWORD,
+            'csrf_token' => self::csrfTokenFrom($page),
+            'state' => $state,
+        ]);
+
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
+        self::assertSame('', $response->getHeaderLine('Location'));
+        self::assertStringContainsString('Sign-in expired', (string) $response->getBody());
+        self::assertNull(self::setCookieHeader($response, self::SESSION_COOKIE), 'Nobody was signed in.');
+        self::assertStringNotContainsString(self::TEST_USER_EMAIL, (string) $response->getBody());
+    }
+
+    /**
+     * Past an hour the form's CSRF cookie has gone too, so the first submit is refused as an expired
+     * form. The page it renders must not offer a form for the dead request again, or the second
+     * submit would sign in to nowhere.
+     */
+    public function testAnExpiredFormForAnExpiredRequestSaysTheRequestExpired(): void
+    {
+        $this->user();
+        $this->publicClient();
+        $state = $this->storeLoginState('/oauth2/authorize?x=y', self::TEST_CLIENT_ID);
+        $this->get('/auth/login', ['state' => $state]);
+        $this->forgetLoginState($state);
+
+        $response = $this->post('/auth/login', [
+            'email' => self::TEST_USER_EMAIL,
+            'password' => self::TEST_USER_PASSWORD,
+            'csrf_token' => 'from-a-cookie-long-gone',
+            'state' => $state,
+        ]);
+
+        $body = (string) $response->getBody();
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
+        self::assertStringContainsString('Sign-in expired', $body);
+        self::assertStringNotContainsString('name="password"', $body);
+    }
+
+    /** Opened directly, with no request at all, the page still signs in and says so afterwards. */
+    public function testSigningInWithNoRequestLandsSomewhereThatSaysSo(): void
     {
         $this->user();
 
-        $response = $this->submitLogin(state: 'expired-or-forged');
+        $response = $this->submitLogin();
         self::assertSame(StatusCodeInterface::STATUS_SEE_OTHER, $response->getStatusCode());
         self::assertSame('/auth/login', $response->getHeaderLine('Location'));
 
