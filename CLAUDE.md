@@ -310,7 +310,7 @@ objects, repository interfaces, and an `Event` namespace for its domain events.
 | `Identity` | `User`, `Profile`, `AppMetadata`, `PasswordPolicy`, `ExternalIdentity`, `AssertedIdentity`, `AccountLink` | Every account belongs to one connection; an address is unique within it; a changed address is unverified; an emailed link dies with the address or password it was issued against; application metadata is a JSON object only operators write (16 KiB, five levels, keys sorted), replaced whole |
 | `Client` | `Client`, `ClientId`, `ClientType`, `ClientAuthMethod`, `GrantType`, `ResponseType`, `Ownership`, `BackChannelLogout`, `AccentColor`, `ClientLogo`, `InitiateLoginUri`, `Registration\InitialAccessToken` | Type, auth method and secret agree; the code flow needs a redirect URI; `client_credentials` needs a confidential client; `tpc_…` ids are third-party; an accent colour is `#` and six hex digits, its text colour worked out by WCAG contrast; a logo is PNG, JPEG or WebP by its content (never SVG), 16–1024 px a side, 256 KiB |
 | `Connection` | `Connection`, `ConnectionName`, `ConnectionStrategy` (database, social, OIDC, passwordless, SAML), `OidcSettings`, `BuiltInConnection`, `Saml\*` (`SamlSettings`, `SamlCertificate`, `SamlOptions`, `SamlRequestId`, `ServiceProviderKey[Set]`) | The default pool, social providers and `email` are switched, never created or deleted; only a pool takes sign-ups or requires a verified address; only an OIDC or SAML connection requires provisioning; a SAML connection, and only one, has SAML settings: 1 to 3 pinned RSA certificates, https endpoints |
-| `ResourceServer` | `ResourceServer` (an API: `rs_…` id, audience, permissions, `AccessTokenFormat`), `Permission`, `ClientGrant` | A system API (the Management API) can be renamed, never deleted, always enforces roles; tokens are opaque unless the API takes JWTs |
+| `ResourceServer` | `ResourceServer` (an API: `rs_…` id, audience, permissions, `AccessTokenFormat`, its `AuthorizationSettings`), `Permission`, `ClientGrant` | A system API (the Management API, the Authorization API) can be renamed, never deleted, always enforces roles, and takes no fine-grained authorization; tokens are opaque unless the API takes JWTs |
 | `Rbac` | `Role`, `GrantedPermission`, `RoleRepository` (also the assignments) | A person holds a permission only through a role; `permissionsHeld(user, API)` is the question issuance asks; a **provisionable** role (one a SCIM group may grant) never holds a system API's permission, refused by the role and by a database trigger; an assignment is `by_hand` or a group's, and a group takes back only its own |
 | `Consent` | `UserConsent`, `ConsentPolicy`, `PendingConsent` | `ConsentPolicy` alone decides who is asked |
 | `OAuth2` | `AuthorizationCode`, `AccessToken`, `AccessTokenClaims` (RFC 9068), `RefreshToken` (families), `DeviceAuthorization`, `UserCode`, `CodeChallenge`/`CodeVerifier` (S256), `Prompt`, `MaxAge`, `OAuth2Error`/`ErrorCode`, `BearerTokenError` | Single use, exact matching, rotation with replay revocation |
@@ -320,7 +320,7 @@ objects, repository interfaces, and an `Event` namespace for its domain events.
 | `Claims` | `ClaimName`, `ClaimSource`, `ClaimMapping`, `ClaimMappings`, `ClaimSubject`, `CustomClaims` | A custom claim never has a reserved name (registered, standard, or this server's), checked when saved and again at issuance; its source is the account (address, connection, profile, `app_metadata`, roles) or a constant, never the request; a source with no value leaves its claim out; at most twenty per API, no two reading nested metadata; 32 KiB per token, refused rather than cut |
 | `Webhook` | `WebhookEndpoint`, `WebhookEndpointId`, `WebhookSecret`, `EventFilter`, `WebhookEndpointRepository` | An endpoint is https, at most twenty, listening to known audit event types or `*`; its secret (`whsec_`, 32 random bytes) is the server's, shown once, sealed (`webhook:<id>:secret`), never hashed; after a rotation the previous one signs beside it for a day |
 | `Provisioning` | `ProvisioningToken`, `ProvisioningTokenId`, `ProvisioningTokenState`, `SubjectAttribute`, `ProvisioningTokenRepository`, `ScimUser`, `ScimFilter`, `ProvisionedAccount`, `ProvisionedAccountRepository` | A token is for one pool or enterprise connection and goes with it; shown once, kept as its digest; a day to two years, a year by default, flagged within thirty days; revoked, never changed otherwise |
-| `Authorization` | `ObjectType`, `ObjectRef`, `Relation`, `SubjectRef`, `Tuple`, `AuthorizationModel`, `StoreId`, `AuthorizationModelId` | Held to OpenFGA's notation: no `:`, `#`, `@` or space where it would be read as another part; an object at most 256 characters and never the wildcard `*`; a model is schema 1.1 with distinct types, kept as its JSON text; the engine's ids are ULIDs |
+| `Authorization` | `ObjectType`, `ObjectRef`, `Relation`, `SubjectRef`, `Tuple`, `AuthorizationModel`, `ReservedType`, `AuthorizationSettings`, `StoreId`, `AuthorizationModelId` | Held to OpenFGA's notation: no `:`, `#`, `@` or space where it would be read as another part; an object at most 256 characters and never the wildcard `*`; a model is schema 1.1 with distinct types, kept as its JSON text, declares `user`, and takes Clavia's types only in Clavia's shape (`user`, `client` with no relation; `role`, `group` exactly `member: [user]`); a client speaks for one API at most, twenty per API; the engine's ids are ULIDs |
 
 The application mirrors these contexts (`Application\OAuth2`, `Authentication`, `Oidc`,
 `Management`, `Connection`, `Audit`…). `Application\Port` holds the technical ports: signing
@@ -337,8 +337,8 @@ decision engine (`DecisionEngine`, `AccessCheck`, `DecisionEngineFailed`).
 
 ### Fine-grained authorization
 
-Design in `docs/design/fine-grained-authorization.md` (AuthZEN over OpenFGA, #133), built in slices.
-Slice 1 (#135) is the engine alone; no route, operation or command uses it yet.
+Design in `docs/design/fine-grained-authorization.md` (AuthZEN over OpenFGA, #133), built in slices:
+the engine (#135), then authorization on an API (#136). Nothing asks the engine for a decision yet.
 
 - **OpenFGA runs beside Clavia**, its own container and PostgreSQL, reached by Clavia alone with a
   preshared key (`CLAVIA_FGA_URL`, `CLAVIA_FGA_API_KEY`; unset, the feature is off and
@@ -359,6 +359,26 @@ Slice 1 (#135) is the engine alone; no route, operation or command uses it yet.
   operation and reason, never with what was sent or the key.
 - **A deleted store still answers in OpenFGA** (its deletion is soft): whoever deletes one forgets
   its id in the same step.
+- **Authorization on an API** (#136, §5.1): `PUT /api/v1/resource-servers/{id}/authorization`
+  (`update:resource_servers`, `ConfigureAuthorization`) takes the model (OpenFGA's JSON, read as
+  text so `{}` stays an object), the clients speaking for the API and `denial_reasons`. In order: a
+  system API is `409`; a server naming no engine is `409`; each client must exist and be a first-party
+  machine client (`422` at `/clients/i`); the API's store is created the first time
+  (`clavia-<rs id>`) and kept; the model is written as a new version only when it differs (compared
+  as canonical JSON), OpenFGA's refusal a `422` at `/model` with its code alone; then the settings
+  are saved and announced in one transaction (`AuthorizationEnabled`, `AuthorizationModelWritten`,
+  `ResourceServerChanged` for the clients or reasons). A store made for a request that then fails is
+  deleted again. A client speaking for another API is `409` (`authorization_clients`' key). The model
+  is kept in `resource_servers` (configuration, not the graph), so `GET` (`read:resource_servers`)
+  reads it without the engine; `404` when none was ever set up. `DELETE` switches it off and keeps
+  the store; `?confirm=delete` deletes the store and forgets it in one transaction, the engine called
+  last so a failure (`503`) rolls back. Deleting the API deletes its store too, best effort (the id
+  is forgotten with it). The engine not answering is `503`, nothing changed.
+- **The Authorization API** (`https://management.{domain}/access`, `Settings::authorizationApiAudience()`)
+  is a second system API, registered by `management-api:register` when `CLAVIA_FGA_URL` is set
+  (`RegisterAuthorizationApi`, through `SystemApiRegistration`, the Management API's too), with
+  `AuthorizationPermission`'s scopes: `evaluate:access`, `search:access`, `write:relationships`.
+  A speaking client is granted on it from the shell (`clients:grant`).
 
 ## Flows
 

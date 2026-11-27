@@ -138,6 +138,13 @@ A new context, `Domain\Authorization`:
 the model checked (§4), a store created if there is none, the model written, the store's identity
 tuples queued (every holder of every role holding a permission on this API). `GET` returns the
 settings and the current model; `DELETE` disables, and deletes the store after `?confirm=delete`.
+Decided in slice 2 (#136): the model is kept in Clavia's database beside the settings (configuration,
+not the graph), so `GET` answers without the engine; `PUT` writes a new version only when the model
+differs from the one in force; `DELETE` without the confirmation switches authorization off and keeps
+the store (switching it on again brings its relationships back); `PUT` is a `409` while
+`CLAVIA_FGA_URL` is unset (switching off still works, and deleting the store needs the engine: `503`);
+deleting an API deletes its store, best effort. A speaking
+client is a first-party client holding `client_credentials`, and an API has at most twenty.
 OpenFGA's deletion of a store is soft (found in slice 1): the store is no longer listed, but
 questions and writes naming its id are still answered, so Clavia forgets the id in the same step
 and never asks with it again. Writing a new model keeps the store and its tuples; a model that drops a relation still used by
