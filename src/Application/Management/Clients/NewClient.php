@@ -40,6 +40,9 @@ final readonly class NewClient
      *                                    (`dpop_bound_access_tokens`, RFC 9449 §5.2).
      * @param string|null  $accentColor   Its colour on the sign-in pages, `#` and six hexadecimal digits;
      *                                    null for this server's.
+     * @param string|null  $initiateLoginUri Where it starts a sign-in of its own (`initiate_login_uri`, OpenID
+     *                                    Connect Dynamic Client Registration 1.0 §2): where a person whose
+     *                                    request expired is sent to start again; null for none.
      */
     public function __construct(
         public string $name = '',
@@ -58,6 +61,7 @@ final readonly class NewClient
         public bool $requirePushedAuthorizationRequests = false,
         public bool $requireDpop = false,
         public ?string $accentColor = null,
+        public ?string $initiateLoginUri = null,
     ) {
     }
 }

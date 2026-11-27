@@ -79,7 +79,7 @@ final readonly class BeginSamlSignIn
 
         $loginState = $loginState === '' ? null : $loginState;
         // A request that is gone starts nothing: the round trip would sign in to nowhere.
-        $target = HeldSignInRequest::find($this->loginStates, $loginState);
+        $target = HeldSignInRequest::find($this->loginStates, $this->clients, $loginState);
         if ($target instanceof SignInRequestExpired) {
             return $target;
         }

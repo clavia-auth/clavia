@@ -68,7 +68,7 @@ final readonly class SignInWithPassword
     public function __invoke(PasswordSignIn $attempt): SignInOutcome
     {
         // A request that is gone is refused before any password is looked at: nothing to resume.
-        $pending = HeldSignInRequest::find($this->loginStates, $attempt->loginState);
+        $pending = HeldSignInRequest::find($this->loginStates, $this->clients, $attempt->loginState);
         if ($pending instanceof SignInRequestExpired) {
             return $pending;
         }

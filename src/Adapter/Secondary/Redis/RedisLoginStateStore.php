@@ -28,6 +28,9 @@ final readonly class RedisLoginStateStore implements LoginStateStore
 {
     private const string PREFIX = 'login-state';
 
+    /** The application a request was for, kept a day under its own key: the client's id and nothing else. */
+    private const string APPLICATION_PREFIX = 'login-state-application';
+
     public function __construct(private RedisConnection $redis)
     {
     }
@@ -47,6 +50,13 @@ final readonly class RedisLoginStateStore implements LoginStateStore
                 JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES,
             ),
         );
+        if ($state->clientId !== null) {
+            $this->redis->client()->setex(
+                Keys::forSecret(self::APPLICATION_PREFIX, $handle),
+                LoginState::APPLICATION_REMEMBERED_SECONDS,
+                $state->clientId->value,
+            );
+        }
     }
 
     #[\Override]
@@ -94,6 +104,21 @@ final readonly class RedisLoginStateStore implements LoginStateStore
     {
         if ($handle !== '') {
             $this->redis->client()->del(Keys::forSecret(self::PREFIX, $handle));
+        }
+    }
+
+    #[\Override]
+    public function applicationOf(#[\SensitiveParameter] string $handle): ?ClientId
+    {
+        if ($handle === '') {
+            return null;
+        }
+
+        $raw = $this->redis->client()->get(Keys::forSecret(self::APPLICATION_PREFIX, $handle));
+        try {
+            return is_string($raw) ? ClientId::fromString($raw) : null;
+        } catch (InvalidValue) {
+            return null;
         }
     }
 }

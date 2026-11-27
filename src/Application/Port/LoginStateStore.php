@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Application\Port;
 
 use Clavia\Domain\Authentication\LoginState;
+use Clavia\Domain\Client\ClientId;
 
 /**
  * Short-lived storage for pending sign-ins, keyed by an opaque handle.
@@ -34,5 +35,16 @@ interface LoginStateStore
      */
     public function get(#[\SensitiveParameter] string $handle): ?LoginState;
 
+    /**
+     * Forget the request. The application it was for is still remembered ({@see applicationOf()}).
+     */
     public function forget(#[\SensitiveParameter] string $handle): void;
+
+    /**
+     * The application the request behind `$handle` was for, for {@see LoginState::APPLICATION_REMEMBERED_SECONDS}
+     * after it was put, whether it has since expired or been forgotten: what a page left open past the
+     * request still knows, to send the person back to that application (#219). Null for a handle never
+     * put, a request for no application, or once that day has passed.
+     */
+    public function applicationOf(#[\SensitiveParameter] string $handle): ?ClientId;
 }

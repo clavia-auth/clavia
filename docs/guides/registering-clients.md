@@ -101,8 +101,9 @@ Its metadata is held to these rules:
 | `dpop_bound_access_tokens` | `true` to [require DPoP](dpop.md) for its tokens |
 
 PKCE stays mandatory. Members the operator sets (`mfa_policy`, pushed authorization requests,
-`require_pkce`, custom claims) and members this server doesn't know are ignored, and left out of
-the answer.
+`require_pkce`, custom claims, `initiate_login_uri`) and members this server doesn't know are
+ignored, and left out of the answer. `initiate_login_uri` is where this server sends a person whose
+sign-in request expired, so only an operator registers it, with `PATCH /api/v1/clients/{client_id}`.
 
 A refusal is a `400`, naming the member at fault, never its value:
 

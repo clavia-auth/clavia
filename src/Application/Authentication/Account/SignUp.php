@@ -85,7 +85,7 @@ final readonly class SignUp
         $email = trim($request->email);
         $loginState = $request->loginState === null || $request->loginState === '' ? null : $request->loginState;
         // A request that is gone makes no account: it could only be signed in to nowhere.
-        $pending = HeldSignInRequest::find($this->loginStates, $loginState);
+        $pending = HeldSignInRequest::find($this->loginStates, $this->clients, $loginState);
         if ($pending instanceof SignInRequestExpired) {
             return $pending;
         }

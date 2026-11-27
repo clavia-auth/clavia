@@ -158,6 +158,11 @@ final class DevelopmentCommandsTest extends TestCase
             $dashboard->backChannelLogout?->uri->value,
         );
         self::assertTrue($dashboard->backChannelLogout?->sessionRequired);
+        // #219: a sign-in that outlived its request starts again there.
+        self::assertSame(
+            'https://management.clavia.test/dashboard/auth/sign-in',
+            $dashboard->initiateLoginUri?->uri->value,
+        );
 
         // A rerun keeps it, and the connections an operator gave it.
         $this->clients->save($dashboard->withConnections([ConnectionName::defaultPool(), ConnectionName::email()]));

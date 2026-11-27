@@ -13,6 +13,7 @@ namespace ClaviaTest\Unit\Support;
 
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Domain\Authentication\LoginState;
+use Clavia\Domain\Client\ClientId;
 use ClaviaTest\Support\Contract\LoginStateStoreContract;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryLoginStateStore;
@@ -47,5 +48,17 @@ final class InMemoryLoginStateStoreTest extends TestCase
 
         $this->clock->advance(1);
         self::assertNull($this->store->get('handle-1'));
+    }
+
+    public function testTheApplicationOutlivesTheRequestForADayAndNoMore(): void
+    {
+        $this->store->put('handle-1', new LoginState('/a', ClientId::fromString('spa')));
+
+        $this->clock->advance(LoginState::LIFETIME_SECONDS);
+        self::assertNull($this->store->get('handle-1'));
+        self::assertSame('spa', $this->store->applicationOf('handle-1')?->value);
+
+        $this->clock->advance(LoginState::APPLICATION_REMEMBERED_SECONDS - LoginState::LIFETIME_SECONDS);
+        self::assertNull($this->store->applicationOf('handle-1'));
     }
 }

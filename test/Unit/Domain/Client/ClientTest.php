@@ -22,6 +22,7 @@ use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\GrantType;
+use Clavia\Domain\Client\InitiateLoginUri;
 use Clavia\Domain\Client\ResponseType;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\Url;
@@ -283,6 +284,20 @@ final class ClientTest extends TestCase
             ['https://app.example', 'https://app.example:8443', 'http://localhost:3000'],
             $client->redirectOrigins(),
         );
+    }
+
+    /** A sign-in submitted after the request expired is sent to the start address: its origin may end a form. */
+    public function testTheFormOriginsAddTheSignInStartAddressOnce(): void
+    {
+        $client = $this->register(redirectUris: [Url::fromString('https://app.example/cb')]);
+        self::assertSame(['https://app.example'], $client->formOrigins());
+
+        $sameOrigin = $client->withInitiateLoginUri(InitiateLoginUri::fromString('https://app.example/sign-in'));
+        self::assertSame(['https://app.example'], $sameOrigin->formOrigins());
+
+        $elsewhere = $client->withInitiateLoginUri(InitiateLoginUri::fromString('https://login.app.example/start'));
+        self::assertSame(['https://app.example', 'https://login.app.example'], $elsewhere->formOrigins());
+        self::assertSame(['https://app.example'], $elsewhere->redirectOrigins(), 'Redirects go nowhere new.');
     }
 
     public function testTheSoleRedirectUriIsOnlyThereWhenThereIsExactlyOne(): void

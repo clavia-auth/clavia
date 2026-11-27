@@ -6,6 +6,16 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ## [Unreleased]
 
+### Added
+
+- **An application's sign-in start address** (`initiate_login_uri`, #219, OpenID Connect Dynamic Client
+  Registration §2). An operator registers it on a client through the Management API (an https URL). A
+  person who signs in from a page whose request has expired (held for an hour) is then sent straight back
+  to it, with `iss`, and the application starts a new request, instead of being told to go back. This
+  server remembers which application a request was for, and nothing more, for 24 hours. A client that
+  registers itself cannot set it. `seed-dev` registers the dashboard's (`/dashboard/auth/sign-in`).
+  Migration `0051` adds the column.
+
 ### Fixed
 
 - **A link under a sign-in form stands apart from it**: "Back to sign in" on the forgot-password and

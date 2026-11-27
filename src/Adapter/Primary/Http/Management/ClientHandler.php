@@ -75,6 +75,8 @@ final readonly class ClientHandler implements RequestHandlerInterface
                     $claims,
                     $body->has('accent_color'),
                     $body->string('accent_color'),
+                    $body->has('initiate_login_uri'),
+                    $body->string('initiate_login_uri'),
                 ));
 
                 return $this->responder->json(ManagementViews::client($this->read->describe($updated)));

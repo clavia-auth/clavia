@@ -71,7 +71,7 @@ final readonly class SignInWithPasskey
     ): SignedIn|SecondFactorRequired|CredentialsRejected|SignInRequestExpired {
         $loginState = $attempt->loginState === null || $attempt->loginState === '' ? null : $attempt->loginState;
         // A request that is gone is refused before the ceremony is claimed or the passkey checked.
-        $pending = HeldSignInRequest::find($this->loginStates, $loginState);
+        $pending = HeldSignInRequest::find($this->loginStates, $this->clients, $loginState);
         if ($pending instanceof SignInRequestExpired) {
             return $pending;
         }

@@ -83,6 +83,22 @@ trait LoginStateStoreContract
         self::assertSame('/b', $this->loginStates()->get('handle-2')?->nextUrl);
     }
 
+    /** #219: a page left open past its request still knows which application to send the person back to. */
+    #[Test]
+    public function theApplicationIsRememberedAfterTheRequestIsForgotten(): void
+    {
+        $this->loginStates()->put('handle-1', new LoginState('/a', ClientId::fromString('spa')));
+        $this->loginStates()->put('handle-2', new LoginState('/b'));
+
+        $this->loginStates()->forget('handle-1');
+
+        self::assertNull($this->loginStates()->get('handle-1'));
+        self::assertSame('spa', $this->loginStates()->applicationOf('handle-1')?->value);
+        self::assertNull($this->loginStates()->applicationOf('handle-2'), 'A request for no application.');
+        self::assertNull($this->loginStates()->applicationOf('never-there'));
+        self::assertNull($this->loginStates()->applicationOf(''));
+    }
+
     /** docs/design/translated-sign-in-pages.md §5.2: the pages a held request goes through read them here. */
     #[Test]
     public function theLanguagesTheRequestAskedForAreKept(): void

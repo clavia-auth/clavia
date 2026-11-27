@@ -67,6 +67,7 @@ final readonly class ClientsHandler implements RequestHandlerInterface
             $body->bool('require_pushed_authorization_requests') ?? false,
             $body->bool('dpop_bound_access_tokens') ?? false,
             $body->string('accent_color'),
+            $body->string('initiate_login_uri'),
         ));
 
         return $this->responder->created(

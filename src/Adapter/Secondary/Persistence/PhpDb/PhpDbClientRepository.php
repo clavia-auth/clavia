@@ -22,6 +22,7 @@ use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\GrantType;
+use Clavia\Domain\Client\InitiateLoginUri;
 use Clavia\Domain\Client\ResponseType;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Shared\Page;
@@ -38,7 +39,7 @@ final readonly class PhpDbClientRepository implements ClientRepository
     private const string COLUMNS = 'client_id, client_secret_hash, name, client_type, redirect_uris, '
         . 'grant_types, response_types, token_endpoint_auth_method, created_at, post_logout_redirect_uris, '
         . 'backchannel_logout_uri, backchannel_logout_session_required, require_pkce, mfa_policy, '
-        . 'require_pushed_authorization_requests, require_dpop, claims, accent_color';
+        . 'require_pushed_authorization_requests, require_dpop, claims, accent_color, initiate_login_uri';
 
     public function __construct(
         private Database $database,
@@ -130,13 +131,14 @@ final readonly class PhpDbClientRepository implements ClientRepository
                     client_id, client_secret_hash, name, client_type, redirect_uris, grant_types,
                     response_types, token_endpoint_auth_method, created_at, post_logout_redirect_uris,
                     backchannel_logout_uri, backchannel_logout_session_required, require_pkce, mfa_policy,
-                    require_pushed_authorization_requests, require_dpop, claims, accent_color
+                    require_pushed_authorization_requests, require_dpop, claims, accent_color, initiate_login_uri
                 ) VALUES (
                     :client_id, :client_secret_hash, :name, :client_type, CAST(:redirect_uris AS jsonb),
                     CAST(:grant_types AS jsonb), CAST(:response_types AS jsonb), :auth_method, :created_at,
                     CAST(:post_logout_redirect_uris AS jsonb), :backchannel_logout_uri,
                     :backchannel_logout_session_required, :require_pkce, :mfa_policy,
-                    :require_pushed_authorization_requests, :require_dpop, CAST(:claims AS jsonb), :accent_color
+                    :require_pushed_authorization_requests, :require_dpop, CAST(:claims AS jsonb), :accent_color,
+                    :initiate_login_uri
                 )
                 ON CONFLICT (client_id) DO UPDATE SET
                     client_secret_hash = EXCLUDED.client_secret_hash,
@@ -153,7 +155,8 @@ final readonly class PhpDbClientRepository implements ClientRepository
                     require_pushed_authorization_requests = EXCLUDED.require_pushed_authorization_requests,
                     require_dpop = EXCLUDED.require_dpop,
                     claims = EXCLUDED.claims,
-                    accent_color = EXCLUDED.accent_color
+                    accent_color = EXCLUDED.accent_color,
+                    initiate_login_uri = EXCLUDED.initiate_login_uri
                 SQL,
             [
                 'client_id' => $client->id->value,
@@ -182,6 +185,7 @@ final readonly class PhpDbClientRepository implements ClientRepository
                 'require_dpop' => $client->requiresDpop,
                 'claims' => $client->claims->toJson(),
                 'accent_color' => $client->accentColor?->hex,
+                'initiate_login_uri' => $client->initiateLoginUri?->uri->value,
             ],
         );
     }
@@ -240,7 +244,7 @@ final readonly class PhpDbClientRepository implements ClientRepository
          *            post_logout_redirect_uris: string, backchannel_logout_uri: string|null,
          *            backchannel_logout_session_required: bool, require_pkce: bool, mfa_policy: string,
          *            require_pushed_authorization_requests: bool, require_dpop: bool, claims: string,
-         *            accent_color: string|null} $row
+         *            accent_color: string|null, initiate_login_uri: string|null} $row
          */
         return Client::register(
             ClientId::fromString($row['client_id']),
@@ -264,6 +268,7 @@ final readonly class PhpDbClientRepository implements ClientRepository
             $row['require_dpop'],
             ClaimMappings::forApplicationFromJson($row['claims']),
             $row['accent_color'] === null ? null : AccentColor::fromString($row['accent_color']),
+            $row['initiate_login_uri'] === null ? null : InitiateLoginUri::fromString($row['initiate_login_uri']),
         );
     }
 }

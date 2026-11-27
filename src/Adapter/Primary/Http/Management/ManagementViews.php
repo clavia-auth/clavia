@@ -168,6 +168,8 @@ final class ManagementViews
             // Branding on the sign-in pages (#25): the logo is read at GET …/logo, named by its version.
             'accent_color' => $client->accentColor?->hex,
             'logo_version' => $logoVersion,
+            // OpenID Connect Registration 1.0 §2: where a person whose sign-in request expired is sent (#219).
+            'initiate_login_uri' => $client->initiateLoginUri?->uri->value,
             // RFC 7591: which initial access token let it in, and when; null for the operator's own.
             'claims' => array_map(
                 static fn (ClaimMapping $mapping): array => $mapping->toArray(),
