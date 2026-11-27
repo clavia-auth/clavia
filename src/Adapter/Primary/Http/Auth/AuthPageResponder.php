@@ -15,6 +15,7 @@ use Clavia\Adapter\Primary\Http\Shared\HtmlPage;
 use Clavia\Adapter\Primary\Http\Shared\PageRenderer;
 use Clavia\Adapter\Primary\Http\Shared\RequestCookies;
 use Clavia\Adapter\Primary\Http\Shared\SetCookie;
+use Clavia\Application\Authentication\SignIn\SignInRequestExpired;
 use Clavia\Domain\Shared\Language;
 use Clavia\Domain\Shared\SecretGenerator;
 use Fig\Http\Message\StatusCodeInterface;
@@ -38,6 +39,7 @@ final readonly class AuthPageResponder
         private ResponseFactoryInterface $responses,
         private SecretGenerator $secrets,
         private AuthCookies $cookies,
+        private string $issuer,
     ) {
     }
 
@@ -67,6 +69,24 @@ final readonly class AuthPageResponder
         return count($held) > 1
             ? $response->withAddedHeader('Set-Cookie', $this->cookies->expireStrayCsrf()->toString())
             : $response;
+    }
+
+    /**
+     * The answer to a sign-in whose held request is gone (#218, #219): a `303` to where its application
+     * starts a sign-in, with `iss` (OpenID Connect Core 1.0 §4), when the application registered one, so
+     * that it starts a new request; otherwise the page saying the sign-in expired. The address is the
+     * operator's registration, never anything the request carried.
+     *
+     * @param list<SetCookie> $cookies
+     */
+    public function expired(
+        ServerRequestInterface $request,
+        SignInRequestExpired $expired,
+        array $cookies = [],
+    ): ResponseInterface {
+        return $expired->restartAt === null
+            ? $this->page($request, LoginPages::expired(), $cookies)
+            : $this->redirect($expired->restartAt->forIssuer($this->issuer), $cookies);
     }
 
     /**

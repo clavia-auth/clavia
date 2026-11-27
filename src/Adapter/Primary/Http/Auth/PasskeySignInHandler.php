@@ -68,7 +68,7 @@ final readonly class PasskeySignInHandler implements RequestHandlerInterface
         ));
 
         if ($outcome instanceof SignInRequestExpired) {
-            return $this->responder->page($request, LoginPages::expired(), [$this->cookies->expireWebAuthn()]);
+            return $this->responder->expired($request, $outcome, [$this->cookies->expireWebAuthn()]);
         }
         if ($outcome instanceof SecondFactorRequired) {
             return $this->responder->redirect(MfaPages::CHALLENGE_PATH, [

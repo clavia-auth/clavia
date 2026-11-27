@@ -19,6 +19,7 @@ use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\GrantType;
+use Clavia\Domain\Client\InitiateLoginUri;
 use Clavia\Domain\Client\ResponseType;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Shared\Clock;
@@ -104,6 +105,9 @@ final readonly class SeedDashboardClient
             // Operators sign in with a password; other connections are enabled through the API.
             $existing?->connections ?? [ConnectionName::defaultPool()],
             new BackChannelLogout(Url::fromString($base . '/auth/backchannel-logout'), sessionRequired: true),
+            // Where a sign-in that outlived its request sends the operator back to (#219): a GET there
+            // starts a new attempt.
+            initiateLoginUri: InitiateLoginUri::fromString($base . '/auth/sign-in'),
         ));
 
         return new SeededDashboard($id, $existing === null);

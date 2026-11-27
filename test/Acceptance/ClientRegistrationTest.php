@@ -136,6 +136,8 @@ final class ClientRegistrationTest extends AcceptanceTestCase
             'mfa_policy' => 'required',
             'logo_uri' => 'https://acme.example/logo.png',
             'claims' => [['name' => 'plan', 'source' => 'app_metadata.plan', 'in' => ['id_token']]],
+            // Operators only (#219): this server would send people to it.
+            'initiate_login_uri' => 'https://reports.acme.example/sign-in',
         ], $token);
 
         self::assertSame(
@@ -162,7 +164,7 @@ final class ClientRegistrationTest extends AcceptanceTestCase
         self::assertSame(['https://reports.acme.example/bye'], $document['post_logout_redirect_uris']);
         self::assertFalse($document['dpop_bound_access_tokens']);
         // Ignored, and so not in the answer (RFC 7591 §3.2.1).
-        foreach (['require_pkce', 'mfa_policy', 'logo_uri', 'claims'] as $ignored) {
+        foreach (['require_pkce', 'mfa_policy', 'logo_uri', 'claims', 'initiate_login_uri'] as $ignored) {
             self::assertArrayNotHasKey($ignored, $document);
         }
 
@@ -172,6 +174,7 @@ final class ClientRegistrationTest extends AcceptanceTestCase
         self::assertTrue($client->requiresPkce, 'PKCE stays required.');
         self::assertSame([], $client->connections);
         self::assertTrue($client->claims->isEmpty(), 'A self-registered client never sets its custom claims.');
+        self::assertNull($client->initiateLoginUri, 'Nor where people are sent to start again.');
         $registration = $this->container()->get(ClientRegistrationRepository::class)->find($client->id);
         self::assertTrue($registration?->accessTokenDigest->equals(Digest::of($document['registration_access_token'])));
         self::assertTrue($registration?->initialAccessTokenId?->equals($this->idOf($token)));

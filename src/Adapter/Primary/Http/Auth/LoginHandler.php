@@ -81,7 +81,7 @@ final readonly class LoginHandler implements RequestHandlerInterface
         ));
 
         if ($outcome instanceof SignInRequestExpired) {
-            return $this->responder->page($request, LoginPages::expired());
+            return $this->responder->expired($request, $outcome);
         }
         if ($outcome instanceof SecondFactorRequired) {
             // No session yet: the second step is a page of its own, holding the

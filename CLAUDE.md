@@ -305,7 +305,7 @@ objects, repository interfaces, and an `Event` namespace for its domain events.
 |---|---|---|
 | `Shared` | `Clock`, `RandomSource`, `SecretGenerator`, `Digest`, `Scope`/`ScopeSet`, `Audience`, `Url`, `UuidId`, `Base64Url`, `PageRequest`/`Page`, `InvalidValue`, `AlreadyExists`, `DomainEvent` | Secrets are 43-character tokens; codes and tokens are stored as their SHA-256 `Digest`; URLs are kept byte for byte and compared exactly |
 | `Identity` | `User`, `Profile`, `AppMetadata`, `PasswordPolicy`, `ExternalIdentity`, `AssertedIdentity`, `AccountLink` | Every account belongs to one connection; an address is unique within it; a changed address is unverified; an emailed link dies with the address or password it was issued against; application metadata is a JSON object only operators write (16 KiB, five levels, keys sorted), replaced whole |
-| `Client` | `Client`, `ClientId`, `ClientType`, `ClientAuthMethod`, `GrantType`, `ResponseType`, `Ownership`, `BackChannelLogout`, `AccentColor`, `ClientLogo`, `Registration\InitialAccessToken` | Type, auth method and secret agree; the code flow needs a redirect URI; `client_credentials` needs a confidential client; `tpc_…` ids are third-party; an accent colour is `#` and six hex digits, its text colour worked out by WCAG contrast; a logo is PNG, JPEG or WebP by its content (never SVG), 16–1024 px a side, 256 KiB |
+| `Client` | `Client`, `ClientId`, `ClientType`, `ClientAuthMethod`, `GrantType`, `ResponseType`, `Ownership`, `BackChannelLogout`, `AccentColor`, `ClientLogo`, `InitiateLoginUri`, `Registration\InitialAccessToken` | Type, auth method and secret agree; the code flow needs a redirect URI; `client_credentials` needs a confidential client; `tpc_…` ids are third-party; an accent colour is `#` and six hex digits, its text colour worked out by WCAG contrast; a logo is PNG, JPEG or WebP by its content (never SVG), 16–1024 px a side, 256 KiB |
 | `Connection` | `Connection`, `ConnectionName`, `ConnectionStrategy` (database, social, OIDC, passwordless, SAML), `OidcSettings`, `BuiltInConnection`, `Saml\*` (`SamlSettings`, `SamlCertificate`, `SamlOptions`, `SamlRequestId`, `ServiceProviderKey[Set]`) | The default pool, social providers and `email` are switched, never created or deleted; only a pool takes sign-ups or requires a verified address; only an OIDC or SAML connection requires provisioning; a SAML connection, and only one, has SAML settings: 1 to 3 pinned RSA certificates, https endpoints |
 | `ResourceServer` | `ResourceServer` (an API: `rs_…` id, audience, permissions, `AccessTokenFormat`), `Permission`, `ClientGrant` | A system API (the Management API) can be renamed, never deleted, always enforces roles; tokens are opaque unless the API takes JWTs |
 | `Rbac` | `Role`, `GrantedPermission`, `RoleRepository` (also the assignments) | A person holds a permission only through a role; `permissionsHeld(user, API)` is the question issuance asks; a **provisionable** role (one a SCIM group may grant) never holds a system API's permission, refused by the role and by a database trigger; an assignment is `by_hand` or a group's, and a group takes back only its own |
@@ -381,7 +381,11 @@ A handle that names nothing any more (expired, spent, forged) is **refused, neve
 (`SignIn\HeldSignInRequest`, #218): the login and sign-up pages show "sign-in expired" instead of a
 form, and every first factor (password, passkey, sign-up, passwordless start, external and SAML
 start) answers `SignInRequestExpired` before it checks or sends anything. Only a page with no handle
-at all signs in to this server's own pages.
+at all signs in to this server's own pages. The store keeps which application a handle was for a day
+longer than the request (`LoginStateStore::applicationOf()`, the client id alone); when that client
+registered an `initiate_login_uri` (`InitiateLoginUri`, operators only, never dynamic registration,
+#219), `AuthPageResponder::expired()` answers a `303` there with `iss` (OIDC Core §4) instead of the
+page, and the login page's `form-action` names its origin (`Client::formOrigins()`).
 
 `POST /oauth2/token` runs `Token\IssueToken`, which owns what every grant shares (repeated
 parameters, `grant_type`, client authentication, the client's right to the grant) and

@@ -22,6 +22,7 @@ use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\Event\ClientRegistered;
+use Clavia\Domain\Client\InitiateLoginUri;
 use Clavia\Domain\Client\Ownership;
 use Clavia\Domain\Shared\Clock;
 use Clavia\Domain\Shared\InvalidValue;
@@ -88,6 +89,7 @@ final readonly class RegisterClient
             $new->requireDpop,
             null,
             $new->accentColor === null ? null : AccentColor::fromString($new->accentColor),
+            $new->initiateLoginUri === null ? null : InitiateLoginUri::fromString($new->initiateLoginUri),
         );
         $this->clients->save($client);
         $this->events->dispatch(new ClientRegistered($client));

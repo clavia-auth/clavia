@@ -13,6 +13,7 @@ namespace Clavia\Application\Authentication\SignIn;
 
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Domain\Authentication\LoginState;
+use Clavia\Domain\Client\ClientRepository;
 
 /**
  * The request a sign-in page was opened for, as every first factor reads it: the one place that
@@ -31,21 +32,40 @@ final class HeldSignInRequest
     {
     }
 
-    /** @return LoginState|SignInRequestExpired|null Null when no handle was given. */
+    /**
+     * @return LoginState|SignInRequestExpired|null Null when no handle was given. A request that is gone
+     *         names where its application starts a sign-in, when the store still remembers which one it
+     *         was for and that application registered such an address (#219).
+     */
     public static function find(
         LoginStateStore $loginStates,
+        ClientRepository $clients,
         #[\SensitiveParameter] ?string $handle,
     ): LoginState|SignInRequestExpired|null {
         if ($handle === null || $handle === '') {
             return null;
         }
 
-        return $loginStates->get($handle) ?? new SignInRequestExpired();
+        $held = $loginStates->get($handle);
+        if ($held !== null) {
+            return $held;
+        }
+        $clientId = $loginStates->applicationOf($handle);
+
+        return new SignInRequestExpired($clientId === null ? null : $clients->find($clientId)?->initiateLoginUri);
     }
 
-    /** Whether a handle was given and names nothing: for the pages, before they offer a form. */
-    public static function hasExpired(LoginStateStore $loginStates, #[\SensitiveParameter] ?string $handle): bool
-    {
-        return self::find($loginStates, $handle) instanceof SignInRequestExpired;
+    /**
+     * What a page for `$handle` shows instead of a form: null while the request is there, or when the
+     * page names none.
+     */
+    public static function expired(
+        LoginStateStore $loginStates,
+        ClientRepository $clients,
+        #[\SensitiveParameter] ?string $handle,
+    ): ?SignInRequestExpired {
+        $found = self::find($loginStates, $clients, $handle);
+
+        return $found instanceof SignInRequestExpired ? $found : null;
     }
 }

@@ -23,6 +23,7 @@ use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\GrantType;
+use Clavia\Domain\Client\InitiateLoginUri;
 use Clavia\Domain\Client\ResponseType;
 use Clavia\Domain\Connection\ConnectionName;
 use Clavia\Domain\Shared\PageRequest;
@@ -95,6 +96,21 @@ trait ClientRepositoryContract
 
         $this->clients()->save($read->withBackChannelLogout(null));
         self::assertNull($this->clients()->find(ClientId::fromString('spa'))?->backChannelLogout);
+    }
+
+    #[Test]
+    public function aSignInStartAddressIsKeptByteForByteAndCleared(): void
+    {
+        $this->clients()->save($this->aPublicClient('spa', 'My SPA')->withInitiateLoginUri(
+            InitiateLoginUri::fromString('https://app.example/sign-in?from=Clavia'),
+        ));
+
+        $read = $this->clients()->find(ClientId::fromString('spa'));
+        self::assertNotNull($read);
+        self::assertSame('https://app.example/sign-in?from=Clavia', $read->initiateLoginUri?->uri->value);
+
+        $this->clients()->save($read->withInitiateLoginUri(null));
+        self::assertNull($this->clients()->find(ClientId::fromString('spa'))?->initiateLoginUri);
     }
 
     #[Test]

@@ -67,12 +67,13 @@ final readonly class DescribeLoginPage
     }
 
     /**
-     * Whether the page names a held request that is gone (expired, spent, or never was): such a page
-     * offers no form, since no sign-in from it can finish what was started ({@see SignInRequestExpired}).
+     * The held request the page names, when it is gone (expired, spent, or never was): such a page
+     * offers no form, since no sign-in from it can finish what was started. Null while the request is
+     * there, or when the page names none.
      */
-    public function requestHasExpired(#[\SensitiveParameter] ?string $loginState): bool
+    public function expiredRequest(#[\SensitiveParameter] ?string $loginState): ?SignInRequestExpired
     {
-        return HeldSignInRequest::hasExpired($this->loginStates, $loginState);
+        return HeldSignInRequest::expired($this->loginStates, $this->clients, $loginState);
     }
 
     /**
@@ -118,14 +119,14 @@ final readonly class DescribeLoginPage
 
     /**
      * Where a sign-in submitted from the page for this handle may end: the origins of the
-     * redirect URIs of the application the pending request is for. Empty when the handle
-     * names nothing, or no application.
+     * redirect URIs of the application the pending request is for, and of its sign-in start
+     * address (`Client::formOrigins()`). Empty when the handle names nothing, or no application.
      *
      * @return list<string>
      */
     public function formOrigins(#[\SensitiveParameter] ?string $loginState): array
     {
-        return $this->client($loginState)?->redirectOrigins() ?? [];
+        return $this->client($loginState)?->formOrigins() ?? [];
     }
 
     /** The application behind a login page's handle, if the handle names one. */

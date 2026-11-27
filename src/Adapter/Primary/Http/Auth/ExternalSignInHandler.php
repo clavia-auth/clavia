@@ -53,7 +53,7 @@ final readonly class ExternalSignInHandler implements RequestHandlerInterface
             return $this->errors->notFound($request);
         }
         if ($started instanceof SignInRequestExpired) {
-            return $this->responder->page($request, LoginPages::expired());
+            return $this->responder->expired($request, $started);
         }
         if ($started instanceof ExternalSignInUnavailable) {
             return $this->responder->page($request, LoginPages::form(

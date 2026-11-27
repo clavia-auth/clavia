@@ -71,7 +71,7 @@ final readonly class PasswordlessStartHandler implements RequestHandlerInterface
         ));
 
         if ($outcome instanceof SignInRequestExpired) {
-            return $this->responder->page($request, LoginPages::expired());
+            return $this->responder->expired($request, $outcome);
         }
         if ($outcome instanceof PasswordlessCodeSent) {
             return $this->responder->redirect(
@@ -99,8 +99,9 @@ final readonly class PasswordlessStartHandler implements RequestHandlerInterface
         Message $error,
         int $status,
     ): ResponseInterface {
-        if ($this->describe->requestHasExpired($loginState)) {
-            return $this->responder->page($request, LoginPages::expired());
+        $expired = $this->describe->expiredRequest($loginState);
+        if ($expired !== null) {
+            return $this->responder->expired($request, $expired);
         }
 
         return $this->responder->page(

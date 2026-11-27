@@ -13,6 +13,7 @@ namespace ClaviaTest\Support\Fake;
 
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Domain\Authentication\LoginState;
+use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Shared\Clock;
 
 /**
@@ -22,6 +23,9 @@ final class InMemoryLoginStateStore implements LoginStateStore
 {
     /** @var array<string, array{state: LoginState, expiresAt: int}> */
     private array $entries = [];
+
+    /** @var array<string, array{clientId: ClientId, expiresAt: int}> */
+    private array $applications = [];
 
     public function __construct(private readonly Clock $clock)
     {
@@ -34,6 +38,12 @@ final class InMemoryLoginStateStore implements LoginStateStore
             'state' => $state,
             'expiresAt' => $this->clock->now()->getTimestamp() + LoginState::LIFETIME_SECONDS,
         ];
+        if ($state->clientId !== null) {
+            $this->applications[$handle] = [
+                'clientId' => $state->clientId,
+                'expiresAt' => $this->clock->now()->getTimestamp() + LoginState::APPLICATION_REMEMBERED_SECONDS,
+            ];
+        }
     }
 
     #[\Override]
@@ -48,6 +58,14 @@ final class InMemoryLoginStateStore implements LoginStateStore
     public function forget(#[\SensitiveParameter] string $handle): void
     {
         unset($this->entries[$handle]);
+    }
+
+    #[\Override]
+    public function applicationOf(#[\SensitiveParameter] string $handle): ?ClientId
+    {
+        $entry = $this->applications[$handle] ?? null;
+
+        return $entry !== null && $entry['expiresAt'] > $this->clock->now()->getTimestamp() ? $entry['clientId'] : null;
     }
 
     public function count(): int

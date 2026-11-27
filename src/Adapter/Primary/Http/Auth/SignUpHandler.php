@@ -78,7 +78,7 @@ final readonly class SignUpHandler implements RequestHandlerInterface
             $this->responder->language($request),
         ));
         if ($outcome instanceof SignInRequestExpired) {
-            return $this->responder->page($request, LoginPages::expired());
+            return $this->responder->expired($request, $outcome);
         }
         if ($outcome instanceof CheckYourInbox) {
             return $this->responder->page($request, AccountPages::checkInbox($outcome->email, 'sign-up', $loginState));
@@ -113,8 +113,9 @@ final readonly class SignUpHandler implements RequestHandlerInterface
         int $status = StatusCodeInterface::STATUS_OK,
     ): ResponseInterface {
         // A page for a request that is gone offers no form: an account made from it would sign in to nowhere.
-        if ($this->describe->requestHasExpired($loginState)) {
-            return $this->responder->page($request, LoginPages::expired());
+        $expired = $this->describe->expiredRequest($loginState);
+        if ($expired !== null) {
+            return $this->responder->expired($request, $expired);
         }
         $page = ($this->describe)($loginState);
         if (! $page->available) {
