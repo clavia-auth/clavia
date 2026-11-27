@@ -369,6 +369,7 @@ final class SettingsBuilder
 
         $this->refuseUnusableSamlKeys($settings);
         $this->refuseUnknownLanguages($settings);
+        $this->refuseUnusableDecisionEngine($settings);
 
         if ($settings->signingBackend !== 'postgres' && $settings->signingKeyRef === null) {
             throw new InvalidSettings(sprintf(
@@ -530,6 +531,46 @@ final class SettingsBuilder
                 'CLAVIA_DEFAULT_LANGUAGE %s is not one of CLAVIA_LANGUAGES.',
                 $this->quote($settings->defaultLanguage),
             ));
+        }
+    }
+
+    /**
+     * The decision engine (docs/design/fine-grained-authorization.md §3): its URL http or https with
+     * a host and nothing a request would carry beyond the path (no credentials, query or fragment),
+     * and its key with it, never one without the other. The key is never quoted back.
+     *
+     * @throws InvalidSettings
+     */
+    private function refuseUnusableDecisionEngine(Settings $settings): void
+    {
+        if ($settings->fgaUrl === null) {
+            if ($settings->fgaApiKey !== null) {
+                throw new InvalidSettings('CLAVIA_FGA_API_KEY is set without CLAVIA_FGA_URL naming the engine.');
+            }
+
+            return;
+        }
+
+        $uri = Uri::parse($settings->fgaUrl);
+        if (
+            $uri === null
+            || ! in_array(strtolower((string) $uri->getScheme()), ['http', 'https'], true)
+            || ($uri->getHost() ?? '') === ''
+            || $uri->getUserInfo() !== null
+            || $uri->getQuery() !== null
+            || $uri->getFragment() !== null
+        ) {
+            throw new InvalidSettings(
+                'CLAVIA_FGA_URL must be an http or https URL with a host and no credentials, query or fragment.',
+            );
+        }
+
+        $length = strlen($settings->fgaApiKey ?? '');
+        if ($length < 16 || $length > 512) {
+            throw new InvalidSettings(
+                'CLAVIA_FGA_URL requires CLAVIA_FGA_API_KEY, the preshared key OpenFGA is started with: '
+                . '16 to 512 characters.',
+            );
         }
     }
 

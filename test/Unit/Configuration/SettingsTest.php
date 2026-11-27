@@ -500,6 +500,77 @@ final class SettingsTest extends TestCase
         self::assertNotContains('api', Settings::RESERVED_SUBDOMAIN_LABELS);
     }
 
+    // ── Fine-grained authorization ──────────────────────────────────────────────
+
+    public function testTheDecisionEngineIsOffUntilItsUrlIsSet(): void
+    {
+        $settings = Settings::fromEnvironment(self::MINIMAL);
+
+        self::assertNull($settings->fgaUrl);
+        self::assertNull($settings->fgaApiKey);
+        self::assertSame(2, $settings->fgaTimeout);
+    }
+
+    public function testTheDecisionEngineIsAPrivateAddressWithItsKey(): void
+    {
+        // Infrastructure, like the database: a private address on plain http is what it is.
+        $settings = Settings::fromEnvironment(self::MINIMAL + [
+            'CLAVIA_FGA_URL' => 'http://openfga:8080',
+            'CLAVIA_FGA_API_KEY' => str_repeat('k', 16),
+            'CLAVIA_FGA_TIMEOUT' => '10',
+        ]);
+
+        self::assertSame('http://openfga:8080', $settings->fgaUrl);
+        self::assertSame(str_repeat('k', 16), $settings->fgaApiKey);
+        self::assertSame(10, $settings->fgaTimeout);
+    }
+
+    /** @return iterable<string, array{array<string, string>, string}> */
+    public static function unusableDecisionEngines(): iterable
+    {
+        $key = ['CLAVIA_FGA_API_KEY' => str_repeat('k', 16)];
+
+        yield 'a URL without its key' => [['CLAVIA_FGA_URL' => 'http://openfga:8080'], 'requires CLAVIA_FGA_API_KEY'];
+        yield 'a key too short' => [
+            ['CLAVIA_FGA_URL' => 'http://openfga:8080', 'CLAVIA_FGA_API_KEY' => str_repeat('k', 15)],
+            'requires CLAVIA_FGA_API_KEY',
+        ];
+        yield 'a key too long' => [
+            ['CLAVIA_FGA_URL' => 'http://openfga:8080', 'CLAVIA_FGA_API_KEY' => str_repeat('k', 513)],
+            'requires CLAVIA_FGA_API_KEY',
+        ];
+        yield 'a key without a URL' => [$key, 'without CLAVIA_FGA_URL'];
+        yield 'not http' => [['CLAVIA_FGA_URL' => 'grpc://openfga:8081'] + $key, 'http or https'];
+        yield 'no host' => [['CLAVIA_FGA_URL' => 'http:///stores'] + $key, 'http or https'];
+        yield 'credentials' => [['CLAVIA_FGA_URL' => 'http://fga:secret@openfga:8080'] + $key, 'no credentials'];
+        yield 'a query' => [['CLAVIA_FGA_URL' => 'http://openfga:8080/?x=1'] + $key, 'no credentials'];
+        yield 'a fragment' => [['CLAVIA_FGA_URL' => 'http://openfga:8080/#x'] + $key, 'no credentials'];
+        yield 'not a URL' => [['CLAVIA_FGA_URL' => 'http://open fga'] + $key, 'http or https'];
+        yield 'a timeout of zero' => [
+            ['CLAVIA_FGA_URL' => 'http://openfga:8080', 'CLAVIA_FGA_TIMEOUT' => '0'] + $key,
+            'CLAVIA_FGA_TIMEOUT must be at least 1',
+        ];
+        yield 'a timeout past ten seconds' => [
+            ['CLAVIA_FGA_URL' => 'http://openfga:8080', 'CLAVIA_FGA_TIMEOUT' => '11'] + $key,
+            'CLAVIA_FGA_TIMEOUT must be at most 10',
+        ];
+    }
+
+    /** @param array<string, string> $variables */
+    #[DataProvider('unusableDecisionEngines')]
+    public function testAnUnusableDecisionEngineIsRefusedAtStartup(array $variables, string $reason): void
+    {
+        try {
+            Settings::fromEnvironment(self::MINIMAL + $variables);
+            self::fail('The settings were accepted.');
+        } catch (InvalidSettings $refused) {
+            self::assertStringContainsString($reason, $refused->getMessage());
+            // The key is a credential: never quoted back.
+            self::assertStringNotContainsString('kkkkkkkkkkkkkkk', $refused->getMessage());
+            self::assertStringNotContainsString('secret', $refused->getMessage());
+        }
+    }
+
     // ── Passkeys ────────────────────────────────────────────────────────────────
 
     public function testTheBreachedPasswordCheckIsOffUnlessTurnedOn(): void
