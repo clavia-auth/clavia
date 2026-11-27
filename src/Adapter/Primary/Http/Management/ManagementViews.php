@@ -31,6 +31,7 @@ use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\Passkey\Passkey;
 use Clavia\Domain\Claims\ClaimMapping;
 use Clavia\Domain\Client\Client;
+use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\Registration\ClientRegistration;
 use Clavia\Domain\Client\Registration\InitialAccessToken;
@@ -52,6 +53,7 @@ use Clavia\Domain\Webhook\WebhookDelivery;
 use Clavia\Domain\Webhook\WebhookEndpoint;
 use DateTimeImmutable;
 use DateTimeZone;
+use LogicException;
 
 /**
  * The JSON shape of each resource, as `docs/openapi/management-api.yaml` describes it
@@ -209,6 +211,29 @@ final class ManagementViews
                 static fn (ClaimMapping $mapping): array => $mapping->toArray(),
                 $api->claims->mappings,
             ),
+        ];
+    }
+
+    /**
+     * An API's fine-grained authorization: on or off, its store, the model in force (as the operator
+     * wrote it, decoded with its objects kept objects, so `{}` is not sent back as `[]`), and the
+     * clients speaking for it.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws LogicException When the API has none: the use case answers 404 first.
+     */
+    public static function authorization(ResourceServer $api): array
+    {
+        $settings = $api->authorization ?? throw new LogicException('The API has no fine-grained authorization.');
+
+        return [
+            'enabled' => $settings->enabled,
+            'store_id' => $settings->store->value,
+            'model_id' => $settings->modelId->value,
+            'model' => json_decode($settings->model->json, false, 64, JSON_THROW_ON_ERROR),
+            'clients' => array_map(static fn (ClientId $client): string => $client->value, $settings->clients),
+            'denial_reasons' => $settings->denialReasons,
         ];
     }
 

@@ -41,6 +41,7 @@ use Clavia\Domain\Shared\Url;
 use ClaviaTest\Support\Fake\FrozenClock;
 use ClaviaTest\Support\Fake\InMemoryClientGrantRepository;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
+use ClaviaTest\Support\Fake\FakeDecisionEngine;
 use ClaviaTest\Support\Fake\InMemoryDomainEvents;
 use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
@@ -149,7 +150,7 @@ final class ResourceServersTest extends TestCase
         $client = $this->machineClient();
         $this->grant()($client->id, $api->identifier);
 
-        new DeleteResourceServer($this->apis, new InMemoryDomainEvents())($api->id);
+        new DeleteResourceServer($this->apis, new InMemoryDomainEvents(), new FakeDecisionEngine())($api->id);
 
         self::assertNull($this->apis->find($api->id));
         self::assertNull($this->grants->find($client->id, $api->id));
@@ -206,7 +207,7 @@ final class ResourceServersTest extends TestCase
         $api = $this->registerManagementApi()();
 
         try {
-            new DeleteResourceServer($this->apis, new InMemoryDomainEvents())($api->id);
+            new DeleteResourceServer($this->apis, new InMemoryDomainEvents(), new FakeDecisionEngine())($api->id);
             self::fail('The Management API was deleted.');
         } catch (SystemApiProtected) {
         }

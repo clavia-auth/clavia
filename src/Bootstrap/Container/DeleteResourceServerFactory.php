@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Application\Management\ResourceServers\DeleteResourceServer;
+use Clavia\Application\Port\DecisionEngine;
 use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Psr\Container\ContainerInterface;
@@ -25,6 +26,9 @@ final class DeleteResourceServerFactory
         /** @var DomainEvents $events */
         $events = $container->get(DomainEvents::class);
 
-        return new DeleteResourceServer($resourceServers, $events);
+        /** @var DecisionEngine $engine */
+        $engine = $container->get(DecisionEngine::class);
+
+        return new DeleteResourceServer($resourceServers, $events, $engine);
     }
 }

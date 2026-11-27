@@ -40,4 +40,18 @@ final readonly class ReadResourceServers
     {
         return $this->resourceServers->find($id) ?? throw NotFound::of('API');
     }
+
+    /**
+     * The API, known to have fine-grained authorization set up, switched on or off.
+     *
+     * @throws NotFound When the API does not exist or has none.
+     */
+    public function withAuthorization(ResourceServerId $id): ResourceServer
+    {
+        $api = $this->one($id);
+
+        return $api->authorization === null
+            ? throw NotFound::of('fine-grained authorization on this API')
+            : $api;
+    }
 }

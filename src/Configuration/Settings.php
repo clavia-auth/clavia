@@ -511,6 +511,22 @@ final readonly class Settings
         return $this->managementApiIdentifier ?? sprintf('https://%s/api/v1/', $this->managementHost());
     }
 
+    /**
+     * The Authorization API's identifier (docs/design/fine-grained-authorization.md §2): the audience
+     * of the tokens an API's client asks for decisions with. Derived from the domain, an identifier
+     * never dereferenced, beside the Management API's.
+     */
+    public function authorizationApiAudience(): string
+    {
+        return sprintf('https://%s/access', $this->managementHost());
+    }
+
+    /** Whether fine-grained authorization is on: `CLAVIA_FGA_URL` names a decision engine. */
+    public function fineGrainedAuthorization(): bool
+    {
+        return $this->fgaUrl !== null;
+    }
+
     /** The `From` address of every email: `CLAVIA_EMAIL_FROM`, or `no-reply@{rootDomain}`. */
     public function emailSender(): string
     {

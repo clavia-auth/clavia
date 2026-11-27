@@ -71,6 +71,24 @@ final class FakeDecisionEngine implements DecisionEngine
         $this->unavailable = true;
     }
 
+    /** The engine answers again. */
+    public function comeBack(): void
+    {
+        $this->unavailable = false;
+    }
+
+    /** Whether the store exists: a test that deleted one, or left none behind, says so. */
+    public function hasStore(StoreId $store): bool
+    {
+        return isset($this->models[$store->value]);
+    }
+
+    /** How many stores exist. */
+    public function storeCount(): int
+    {
+        return count($this->models);
+    }
+
     #[\Override]
     public function createStore(string $name): StoreId
     {

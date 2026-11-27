@@ -81,6 +81,7 @@ use Clavia\Adapter\Primary\Http\Management\ProvisioningTokensHandler;
 use Clavia\Adapter\Primary\Http\Management\ManagementApiMiddleware;
 use Clavia\Adapter\Primary\Http\Management\ManagementContract;
 use Clavia\Adapter\Primary\Http\Management\ManagementResponder;
+use Clavia\Adapter\Primary\Http\Management\ResourceServerAuthorizationHandler;
 use Clavia\Adapter\Primary\Http\Management\ResourceServerHandler;
 use Clavia\Adapter\Primary\Http\Management\ResourceServersHandler;
 use Clavia\Adapter\Primary\Http\Management\RoleHandler;
@@ -271,8 +272,12 @@ use Clavia\Application\Management\ProvisioningTokens\RevokeProvisioningToken;
 use Clavia\Application\Management\Provisioning\AssignRole;
 use Clavia\Application\Management\Provisioning\EnsureRole;
 use Clavia\Application\Management\Provisioning\GrantClientAccess;
+use Clavia\Application\Management\Provisioning\RegisterAuthorizationApi;
 use Clavia\Application\Management\Provisioning\RegisterManagementApi;
+use Clavia\Application\Management\Provisioning\SystemApiRegistration;
+use Clavia\Application\Management\ResourceServers\ConfigureAuthorization;
 use Clavia\Application\Management\ResourceServers\DeleteResourceServer;
+use Clavia\Application\Management\ResourceServers\DisableAuthorization;
 use Clavia\Application\Management\ResourceServers\ReadResourceServers;
 use Clavia\Application\Management\ResourceServers\RegisterResourceServer;
 use Clavia\Application\Management\ResourceServers\UpdateResourceServer;
@@ -766,8 +771,12 @@ final class ConfigProvider
                     RegisterResourceServer::class => Container\RegisterResourceServerFactory::class,
                     UpdateResourceServer::class => Container\UpdateResourceServerFactory::class,
                     DeleteResourceServer::class => Container\DeleteResourceServerFactory::class,
+                    ConfigureAuthorization::class => Container\ConfigureAuthorizationFactory::class,
+                    DisableAuthorization::class => Container\DisableAuthorizationFactory::class,
                     GrantClientAccess::class => Container\GrantClientAccessFactory::class,
                     RegisterManagementApi::class => Container\RegisterManagementApiFactory::class,
+                    SystemApiRegistration::class => Container\SystemApiRegistrationFactory::class,
+                    RegisterAuthorizationApi::class => Container\RegisterAuthorizationApiFactory::class,
                     AuthenticateManagementCaller::class => Container\AuthenticateManagementCallerFactory::class,
                     RolePermissions::class => Container\RolePermissionsFactory::class,
                     ReadRoles::class => Container\ReadRolesFactory::class,
@@ -931,6 +940,8 @@ final class ConfigProvider
                     RotateClientSecretHandler::class => Container\RotateClientSecretHandlerFactory::class,
                     ResourceServersHandler::class => Container\ResourceServersHandlerFactory::class,
                     ResourceServerHandler::class => Container\ResourceServerHandlerFactory::class,
+                    ResourceServerAuthorizationHandler::class
+                        => Container\ResourceServerAuthorizationHandlerFactory::class,
                     RolesHandler::class => Container\RolesHandlerFactory::class,
                     RoleHandler::class => Container\RoleHandlerFactory::class,
                     RoleUsersHandler::class => Container\RoleUsersHandlerFactory::class,

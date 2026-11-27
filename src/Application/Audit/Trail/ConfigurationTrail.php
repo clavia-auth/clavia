@@ -36,6 +36,9 @@ use Clavia\Domain\Oidc\Event\SigningKeyRotated;
 use Clavia\Domain\Provisioning\Event\ProvisioningTokenIssued;
 use Clavia\Domain\Provisioning\Event\ProvisioningTokenRevoked;
 use Clavia\Domain\ResourceServer\Event\ClientAccessGranted;
+use Clavia\Domain\Authorization\Event\AuthorizationDisabled;
+use Clavia\Domain\Authorization\Event\AuthorizationEnabled;
+use Clavia\Domain\Authorization\Event\AuthorizationModelWritten;
 use Clavia\Domain\ResourceServer\Event\ResourceServerChanged;
 use Clavia\Domain\ResourceServer\Event\ResourceServerDeleted;
 use Clavia\Domain\ResourceServer\Event\ResourceServerRegistered;
@@ -76,6 +79,9 @@ final readonly class ConfigurationTrail implements EventSubscriber
             ResourceServerRegistered::class => $this->resourceServerRegistered(...),
             ResourceServerChanged::class => $this->resourceServerChanged(...),
             ResourceServerDeleted::class => $this->resourceServerDeleted(...),
+            AuthorizationEnabled::class => $this->authorizationEnabled(...),
+            AuthorizationDisabled::class => $this->authorizationDisabled(...),
+            AuthorizationModelWritten::class => $this->authorizationModelWritten(...),
             ClientAccessGranted::class => $this->clientAccessGranted(...),
             ConnectionCreated::class => $this->connectionCreated(...),
             ConnectionChanged::class => $this->connectionChanged(...),
@@ -179,6 +185,34 @@ final readonly class ConfigurationTrail implements EventSubscriber
         $this->audit->record(AuditEventType::ResourceServerDeleted, AuditTarget::resourceServer($api->id), [
             'identifier' => $api->identifier->value,
         ]);
+    }
+
+    private function authorizationEnabled(AuthorizationEnabled $event): void
+    {
+        $this->audit->record(
+            AuditEventType::AuthorizationEnabled,
+            AuditTarget::resourceServer($event->resourceServerId),
+            ['store' => $event->store->value],
+        );
+    }
+
+    private function authorizationDisabled(AuthorizationDisabled $event): void
+    {
+        $this->audit->record(
+            AuditEventType::AuthorizationDisabled,
+            AuditTarget::resourceServer($event->resourceServerId),
+            ['store_deleted' => $event->storeDeleted],
+        );
+    }
+
+    /** The model's id, never its content: the model is read where it is kept. */
+    private function authorizationModelWritten(AuthorizationModelWritten $event): void
+    {
+        $this->audit->record(
+            AuditEventType::AuthorizationModelWritten,
+            AuditTarget::resourceServer($event->resourceServerId),
+            ['model' => $event->model->value],
+        );
     }
 
     private function clientAccessGranted(ClientAccessGranted $event): void
