@@ -6,6 +6,13 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ## [Unreleased]
 
+### Fixed
+
+- **A link under a sign-in form stands apart from it**: "Back to sign in" on the forgot-password and
+  check-your-inbox pages, "Already have an account?" on sign-up, and "Start again" on the passwordless
+  pages now sit centred, with room above, like "Forgot your password?" on the login page, instead of
+  against the button.
+
 ## [0.5.0] - 2026-11-27
 
 Operations and experience: a production deployment kit and Prometheus metrics, sign-in pages and mail
