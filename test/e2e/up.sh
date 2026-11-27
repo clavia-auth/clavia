@@ -22,6 +22,10 @@ root="$(cd "${here}/../.." && pwd)"
 work="${here}/.work"
 domain="clavia.test"
 compose=(docker compose -f "${here}/compose.yaml")
+# Another compose file merged into the stack, such as the conformance suite's (conformance/compose.yaml).
+if [[ -n "${CLAVIA_E2E_COMPOSE_OVERRIDE:-}" ]]; then
+  compose+=(-f "${CLAVIA_E2E_COMPOSE_OVERRIDE}")
+fi
 # The dashboard behind /dashboard is started when asked for (it is pulled, and its image is not Clavia's).
 [[ -n "${CLAVIA_E2E_DASHBOARD:-}" ]] && compose+=(--profile dashboard)
 

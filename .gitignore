@@ -34,3 +34,4 @@ certs/*.pem
 # deploy/compose: the settings of a deployment, which hold its secrets
 deploy/compose/dashboard.env
 /test/e2e/.work/
+/conformance/.work/

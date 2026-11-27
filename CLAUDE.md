@@ -1384,9 +1384,12 @@ Three suites, three base classes, all under `test/`:
   operations and the routes the same set. It describes, never gates: requests are not checked.
 - **End to end** (`test/e2e/`, `make e2e-up`, then `composer e2e`): Behat scenarios in Gherkin (`test/e2e/features/`, contexts in `test/e2e/Context/`, configured by `behat.php`) over HTTPS from outside, against the production topology (Caddy with the production Caddyfile, PHP-FPM, PostgreSQL, Redis, and Mailpit as the SMTP server; with `CLAVIA_E2E_DASHBOARD=1`, the dashboard too, from `ghcr.io/clavia-auth/clavia-dashboard:edge` or the image `CLAVIA_E2E_DASHBOARD_IMAGE` names, for the dashboard's own Playwright suite; `CLAVIA_E2E_IMAGE=<image>` runs a Clavia image as it is instead of building this checkout's, as the dashboard's workflow does with `ghcr.io/clavia-auth/clavia:edge`) built from the checkout on `127.0.0.1` ports 80 and 443, with a `mkcert` certificate for `*.clavia.test`. `up.sh` starts and seeds it, `verify.sh` checks it answers, `down.sh` forgets it; the `End to end` workflow runs the same. Each scenario makes its own people and applications through the Management API, under names no other scenario uses, and the stack is never wiped. The stack's failure throttle (20 per 5 minutes per address) is shared by the whole run: a scenario that provokes refusals spends from it, and `redis-cli flushall` in the stack's Redis resets it. `CLAVIA_E2E_ADDRESS` and `CLAVIA_E2E_HTTPS_PORT` say where Caddy is reached when it is not `127.0.0.1:443`, and `CLAVIA_E2E_MAIL_PORT` where Mailpit's API is (8025); a scenario reads the mail it provoked from there (`MailContext`), by recipient. The stack raises the account-mail and sign-up send limits (`e2e.env`), which the acceptance suite tests, so the run does not spend a budget it shares. The design is `docs/design/end-to-end-scenarios.md`; its slices add the scenarios.
 - **Use cases** take `new InMemoryDomainEvents()` and assert on `ofType()`.
-- **Conformance**: the OpenID Foundation suite passes the Config OP plan and, but for one test
-  OAuth 2.1 forbids passing (a code flow without a nonce or PKCE), the Basic OP plan.
-  `conformance/README.md` explains how to run it.
+- **Conformance**: the OpenID Foundation suite passes the Config OP plan and the Basic OP plan but
+  for two deliberate failures: a code flow without a nonce or PKCE, which OAuth 2.1 forbids, and a request
+  for the advertised MFA level by an account with no second factor, sent to enrol. It runs nightly
+  (`conformance.yml`, `conformance/run.sh`) against the end-to-end stack, and any module whose outcome
+  differs from `conformance/baseline.json`, either way, fails the run and opens or updates one issue
+  labelled `conformance`. `conformance/README.md` explains the results and how to run it.
 
 Tests state behaviour from the specifications, and name the RFC section where it matters.
 

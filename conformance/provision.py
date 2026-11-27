@@ -43,6 +43,8 @@ def main() -> int:
     parser.add_argument("--email", required=True, help="The account the suite's browser signs in as")
     parser.add_argument("--password", required=True)
     parser.add_argument("--ca", help="A CA bundle to trust, for a server with a local certificate")
+    parser.add_argument("--profile", action="store_true",
+                        help="Give the account a profile first: the suite asks for the profile scope's claims")
     args = parser.parse_args()
 
     context = ssl.create_default_context(cafile=args.ca)
@@ -55,6 +57,9 @@ def main() -> int:
         "Authorization": "Basic " + base64.b64encode(f"{args.m2m_id}:{args.m2m_secret}".encode()).decode(),
     }, urllib.parse.urlencode({"grant_type": "client_credentials", "audience": management}).encode(),
         "application/x-www-form-urlencoded")["access_token"]
+
+    if args.profile:
+        give_profile(opener, management, token, args.email)
 
     def client(name: str, method: str) -> dict:
         created = call(opener, management + "clients", {"Authorization": f"Bearer {token}"}, json.dumps({
@@ -83,8 +88,26 @@ def main() -> int:
     return 0
 
 
-def call(opener, url: str, headers: dict, body: bytes, content_type: str) -> dict:
-    request = urllib.request.Request(url, data=body, method="POST", headers=headers | {"Content-Type": content_type})
+def give_profile(opener, management: str, token: str, email: str) -> None:
+    """The account the suite signs in as, with the profile claims Clavia keeps (README, step 1)."""
+    headers = {"Authorization": f"Bearer {token}"}
+    found = call(opener, management + "users?" + urllib.parse.urlencode({"q": email}), headers, None, None, "GET")
+    user = next((item for item in found["items"] if item["email"] == email), None)
+    if user is None:
+        sys.exit(f"No account {email}: run `clavia seed-dev` first.")
+    call(opener, management + "users/" + urllib.parse.quote(user["id"]), headers, json.dumps({
+        "name": "Ada Lovelace",
+        "given_name": "Ada",
+        "family_name": "Lovelace",
+        "nickname": "ada",
+        "locale": "en-GB",
+    }).encode(), "application/json", "PATCH")
+
+
+def call(opener, url: str, headers: dict, body: bytes | None, content_type: str | None,
+         method: str = "POST") -> dict:
+    extra = {} if content_type is None else {"Content-Type": content_type}
+    request = urllib.request.Request(url, data=body, method=method, headers=headers | extra)
     try:
         with opener.open(request) as response:
             return json.load(response)
