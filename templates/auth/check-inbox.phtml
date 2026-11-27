@@ -20,4 +20,4 @@
       <p class="subtitle"><?= $this->emphasised('account.check_inbox.sign_up', ['email' => $email], 'email') ?></p>
 <?php endif ?>
 <?php $this->placeholder('subtitle')->captureEnd() ?>
-    <p class="hint"><?= $this->escapeHtml($this->t('account.check_inbox.nothing_arrived')) ?> <a href="<?= $this->escapeHtmlAttr($loginHref) ?>"><?= $this->escapeHtml($this->t('account.back_to_sign_in')) ?></a></p>
+    <p class="hint aside"><?= $this->escapeHtml($this->t('account.check_inbox.nothing_arrived')) ?> <a href="<?= $this->escapeHtmlAttr($loginHref) ?>"><?= $this->escapeHtml($this->t('account.back_to_sign_in')) ?></a></p>
