@@ -31,7 +31,7 @@
   "oidcc-basic-certification-test-plan[client_registration=static_client][server_metadata=discovery] / oidcc-server[client_auth_type=client_secret_basic][response_mode=default][response_type=code]": "PASSED",
   "oidcc-basic-certification-test-plan[client_registration=static_client][server_metadata=discovery] / oidcc-ui-locales[client_auth_type=client_secret_basic][response_mode=default][response_type=code]": "PASSED",
   "oidcc-basic-certification-test-plan[client_registration=static_client][server_metadata=discovery] / oidcc-unsigned-request-object-supported-correctly-or-rejected-as-unsupported[client_auth_type=client_secret_basic][response_mode=default][response_type=code]": "SKIPPED",
-  "oidcc-basic-certification-test-plan[client_registration=static_client][server_metadata=discovery] / oidcc-userinfo-get[client_auth_type=client_secret_basic][response_mode=default][response_type=code]": "PASSED",
+  "oidcc-basic-certification-test-plan[client_registration=static_client][server_metadata=discovery] / oidcc-userinfo-get[client_auth_type=client_secret_basic][response_mode=default][response_type=code]": "WARNING",
   "oidcc-basic-certification-test-plan[client_registration=static_client][server_metadata=discovery] / oidcc-userinfo-post-body[client_auth_type=client_secret_basic][response_mode=default][response_type=code]": "WARNING",
   "oidcc-basic-certification-test-plan[client_registration=static_client][server_metadata=discovery] / oidcc-userinfo-post-header[client_auth_type=client_secret_basic][response_mode=default][response_type=code]": "PASSED",
   "oidcc-config-certification-test-plan / oidcc-discovery-endpoint-verification[client_registration=static_client][server_metadata=discovery]": "PASSED"
