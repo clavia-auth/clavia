@@ -4186,16 +4186,16 @@
         },
         {
             "name": "symfony/mailer",
-            "version": "v8.1.10",
+            "version": "v8.1.12",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/mailer.git",
-                "reference": "4ba81a8f04fbf0bb1691f7bff760b301f1956fd7"
+                "reference": "535515ab0bdc7efbfb7161fe23c6bf7434e26b93"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/mailer/zipball/4ba81a8f04fbf0bb1691f7bff760b301f1956fd7",
-                "reference": "4ba81a8f04fbf0bb1691f7bff760b301f1956fd7",
+                "url": "https://api.github.com/repos/symfony/mailer/zipball/535515ab0bdc7efbfb7161fe23c6bf7434e26b93",
+                "reference": "535515ab0bdc7efbfb7161fe23c6bf7434e26b93",
                 "shasum": ""
             },
             "require": {
@@ -4242,7 +4242,7 @@
             "description": "Helps sending emails",
             "homepage": "https://symfony.com",
             "support": {
-                "source": "https://github.com/symfony/mailer/tree/v8.1.10"
+                "source": "https://github.com/symfony/mailer/tree/v8.1.12"
             },
             "funding": [
                 {
@@ -4262,7 +4262,8 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-10-23T17:06:53+00:00"
+            "time": "2026-11-24T18:01:43+00:00",
+            "published-time": "2026-11-25T09:30:34+00:00"
         },
         {
             "name": "symfony/mime",
@@ -5351,16 +5352,16 @@
         },
         {
             "name": "symfony/serializer",
-            "version": "v8.1.11",
+            "version": "v8.1.12",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/serializer.git",
-                "reference": "05624c94507c3acf065b6486bb626f0d741af459"
+                "reference": "0d8d656317c5213a0858ad7868fe19e0072f094f"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/serializer/zipball/05624c94507c3acf065b6486bb626f0d741af459",
-                "reference": "05624c94507c3acf065b6486bb626f0d741af459",
+                "url": "https://api.github.com/repos/symfony/serializer/zipball/0d8d656317c5213a0858ad7868fe19e0072f094f",
+                "reference": "0d8d656317c5213a0858ad7868fe19e0072f094f",
                 "shasum": ""
             },
             "require": {
@@ -5426,7 +5427,7 @@
             "description": "Handles serializing and deserializing data structures, including object graphs, into array structures or other formats like XML and JSON.",
             "homepage": "https://symfony.com",
             "support": {
-                "source": "https://github.com/symfony/serializer/tree/v8.1.11"
+                "source": "https://github.com/symfony/serializer/tree/v8.1.12"
             },
             "funding": [
                 {
@@ -5446,7 +5447,8 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-11-04T08:39:20+00:00"
+            "time": "2026-11-24T18:01:43+00:00",
+            "published-time": "2026-11-25T09:30:34+00:00"
         },
         {
             "name": "symfony/service-contracts",
