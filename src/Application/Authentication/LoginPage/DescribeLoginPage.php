@@ -13,6 +13,8 @@ namespace Clavia\Application\Authentication\LoginPage;
 
 use Clavia\Application\Authentication\External\ExternalProviderOption;
 use Clavia\Application\Authentication\ResolveEndUser;
+use Clavia\Application\Authentication\SignIn\HeldSignInRequest;
+use Clavia\Application\Authentication\SignIn\SignInRequestExpired;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Domain\Client\Client;
@@ -65,6 +67,16 @@ final readonly class DescribeLoginPage
     }
 
     /**
+     * The held request the page names, when it is gone (expired, spent, or never was): such a page
+     * offers no form, since no sign-in from it can finish what was started. Null while the request is
+     * there, or when the page names none.
+     */
+    public function expiredRequest(#[\SensitiveParameter] ?string $loginState): ?SignInRequestExpired
+    {
+        return HeldSignInRequest::expired($this->loginStates, $this->clients, $loginState);
+    }
+
+    /**
      * The ways in the form offers for the handle's application — or every usable one
      * without a handle.
      */
@@ -107,14 +119,14 @@ final readonly class DescribeLoginPage
 
     /**
      * Where a sign-in submitted from the page for this handle may end: the origins of the
-     * redirect URIs of the application the pending request is for. Empty when the handle
-     * names nothing, or no application.
+     * redirect URIs of the application the pending request is for, and of its sign-in start
+     * address (`Client::formOrigins()`). Empty when the handle names nothing, or no application.
      *
      * @return list<string>
      */
     public function formOrigins(#[\SensitiveParameter] ?string $loginState): array
     {
-        return $this->client($loginState)?->redirectOrigins() ?? [];
+        return $this->client($loginState)?->formOrigins() ?? [];
     }
 
     /** The application behind a login page's handle, if the handle names one. */

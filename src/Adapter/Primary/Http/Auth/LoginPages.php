@@ -30,6 +30,8 @@ final class LoginPages
 
     public const string EXPIRED_FORM = 'login.error.expired_form';
 
+    public const string EXPIRED_REQUEST = 'login.error.expired_request';
+
     public const string PASSWORD_UNAVAILABLE = 'login.error.password_unavailable';
 
     public const string INVALID_EMAIL = 'login.error.invalid_email';
@@ -100,6 +102,23 @@ final class LoginPages
             status: $status,
             formOrigins: $formOrigins,
             script: $passkey === null ? null : PasskeyPages::SCRIPT,
+        );
+    }
+
+    /**
+     * What a page for a held request that is gone shows instead of a form (#218): nothing was signed
+     * in, and only the application can start again. Shown by the login and sign-up pages, and by every
+     * first factor refused with {@see \Clavia\Application\Authentication\SignIn\SignInRequestExpired}.
+     */
+    public static function expired(): HtmlPage
+    {
+        return new HtmlPage(
+            template: 'auth::login-expired',
+            title: Message::of('login.expired.title'),
+            heading: Message::of('login.expired.title'),
+            returnTo: self::address(null),
+            error: Message::of(self::EXPIRED_REQUEST),
+            status: StatusCodeInterface::STATUS_BAD_REQUEST,
         );
     }
 

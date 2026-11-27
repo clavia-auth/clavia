@@ -20,6 +20,7 @@ use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\Authentication\External\ExternalSignInUnavailable;
 use Clavia\Application\Authentication\External\Saml\BeginSamlSignIn;
 use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
+use Clavia\Application\Authentication\SignIn\SignInRequestExpired;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -47,6 +48,9 @@ final readonly class SamlSignInHandler implements RequestHandlerInterface
         $started = ($this->begin)(self::connection($request), $loginState);
         if ($started === null) {
             return $this->errors->notFound($request);
+        }
+        if ($started instanceof SignInRequestExpired) {
+            return $this->responder->expired($request, $started);
         }
         if ($started instanceof ExternalSignInUnavailable) {
             return $this->responder->page($request, LoginPages::form(

@@ -14,6 +14,7 @@ namespace Clavia\Bootstrap\Container;
 use Clavia\Adapter\Primary\Http\Auth\AuthCookies;
 use Clavia\Adapter\Primary\Http\Auth\AuthPageResponder;
 use Clavia\Adapter\Primary\Http\Shared\PageRenderer;
+use Clavia\Configuration\Settings;
 use Clavia\Domain\Shared\SecretGenerator;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
@@ -31,6 +32,9 @@ final class AuthPageResponderFactory
         /** @var AuthCookies $cookies */
         $cookies = $container->get(AuthCookies::class);
 
-        return new AuthPageResponder($pages, $responses, $secrets, $cookies);
+        /** @var Settings $settings */
+        $settings = $container->get(Settings::class);
+
+        return new AuthPageResponder($pages, $responses, $secrets, $cookies, $settings->issuer());
     }
 }

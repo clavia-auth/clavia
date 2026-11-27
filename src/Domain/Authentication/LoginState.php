@@ -36,6 +36,13 @@ final readonly class LoginState
      */
     public const int LIFETIME_SECONDS = 3600;
 
+    /**
+     * How long the application a request was for is remembered after the request itself is gone
+     * (expired or spent): a person who comes back to a page left open that long is sent to the
+     * application to start again, rather than told to find it (#219). Only the client's id is kept.
+     */
+    public const int APPLICATION_REMEMBERED_SECONDS = 86400;
+
     /** The languages the request asked its pages in (`ui_locales`); none if none. */
     public UiLocales $uiLocales;
 

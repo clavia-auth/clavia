@@ -12,6 +12,8 @@ declare(strict_types=1);
 namespace Clavia\Application\Authentication\Passwordless;
 
 use Clavia\Application\Authentication\EmailSendLimit;
+use Clavia\Application\Authentication\SignIn\HeldSignInRequest;
+use Clavia\Application\Authentication\SignIn\SignInRequestExpired;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Application\Port\Mailer;
@@ -67,7 +69,7 @@ final readonly class StartPasswordlessSignIn
 
     public function __invoke(
         PasswordlessStart $request,
-    ): PasswordlessCodeSent|PasswordlessLinkSent|PasswordlessRefused {
+    ): PasswordlessCodeSent|PasswordlessLinkSent|PasswordlessRefused|SignInRequestExpired {
         $mode = PasswordlessMode::tryFrom($request->mode);
         try {
             $email = PasswordlessChallenge::address($request->email);
@@ -79,7 +81,11 @@ final readonly class StartPasswordlessSignIn
         }
 
         $loginState = $request->loginState === '' ? null : $request->loginState;
-        $target = $loginState === null ? null : $this->loginStates->get($loginState);
+        // A request that is gone sends nothing: the code or link would sign in to nowhere.
+        $target = HeldSignInRequest::find($this->loginStates, $this->clients, $loginState);
+        if ($target instanceof SignInRequestExpired) {
+            return $target;
+        }
         $clientId = $target?->clientId;
         $client = $clientId === null ? null : $this->clients->find($clientId);
         if (! $this->access->allows($client, ConnectionName::email())) {

@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Application\Authentication\Account;
 
 use Clavia\Application\Authentication\LoginPage\DescribeLoginPage;
+use Clavia\Application\Authentication\SignIn\SignInRequestExpired;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Domain\Client\ClientRepository;
@@ -40,5 +41,11 @@ final readonly class DescribeSignUpPage
         }
 
         return new SignUpPage(true, $pool->requiresVerifiedEmail, $this->loginPage->formOrigins($loginState));
+    }
+
+    /** The held request the page names, when it is gone: then it offers no form. */
+    public function expiredRequest(#[\SensitiveParameter] ?string $loginState): ?SignInRequestExpired
+    {
+        return $this->loginPage->expiredRequest($loginState);
     }
 }

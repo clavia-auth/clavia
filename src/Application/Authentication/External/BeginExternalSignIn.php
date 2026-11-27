@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Clavia\Application\Authentication\External;
 
+use Clavia\Application\Authentication\SignIn\HeldSignInRequest;
+use Clavia\Application\Authentication\SignIn\SignInRequestExpired;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\Port\ExternalSignInStore;
 use Clavia\Application\Port\LoginStateStore;
@@ -52,13 +54,13 @@ final readonly class BeginExternalSignIn
      * @param string      $connection The connection the route named.
      * @param string|null $loginState The login page's handle, if the sign-in started from one.
      *
-     * @return ExternalSignInStarted|ExternalSignInUnavailable|null Null when no usable external
-     *                                                              connection has that name.
+     * @return ExternalSignInStarted|ExternalSignInUnavailable|SignInRequestExpired|null Null when no usable
+     *         external connection has that name; {@see SignInRequestExpired} for a handle that names nothing any more.
      */
     public function __invoke(
         string $connection,
         #[\SensitiveParameter] ?string $loginState,
-    ): ExternalSignInStarted|ExternalSignInUnavailable|null {
+    ): ExternalSignInStarted|ExternalSignInUnavailable|SignInRequestExpired|null {
         try {
             $usable = $this->access->external(ConnectionName::fromString($connection));
         } catch (InvalidValue) {
@@ -69,7 +71,11 @@ final readonly class BeginExternalSignIn
         }
 
         $loginState = $loginState === '' ? null : $loginState;
-        $target = $loginState === null ? null : $this->loginStates->get($loginState);
+        // A request that is gone starts nothing: the round trip would sign in to nowhere.
+        $target = HeldSignInRequest::find($this->loginStates, $this->clients, $loginState);
+        if ($target instanceof SignInRequestExpired) {
+            return $target;
+        }
         $clientId = $target?->clientId;
         $client = $clientId === null ? null : $this->clients->find($clientId);
         if (! $this->access->allows($client, $usable->connection->name)) {

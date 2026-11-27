@@ -16,6 +16,7 @@ use Clavia\Adapter\Secondary\Redis\RedisConnection;
 use Clavia\Adapter\Secondary\Redis\RedisLoginStateStore;
 use Clavia\Application\Port\LoginStateStore;
 use Clavia\Domain\Authentication\LoginState;
+use Clavia\Domain\Client\ClientId;
 use ClaviaTest\Support\Contract\LoginStateStoreContract;
 use ClaviaTest\Support\IntegrationTestCase;
 use ClaviaTest\Support\TestEnvironment;
@@ -51,14 +52,24 @@ final class RedisLoginStateStoreTest extends IntegrationTestCase
         self::assertLessThanOrEqual(LoginState::LIFETIME_SECONDS, $ttl);
     }
 
+    public function testTheApplicationIsKeptADayUnderItsOwnKey(): void
+    {
+        $this->loginStates()->put('handle-1', new LoginState('/a', ClientId::fromString('spa')));
+
+        $key = Keys::forSecret('login-state-application', 'handle-1');
+        self::assertSame('spa', $this->redis()->get($key), 'The client id, and nothing else.');
+        self::assertGreaterThan(LoginState::APPLICATION_REMEMBERED_SECONDS - 5, $this->redis()->ttl($key));
+        self::assertLessThanOrEqual(LoginState::APPLICATION_REMEMBERED_SECONDS, $this->redis()->ttl($key));
+    }
+
     public function testTheHandleNeverAppearsInAKey(): void
     {
-        $this->loginStates()->put('the-plain-handle', new LoginState('/a'));
+        $this->loginStates()->put('the-plain-handle', new LoginState('/a', ClientId::fromString('spa')));
 
         $keys = $this->redis()->keys('*');
 
         self::assertIsArray($keys);
-        self::assertCount(1, $keys);
+        self::assertCount(2, $keys);
         self::assertStringNotContainsString('the-plain-handle', implode('|', $keys));
     }
 

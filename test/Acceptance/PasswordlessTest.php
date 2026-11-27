@@ -96,6 +96,26 @@ final class PasswordlessTest extends AcceptanceTestCase
         self::assertSame([], $this->outbox()->recent(10), 'Refused, not merely hidden: nothing was sent.');
     }
 
+    /** The request expired while the page was open: no code or link goes out (#218). */
+    public function testNothingIsSentForARequestThatExpired(): void
+    {
+        $this->publicClient();
+        $state = $this->loginStateForTheClient();
+        $page = $this->get('/auth/login', ['state' => $state]);
+        $this->forgetLoginState($state);
+
+        $refused = $this->post('/auth/passwordless/start', [
+            'email' => self::EMAIL,
+            'mode' => 'link',
+            'csrf_token' => self::csrfTokenFrom($page),
+            'state' => $state,
+        ]);
+
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $refused->getStatusCode());
+        self::assertStringContainsString('Sign-in expired', (string) $refused->getBody());
+        self::assertSame([], $this->outbox()->recent(10));
+    }
+
     // ── A code ──────────────────────────────────────────────────────────────────
 
     public function testACodeSignsInAndCreatesTheAccount(): void

@@ -24,6 +24,7 @@ use Clavia\Application\Authentication\SignIn\PasswordSignInUnavailable;
 use Clavia\Application\Authentication\SignIn\SecondFactorRequired;
 use Clavia\Application\Authentication\SignIn\SignedIn;
 use Clavia\Application\Authentication\SignIn\SignInOutcome;
+use Clavia\Application\Authentication\SignIn\SignInRequestExpired;
 use Clavia\Application\Authentication\SignIn\SignInWithPassword;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Domain\Authentication\AuthenticationMethod;
@@ -283,9 +284,18 @@ final class SignInWithPasswordTest extends TestCase
         self::assertSame('/auth/login', $outcome->nextUrl);
     }
 
-    public function testAnUnknownHandleStillSignsInAndLandsOnTheLoginPage(): void
+    /** A handle naming nothing is a request that is gone: nobody is signed in to nowhere (#218). */
+    public function testAnUnknownHandleSignsNobodyInAndChecksNoPassword(): void
     {
         $outcome = $this->signInWith(loginState: 'expired');
+
+        self::assertInstanceOf(SignInRequestExpired::class, $outcome);
+        self::assertSame([], $this->events->ofType(SignInRefused::class), 'No password was judged.');
+    }
+
+    public function testNoHandleAtAllStillSignsInAndLandsOnTheLoginPage(): void
+    {
+        $outcome = $this->signInWith(loginState: null);
 
         self::assertInstanceOf(SignedIn::class, $outcome);
         self::assertSame('/auth/login', $outcome->nextUrl);

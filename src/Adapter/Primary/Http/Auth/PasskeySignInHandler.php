@@ -18,6 +18,7 @@ use Clavia\Adapter\Primary\Http\Shared\RequestParameterReader;
 use Clavia\Application\Authentication\SignIn\PasskeySignIn;
 use Clavia\Application\Authentication\SignIn\SecondFactorRequired;
 use Clavia\Application\Authentication\SignIn\SignedIn;
+use Clavia\Application\Authentication\SignIn\SignInRequestExpired;
 use Clavia\Application\Authentication\SignIn\SignInWithPasskey;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
@@ -66,6 +67,9 @@ final readonly class PasskeySignInHandler implements RequestHandlerInterface
             RequestCookies::first($request, $this->cookies->sessionCookieName),
         ));
 
+        if ($outcome instanceof SignInRequestExpired) {
+            return $this->responder->expired($request, $outcome, [$this->cookies->expireWebAuthn()]);
+        }
         if ($outcome instanceof SecondFactorRequired) {
             return $this->responder->redirect(MfaPages::CHALLENGE_PATH, [
                 $this->cookies->mfaChallenge($outcome->challenge),

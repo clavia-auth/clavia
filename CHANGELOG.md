@@ -8,21 +8,39 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ## [0.5.1] - 2026-11-27
 
-Small fixes to the sign-in pages and the guides. Nothing needs doing on upgrade: no migration, no new
-setting, no new scope.
+Sign-in pages that outlive their request, and small fixes to the pages and the guides. A sign-in page
+left open past its request's hour no longer signs anybody in to nowhere: the person is sent back to the
+application, or told to go back to it.
+
+Nothing needs doing on upgrade beyond the migration (`0051`), which runs as before. To send people back
+to an application rather than telling them to go back, register its sign-in start address
+(`initiate_login_uri`) through the Management API. No new setting, no new scope.
 
 ### Added
 
+- **An application's sign-in start address** (`initiate_login_uri`, #219, OpenID Connect Dynamic Client
+  Registration §2). An operator registers it on a client through the Management API (an https URL). A
+  person who signs in from a page whose request has expired (held for an hour) is then sent straight back
+  to it, with `iss`, and the application starts a new request, instead of being told to go back. This
+  server remembers which application a request was for, and nothing more, for 24 hours. A client that
+  registers itself cannot set it. `seed-dev` registers the dashboard's (`/dashboard/auth/sign-in`).
+- **Migration `0051`** adds the clients' `initiate_login_uri` column.
 - **A theme switch on the guides** (#216): a button in the guide pages' bar switches between light and
   dark, and the API reference beside them follows the same choice. Without one, the pages follow the
   system as before.
 
 ### Fixed
 
-- **A link under a sign-in form stands apart from it**: "Back to sign in" on the forgot-password and
-  check-your-inbox pages, "Already have an account?" on sign-up, and "Start again" on the passwordless
-  pages now sit centred, with room above, like "Forgot your password?" on the login page, instead of
-  against the button.
+- **A link under a sign-in form stands apart from it** (#217): "Back to sign in" on the forgot-password
+  and check-your-inbox pages, "Already have an account?" on sign-up, and "Start again" on the
+  passwordless pages now sit centred, with room above, like "Forgot your password?" on the login page,
+  instead of against the button.
+- **A sign-in whose request has expired signs nobody in** (#218). A sign-in page left open past the
+  request's hour used to sign the person in anyway, to nowhere: they were shown "you are signed in" while
+  the application never heard back, and the application's choice of connections was ignored. The login
+  and sign-up pages for such a request now say it has expired and to go back to the application, and a
+  password, passkey, sign-up, email code or link, or external sign-in submitted from one is refused
+  before anything is checked or sent. A page opened with no request at all works as before.
 
 ## [0.5.0] - 2026-11-27
 

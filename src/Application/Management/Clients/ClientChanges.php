@@ -28,6 +28,8 @@ final readonly class ClientChanges
      *                                                       null then clears it — or absent.
      * @param bool              $changesAccentColor          Whether `$accentColor` is a change — null then
      *                                                       gives the pages this server's colour back.
+     * @param bool              $changesInitiateLoginUri     Whether `$initiateLoginUri` is a change — null then
+     *                                                       clears it — or absent.
      */
     public function __construct(
         public ?string $name = null,
@@ -46,6 +48,8 @@ final readonly class ClientChanges
         public ?ClaimMappings $claims = null,
         public bool $changesAccentColor = false,
         public ?string $accentColor = null,
+        public bool $changesInitiateLoginUri = false,
+        public ?string $initiateLoginUri = null,
     ) {
     }
 }

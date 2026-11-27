@@ -66,10 +66,15 @@ final readonly class SignInWithPasskey
     ) {
     }
 
-    public function __invoke(PasskeySignIn $attempt): SignedIn|SecondFactorRequired|CredentialsRejected
-    {
+    public function __invoke(
+        PasskeySignIn $attempt,
+    ): SignedIn|SecondFactorRequired|CredentialsRejected|SignInRequestExpired {
         $loginState = $attempt->loginState === null || $attempt->loginState === '' ? null : $attempt->loginState;
-        $pending = $loginState === null ? null : $this->loginStates->get($loginState);
+        // A request that is gone is refused before the ceremony is claimed or the passkey checked.
+        $pending = HeldSignInRequest::find($this->loginStates, $this->clients, $loginState);
+        if ($pending instanceof SignInRequestExpired) {
+            return $pending;
+        }
         $clientId = $pending?->clientId;
 
         // Claimed before anything is checked: a ceremony answers once, rightly or not.

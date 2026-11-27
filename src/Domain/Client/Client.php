@@ -68,6 +68,7 @@ final readonly class Client
         public bool $requiresDpop,
         public ClaimMappings $claims,
         public ?AccentColor $accentColor,
+        public ?InitiateLoginUri $initiateLoginUri,
     ) {
     }
 
@@ -92,6 +93,8 @@ final readonly class Client
      * @param bool               $requiresDpop  Whether every token it is issued must be bound to a DPoP
      *                                          key (`dpop_bound_access_tokens`, RFC 9449 §5.2).
      * @param AccentColor|null   $accentColor   Its colour on the sign-in pages; null for this server's.
+     * @param InitiateLoginUri|null $initiateLoginUri Where it starts a sign-in of its own; null when it
+     *                                          registered none.
      *
      * @throws InvalidValue When the registration contradicts itself, or a third-party client would
      *                      list connections.
@@ -115,6 +118,7 @@ final readonly class Client
         bool $requiresDpop = false,
         ?ClaimMappings $claims = null,
         ?AccentColor $accentColor = null,
+        ?InitiateLoginUri $initiateLoginUri = null,
     ): self {
         $secretHash = $secretHash === '' ? null : $secretHash;
 
@@ -218,6 +222,7 @@ final readonly class Client
             $requiresDpop,
             $claims ?? ClaimMappings::none(),
             $accentColor,
+            $initiateLoginUri,
         );
     }
 
@@ -249,6 +254,7 @@ final readonly class Client
             $this->requiresDpop,
             $this->claims,
             $this->accentColor,
+            $this->initiateLoginUri,
         );
     }
 
@@ -256,6 +262,14 @@ final readonly class Client
     public function withAccentColor(?AccentColor $accentColor): self
     {
         return clone($this, ['accentColor' => $accentColor]);
+    }
+
+    /**
+     * The same client, starting its sign-ins at `$initiateLoginUri`, or registering no such address (null).
+     */
+    public function withInitiateLoginUri(?InitiateLoginUri $initiateLoginUri): self
+    {
+        return clone($this, ['initiateLoginUri' => $initiateLoginUri]);
     }
 
     /**
@@ -324,6 +338,7 @@ final readonly class Client
             $this->requiresDpop,
             $this->claims,
             $this->accentColor,
+            $this->initiateLoginUri,
         );
     }
 
@@ -351,6 +366,7 @@ final readonly class Client
             $this->requiresDpop,
             $this->claims,
             $this->accentColor,
+            $this->initiateLoginUri,
         );
     }
 
@@ -380,6 +396,7 @@ final readonly class Client
             $this->requiresDpop,
             $this->claims,
             $this->accentColor,
+            $this->initiateLoginUri,
         );
     }
 
@@ -407,6 +424,7 @@ final readonly class Client
             $this->requiresDpop,
             $this->claims,
             $this->accentColor,
+            $this->initiateLoginUri,
         );
     }
 
@@ -434,6 +452,7 @@ final readonly class Client
             $this->requiresDpop,
             $this->claims,
             $this->accentColor,
+            $this->initiateLoginUri,
         );
     }
 
@@ -462,6 +481,7 @@ final readonly class Client
             $required,
             $this->claims,
             $this->accentColor,
+            $this->initiateLoginUri,
         );
     }
 
@@ -497,6 +517,7 @@ final readonly class Client
             $this->requiresDpop,
             $this->claims,
             $this->accentColor,
+            $this->initiateLoginUri,
         );
     }
 
@@ -525,16 +546,29 @@ final readonly class Client
 
     /**
      * The origins the registered redirect URIs point at, each once, in registration order.
-     *
-     * Where a browser may legitimately end up after this client's authorization
-     * request: the login page lists them in its CSP `form-action`, because Chromium
-     * applies that directive to the whole redirect chain of a form submission.
-     *
      * @return list<string>
      */
     public function redirectOrigins(): array
     {
         $origins = array_map(static fn (Url $uri): string => $uri->origin(), $this->redirectUris);
+
+        return array_values(array_unique($origins));
+    }
+
+    /**
+     * Where a browser may legitimately end up after a form on a sign-in page for this client: the
+     * redirect origins, then the origin of its sign-in start address, which a sign-in submitted after
+     * the request expired is sent to (#219). The login page lists them in its CSP `form-action`,
+     * because Chromium applies that directive to the whole redirect chain of a form submission.
+     *
+     * @return list<string>
+     */
+    public function formOrigins(): array
+    {
+        $origins = $this->redirectOrigins();
+        if ($this->initiateLoginUri !== null) {
+            $origins[] = $this->initiateLoginUri->uri->origin();
+        }
 
         return array_values(array_unique($origins));
     }

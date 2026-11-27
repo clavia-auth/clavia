@@ -20,6 +20,7 @@ use Clavia\Application\Authentication\SignIn\PasswordSignIn;
 use Clavia\Application\Authentication\SignIn\PasswordSignInUnavailable;
 use Clavia\Application\Authentication\SignIn\SecondFactorRequired;
 use Clavia\Application\Authentication\SignIn\SignedIn;
+use Clavia\Application\Authentication\SignIn\SignInRequestExpired;
 use Clavia\Application\Authentication\SignIn\SignInWithPassword;
 use Fig\Http\Message\StatusCodeInterface;
 use Psr\Http\Message\ResponseInterface;
@@ -79,6 +80,9 @@ final readonly class LoginHandler implements RequestHandlerInterface
             $this->responder->language($request),
         ));
 
+        if ($outcome instanceof SignInRequestExpired) {
+            return $this->responder->expired($request, $outcome);
+        }
         if ($outcome instanceof SecondFactorRequired) {
             // No session yet: the second step is a page of its own, holding the
             // challenge in a cookie scoped to /auth.
