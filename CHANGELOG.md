@@ -113,6 +113,10 @@ yours matches error messages or reads `Content-Type` on an empty answer.
 
 ### Security
 
+- **`symfony/mailer` 8.1.12** (#212) fixes CVE-2026-133751 and CVE-2026-133755: a man in the middle could
+  bypass a required TLS or inject replies right after STARTTLS. Clavia's SMTP transport requires STARTTLS,
+  so both reached the session that carries verification, reset and sign-in links. `symfony/serializer`
+  8.1.12, used by the passkey library, fixes two advisories no path of Clavia's takes.
 - A logo is recognised by its content and never an SVG, which can carry script; it is served from the
   sign-in origin with `nosniff` and a policy that allows nothing. An application's colour is checked to
   six hexadecimal digits and reaches the pages as a stylesheet of their own origin: no inline style, no
