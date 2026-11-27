@@ -20,7 +20,7 @@
 name: clavia
 
 x-clavia: &clavia
-  image: ghcr.io/clavia-auth/clavia:${CLAVIA_VERSION:-0.4.0}
+  image: ghcr.io/clavia-auth/clavia:${CLAVIA_VERSION:-0.5.0}
   env_file: [.env]
   restart: unless-stopped
   networks: [clavia]
@@ -36,7 +36,7 @@ services:
         required: false
 
   assets:
-    image: ghcr.io/clavia-auth/clavia:${CLAVIA_VERSION:-0.4.0}
+    image: ghcr.io/clavia-auth/clavia:${CLAVIA_VERSION:-0.5.0}
     # The image's public/ into the volume Caddy serves, replaced whole.
     command: ["sh", "-c", "rm -rf /shared/* && cp -a /app/public/. /shared/"]
     restart: "no"
@@ -109,7 +109,7 @@ services:
       retries: 3
 
   dashboard:
-    image: ghcr.io/clavia-auth/clavia-dashboard:${CLAVIA_DASHBOARD_VERSION:-0.4.0}
+    image: ghcr.io/clavia-auth/clavia-dashboard:${CLAVIA_DASHBOARD_VERSION:-0.5.0}
     restart: unless-stopped
     env_file: [dashboard.env]
     depends_on:

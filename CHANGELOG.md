@@ -6,58 +6,19 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-27
+
+Operations and experience: a production deployment kit and Prometheus metrics, sign-in pages and mail
+in the person's language (English and French), branding per application, and references and guides for
+both APIs (`docs/PRODUCTION.md`, `docs/design/translated-sign-in-pages.md`,
+`docs/design/authorization-server-openapi.md`, `docs/design/end-to-end-scenarios.md`).
+
+Nothing needs doing on upgrade beyond the migration, which runs as before. Read Changed if a client of
+yours matches error messages or reads `Content-Type` on an empty answer.
+
 ### Added
 
-- **Branding per application** (#25): an application's logo, name and accent colour on the sign-in
-  pages of its requests. Set through the Management API: `accent_color` on a client, and
-  `GET | PUT | DELETE /api/v1/clients/{client_id}/logo` (PNG, JPEG or WebP, 16 to 1024 pixels a side, at
-  most 256 KiB; never SVG). The pages load both from the sign-in origin, so their security policy is
-  unchanged. Migration `0050_client_branding`.
-
-- **Every sign-in page in French** (#182): sign-up, verification and reset, second factor and its
-  settings, passkeys (their dates too), consent, device approval, passwordless, sign-out, and the SAML
-  and external sign-in refusals. The standard OpenID Connect scopes are worded in the person's language;
-  an API's permissions keep their operator's words. A refused password is worded from its reason, with
-  the policy's bounds.
-
-- **A language switcher** (#185, the last of #24) in every page's footer, beside the colour scheme:
-  the person's choice (`POST /auth/language`, a `clavia_language` cookie for a year) outranks what the
-  application asks for and what the browser says.
-
-- **`ui_locales`** (#183, OpenID Connect Core §3.1.2.1): an application asking for a language gets it
-  on every page of the sign-in it starts (login, second factor, step-up, enrolment, consent), pushed or
-  not, before the browser's `Accept-Language`. A tag that is not offered or not well formed is passed
-  over, never refused. Discovery names the languages offered (`ui_locales_supported`).
-
-- **The sign-in pages in French** (#181, the first of #24): the login page and the error pages follow
-  the browser's `Accept-Language`, among the offered languages, and say so in `<html lang>` and
-  `Content-Language`. Messages live in `translations/*.arb` (ICU MessageFormat), which `CatalogueTest`
-  keeps complete. New settings: **`CLAVIA_LANGUAGES`** (`en fr`) and **`CLAVIA_DEFAULT_LANGUAGE`**
-  (`en`); a language without a catalogue refuses to start. The other pages follow in #182.
-
-- **A reference for the authorization server** (#93), beside the Management API's: every endpoint an
-  application or an API calls on `auth.{domain}` (token, PAR, introspection, revocation, device code,
-  registration, userinfo, the JWKS, discovery, authorize and end session), its parameters, answers and
-  refusals, in `docs/openapi/authorization-server.yaml`, checked against what the server answers. The
-  guides link its operations.
-
-- **The mail in French** (#184, part of #24): verification, reset, invitation, the taken-address
-  notice, the second-factor notice and the passwordless code and link are in the language of the page
-  the person used, and an operator's `POST /api/v1/users/{id}/password-reset` in the account's profile
-  `locale` (else the default language). Their words moved to the catalogue (`mail.*`), durations
-  included.
-
-- **Guides for the Management API** (#98), published with the reference: getting a token (a machine
-  client, or a person signing in), scopes and roles, errors and stepping up, paging and search,
-  DPoP-bound tokens, and registering clients with an initial access token. The reference's bar and
-  introduction link them, and each release keeps its own.
-
-- **Prometheus metrics** (#23): tokens issued, sign-ins, sign-in refusals by reason, OAuth errors by
-  code, mail sent and failed, and request latency by route, at `/metrics` on the internal listener
-  (Caddy's port 8081, never `auth.*` or `management.*`), shared by every process through Redis. New
-  setting **`CLAVIA_METRICS_ENABLED`** (on). The Helm chart gains a metrics Service and an optional
-  ServiceMonitor. A proxy of your own in front of PHP-FPM must answer `/metrics` with `404` on both hosts,
-  and pass `CLAVIA_LISTENER=internal` only from an internal listener.
+**Running it in production**
 
 - **A production deployment kit** (#22): [`docs/PRODUCTION.md`](docs/PRODUCTION.md), a guide to hosts,
   TLS, secrets, signing keys, the first start (the dashboard's client and the first administrator),
@@ -66,6 +27,104 @@ All notable changes to Clavia are written here, for the people who run it. The f
   run every minute and daily); and a Helm chart ([`deploy/helm/clavia`](deploy/helm/clavia): PHP-FPM
   and Caddy in each pod, migrations as a Job before every install and upgrade, the scheduled commands
   as CronJobs, an Ingress for both hosts, and the dashboard). One production Caddyfile serves both.
+- **Prometheus metrics** (#23): tokens issued, sign-ins, sign-in refusals by reason, OAuth errors by
+  code, mail sent and failed, and request latency by route, at `/metrics` on the internal listener
+  (Caddy's port 8081, never `auth.*` or `management.*`), shared by every process through Redis. The Helm
+  chart gains a metrics Service and an optional ServiceMonitor. A proxy of your own in front of PHP-FPM
+  must answer `/metrics` with `404` on both hosts, and pass `CLAVIA_LISTENER=internal` only from an
+  internal listener.
+- **`ghcr.io/clavia-auth/clavia:edge`** (#204), with a `sha-<commit>` tag, built from every push to
+  `main` for other projects' CI. It is not a release: run `X.Y.Z` anywhere that matters.
+
+**Sign-in pages and mail in the person's language** (#24)
+
+- **The sign-in pages in French and English** (#181, #182): the login and error pages, sign-up,
+  verification and reset, the second factor and its settings, passkeys (their dates too), consent,
+  device approval, passwordless, sign-out, and the SAML and external sign-in refusals. A page is in the
+  language the person chose, then the one the application asked for, then the browser's
+  (`Accept-Language`), among the offered ones, and says so in `<html lang>` and `Content-Language`. The
+  standard OpenID Connect scopes are worded in the person's language; an API's permissions keep their
+  operator's words. A refused password is worded from its reason, with the policy's bounds. Messages
+  live in `translations/*.arb` (ICU MessageFormat): a translation is a file of data, kept complete by a
+  test.
+- **`ui_locales`** (#183, OpenID Connect Core §3.1.2.1): an application asking for a language gets it on
+  every page of the sign-in it starts (login, second factor, step-up, enrolment, consent), pushed or not.
+  A tag that is not offered or not well formed is passed over, never refused. Discovery names the
+  languages offered (`ui_locales_supported`).
+- **A language switcher** (#185) in every page's footer, beside the colour scheme: the person's choice
+  (`POST /auth/language`, a `clavia_language` cookie for a year) outranks the application's and the
+  browser's.
+- **The mail in French and English** (#184): verification, reset, invitation, the taken-address notice,
+  the second-factor notice and the passwordless code and link are in the language of the page the
+  person used, and an operator's `POST /api/v1/users/{id}/password-reset` in the account's profile
+  `locale` (else the default language).
+
+**Branding per application** (#25)
+
+- An application's **logo, name and accent colour** on the sign-in pages of its requests. Set through
+  the Management API: `accent_color` on a client, and `GET | PUT | DELETE /api/v1/clients/{client_id}/logo`
+  (PNG, JPEG or WebP, 16 to 1024 pixels a side, at most 256 KiB; never SVG). The pages load both from the
+  sign-in origin, so their security policy is unchanged. The dashboard sets them from an application's
+  Branding tab.
+
+**References and guides**
+
+- **A reference for the authorization server** (#93), beside the Management API's: every endpoint an
+  application or an API calls on `auth.{domain}` (token, PAR, introspection, revocation, device code,
+  registration, userinfo, the JWKS, discovery, authorize and end session), its parameters, answers and
+  refusals, in `docs/openapi/authorization-server.yaml`, checked against what the server answers.
+- **Guides for the Management API** (#98), published with the reference: getting a token (a machine
+  client, or a person signing in), scopes and roles, errors and stepping up, paging and search,
+  DPoP-bound tokens, and registering clients with an initial access token. Each release keeps its own.
+
+**Tested as deployed**
+
+- **End-to-end scenarios** (#39) against the production topology (Caddy with the production Caddyfile,
+  PHP-FPM, PostgreSQL, Redis, mail through SMTP, the dashboard), on every pull request: host separation,
+  security headers, sign-in with PKCE, refresh rotation and replay, the device flow, introspection,
+  revocation and throttling, and the mail links. The OpenID Foundation conformance plans run **nightly**
+  against the same stack and are compared module by module with a recorded baseline
+  (`conformance/README.md`).
+
+**New settings, migrations and commands**
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `CLAVIA_LANGUAGES` | `en fr` | The languages offered, each with its catalogue; one without one refuses to start |
+| `CLAVIA_DEFAULT_LANGUAGE` | `en` | The language when nothing else matches; must be offered |
+| `CLAVIA_METRICS_ENABLED` | `true` | Prometheus metrics on the internal listener |
+
+- Migration **`0050_client_branding`**: `oauth2_clients.accent_color` and the `client_logos` table.
+- No new Management API scope, and no new scheduled command.
+
+### Changed
+
+- **A `409` names the kind of thing taken, never the value sent** (#177): "A role with this name already
+  exists." rather than repeating the name, for roles, connections, APIs and accounts. A client matching
+  the old words must match the status and the problem's `type` instead.
+- **An answer with no content has no `Content-Type`** (#178): a `200` from revocation or a `204` used to
+  say `text/html; charset=UTF-8`, which PHP added.
+- **The Management API's client has two more fields**, `accent_color` and `logo_version` (null when
+  unset); a client of the document that generates strict types regenerates them. The dashboard 0.5.0
+  does.
+- **Static files under `/auth/static/` are named with a digest of their content** (`auth.css?v=…`) and
+  sent with `Cache-Control: no-cache` by both Caddyfiles. A proxy of your own should keep them
+  revalidated.
+
+### Security
+
+- **`symfony/mailer` 8.1.12** (#212) fixes CVE-2026-133751 and CVE-2026-133755: a man in the middle could
+  bypass a required TLS or inject replies right after STARTTLS. Clavia's SMTP transport requires STARTTLS,
+  so both reached the session that carries verification, reset and sign-in links. `symfony/serializer`
+  8.1.12, used by the passkey library, fixes two advisories no path of Clavia's takes.
+- A logo is recognised by its content and never an SVG, which can carry script; it is served from the
+  sign-in origin with `nosniff` and a policy that allows nothing. An application's colour is checked to
+  six hexadecimal digits and reaches the pages as a stylesheet of their own origin: no inline style, no
+  image or style from anywhere else.
+- A pending consent's branding shows only to the person it was put to, so someone else's handle still
+  gives the plain "expired" page.
+- `ui_locales` and the language cookie only choose among the offered languages; neither reaches a file
+  path or a page unfiltered.
 
 ### Fixed
 
@@ -506,7 +565,8 @@ forbids passing (a code flow with neither PKCE nor a `nonce`); see
 - Request objects (`request`, `request_uri`) and the `address` and `phone` scopes.
 - A queue for mail: a sign-in email is sent while the person waits.
 
-[Unreleased]: https://github.com/clavia-auth/clavia/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/clavia-auth/clavia/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/clavia-auth/clavia/releases/tag/v0.5.0
 [0.4.0]: https://github.com/clavia-auth/clavia/releases/tag/v0.4.0
 [0.3.0]: https://github.com/clavia-auth/clavia/releases/tag/v0.3.0
 [0.2.0]: https://github.com/clavia-auth/clavia/releases/tag/v0.2.0
