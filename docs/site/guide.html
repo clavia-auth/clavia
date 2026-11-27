@@ -11,6 +11,16 @@
     turns the Markdown into HTML, DOMPurify keeps only what is safe to insert. Built by
     docs/site/build.sh, once per guide; published with the reference by .github/workflows/docs.yml.
   -->
+  <script>
+    // The theme chosen with the bar's switch, applied before the first paint. It is kept under
+    // Scalar's own key (`colorMode`: light, dark or system), so the guides and the reference, which
+    // share an origin, show the same theme whichever page it was chosen on. Anything else follows
+    // the system.
+    try {
+      const chosen = localStorage.getItem('colorMode');
+      if (chosen === 'light' || chosen === 'dark') document.documentElement.dataset.theme = chosen;
+    } catch {}
+  </script>
   <style>
     :root {
       --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
@@ -74,6 +84,27 @@
       border: 1px solid var(--border);
       border-radius: 6px;
       padding: 4px 8px;
+    }
+    .clavia-bar .theme-switch {
+      display: grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      color: var(--muted);
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .clavia-bar .theme-switch:hover { color: var(--text); background: var(--surface); }
+    .clavia-bar .theme-switch svg { width: 16px; height: 16px; }
+    .theme-switch .moon, .theme-switch .sun { display: none; }
+    :root[data-theme="light"] .theme-switch .moon, :root[data-theme="dark"] .theme-switch .sun { display: block; }
+    :root:not([data-theme]) .theme-switch .moon { display: block; }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme]) .theme-switch .moon { display: none; }
+      :root:not([data-theme]) .theme-switch .sun { display: block; }
     }
     .layout {
       display: grid;
@@ -145,6 +176,17 @@
       <option value="">{{RELEASE}}</option>
     </select>
     <a class="muted hide-narrow" href="https://github.com/clavia-auth/clavia">GitHub</a>
+    <button type="button" class="theme-switch" id="clavia-theme" aria-label="Switch between light and dark">
+      <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+      <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"/>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+      </svg>
+    </button>
   </header>
   <div class="layout">
     <nav class="guides" aria-label="Guides">
@@ -171,6 +213,18 @@
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"
     integrity="sha384-JEyTNhjM6R1ElGoJns4U2Ln4ofPcqzSsynQkmEc/KGy6336qAZl70tDLufbkla+3" crossorigin="anonymous"></script>
   <script>
+    // Like Scalar's own switch: the other theme from the one shown, kept for the next page.
+    document.getElementById('clavia-theme').addEventListener('click', () => {
+      const root = document.documentElement;
+      const shown = root.dataset.theme
+        ?? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const next = shown === 'dark' ? 'light' : 'dark';
+      root.dataset.theme = next;
+      try {
+        localStorage.setItem('colorMode', next);
+      } catch {}
+    });
+
     (async () => {
       const article = document.getElementById('guide');
       const response = await fetch('./{{SLUG}}.md', { cache: 'no-cache' });
