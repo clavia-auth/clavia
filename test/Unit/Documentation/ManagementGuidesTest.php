@@ -190,6 +190,21 @@ final class ManagementGuidesTest extends TestCase
         }
     }
 
+    public function testTheThemeSwitchSharesTheReferencesChoice(): void
+    {
+        $page = (string) file_get_contents(self::PAGE);
+
+        self::assertStringContainsString('id="clavia-theme"', $page);
+        self::assertStringContainsString(
+            "localStorage.getItem('colorMode')",
+            $page,
+            'Scalar keeps its theme under colorMode: the guides read the same key, so both pages agree.',
+        );
+        self::assertStringContainsString("localStorage.setItem('colorMode', next)", $page);
+        self::assertStringContainsString(':root[data-theme="dark"]', $page);
+        self::assertStringContainsString(':root:not([data-theme="light"])', $page);
+    }
+
     /** @return iterable<string, array{string}> */
     public static function guides(): iterable
     {
