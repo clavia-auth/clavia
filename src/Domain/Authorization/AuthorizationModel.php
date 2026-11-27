@@ -90,6 +90,6 @@ final readonly class AuthorizationModel
 
     public function declares(ObjectType $type): bool
     {
-        return array_any($this->types, fn($declared) => $declared->equals($type));
+        return array_any($this->types, static fn (ObjectType $declared): bool => $declared->equals($type));
     }
 }
