@@ -6,6 +6,16 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-27
+
+Sign-in pages that outlive their request, and small fixes to the pages and the guides. A sign-in page
+left open past its request's hour no longer signs anybody in to nowhere: the person is sent back to the
+application, or told to go back to it.
+
+Nothing needs doing on upgrade beyond the migration (`0051`), which runs as before. To send people back
+to an application rather than telling them to go back, register its sign-in start address
+(`initiate_login_uri`) through the Management API. No new setting, no new scope.
+
 ### Added
 
 - **An application's sign-in start address** (`initiate_login_uri`, #219, OpenID Connect Dynamic Client
@@ -14,14 +24,17 @@ All notable changes to Clavia are written here, for the people who run it. The f
   to it, with `iss`, and the application starts a new request, instead of being told to go back. This
   server remembers which application a request was for, and nothing more, for 24 hours. A client that
   registers itself cannot set it. `seed-dev` registers the dashboard's (`/dashboard/auth/sign-in`).
-  Migration `0051` adds the column.
+- **Migration `0051`** adds the clients' `initiate_login_uri` column.
+- **A theme switch on the guides** (#216): a button in the guide pages' bar switches between light and
+  dark, and the API reference beside them follows the same choice. Without one, the pages follow the
+  system as before.
 
 ### Fixed
 
-- **A link under a sign-in form stands apart from it**: "Back to sign in" on the forgot-password and
-  check-your-inbox pages, "Already have an account?" on sign-up, and "Start again" on the passwordless
-  pages now sit centred, with room above, like "Forgot your password?" on the login page, instead of
-  against the button.
+- **A link under a sign-in form stands apart from it** (#217): "Back to sign in" on the forgot-password
+  and check-your-inbox pages, "Already have an account?" on sign-up, and "Start again" on the
+  passwordless pages now sit centred, with room above, like "Forgot your password?" on the login page,
+  instead of against the button.
 - **A sign-in whose request has expired signs nobody in** (#218). A sign-in page left open past the
   request's hour used to sign the person in anyway, to nowhere: they were shown "you are signed in" while
   the application never heard back, and the application's choice of connections was ignored. The login
@@ -588,7 +601,8 @@ forbids passing (a code flow with neither PKCE nor a `nonce`); see
 - Request objects (`request`, `request_uri`) and the `address` and `phone` scopes.
 - A queue for mail: a sign-in email is sent while the person waits.
 
-[Unreleased]: https://github.com/clavia-auth/clavia/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/clavia-auth/clavia/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/clavia-auth/clavia/releases/tag/v0.5.1
 [0.5.0]: https://github.com/clavia-auth/clavia/releases/tag/v0.5.0
 [0.4.0]: https://github.com/clavia-auth/clavia/releases/tag/v0.4.0
 [0.3.0]: https://github.com/clavia-auth/clavia/releases/tag/v0.3.0
