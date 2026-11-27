@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Clavia API reference · 0.5.0</title>
+  <meta name="description" content="Reference of the Clavia Management API and authorization server, for Clavia 0.5.0.">
+  <link rel="icon" href="../clavia-icon.svg" type="image/svg+xml">
+  <!--
+    The API references, rendered by Scalar from the documents beside this file: management-api.yaml,
+    and authorization-server.yaml for a release that has it (Scalar's document switcher, one server
+    each). Built by docs/site/build.sh, which fills in the release, the path to the site's root and
+    whether the second document is there, and drops the Guides link for a release without guides
+    (guide.html renders them); published by .github/workflows/docs.yml. See docs/RELEASING.md.
+  -->
+  <style>
+    /*
+      Type and spacing of Clavia's own pages (public/auth/static/auth.css): the system font, 15px
+      on a 1.5 line, rather than a web font fetched from elsewhere (withDefaultFonts: false).
+    */
+    :root {
+      --clavia-bar-height: 52px;
+      --clavia-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      --clavia-font-code: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      --scalar-custom-header-height: var(--clavia-bar-height);
+    }
+    .scalar-app, .clavia-bar {
+      --scalar-font: var(--clavia-font);
+      --scalar-font-code: var(--clavia-font-code);
+      /* Prose at Clavia's 15px; the rest of Scalar's scale (navigation, labels) as it is. */
+      --scalar-font-size-2: 15px;
+      --scalar-line-height-1: 1.5;
+      --scalar-line-height-2: 1.55;
+      --scalar-line-height-3: 1.6;
+      --scalar-code-line-height: 1.6;
+      --scalar-radius: 6px;
+      --scalar-radius-lg: 8px;
+      --scalar-radius-xl: 10px;
+      --scalar-sidebar-width: 288px;
+      --scalar-sidebar-padding: 14px;
+      --scalar-content-max-width: 1320px;
+    }
+    /*
+      Clavia's green (public/auth/static/auth.css), as Scalar's accent. Declared on the app's own
+      element: Scalar declares its theme on .light-mode / .dark-mode and :root, after this sheet, and
+      a variable declared nearer the elements that read it wins whatever the order.
+    */
+    .light-mode .scalar-app, .light-mode.scalar-app {
+      --scalar-color-accent: #2d6a4f;
+      --scalar-background-accent: #2d6a4f1a;
+    }
+    .dark-mode .scalar-app, .dark-mode.scalar-app {
+      --scalar-color-accent: #52b788;
+      --scalar-background-accent: #52b7881f;
+    }
+    /*
+      Each tag keeps its heading and description, without the card listing its operations: the
+      sidebar lists them. The card is the column holding a .scalar-card in a tag's own section
+      (one outside an operation list; the operations, inside one, keep their cards).
+    */
+    section.section[id*="/tag/"]:not(.contents section) .section-column:has(> .scalar-card) {
+      display: none;
+    }
+    body { margin: 0; }
+    .clavia-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-sizing: border-box;
+      height: var(--clavia-bar-height);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 0 20px;
+      font: 500 15px/1 var(--clavia-font);
+      color: var(--scalar-color-1, #1b1b1b);
+      background: var(--scalar-background-1, #fff);
+      border-bottom: 1px solid var(--scalar-border-color, #e5e5e5);
+    }
+    .clavia-bar a { color: inherit; text-decoration: none; }
+    .clavia-bar .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+    .clavia-bar .brand img { width: 22px; height: 22px; }
+    .clavia-bar .muted { color: var(--scalar-color-2, #6b6b6b); font-weight: 400; }
+    .clavia-bar .spacer { flex: 1; }
+    .clavia-bar select {
+      font: inherit;
+      color: inherit;
+      background: var(--scalar-background-2, #f6f6f6);
+      border: 1px solid var(--scalar-border-color, #e5e5e5);
+      border-radius: 6px;
+      padding: 4px 8px;
+    }
+    @media (max-width: 600px) { .clavia-bar .hide-narrow { display: none; } }
+  </style>
+</head>
+<body>
+  <header class="clavia-bar">
+    <a class="brand" href="../"><img src="../clavia-icon.svg" alt="">Clavia</a>
+    <span class="muted hide-narrow">API reference</span>
+    <a class="muted" href="guides/" data-guides>Guides</a>
+    <span class="spacer"></span>
+    <label class="muted hide-narrow" for="clavia-release">Release</label>
+    <select id="clavia-release" aria-label="Clavia release">
+      <option value="">0.5.0</option>
+    </select>
+    <a class="muted hide-narrow" href="https://github.com/clavia-auth/clavia">GitHub</a>
+  </header>
+  <div id="app"></div>
+
+  <!-- Pinned, and held to its hash (Subresource Integrity): a changed file on the CDN does not run. -->
+  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.77.0/dist/browser/standalone.js"
+    integrity="sha384-+7ESN8b9Ljg46TCYKedZUlhF/wfZbOt78aV/DtoU3anEElh8Q2eXsyhQ9W5lAZD4" crossorigin="anonymous"></script>
+  <script>
+    const common = {
+      theme: 'default',
+      layout: 'modern',
+      // A reference, not a workbench: no developer toolbar (shown on localhost by default), and no
+      // "Test request", which could not reach a reader's server from this page anyway.
+      showDeveloperTools: 'never',
+      // Nor Scalar's "Ask AI", a service of Scalar's own (on by default on localhost).
+      agent: { disabled: true },
+      hideClientButton: true,
+      hideTestRequestButton: true,
+      // The schemas are in each operation, where they are read; a separate list repeats them.
+      hideModels: true,
+      withDefaultFonts: false,
+      defaultHttpClient: { targetKey: 'shell', clientKey: 'curl' },
+    };
+    // Never a real host: the reader types their own domain, and each document has its own host.
+    const domain = { default: 'example.com', description: 'Your CLAVIA_ROOT_DOMAIN' };
+    const server = (host) => [{ url: `https://${host}.{domain}`, description: 'Your Clavia deployment', variables: { domain } }];
+    const references = [{
+      ...common,
+      title: 'Management API',
+      slug: 'management-api',
+      url: './management-api.yaml',
+      default: true,
+      servers: server('management'),
+      authentication: { preferredSecurityScheme: 'managementToken' },
+      metaData: { title: 'Clavia Management API · 0.5.0' },
+    }];
+    // A release from before the authorization server's document (#93) has the Management API's alone.
+    if (true) {
+      references.push({
+        ...common,
+        title: 'Authorization server',
+        slug: 'authorization-server',
+        url: './authorization-server.yaml',
+        servers: server('auth'),
+        authentication: { preferredSecurityScheme: 'clientSecretBasic' },
+        metaData: { title: 'Clavia authorization server · 0.5.0' },
+      });
+    }
+    Scalar.createApiReference('#app', references);
+
+    // The release picker: every published release, newest first (versions.json, written by the
+    // Docs workflow). Without it, the page still shows its own release.
+    (async () => {
+      const select = document.getElementById('clavia-release');
+      try {
+        const response = await fetch('../versions.json', { cache: 'no-cache' });
+        if (!response.ok) return;
+        const { latest, versions } = await response.json();
+        select.replaceChildren(...versions.map((version) => {
+          const option = document.createElement('option');
+          option.value = version === latest ? '../' : '../v' + version + '/';
+          option.textContent = version === latest ? version + ' (latest)' : version;
+          option.selected = version === '0.5.0';
+          return option;
+        }));
+      } catch {
+        return;
+      }
+      select.addEventListener('change', () => { if (select.value !== '') location.href = select.value; });
+    })();
+  </script>
+</body>
+</html>

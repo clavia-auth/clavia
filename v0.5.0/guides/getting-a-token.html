@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Getting a token · Clavia Management API · 0.5.0</title>
+  <meta name="description" content="Getting a token: a guide to the Clavia Management API, for Clavia 0.5.0.">
+  <link rel="icon" href="../../clavia-icon.svg" type="image/svg+xml">
+  <!--
+    One guide (docs/guides/getting-a-token.md, served beside this page), rendered in the browser: marked
+    turns the Markdown into HTML, DOMPurify keeps only what is safe to insert. Built by
+    docs/site/build.sh, once per guide; published with the reference by .github/workflows/docs.yml.
+  -->
+  <style>
+    :root {
+      --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      --font-code: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      --text: #1b1b1b;
+      --muted: #6b6b6b;
+      --background: #fff;
+      --surface: #f6f6f6;
+      --border: #e5e5e5;
+      --accent: #2d6a4f;
+      --accent-soft: #2d6a4f1a;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --text: #e8e8e8;
+        --muted: #a0a0a0;
+        --background: #0f0f0f;
+        --surface: #1a1a1a;
+        --border: #2a2a2a;
+        --accent: #52b788;
+        --accent-soft: #52b7881f;
+        color-scheme: dark;
+      }
+    }
+    :root[data-theme="dark"] {
+      --text: #e8e8e8;
+      --muted: #a0a0a0;
+      --background: #0f0f0f;
+      --surface: #1a1a1a;
+      --border: #2a2a2a;
+      --accent: #52b788;
+      --accent-soft: #52b7881f;
+      color-scheme: dark;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 15px/1.6 var(--font); color: var(--text); background: var(--background); }
+    a { color: var(--accent); }
+    .clavia-bar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 0 20px;
+      font: 500 15px/1 var(--font);
+      background: var(--background);
+      border-bottom: 1px solid var(--border);
+    }
+    .clavia-bar a { color: inherit; text-decoration: none; }
+    .clavia-bar .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+    .clavia-bar .brand img { width: 22px; height: 22px; }
+    .clavia-bar .muted { color: var(--muted); font-weight: 400; }
+    .clavia-bar .spacer { flex: 1; }
+    .clavia-bar select {
+      font: inherit;
+      color: inherit;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 8px;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 240px minmax(0, 760px);
+      gap: 48px;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 32px 20px 96px;
+    }
+    nav.guides { position: sticky; top: 84px; align-self: start; font-size: 14px; }
+    nav.guides h2 {
+      margin: 0 0 8px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    nav.guides ul { list-style: none; margin: 0 0 24px; padding: 0; }
+    nav.guides li a {
+      display: block;
+      padding: 5px 10px;
+      border-radius: 6px;
+      color: var(--text);
+      text-decoration: none;
+    }
+    nav.guides li a:hover { background: var(--surface); }
+    nav.guides li a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+    article { min-width: 0; }
+    article h1 { font-size: 30px; line-height: 1.25; margin: 0 0 16px; }
+    article h2 { font-size: 21px; line-height: 1.3; margin: 40px 0 12px; padding-top: 8px; border-top: 1px solid var(--border); }
+    article h3 { font-size: 17px; margin: 28px 0 8px; }
+    article :is(h2, h3) { scroll-margin-top: 68px; }
+    article p, article ul, article ol { margin: 0 0 14px; }
+    article li { margin: 4px 0; }
+    article li > ul, article li > ol { margin: 4px 0 0; }
+    article code { font: 13.5px/1.5 var(--font-code); background: var(--surface); padding: 1px 5px; border-radius: 4px; }
+    article pre {
+      margin: 0 0 16px;
+      padding: 14px 16px;
+      overflow-x: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    article pre code { padding: 0; background: none; font-size: 13px; }
+    article table { width: 100%; margin: 0 0 18px; border-collapse: collapse; font-size: 14px; display: block; overflow-x: auto; }
+    article th, article td { padding: 7px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+    article th { font-weight: 600; color: var(--muted); }
+    article blockquote { margin: 0 0 14px; padding: 2px 16px; border-left: 3px solid var(--accent); color: var(--muted); }
+    .heading-anchor { margin-left: 6px; color: var(--muted); text-decoration: none; opacity: 0; }
+    :is(h2, h3):hover .heading-anchor, .heading-anchor:focus { opacity: 1; }
+    .notice { padding: 14px 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+    @media (max-width: 860px) {
+      .layout { grid-template-columns: minmax(0, 1fr); gap: 16px; padding-top: 20px; }
+      nav.guides { position: static; }
+      nav.guides ul { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+      .clavia-bar .hide-narrow { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="clavia-bar">
+    <a class="brand" href="../../"><img src="../../clavia-icon.svg" alt="">Clavia</a>
+    <span class="muted hide-narrow">Management API</span>
+    <span class="spacer"></span>
+    <label class="muted hide-narrow" for="clavia-release">Release</label>
+    <select id="clavia-release" aria-label="Clavia release">
+      <option value="">0.5.0</option>
+    </select>
+    <a class="muted hide-narrow" href="https://github.com/clavia-auth/clavia">GitHub</a>
+  </header>
+  <div class="layout">
+    <nav class="guides" aria-label="Guides">
+      <h2>Guides</h2>
+      <ul>
+        <li><a href="./">Overview</a></li>
+        <li><a href="getting-a-token.html" aria-current="page">Getting a token</a></li>
+        <li><a href="scopes-and-roles.html">Scopes and roles</a></li>
+        <li><a href="errors.html">Errors</a></li>
+        <li><a href="paging-and-search.html">Paging and search</a></li>
+        <li><a href="dpop.html">DPoP-bound tokens</a></li>
+        <li><a href="registering-clients.html">Registering clients</a></li>
+      </ul>
+      <h2>Reference</h2>
+      <ul>
+        <li><a href="../">Every operation</a></li>
+      </ul>
+    </nav>
+    <article id="guide">
+      <noscript>
+        <p class="notice">This page needs JavaScript to show the guide. Read
+        <a href="getting-a-token.md">its Markdown</a> instead.</p>
+      </noscript>
+    </article>
+  </div>
+
+  <!-- Pinned, and held to their hashes (Subresource Integrity): a changed file on the CDN does not run. -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@15.0.12/lib/marked.umd.js"
+    integrity="sha384-fGlgqlm/GUgiVEyV6lvBJbxjprBPT1g0VoE9o/FjCWntEwOQYGqANQdFeFlqbObP" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"
+    integrity="sha384-JEyTNhjM6R1ElGoJns4U2Ln4ofPcqzSsynQkmEc/KGy6336qAZl70tDLufbkla+3" crossorigin="anonymous"></script>
+  <script>
+    (async () => {
+      const article = document.getElementById('guide');
+      const response = await fetch('./getting-a-token.md', { cache: 'no-cache' });
+      if (!response.ok) {
+        article.innerHTML = '<p class="notice">This guide could not be loaded.</p>';
+        return;
+      }
+      const html = marked.parse(await response.text(), { gfm: true });
+      article.replaceChildren(DOMPurify.sanitize(html, { RETURN_DOM_FRAGMENT: true }));
+
+      // Links written for GitHub, made to work here: another guide (x.md) is its page (x.html), the
+      // index (README.md) is this directory, and an OpenAPI document is its reference.
+      for (const link of article.querySelectorAll('a[href]')) {
+        const href = link.getAttribute('href');
+        if (/^[a-z]+:/i.test(href) || href.startsWith('#')) {
+          if (/^https?:/i.test(href)) link.rel = 'noopener';
+          continue;
+        }
+        const [path, fragment] = href.split('#');
+        let target = path;
+        if (path === '../openapi/management-api.yaml') target = '../';
+        // The authorization server's document is the reference's second source: Scalar's deep link
+        // is its slug, then the operation's own (#authorization-server/tag/tokens/POST/oauth2/token).
+        else if (path === '../openapi/authorization-server.yaml') {
+          link.setAttribute('href', '../#authorization-server' + (fragment === undefined ? '' : '/' + fragment));
+          continue;
+        }
+        else if (path === 'README.md') target = './';
+        else if (path.endsWith('.md')) target = path.slice(0, -3) + '.html';
+        link.setAttribute('href', target + (fragment === undefined ? '' : '#' + fragment));
+      }
+
+      // GitHub's heading anchors, so a link to errors.md#stepping-up lands on the same heading.
+      const used = new Map();
+      for (const heading of article.querySelectorAll('h2, h3')) {
+        const base = heading.textContent.trim().toLowerCase()
+          .replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s/g, '-');
+        const count = used.get(base) ?? 0;
+        used.set(base, count + 1);
+        heading.id = count === 0 ? base : base + '-' + count;
+        const anchor = document.createElement('a');
+        anchor.className = 'heading-anchor';
+        anchor.href = '#' + heading.id;
+        anchor.setAttribute('aria-label', 'Link to this section');
+        anchor.textContent = '#';
+        heading.append(anchor);
+      }
+      if (location.hash) document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView();
+    })();
+
+    // The release picker, as on the reference: each release's guides live beside its reference.
+    (async () => {
+      const select = document.getElementById('clavia-release');
+      try {
+        const response = await fetch('../../versions.json', { cache: 'no-cache' });
+        if (!response.ok) return;
+        const { latest, versions } = await response.json();
+        select.replaceChildren(...versions.map((version) => {
+          const option = document.createElement('option');
+          option.value = version === latest ? '../../' : '../../v' + version + '/';
+          option.textContent = version === latest ? version + ' (latest)' : version;
+          option.selected = version === '0.5.0';
+          return option;
+        }));
+      } catch {
+        return;
+      }
+      select.addEventListener('change', () => { if (select.value !== '') location.href = select.value; });
+    })();
+  </script>
+</body>
+</html>
