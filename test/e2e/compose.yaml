@@ -25,6 +25,13 @@ services:
       additional_contexts:
         app: ../..
       target: production
+    # Clavia calls out to the applications it signs people in to (a back-channel logout, a webhook): on the
+    # `edge` network the names of the stack are Caddy, as they are for the dashboard, and the CA of the stack's
+    # certificate is the one it trusts for those calls (the only ones it makes here).
+    networks: [clavia, edge]
+    volumes:
+      - ./.work/rootCA.pem:/ca/rootCA.pem:ro
+      - ./php.ini:/usr/local/etc/php/conf.d/zz-e2e.ini:ro
     depends_on:
       migrate:
         condition: service_completed_successfully
