@@ -12,6 +12,10 @@ declare(strict_types=1);
 namespace ClaviaTest\Unit\Domain\ResourceServer;
 
 use Clavia\Domain\Authentication\MfaPolicy;
+use Clavia\Domain\Authorization\AuthorizationModel;
+use Clavia\Domain\Authorization\AuthorizationModelId;
+use Clavia\Domain\Authorization\AuthorizationSettings;
+use Clavia\Domain\Authorization\StoreId;
 use Clavia\Domain\Claims\ClaimMapping;
 use Clavia\Domain\Claims\ClaimMappings;
 use Clavia\Domain\Claims\ClaimName;
@@ -27,6 +31,7 @@ use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\InvalidValue;
 use Clavia\Domain\Shared\ScopeSet;
 use Clavia\Domain\Shared\SecretGenerator;
+use ClaviaTest\Support\Contract\DecisionEngineContract;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -340,6 +345,50 @@ final class ResourceServerTest extends TestCase
                 ClaimSource::fromString('constant', '"x"'),
             ),
         ]));
+    }
+
+    public function testFineGrainedAuthorizationIsSwitchedOnOffAndForgotten(): void
+    {
+        $api = $this->api(['read:invoices']);
+        self::assertNull($api->authorization);
+        self::assertFalse($api->authorizes());
+
+        $on = $api->withAuthorization(self::authorization());
+        self::assertTrue($on->authorizes());
+        // Renamed, the API keeps it: every copy carries it along.
+        self::assertTrue($on->renamed('Billing')->requiringMfa(MfaPolicy::Required)->authorizes());
+
+        $off = $on->withAuthorization(self::authorization()->disabled());
+        self::assertFalse($off->authorizes());
+        self::assertNotNull($off->authorization, 'Switched off, the store is kept.');
+        self::assertNull($off->withoutAuthorization()->authorization);
+    }
+
+    public function testASystemApiTakesNoFineGrainedAuthorization(): void
+    {
+        $system = $this->api(['read:users'])->asSystem('Management API', [Permission::of('read:users')]);
+
+        try {
+            $system->withAuthorization(self::authorization());
+            self::fail('A system API took fine-grained authorization.');
+        } catch (SystemApiProtected $refused) {
+            self::assertStringContainsString('fine-grained authorization', $refused->getMessage());
+        }
+
+        $this->expectException(InvalidValue::class);
+        $this->api([])->withAuthorization(self::authorization())->asSystem('Management API', []);
+    }
+
+    private static function authorization(): AuthorizationSettings
+    {
+        return AuthorizationSettings::of(
+            true,
+            StoreId::fromString('01JAAAAAAAAAAAAAAAAAAAAAAA'),
+            AuthorizationModelId::fromString('01JBBBBBBBBBBBBBBBBBBBBBBB'),
+            AuthorizationModel::fromJson(DecisionEngineContract::MODEL),
+            [ClientId::fromString('invoices-backend')],
+            false,
+        );
     }
 
     /**

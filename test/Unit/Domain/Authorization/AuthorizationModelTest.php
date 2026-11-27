@@ -56,6 +56,82 @@ final class AuthorizationModelTest extends TestCase
         ];
     }
 
+    /**
+     * A model around `$types`, beside `user` unless one of them is.
+     */
+    private static function with(string ...$types): string
+    {
+        $user = array_filter($types, static fn (string $type): bool => str_starts_with($type, '{"type": "user"')) === []
+            ? ['{"type": "user"}']
+            : [];
+
+        return '{"schema_version": "1.1", "type_definitions": [' . implode(', ', [...$user, ...$types]) . ']}';
+    }
+
+    private const string ROLE = '{"type": "role", "relations": {"member": {"this": {}}}, '
+        . '"metadata": {"relations": {"member": {"directly_related_user_types": [{"type": "user"}]}}}}';
+
+    public function testClaviasTypesAreTakenInTheShapeClaviaWritesThem(): void
+    {
+        $model = AuthorizationModel::fromJson(self::with(
+            self::ROLE,
+            str_replace('"role"', '"group"', self::ROLE),
+            '{"type": "client"}',
+            '{"type": "user", "relations": {}, "metadata": null}',
+        ));
+        self::assertCount(4, $model->types);
+
+        // As OpenFGA's own transformer writes `define member: [user]`.
+        $transformed = '{"type": "role", "relations": {"member": {"this": {}}}, "metadata": {"relations": '
+            . '{"member": {"directly_related_user_types": [{"type": "user", "condition": ""}], "module": ""}}}}';
+        self::assertTrue(
+            AuthorizationModel::fromJson(self::with($transformed))->declares(ObjectType::fromString('role')),
+        );
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function reservedTypesOutOfShape(): iterable
+    {
+        yield 'no user' => ['{"schema_version": "1.1", "type_definitions": [{"type": "document"}]}'];
+        yield 'a person with a relation' => [self::with(
+            '{"type": "user", "relations": {"manager": {"this": {}}}, '
+            . '"metadata": {"relations": {"manager": {"directly_related_user_types": [{"type": "user"}]}}}}',
+        )];
+        yield 'an application with a relation' => [self::with(
+            '{"type": "client", "relations": {"owner": {"this": {}}}, '
+            . '"metadata": {"relations": {"owner": {"directly_related_user_types": [{"type": "user"}]}}}}',
+        )];
+        yield 'a role computed from something else' => [self::with(
+            '{"type": "role", "relations": {"member": {"union": {"child": [{"this": {}}, '
+            . '{"computedUserset": {"relation": "admin"}}]}}, "admin": {"this": {}}}, "metadata": {"relations": '
+            . '{"member": {"directly_related_user_types": [{"type": "user"}]}, '
+            . '"admin": {"directly_related_user_types": [{"type": "user"}]}}}}',
+        )];
+        yield 'a role with another relation' => [self::with(str_replace(
+            '"relations": {"member": {"this": {}}}',
+            '"relations": {"member": {"this": {}}, "owner": {"this": {}}}',
+            self::ROLE,
+        ))];
+        yield 'a role whose members are not people' => [self::with(
+            str_replace('[{"type": "user"}]', '[{"type": "user"}, {"type": "team", "relation": "member"}]', self::ROLE),
+        )];
+        yield 'a role taking every person' => [self::with(
+            str_replace('[{"type": "user"}]', '[{"type": "user", "wildcard": {}}]', self::ROLE),
+        )];
+        yield 'a role under a condition' => [self::with(
+            str_replace('[{"type": "user"}]', '[{"type": "user", "condition": "in_office"}]', self::ROLE),
+        )];
+        yield 'a group with no member' => [self::with('{"type": "group"}')];
+    }
+
+    #[DataProvider('reservedTypesOutOfShape')]
+    public function testClaviasTypesAreRefusedInAnyOtherShape(string $json): void
+    {
+        $this->expectException(InvalidValue::class);
+
+        AuthorizationModel::fromJson($json);
+    }
+
     #[DataProvider('notModels')]
     public function testAnythingElseIsRefused(string $json): void
     {
