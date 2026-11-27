@@ -8,6 +8,9 @@
 # certificate in its two https sites, starts everything and waits until it is healthy, then runs
 # `seed-dev`. Safe to run again.
 #
+# CLAVIA_E2E_RECEIVER=1 adds a webhook receiver: https://receiver.clavia.test inside the stack, and what it kept
+# at http://127.0.0.1:8026/deliveries (CLAVIA_E2E_RECEIVER_PORT moves it).
+#
 # CLAVIA_E2E_IMAGE=<image> runs that Clavia image instead of building this checkout's.
 #
 # CLAVIA_E2E_DASHBOARD=1 adds the dashboard (ghcr.io/clavia-auth/clavia-dashboard:edge, or the image
@@ -28,6 +31,8 @@ if [[ -n "${CLAVIA_E2E_COMPOSE_OVERRIDE:-}" ]]; then
 fi
 # The dashboard behind /dashboard is started when asked for (it is pulled, and its image is not Clavia's).
 [[ -n "${CLAVIA_E2E_DASHBOARD:-}" ]] && compose+=(--profile dashboard)
+# And a receiver for the webhooks it registers, on 127.0.0.1:${CLAVIA_E2E_RECEIVER_PORT:-8026}.
+[[ -n "${CLAVIA_E2E_RECEIVER:-}" ]] && compose+=(--profile receiver)
 
 command -v mkcert >/dev/null || { echo "mkcert is needed: https://github.com/FiloSottile/mkcert" >&2; exit 1; }
 

@@ -54,11 +54,15 @@ services:
     volumes:
       - public:/shared
 
+  # The scheduled commands, every two seconds (scheduler.sh): it sends the webhook deliveries, so like php it
+  # calls out to the stack's own names and trusts its CA.
   scheduler:
     <<: *clavia
     command: ["sh", "/opt/clavia/scheduler.sh"]
     volumes:
-      - ../../deploy/compose/scheduler.sh:/opt/clavia/scheduler.sh:ro
+      - ./scheduler.sh:/opt/clavia/scheduler.sh:ro
+      - ./.work/rootCA.pem:/ca/rootCA.pem:ro
+      - ./php.ini:/usr/local/etc/php/conf.d/zz-e2e.ini:ro
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -126,6 +130,27 @@ services:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/dashboard/signed-out').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
       interval: 3s
       timeout: 5s
+      retries: 30
+
+  # Where a webhook is delivered to, for a suite that registers one: it keeps what it is sent and lists it on a
+  # port published on this machine (receiver.mjs). Off unless asked for (CLAVIA_E2E_RECEIVER=1, see up.sh).
+  receiver:
+    profiles: [receiver]
+    image: node:22-alpine
+    command: ["node", "/app/receiver.mjs"]
+    ports:
+      - "127.0.0.1:${CLAVIA_E2E_RECEIVER_PORT:-8026}:8026"
+    volumes:
+      - ./receiver.mjs:/app/receiver.mjs:ro
+      - ./.work/certs:/certs:ro
+    networks:
+      clavia:
+        aliases:
+          - receiver.clavia.test
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8026/healthz"]
+      interval: 2s
+      timeout: 3s
       retries: 30
 
   db:
