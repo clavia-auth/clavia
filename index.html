@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Clavia API reference · 0.5.0</title>
-  <meta name="description" content="Reference of the Clavia Management API and authorization server, for Clavia 0.5.0.">
+  <title>Clavia API reference · 0.5.1</title>
+  <meta name="description" content="Reference of the Clavia Management API and authorization server, for Clavia 0.5.1.">
   <link rel="icon" href="clavia-icon.svg" type="image/svg+xml">
   <!--
     The API references, rendered by Scalar from the documents beside this file: management-api.yaml,
@@ -101,7 +101,7 @@
     <span class="spacer"></span>
     <label class="muted hide-narrow" for="clavia-release">Release</label>
     <select id="clavia-release" aria-label="Clavia release">
-      <option value="">0.5.0</option>
+      <option value="">0.5.1</option>
     </select>
     <a class="muted hide-narrow" href="https://github.com/clavia-auth/clavia">GitHub</a>
   </header>
@@ -137,7 +137,7 @@
       default: true,
       servers: server('management'),
       authentication: { preferredSecurityScheme: 'managementToken' },
-      metaData: { title: 'Clavia Management API · 0.5.0' },
+      metaData: { title: 'Clavia Management API · 0.5.1' },
     }];
     // A release from before the authorization server's document (#93) has the Management API's alone.
     if (true) {
@@ -148,7 +148,7 @@
         url: './authorization-server.yaml',
         servers: server('auth'),
         authentication: { preferredSecurityScheme: 'clientSecretBasic' },
-        metaData: { title: 'Clavia authorization server · 0.5.0' },
+        metaData: { title: 'Clavia authorization server · 0.5.1' },
       });
     }
     Scalar.createApiReference('#app', references);
@@ -165,7 +165,7 @@
           const option = document.createElement('option');
           option.value = version === latest ? '' : 'v' + version + '/';
           option.textContent = version === latest ? version + ' (latest)' : version;
-          option.selected = version === '0.5.0';
+          option.selected = version === '0.5.1';
           return option;
         }));
       } catch {
