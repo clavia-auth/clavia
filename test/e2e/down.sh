@@ -8,5 +8,5 @@ compose=(docker compose -f "${here}/compose.yaml")
 if [[ -n "${CLAVIA_E2E_COMPOSE_OVERRIDE:-}" ]]; then
   compose+=(-f "${CLAVIA_E2E_COMPOSE_OVERRIDE}")
 fi
-"${compose[@]}" --profile dashboard down --volumes --remove-orphans
+"${compose[@]}" --profile dashboard --profile receiver down --volumes --remove-orphans
 rm -rf "${here}/.work"

@@ -49,3 +49,13 @@ if [[ -n "${CLAVIA_E2E_DASHBOARD:-}" ]]; then
     exit 1
   fi
 fi
+
+# With the receiver: it answers on the port it is published on.
+if [[ -n "${CLAVIA_E2E_RECEIVER:-}" ]]; then
+  if curl -sS -o /dev/null --max-time 10 "http://127.0.0.1:${CLAVIA_E2E_RECEIVER_PORT:-8026}/healthz"; then
+    echo "ok   the webhook receiver answers"
+  else
+    echo "FAIL the webhook receiver does not answer"
+    exit 1
+  fi
+fi
