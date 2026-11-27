@@ -357,6 +357,7 @@ use Clavia\Application\Port\AttemptCounter;
 use Clavia\Application\Port\BackChannelLogoutDelivery;
 use Clavia\Application\Port\BreachedPasswords;
 use Clavia\Application\Port\ConsentStateStore;
+use Clavia\Application\Port\DecisionEngine;
 use Clavia\Application\Port\DeferredTasks;
 use Clavia\Application\Port\DeviceAuthorizationStore;
 use Clavia\Application\Port\DomainEvents;
@@ -665,6 +666,8 @@ final class ConfigProvider
                     ExternalSignInCallbackHandler::class => Container\ExternalSignInCallbackHandlerFactory::class,
                     Mailer::class => Container\MailerFactory::class,
                     BreachedPasswords::class => Container\BreachedPasswordsFactory::class,
+                    DecisionEngine::class => Container\DecisionEngineFactory::class,
+                    Container\FgaHttpClientFactory::SERVICE => Container\FgaHttpClientFactory::class,
                     PasswordScreen::class => Container\PasswordScreenFactory::class,
                     MailOutbox::class => Container\MailOutboxFactory::class,
                     PasswordlessChallengeStore::class => Container\PasswordlessChallengeStoreFactory::class,

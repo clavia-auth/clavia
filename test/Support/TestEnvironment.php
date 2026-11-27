@@ -23,7 +23,8 @@ use LogicException;
  *
  * Where those services are is the only thing the environment may change:
  * `CLAVIA_TEST_DATABASE_URL` and `CLAVIA_TEST_REDIS_URL` (set by docker-compose.yml for
- * the `php` container and by the CI workflow).
+ * the `php` container and by the CI workflow), and `CLAVIA_TEST_FGA_URL` with
+ * `CLAVIA_TEST_FGA_API_KEY` for an OpenFGA to run the decision engine contract against.
  */
 final class TestEnvironment
 {
@@ -101,6 +102,22 @@ final class TestEnvironment
         }
 
         return $url;
+    }
+
+    /**
+     * Where the OpenFGA the integration suite runs the decision engine contract against is, or
+     * null when there is none: the run is then skipped. Nothing is wiped there; each test makes
+     * its own stores and deletes them.
+     */
+    public static function fgaUrl(): ?string
+    {
+        return self::fromEnvironment('CLAVIA_TEST_FGA_URL');
+    }
+
+    /** The preshared key that OpenFGA was started with. */
+    public static function fgaApiKey(): string
+    {
+        return self::fromEnvironment('CLAVIA_TEST_FGA_API_KEY') ?? '';
     }
 
     private static function fromEnvironment(string $name): ?string

@@ -322,6 +322,25 @@ final readonly class Settings
          */
         public bool $breachedPasswordCheck = false,
         // ------------------------------------------------------------------
+        // Fine-grained authorization (docs/design/fine-grained-authorization.md §3)
+        // ------------------------------------------------------------------
+        /**
+         * Where OpenFGA, the decision engine, is: an http or https URL with no credentials, query or
+         * fragment. Unset, fine-grained authorization is off. Infrastructure, like the database's
+         * URL, on the private network beside Clavia: it is not held to the outbound policy, which
+         * would refuse its private address.
+         */
+        public ?string $fgaUrl = null,
+        /**
+         * The preshared key OpenFGA is started with (`OPENFGA_AUTHN_PRESHARED_KEYS`), 16 to 512
+         * characters. Only Clavia holds it, so no API can reach the engine around Clavia. Required
+         * with the URL.
+         */
+        public ?string $fgaApiKey = null,
+        /** How long one call to OpenFGA may take, seconds; past it, no decision is made. */
+        #[Range(min: 1, max: 10)]
+        public int $fgaTimeout = 2,
+        // ------------------------------------------------------------------
         // Passkeys (docs/design/passkeys.md)
         // ------------------------------------------------------------------
         /** Turns every passkey page and flow on or off. */

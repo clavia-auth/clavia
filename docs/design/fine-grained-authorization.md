@@ -1,6 +1,6 @@
 # Design: Fine-grained authorization, AuthZEN over OpenFGA
 
-**Status:** proposed · **Date:** 2026-11-25 · **Issue:** clavia-auth/clavia#133 ·
+**Status:** agreed · **Date:** 2026-11-25 · **Issue:** clavia-auth/clavia#133 ·
 **Specifications:** OpenID AuthZEN Authorization API 1.0 (Final, January 2026: the information
 model of subject, action, resource and context; the Access Evaluation and Access Evaluations APIs;
 the Subject, Resource and Action Search APIs; the PDP metadata document), OpenFGA's API and
@@ -138,7 +138,9 @@ A new context, `Domain\Authorization`:
 the model checked (§4), a store created if there is none, the model written, the store's identity
 tuples queued (every holder of every role holding a permission on this API). `GET` returns the
 settings and the current model; `DELETE` disables, and deletes the store after `?confirm=delete`.
-Writing a new model keeps the store and its tuples; a model that drops a relation still used by
+OpenFGA's deletion of a store is soft (found in slice 1): the store is no longer listed, but
+questions and writes naming its id are still answered, so Clavia forgets the id in the same step
+and never asks with it again. Writing a new model keeps the store and its tuples; a model that drops a relation still used by
 tuples is OpenFGA's to accept or refuse, and its refusal is a `422` with its error code only.
 
 ### 5.2 An evaluation

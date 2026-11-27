@@ -87,7 +87,7 @@ final class ShowConfigCommand extends Command
      *
      * URLs get only their password removed; the host and database still matter for
      * diagnosing a misconfiguration. A setting is a credential when its name ends in
-     * `Password` or `Secret` (`smtpPassword`, `googleClientSecret`) or starts with `secret`
+     * `Password`, `Secret` or `ApiKey` (`smtpPassword`, `googleClientSecret`, `fgaApiKey`) or starts with `secret`
      * (`secretEncryptionKey`) — not merely when it contains the word: the passwordless
      * lifetimes and limits are not secrets.
      */
@@ -97,7 +97,7 @@ final class ShowConfigCommand extends Command
             return sprintf('%s://%s:***@%s', $url['scheme'], $url['user'], $url['rest']);
         }
 
-        if ($value !== '<unset>' && preg_match('/(?:Password|Secret)$|^secret/', $name) === 1) {
+        if ($value !== '<unset>' && preg_match('/(?:Password|Secret|ApiKey)$|^secret/', $name) === 1) {
             return '***';
         }
 

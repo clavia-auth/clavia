@@ -6,6 +6,20 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ## [Unreleased]
 
+### Added
+
+- **OpenFGA beside Clavia** (#135, the first slice of fine-grained authorization, #133,
+  [design](docs/design/fine-grained-authorization.md)). Clavia can now talk to OpenFGA, the decision
+  engine that will answer "may this person do this to that, now?" for your APIs. Nothing uses it
+  yet: no route, no Management API operation and no command exists until the next slices.
+  - **Three settings**: `CLAVIA_FGA_URL` (unset by default, which keeps the feature off),
+    `CLAVIA_FGA_API_KEY` (the preshared key OpenFGA starts with, 16 to 512 characters, required with
+    the URL) and `CLAVIA_FGA_TIMEOUT` (2 seconds, 1 to 10). The URL is your own infrastructure, so a
+    private address is accepted. `bin/clavia config` masks the key.
+  - **Development**: `make up` also starts OpenFGA 1.22.1 and its own PostgreSQL. Its schema is
+    migrated before it starts, its caches are off (every answer is strongly consistent), it requires
+    the preshared key, and it publishes no port on the host.
+
 ## [0.5.1] - 2026-11-27
 
 Sign-in pages that outlive their request, and small fixes to the pages and the guides. A sign-in page

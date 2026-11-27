@@ -37,9 +37,29 @@ jobs:
     env:
       CLAVIA_TEST_DATABASE_URL: postgresql://clavia:clavia@localhost:5434/clavia_test
       CLAVIA_TEST_REDIS_URL: redis://localhost:6379/1
+      # OpenFGA, for the decision engine's contract (docs/design/fine-grained-authorization.md §8).
+      CLAVIA_TEST_FGA_URL: http://localhost:8080
+      CLAVIA_TEST_FGA_API_KEY: ci-only-openfga-preshared-key
 
     steps:
       - uses: actions/checkout@v7
+
+      # Not a service container: those cannot be given OpenFGA's `run` command. Its in-memory
+      # datastore is enough for the contract, whose tests make their own stores; the preshared key
+      # and every cache off, as in docker-compose.yml.
+      - name: Start OpenFGA
+        run: |
+          docker run -d --name openfga -p 8080:8080 openfga/openfga:v1.22.1 run \
+            --datastore-engine memory \
+            --authn-method preshared --authn-preshared-keys "$CLAVIA_TEST_FGA_API_KEY" \
+            --check-query-cache-enabled=false --check-iterator-cache-enabled=false \
+            --list-objects-iterator-cache-enabled=false --playground-enabled=false
+          for _ in $(seq 1 30); do
+            curl -fsS http://localhost:8080/healthz && exit 0
+            sleep 1
+          done
+          docker logs openfga
+          exit 1
 
       - uses: shivammathur/setup-php@v2
         with:

@@ -25,6 +25,8 @@ final class ShowConfigCommandTest extends TestCase
         'CLAVIA_GOOGLE_CLIENT_SECRET' => 'g-secret',
         'CLAVIA_SECRET_ENCRYPTION_KEY' => 'c2VjcmV0',
         'CLAVIA_SMTP_PASSWORD' => 'smtp-pass',
+        'CLAVIA_FGA_URL' => 'http://openfga:8080',
+        'CLAVIA_FGA_API_KEY' => 'openfga-preshared-key',
     ];
 
     public function testEverySettingIsPrintedUnderItsVariableName(): void
@@ -53,6 +55,8 @@ final class ShowConfigCommandTest extends TestCase
         self::assertSame('***', $lines['CLAVIA_GOOGLE_CLIENT_SECRET']);
         self::assertSame('***', $lines['CLAVIA_SECRET_ENCRYPTION_KEY']);
         self::assertSame('***', $lines['CLAVIA_SMTP_PASSWORD']);
+        self::assertSame('***', $lines['CLAVIA_FGA_API_KEY']);
+        self::assertSame('http://openfga:8080', $lines['CLAVIA_FGA_URL']);
         self::assertSame('<unset>', $lines['CLAVIA_GITHUB_CLIENT_SECRET']);
         // A URL keeps its host and database: they matter when diagnosing a misconfiguration.
         self::assertSame('postgresql://clavia:***@localhost:5433/clavia', $lines['CLAVIA_DATABASE_URL']);

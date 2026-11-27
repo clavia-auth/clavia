@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Acceptance;
 
+use Clavia\Adapter\Secondary\Authorization\NoDecisionEngine;
+use Clavia\Adapter\Secondary\Authorization\OpenFgaDecisionEngine;
 use Clavia\Application\Metrics\CountingMailer;
 use Clavia\Adapter\Secondary\Mail\MailTransport;
 use Clavia\Adapter\Secondary\Mail\NoMailer;
@@ -18,6 +20,7 @@ use Clavia\Adapter\Secondary\Mail\OutboxMailer;
 use Clavia\Adapter\Secondary\Mail\RenderedMailer;
 use Clavia\Adapter\Secondary\Mail\SmtpMailer;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
+use Clavia\Application\Port\DecisionEngine;
 use Clavia\Application\Port\IdentityProviders;
 use Clavia\Application\Port\Mailer;
 use Clavia\Application\Port\PasswordHasher;
@@ -92,6 +95,15 @@ final class WiringTest extends AcceptanceTestCase
         self::assertInstanceOf(RenderedMailer::class, $mailer->mailer);
 
         return $mailer->mailer->transport;
+    }
+
+    public function testTheDecisionEngineIsOpenFgaOnlyOnceItsUrlIsSet(): void
+    {
+        self::assertInstanceOf(NoDecisionEngine::class, $this->container()->get(DecisionEngine::class));
+
+        // Built without reaching it: OpenFGA is called when a question is asked.
+        $this->boot(['CLAVIA_FGA_URL' => 'http://openfga.invalid:8080', 'CLAVIA_FGA_API_KEY' => str_repeat('k', 16)]);
+        self::assertInstanceOf(OpenFgaDecisionEngine::class, $this->container()->get(DecisionEngine::class));
     }
 
     public function testASigningAlgorithmNoKeyCanProduceIsRefused(): void

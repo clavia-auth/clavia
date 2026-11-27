@@ -64,6 +64,13 @@ services:
       # Redis database 1 — never the development data (see test/Support/TestEnvironment.php).
       CLAVIA_TEST_DATABASE_URL: postgresql://${CLAVIA_POSTGRES_USER:-clavia}:${CLAVIA_POSTGRES_PASSWORD:-clavia}@db-test:5432/${CLAVIA_POSTGRES_DB:-clavia}_test
       CLAVIA_TEST_REDIS_URL: redis://redis:6379/1
+      # OpenFGA, the decision engine behind fine-grained authorization
+      # (docs/design/fine-grained-authorization.md), reached by name with the key it starts with.
+      # The test suite runs the DecisionEngine contract against it, in stores it makes and deletes.
+      CLAVIA_FGA_URL: http://openfga:8080
+      CLAVIA_FGA_API_KEY: ${CLAVIA_FGA_API_KEY:-development-only-openfga-key}
+      CLAVIA_TEST_FGA_URL: http://openfga:8080
+      CLAVIA_TEST_FGA_API_KEY: ${CLAVIA_FGA_API_KEY:-development-only-openfga-key}
     depends_on:
       db:
         condition: service_healthy
@@ -136,11 +143,74 @@ services:
       timeout: 3s
       retries: 20
 
+  # ── OpenFGA — the decision engine of fine-grained authorization ──
+  # Beside Clavia with its own database: the relationship graph never enters Clavia's
+  # (docs/design/fine-grained-authorization.md §2). Reached by Clavia alone, with a preshared
+  # key, and published on no port of the host. Every cache is off, so every answer is strongly
+  # consistent: a revoked relationship is never answered from a stale copy.
+  openfga-db:
+    image: postgres:17-alpine
+    container_name: clavia-openfga-db
+    environment:
+      POSTGRES_USER: openfga
+      POSTGRES_PASSWORD: openfga
+      POSTGRES_DB: openfga
+    volumes:
+      - clavia-openfga-pgdata:/var/lib/postgresql/data
+    networks:
+      - clavia-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openfga -d openfga"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  # OpenFGA's schema, brought up to date before the server starts; exits when done.
+  openfga-migrate:
+    image: openfga/openfga:v1.22.1
+    container_name: clavia-openfga-migrate
+    command: migrate
+    environment:
+      OPENFGA_DATASTORE_ENGINE: postgres
+      OPENFGA_DATASTORE_URI: postgres://openfga:openfga@openfga-db:5432/openfga?sslmode=disable
+    depends_on:
+      openfga-db:
+        condition: service_healthy
+    networks:
+      - clavia-net
+
+  openfga:
+    image: openfga/openfga:v1.22.1
+    container_name: clavia-openfga
+    restart: unless-stopped
+    command: run
+    environment:
+      OPENFGA_DATASTORE_ENGINE: postgres
+      OPENFGA_DATASTORE_URI: postgres://openfga:openfga@openfga-db:5432/openfga?sslmode=disable
+      OPENFGA_AUTHN_METHOD: preshared
+      OPENFGA_AUTHN_PRESHARED_KEYS: ${CLAVIA_FGA_API_KEY:-development-only-openfga-key}
+      OPENFGA_CHECK_QUERY_CACHE_ENABLED: "false"
+      OPENFGA_CHECK_ITERATOR_CACHE_ENABLED: "false"
+      OPENFGA_LIST_OBJECTS_ITERATOR_CACHE_ENABLED: "false"
+      OPENFGA_PLAYGROUND_ENABLED: "false"
+      OPENFGA_LOG_FORMAT: json
+    depends_on:
+      openfga-migrate:
+        condition: service_completed_successfully
+    networks:
+      - clavia-net
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=127.0.0.1:8081"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
 networks:
   clavia-net:
     driver: bridge
 
 volumes:
+  clavia-openfga-pgdata:
   clavia-pgdata:
   clavia-redisdata:
   caddy-data:
