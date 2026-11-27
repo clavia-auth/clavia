@@ -13,6 +13,8 @@ namespace Clavia\Application\Authentication\External\Saml;
 
 use Clavia\Application\Authentication\External\ExternalSignInStarted;
 use Clavia\Application\Authentication\External\ExternalSignInUnavailable;
+use Clavia\Application\Authentication\SignIn\HeldSignInRequest;
+use Clavia\Application\Authentication\SignIn\SignInRequestExpired;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\Connection\Saml\SamlServiceProviderEndpoints;
 use Clavia\Application\Port\ExternalSignInStore;
@@ -57,11 +59,14 @@ final readonly class BeginSamlSignIn
     ) {
     }
 
-    /** @return ExternalSignInStarted|ExternalSignInUnavailable|null Null without an enabled SAML connection of that name. */
+    /**
+     * @return ExternalSignInStarted|ExternalSignInUnavailable|SignInRequestExpired|null Null without an enabled SAML
+     *         connection of that name; {@see SignInRequestExpired} for a handle that names nothing any more.
+     */
     public function __invoke(
         string $connection,
         #[\SensitiveParameter] ?string $loginState,
-    ): ExternalSignInStarted|ExternalSignInUnavailable|null {
+    ): ExternalSignInStarted|ExternalSignInUnavailable|SignInRequestExpired|null {
         try {
             $found = $this->access->saml(ConnectionName::fromString($connection));
         } catch (InvalidValue) {
@@ -73,7 +78,11 @@ final readonly class BeginSamlSignIn
         }
 
         $loginState = $loginState === '' ? null : $loginState;
-        $target = $loginState === null ? null : $this->loginStates->get($loginState);
+        // A request that is gone starts nothing: the round trip would sign in to nowhere.
+        $target = HeldSignInRequest::find($this->loginStates, $loginState);
+        if ($target instanceof SignInRequestExpired) {
+            return $target;
+        }
         $clientId = $target?->clientId;
         $client = $clientId === null ? null : $this->clients->find($clientId);
         if (! $this->access->allows($client, $found->name)) {

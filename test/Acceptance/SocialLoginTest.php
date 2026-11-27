@@ -115,6 +115,19 @@ final class SocialLoginTest extends AcceptanceTestCase
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
     }
 
+    /** A request that is gone starts no round trip to the provider (#218). */
+    public function testARequestThatExpiredStartsNothing(): void
+    {
+        $this->bootWithProviders(['google']);
+
+        $response = $this->get('/auth/social/google', ['state' => 'expired-or-forged']);
+
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
+        self::assertSame('', $response->getHeaderLine('Location'));
+        self::assertStringContainsString('Sign-in expired', (string) $response->getBody());
+        self::assertNull(self::setCookieHeader($response, self::STATE_COOKIE));
+    }
+
     // ------------------------------------------------------------------
     // Completing
     // ------------------------------------------------------------------

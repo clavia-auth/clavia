@@ -377,6 +377,11 @@ A held request is **resumed, not replayed**: the sign-in page and the consent sc
 browser back to `/oauth2/authorize` with every parameter (`AuthorizationRequest::resumption()`),
 minus a `prompt` value already satisfied, and the endpoint decides again with everything as it
 is then.
+A handle that names nothing any more (expired, spent, forged) is **refused, never ignored**
+(`SignIn\HeldSignInRequest`, #218): the login and sign-up pages show "sign-in expired" instead of a
+form, and every first factor (password, passkey, sign-up, passwordless start, external and SAML
+start) answers `SignInRequestExpired` before it checks or sends anything. Only a page with no handle
+at all signs in to this server's own pages.
 
 `POST /oauth2/token` runs `Token\IssueToken`, which owns what every grant shares (repeated
 parameters, `grant_type`, client authentication, the client's right to the grant) and

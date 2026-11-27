@@ -12,8 +12,10 @@ declare(strict_types=1);
 namespace Clavia\Application\Authentication\Account;
 
 use Clavia\Application\Authentication\SignIn\CompleteFirstFactor;
+use Clavia\Application\Authentication\SignIn\HeldSignInRequest;
 use Clavia\Application\Authentication\SignIn\SecondFactorRequired;
 use Clavia\Application\Authentication\SignIn\SignedIn;
+use Clavia\Application\Authentication\SignIn\SignInRequestExpired;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Application\Port\AttemptCounter;
 use Clavia\Application\Port\DomainEvents;
@@ -77,11 +79,16 @@ final readonly class SignUp
     ) {
     }
 
-    public function __invoke(SignUpRequest $request): CheckYourInbox|SignedIn|SecondFactorRequired|SignUpRefused
-    {
+    public function __invoke(
+        SignUpRequest $request,
+    ): CheckYourInbox|SignedIn|SecondFactorRequired|SignUpRefused|SignInRequestExpired {
         $email = trim($request->email);
         $loginState = $request->loginState === null || $request->loginState === '' ? null : $request->loginState;
-        $pending = $loginState === null ? null : $this->loginStates->get($loginState);
+        // A request that is gone makes no account: it could only be signed in to nowhere.
+        $pending = HeldSignInRequest::find($this->loginStates, $loginState);
+        if ($pending instanceof SignInRequestExpired) {
+            return $pending;
+        }
         $clientId = $pending?->clientId;
         $pool = $this->access->signUpPool($clientId === null ? null : $this->clients->find($clientId));
         if ($pool === null || ($pool->requiresVerifiedEmail && ! $this->access->canSendMail())) {

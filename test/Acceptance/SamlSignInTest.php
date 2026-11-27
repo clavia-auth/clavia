@@ -198,6 +198,19 @@ final class SamlSignInTest extends AcceptanceTestCase
         self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $this->get($complete)->getStatusCode(), 'Once.');
     }
 
+    /** A request that is gone sends nobody to the identity provider (#218). */
+    public function testARequestThatExpiredStartsNothing(): void
+    {
+        $this->registerSaml([]);
+
+        $response = $this->get('/auth/saml/acme', ['state' => 'expired-or-forged']);
+
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
+        self::assertSame('', $response->getHeaderLine('Location'));
+        self::assertStringContainsString('Sign-in expired', (string) $response->getBody());
+        self::assertNull(self::setCookieHeader($response, self::STATE_COOKIE));
+    }
+
     public function testASwitchedOffConnectionIsGone(): void
     {
         $this->registerSaml([]);

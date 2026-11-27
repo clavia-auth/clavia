@@ -40,6 +40,10 @@ final readonly class LoginForm
         ?Message $error = null,
         int $status = StatusCodeInterface::STATUS_OK,
     ): ResponseInterface {
+        // A page for a request that is gone offers no form: whatever it said would sign in to nowhere.
+        if ($this->describe->requestHasExpired($loginState)) {
+            return $this->responder->page($request, LoginPages::expired());
+        }
         $methods = $this->describe->methods($loginState);
         $passkey = $methods->passkey ? ($this->beginPasskey)($loginState) : null;
 

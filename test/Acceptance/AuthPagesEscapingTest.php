@@ -254,6 +254,12 @@ final class AuthPagesEscapingTest extends AcceptanceTestCase
             heading: self::message(),
             error: self::message(),
         )];
+        yield 'the expired sign-in request' => [new HtmlPage(
+            template: 'auth::login-expired',
+            title: self::message(),
+            heading: self::message(),
+            error: self::message(),
+        )];
         yield 'the two-factor settings: email' => [MfaPages::settings(new MfaStatus(self::HOSTILE, true, 3, 2))];
         yield 'the two-factor settings, off: email' => [MfaPages::settings(new MfaStatus(self::HOSTILE, false, 0))];
         yield 'the set-up page: seed and error' => [

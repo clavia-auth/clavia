@@ -12,6 +12,12 @@ All notable changes to Clavia are written here, for the people who run it. The f
   check-your-inbox pages, "Already have an account?" on sign-up, and "Start again" on the passwordless
   pages now sit centred, with room above, like "Forgot your password?" on the login page, instead of
   against the button.
+- **A sign-in whose request has expired signs nobody in** (#218). A sign-in page left open past the
+  request's hour used to sign the person in anyway, to nowhere: they were shown "you are signed in" while
+  the application never heard back, and the application's choice of connections was ignored. The login
+  and sign-up pages for such a request now say it has expired and to go back to the application, and a
+  password, passkey, sign-up, email code or link, or external sign-in submitted from one is refused
+  before anything is checked or sent. A page opened with no request at all works as before.
 
 ## [0.5.0] - 2026-11-27
 

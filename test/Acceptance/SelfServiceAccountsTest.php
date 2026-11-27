@@ -138,6 +138,33 @@ final class SelfServiceAccountsTest extends AcceptanceTestCase
         self::assertStringContainsString('/auth/verify-email?token=', $this->lastMail()->text);
     }
 
+    /** A request that is gone: the sign-up page offers no form, and a submitted one makes no account (#218). */
+    public function testARequestThatExpiredMakesNoAccount(): void
+    {
+        $this->openSignUp(requireVerifiedEmail: false);
+        $this->publicClient();
+        $state = $this->loginStateForTheClient();
+        $page = $this->get('/auth/login', ['state' => $state]);
+        $this->forgetLoginState($state);
+
+        $form = $this->get('/auth/signup', ['state' => $state]);
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $form->getStatusCode());
+        self::assertStringContainsString('Sign-in expired', (string) $form->getBody());
+        self::assertStringNotContainsString('name="password"', (string) $form->getBody());
+
+        $response = $this->post('/auth/signup', [
+            'email' => self::EMAIL,
+            'password' => self::PASSWORD,
+            'csrf_token' => self::csrfTokenFrom($page),
+            'state' => $state,
+        ]);
+
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
+        self::assertStringContainsString('Sign-in expired', (string) $response->getBody());
+        self::assertNull($this->account());
+        self::assertNull($this->session($this->cookie(self::SESSION_COOKIE)));
+    }
+
     public function testAPoolWithoutVerificationSaysAnAddressIsTaken(): void
     {
         $this->openSignUp(requireVerifiedEmail: false);

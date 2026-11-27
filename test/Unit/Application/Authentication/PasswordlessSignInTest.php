@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Application\Authentication;
 
+use Clavia\Application\Authentication\EmailSendLimit;
 use Clavia\Application\Authentication\Passwordless\AnswerPasswordlessCode;
 use Clavia\Application\Authentication\Passwordless\DescribePasswordlessChallenge;
 use Clavia\Application\Authentication\Passwordless\FinishPasswordlessSignIn;
@@ -20,13 +21,13 @@ use Clavia\Application\Authentication\Passwordless\PasswordlessCodeSent;
 use Clavia\Application\Authentication\Passwordless\PasswordlessFailure;
 use Clavia\Application\Authentication\Passwordless\PasswordlessLinkSent;
 use Clavia\Application\Authentication\Passwordless\PasswordlessRefused;
-use Clavia\Application\Authentication\EmailSendLimit;
 use Clavia\Application\Authentication\Passwordless\PasswordlessStart;
 use Clavia\Application\Authentication\Passwordless\SignInMail;
 use Clavia\Application\Authentication\Passwordless\StartPasswordlessSignIn;
 use Clavia\Application\Authentication\Sessions;
 use Clavia\Application\Authentication\SignIn\CompleteFirstFactor;
 use Clavia\Application\Authentication\SignIn\SignedIn;
+use Clavia\Application\Authentication\SignIn\SignInRequestExpired;
 use Clavia\Application\Connection\ConnectionAccess;
 use Clavia\Domain\Authentication\AuthenticationMethod;
 use Clavia\Domain\Authentication\LoginState;
@@ -301,7 +302,7 @@ final class PasswordlessSignInTest extends TestCase
         string $mode,
         ?string $loginState = null,
         string $clientAddress = '203.0.113.7',
-    ): PasswordlessCodeSent|PasswordlessLinkSent|PasswordlessRefused {
+    ): PasswordlessCodeSent|PasswordlessLinkSent|PasswordlessRefused|SignInRequestExpired {
         return ($this->start)(new PasswordlessStart($email, $mode, $clientAddress, $loginState));
     }
 
