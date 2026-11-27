@@ -6,8 +6,8 @@ description: |
   administration dashboard. PostgreSQL and Redis are yours to provide.
 type: application
 # The chart is released with Clavia, at the same version (docs/RELEASING.md).
-version: 0.4.0
-appVersion: "0.4.0"
+version: 0.5.0
+appVersion: "0.5.0"
 kubeVersion: ">=1.25.0-0"
 home: https://github.com/clavia-auth/clavia
 sources:
