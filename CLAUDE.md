@@ -54,7 +54,7 @@ Everything runs in the `php` container, so the host needs only Docker and mkcert
 
 | Command | What it does |
 |---|---|
-| `make up` / `make down` | Start or stop Caddy, PHP-FPM, PostgreSQL (development and test) and Redis |
+| `make up` / `make down` | Start or stop Caddy, PHP-FPM, PostgreSQL (development and test), Redis, and OpenFGA with its own PostgreSQL |
 | `make install` | `composer install` |
 | `make migrate` / `make db-status` | Apply pending migrations / list them |
 | `make seed` | Development data: user, clients, the Management API, a signing key, the dashboard client (`clavia seed-dev`) |
@@ -101,7 +101,7 @@ public/index.php            HTTP entry point (PHP-FPM); public/auth/static/ serv
 src/
   Domain/                   pure PHP: aggregates, value objects, policies, repository interfaces
     Shared/  Identity/  Client/  Connection/  ResourceServer/  Rbac/  Consent/
-    OAuth2/  Oidc/  Authentication/  Audit/  Claims/  Webhook/  Provisioning/
+    OAuth2/  Oidc/  Authentication/  Audit/  Claims/  Webhook/  Provisioning/  Authorization/
   Application/              use cases, by context, and the technical ports
     OAuth2/  Oidc/  Authentication/  Management/  Connection/  Clients/  Audit/
     Event/  Secrets/  Development/  Port/
@@ -110,7 +110,7 @@ src/
       Http/{OAuth2,Oidc,Auth,Management,OpenApi,Scim,Shared}/   Cli/
     Secondary/              what the application calls
       Persistence/{PhpDb,Migrations}/  Redis/  Signing/{Postgres,Remote,Jose}/
-      Crypto/  Mail/  Http/  IdentityProvider/  Events/  System/
+      Crypto/  Mail/  Http/  IdentityProvider/  Events/  System/  Authorization/ (OpenFGA)
   Configuration/            the typed CLAVIA_* settings
   Bootstrap/                composition root: ConfigProvider and one factory per service
 templates/                  server-rendered pages: layout/, auth/, error/, partial/
@@ -292,6 +292,9 @@ token reaches `/scim/v2` alone, and a Management API token never does.
   factors, sign-in and consent handles, outbound social-login state, device and user codes,
   passwordless challenges, verification and reset links, WebAuthn ceremonies, nonces, cached JWKS
   and public keys.
+- **OpenFGA** (beside Clavia, its own PostgreSQL) holds the relationship graph of fine-grained
+  authorization: one store per API, its models and its tuples. Nothing of the graph is kept in
+  Clavia's database.
 
 Authorization codes and refresh tokens look like Redis material and deliberately are not:
 single use needs a `SELECT … FOR UPDATE`, and replay detection must outlive any sensible TTL.
@@ -317,6 +320,7 @@ objects, repository interfaces, and an `Event` namespace for its domain events.
 | `Claims` | `ClaimName`, `ClaimSource`, `ClaimMapping`, `ClaimMappings`, `ClaimSubject`, `CustomClaims` | A custom claim never has a reserved name (registered, standard, or this server's), checked when saved and again at issuance; its source is the account (address, connection, profile, `app_metadata`, roles) or a constant, never the request; a source with no value leaves its claim out; at most twenty per API, no two reading nested metadata; 32 KiB per token, refused rather than cut |
 | `Webhook` | `WebhookEndpoint`, `WebhookEndpointId`, `WebhookSecret`, `EventFilter`, `WebhookEndpointRepository` | An endpoint is https, at most twenty, listening to known audit event types or `*`; its secret (`whsec_`, 32 random bytes) is the server's, shown once, sealed (`webhook:<id>:secret`), never hashed; after a rotation the previous one signs beside it for a day |
 | `Provisioning` | `ProvisioningToken`, `ProvisioningTokenId`, `ProvisioningTokenState`, `SubjectAttribute`, `ProvisioningTokenRepository`, `ScimUser`, `ScimFilter`, `ProvisionedAccount`, `ProvisionedAccountRepository` | A token is for one pool or enterprise connection and goes with it; shown once, kept as its digest; a day to two years, a year by default, flagged within thirty days; revoked, never changed otherwise |
+| `Authorization` | `ObjectType`, `ObjectRef`, `Relation`, `SubjectRef`, `Tuple`, `AuthorizationModel`, `StoreId`, `AuthorizationModelId` | Held to OpenFGA's notation: no `:`, `#`, `@` or space where it would be read as another part; an object at most 256 characters and never the wildcard `*`; a model is schema 1.1 with distinct types, kept as its JSON text; the engine's ids are ULIDs |
 
 The application mirrors these contexts (`Application\OAuth2`, `Authentication`, `Oidc`,
 `Management`, `Connection`, `Audit`…). `Application\Port` holds the technical ports: signing
@@ -327,8 +331,34 @@ The application mirrors these contexts (`Application\OAuth2`, `Authentication`, 
 `ExternalSignInStore`, `WebAuthnChallengeStore`, `NonceRegistry`, `AttemptCounter`), passkeys
 (`PasskeyVerifier`), breached passwords (`BreachedPasswords`), mail (`Mailer`, `MailOutbox`),
 identity providers (`IdentityProvider[s]`, `OidcDiscovery`), outbound URLs (`OutboundUrls`), deferred work
-(`DeferredTasks`, `BackChannelLogoutDelivery`), events (`DomainEvents`) and SAML
-(`Saml\SamlServiceProvider`: requests, responses, metadata in and out; nothing wired yet).
+(`DeferredTasks`, `BackChannelLogoutDelivery`), events (`DomainEvents`), SAML
+(`Saml\SamlServiceProvider`: requests, responses, metadata in and out; nothing wired yet) and the
+decision engine (`DecisionEngine`, `AccessCheck`, `DecisionEngineFailed`).
+
+### Fine-grained authorization
+
+Design in `docs/design/fine-grained-authorization.md` (AuthZEN over OpenFGA, #133), built in slices.
+Slice 1 (#135) is the engine alone; no route, operation or command uses it yet.
+
+- **OpenFGA runs beside Clavia**, its own container and PostgreSQL, reached by Clavia alone with a
+  preshared key (`CLAVIA_FGA_URL`, `CLAVIA_FGA_API_KEY`; unset, the feature is off and
+  `NoDecisionEngine` answers every call as unavailable). The URL is infrastructure: not held to
+  `OutboundUrlPolicy`, called through its own bounded client (`FgaHttpClientFactory`,
+  `CLAVIA_FGA_TIMEOUT`, 2 s, no redirect). Its caches are off, so every answer is strongly
+  consistent and nothing is cached here.
+- **The port is `DecisionEngine`**: stores, model versions (`AuthorizationModel`, OpenFGA's JSON,
+  kept as the text it came as), atomic writes of at most 100 tuples, check, batch check (any size;
+  `OpenFgaDecisionEngine` sends parts of 50), list objects, list users (objects only, never a
+  wildcard or a userset), read by subject. `Domain\Authorization` holds the notation:
+  `ObjectType`, `ObjectRef` (`type:id`, never the wildcard `*`), `Relation`, `SubjectRef` (an object
+  or a userset `type:id#relation`), `Tuple`, and the engine's ULIDs (`StoreId`,
+  `AuthorizationModelId`), each held to OpenFGA's rules.
+- **Fail closed**: every failure is one `DecisionEngineFailed`, never a decision. `refusal` is
+  OpenFGA's error code when it refused the request (a 4xx but 401, 403, 408 and 429), null when it
+  could not answer (unreachable, too slow, a rejected key, a 5xx, a malformed answer). Logged by
+  operation and reason, never with what was sent or the key.
+- **A deleted store still answers in OpenFGA** (its deletion is soft): whoever deletes one forgets
+  its id in the same step.
 
 ## Flows
 
@@ -1370,7 +1400,7 @@ Three suites, three base classes, all under `test/`:
 | Suite | Base | Scope |
 |---|---|---|
 | `Unit` | PHPUnit `TestCase` | No I/O: domain rules, use cases with doubles, pure adapters (crypto, OpenAPI), architecture tests |
-| `Integration` | `IntegrationTestCase` | One adapter against real PostgreSQL or Redis, with a scratch schema per test for tables of its own |
+| `Integration` | `IntegrationTestCase` | One adapter against real PostgreSQL or Redis, with a scratch schema per test for tables of its own; `OpenFgaDecisionEngine` against a real OpenFGA (`CLAVIA_TEST_FGA_URL`, skipped without it), in stores each test makes and deletes |
 | `Acceptance` | `AcceptanceTestCase` | The whole application in-process: the real container, pipeline and routes |
 
 - **Doubles and contracts**: every port has a double in `test/Support/Fake`. Where behaviour is

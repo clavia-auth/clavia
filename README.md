@@ -145,6 +145,7 @@ the server sees. The essentials:
 | `CLAVIA_AUDIT_RETENTION_DAYS` | How long audit events are kept (90 days) |
 | `CLAVIA_VERIFICATION_LINK_LIFETIME`, `CLAVIA_RESET_LINK_LIFETIME` | How long verification and reset links work (a day, 30 minutes) |
 | `CLAVIA_TRUSTED_PROXIES` | Proxies whose `X-Forwarded-Proto` is believed (none by default) |
+| `CLAVIA_FGA_URL`, `CLAVIA_FGA_API_KEY`, `CLAVIA_FGA_TIMEOUT` | OpenFGA, the decision engine of fine-grained authorization (being built, [design](docs/design/fine-grained-authorization.md)): its URL, the preshared key it starts with, and how long one call may take (2 s). Unset, the feature is off |
 
 ### In production
 
@@ -234,8 +235,10 @@ config/  templates/  migrations/  docs/openapi/  test/  conformance/
 | `make shell` | A shell in the PHP container |
 
 The tests come in three suites: unit (no I/O), integration (each adapter against real
-PostgreSQL and Redis), and acceptance (the whole application, in process). Every port has an
-in-memory double and a contract test run against both the double and the real adapter.
+PostgreSQL, Redis and OpenFGA), and acceptance (the whole application, in process). Every port has an
+in-memory double and a contract test run against both the double and the real adapter. `make up`
+also starts OpenFGA beside Clavia, with its own database and no port on the host; the decision
+engine's contract runs against it, and is skipped where `CLAVIA_TEST_FGA_URL` names none.
 
 ## Contributing
 
