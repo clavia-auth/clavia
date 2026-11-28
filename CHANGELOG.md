@@ -6,38 +6,98 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-28
+
+**Fine-grained authorization** (#133, [design](docs/design/fine-grained-authorization.md)): an API can
+now ask Clavia who may do what to its own resources (AuthZEN 1.0, over OpenFGA), and Clavia keeps the
+role memberships it knows in step. It is off until `CLAVIA_FGA_URL` names an OpenFGA, and nothing
+changes for a deployment that does not set it, except the `400` described under Changed.
+
+**Upgrading from 0.5**:
+- **Migrations `0052` and `0053`** run on start, as always.
+- **Schedule `bin/clavia fga:sync` every minute**, whether or not you use the feature. With Compose,
+  take this release's `scheduler.sh`; with Helm, `helm upgrade` brings the CronJob.
+- **Run `bin/clavia management-api:register`** for the new Management API scope,
+  `read:relationships`, then give it to your administrators' role.
+- **A client of the Management API** that treats `422` as "my request is wrong" must treat `400` the
+  same way (see Changed). The dashboard 0.6.0 does not yet: where a form used to point at the field at
+  fault, it shows a general error (clavia-dashboard#85).
+- **To turn fine-grained authorization on**, follow `docs/PRODUCTION.md` §8.
+
 ### Added
 
-- **An API's authorization, read by operators** (#242, part of #133,
-  [design](docs/design/fine-grained-authorization.md) §5.6). Three Management API operations answer
-  from the store of the API in the path, whether its authorization is on or off: `GET
-  …/authorization/models` lists the model versions, newest first, with the one in force marked
-  (`read:resource_servers`). `GET …/authorization/relationships?object=type:id` reads one object's
-  relationships, and `POST …/authorization/evaluation` tries a decision with every check an API's own
-  question goes through, a denial always saying which kind it is. Both need the new
-  `read:relationships` scope.
-  - **Upgrading**: run `management-api:register` so the Management API gets the new scope, then
-    give it to your administrators' role. The dashboard asks for every scope its operator holds.
+- **OpenFGA beside Clavia** (#135, the first slice of fine-grained authorization, #133,
+  [design](docs/design/fine-grained-authorization.md)). Clavia can now talk to OpenFGA, the decision
+  engine that answers "may this person do this to that, now?" for your APIs. It runs beside Clavia, with
+  its own database, and Clavia alone reaches it.
+  - **Three settings**: `CLAVIA_FGA_URL` (unset by default, which keeps the feature off),
+    `CLAVIA_FGA_API_KEY` (the preshared key OpenFGA starts with, 16 to 512 characters, required with
+    the URL) and `CLAVIA_FGA_TIMEOUT` (2 seconds, 1 to 10). The URL is your own infrastructure, so a
+    private address is accepted. `bin/clavia config` masks the key.
+  - **Development**: `make up` also starts OpenFGA 1.22.1 and its own PostgreSQL. Its schema is
+    migrated before it starts, its caches are off (every answer is strongly consistent), it requires
+    the preshared key, and it publishes no port on the host.
+  - **Production** (#248): the Compose kit runs OpenFGA the same way, but only when asked to, under
+    the `fga` profile (`COMPOSE_PROFILES=fga`, with `CLAVIA_FGA_URL`, `CLAVIA_FGA_API_KEY` and
+    `OPENFGA_POSTGRES_PASSWORD` in `.env`, all in `env.example`). The Helm chart doesn't run it, as it
+    doesn't run PostgreSQL or Redis: set `env.CLAVIA_FGA_URL` and put the key in its Secret.
+    `docs/PRODUCTION.md` §8 lists the OpenFGA settings Clavia relies on, the first-start steps
+    (`management-api:register` registers the Authorization API) and how to back up and restore
+    OpenFGA's database with Clavia's.
 
-- **A guide to fine-grained authorization** (`docs/guides/fine-grained-authorization.md`, part of
-  clavia-auth/clavia-dashboard#48), for the developer of an API: what the operator sets up (the model,
-  the speaking client, its grant on the Authorization API), getting a token, asking for decisions one at
-  a time or in a batch, the three searches, writing and reading relationships, the facts Clavia adds to
-  the context, and why a `503` is a denial. Published with the other guides.
+- **Fine-grained authorization on an API** (#136, part of #133,
+  [design](docs/design/fine-grained-authorization.md) §5.1). `PUT
+  /api/v1/resource-servers/{id}/authorization` (`update:resource_servers`) turns it on with an OpenFGA
+  model (its JSON form, schema 1.1) and the clients that speak for the API. The API gets its own
+  OpenFGA store, kept from then on, and a model that changes is written as a new version. `GET` shows
+  the settings and the model. `DELETE` turns it off and keeps the store; `?confirm=delete` deletes the
+  store and every relationship in it. Deleting an API deletes its store too. The API's clients then
+  ask for decisions through the Authorization API (below).
+  - **A model declares `type user`**. `user`, `client`, `role` and `group` are Clavia's: `user` and
+    `client` have no relation, and `role` and `group` are exactly `define member: [user]`. Clavia
+    alone will write their relationships.
+  - **A speaking client** is a first-party machine client (`client_credentials`). It speaks for one
+    API at most, and an API has at most twenty.
+  - **The Authorization API** (`https://management.{domain}/access`) is a new system API, with the
+    scopes `evaluate:access`, `search:access` and `write:relationships`. `management-api:register`
+    registers it when `CLAVIA_FGA_URL` is set; grant a speaking client on it with `clients:grant`.
+  - **Three audit event types**, also available to webhooks: `resource_server.authorization_enabled`,
+    `resource_server.authorization_disabled` and `resource_server.authorization_model_written` (the
+    model's id, never its content).
+  - **Migration `0052`** adds the authorization columns to `resource_servers` and the
+    `authorization_clients` table.
 
-- **AuthZEN search** (#140, part of #133, [design](docs/design/fine-grained-authorization.md) §5.5).
-  An API's client asks who may act on a resource (`POST /access/v1/search/subject`), what a subject may
-  act on (`/search/resource`) and what it may do to a resource (`/search/action`), with the new
-  `search:access` scope, as AuthZEN 1.0 §8 describes. A search follows an evaluation's rules, and a
-  subject Clavia does not know has no resources and no actions.
-  - **Results are sorted by id, capped at 1,000** (OpenFGA's own maximum, given as
-    `search_max_results` in the metadata), and paged with `page.limit` (1 to 1,000, 50 by default) and
-    `page.token`. A token is good for the search that gave it only: change the search and it is `400`.
-  - **A subject search leaves out** deactivated or unknown accounts and deleted applications, and any
-    relationship whose condition reads Clavia's facts about the subject, since there is no subject yet
-    to read them from. A condition that starts with `has(clavia.subject)` simply does not count there;
-    an unguarded one makes OpenFGA refuse the whole listing, which then comes back empty, with
-    `context.error` saying why.
+- **The identity feed** (#137, part of #133, [design](docs/design/fine-grained-authorization.md)
+  §5.4). Clavia writes who holds each role (`role:<role id>#member@user:<user id>`) into the store of
+  every API the role holds a permission on, and keeps it in step. A role given, taken or replaced, a
+  role's permissions moved, or a person, an application or a role deleted, is queued in the
+  transaction of the change and sent to OpenFGA just after the response. A person or an application
+  deleted loses every relationship naming them, the API's own included.
+  - **What fails is never lost**: it is sent again with a backoff (5 seconds, a minute, five minutes,
+    then every ten minutes), and never given up. While `CLAVIA_FGA_URL` is unset, changes are kept for
+    the APIs that have a store and sent once it is set again.
+  - **`bin/clavia fga:sync`** sends what is waiting; **`bin/clavia fga:resync <api>`** rebuilds an
+    API's role relationships from Clavia, when a store and Clavia have drifted.
+  - **Migration `0053`** adds the `fga_outbox` table.
+  - **Upgrading**: schedule `bin/clavia fga:sync` every minute. The production kit does: with
+    Compose, take the release's `scheduler.sh`, which your copy of the kit mounts into the `scheduler`
+    service; with Helm, the chart's `fga-sync` CronJob comes with `helm upgrade`. Without it, a role
+    change that could not be sent at once is never sent again.
+
+- **Relationships for APIs** (#139, part of #133, [design](docs/design/fine-grained-authorization.md)
+  §5.3). An API keeps its resources' relationships through Clavia: `POST /access/v1/relationships`
+  writes and deletes up to a hundred, all of them or none, and `GET /access/v1/relationships?object=`
+  reads one object's back, a page at a time. Both need the new `write:relationships` scope, granted on
+  the Authorization API to a client that speaks for the API.
+  - **The Authorization API has a contract** (`docs/openapi/authorization-api.yaml`), which its front
+    door checks every request against, as the Management API's does. It is published beside the other
+    two references.
+  - **Confined to the API's own types**: a relationship on one of Clavia's types (`user`, `client`,
+    `role`, `group`) or on a type the model does not declare is `422`, and so is a person or an
+    application Clavia does not know. OpenFGA's own refusal (written twice, deleted unwritten) is `422`
+    with its error code alone.
+  - **Clavia stores and logs nothing of an API's relationships**: they live in OpenFGA alone, and
+    are not in the audit trail.
 
 - **AuthZEN evaluation** (#138, part of #133, [design](docs/design/fine-grained-authorization.md)
   §5.2). An API's client asks whether a subject may act on a resource, now:
@@ -64,78 +124,36 @@ All notable changes to Clavia are written here, for the people who run it. The f
     public, cacheable for an hour, listing exactly the endpoints that exist. It is not there while
     `CLAVIA_FGA_URL` is unset.
 
-- **Relationships for APIs** (#139, part of #133, [design](docs/design/fine-grained-authorization.md)
-  §5.3). An API keeps its resources' relationships through Clavia: `POST /access/v1/relationships`
-  writes and deletes up to a hundred, all of them or none, and `GET /access/v1/relationships?object=`
-  reads one object's back, a page at a time. Both need the new `write:relationships` scope, granted on
-  the Authorization API to a client that speaks for the API.
-  - **The Authorization API has a contract** (`docs/openapi/authorization-api.yaml`), which its front
-    door checks every request against, as the Management API's does. It is published beside the other
-    two references.
-  - **Confined to the API's own types**: a relationship on one of Clavia's types (`user`, `client`,
-    `role`, `group`) or on a type the model does not declare is `422`, and so is a person or an
-    application Clavia does not know. OpenFGA's own refusal (written twice, deleted unwritten) is `422`
-    with its error code alone.
-  - **Clavia stores and logs nothing of an API's relationships**: they live in OpenFGA alone, and
-    are not in the audit trail.
+- **AuthZEN search** (#140, part of #133, [design](docs/design/fine-grained-authorization.md) §5.5).
+  An API's client asks who may act on a resource (`POST /access/v1/search/subject`), what a subject may
+  act on (`/search/resource`) and what it may do to a resource (`/search/action`), with the new
+  `search:access` scope, as AuthZEN 1.0 §8 describes. A search follows an evaluation's rules, and a
+  subject Clavia does not know has no resources and no actions.
+  - **Results are sorted by id, capped at 1,000** (OpenFGA's own maximum, given as
+    `search_max_results` in the metadata), and paged with `page.limit` (1 to 1,000, 50 by default) and
+    `page.token`. A token is good for the search that gave it only: change the search and it is `400`.
+  - **A subject search leaves out** deactivated or unknown accounts and deleted applications, and any
+    relationship whose condition reads Clavia's facts about the subject, since there is no subject yet
+    to read them from. A condition that starts with `has(clavia.subject)` simply does not count there;
+    an unguarded one makes OpenFGA refuse the whole listing, which then comes back empty, with
+    `context.error` saying why.
 
-- **The identity feed** (#137, part of #133, [design](docs/design/fine-grained-authorization.md)
-  §5.4). Clavia writes who holds each role (`role:<role id>#member@user:<user id>`) into the store of
-  every API the role holds a permission on, and keeps it in step. A role given, taken or replaced, a
-  role's permissions moved, or a person, an application or a role deleted, is queued in the
-  transaction of the change and sent to OpenFGA just after the response. A person or an application
-  deleted loses every relationship naming them, the API's own included.
-  - **What fails is never lost**: it is sent again with a backoff (5 seconds, a minute, five minutes,
-    then every ten minutes), and never given up. While `CLAVIA_FGA_URL` is unset, changes are kept for
-    the APIs that have a store and sent once it is set again.
-  - **`bin/clavia fga:sync`** sends what is waiting; **`bin/clavia fga:resync <api>`** rebuilds an
-    API's role relationships from Clavia, when a store and Clavia have drifted.
-  - **Migration `0053`** adds the `fga_outbox` table.
-  - **Upgrading**: schedule `bin/clavia fga:sync` every minute. The production kit does: with
-    Compose, take the release's `scheduler.sh`, which your copy of the kit mounts into the `scheduler`
-    service; with Helm, the chart's `fga-sync` CronJob comes with `helm upgrade`. Without it, a role
-    change that could not be sent at once is never sent again.
+- **An API's authorization, read by operators** (#242, part of #133,
+  [design](docs/design/fine-grained-authorization.md) §5.6). Three Management API operations answer
+  from the store of the API in the path, whether its authorization is on or off: `GET
+  …/authorization/models` lists the model versions, newest first, with the one in force marked
+  (`read:resource_servers`). `GET …/authorization/relationships?object=type:id` reads one object's
+  relationships, and `POST …/authorization/evaluation` tries a decision with every check an API's own
+  question goes through, a denial always saying which kind it is. Both need the new
+  `read:relationships` scope.
+  - **Upgrading**: run `management-api:register` so the Management API gets the new scope, then
+    give it to your administrators' role. The dashboard asks for every scope its operator holds.
 
-- **Fine-grained authorization on an API** (#136, part of #133,
-  [design](docs/design/fine-grained-authorization.md) §5.1). `PUT
-  /api/v1/resource-servers/{id}/authorization` (`update:resource_servers`) turns it on with an OpenFGA
-  model (its JSON form, schema 1.1) and the clients that speak for the API. The API gets its own
-  OpenFGA store, kept from then on, and a model that changes is written as a new version. `GET` shows
-  the settings and the model. `DELETE` turns it off and keeps the store; `?confirm=delete` deletes the
-  store and every relationship in it. Deleting an API deletes its store too. The API's clients then
-  ask for decisions through the Authorization API (below).
-  - **A model declares `type user`**. `user`, `client`, `role` and `group` are Clavia's: `user` and
-    `client` have no relation, and `role` and `group` are exactly `define member: [user]`. Clavia
-    alone will write their relationships.
-  - **A speaking client** is a first-party machine client (`client_credentials`). It speaks for one
-    API at most, and an API has at most twenty.
-  - **The Authorization API** (`https://management.{domain}/access`) is a new system API, with the
-    scopes `evaluate:access`, `search:access` and `write:relationships`. `management-api:register`
-    registers it when `CLAVIA_FGA_URL` is set; grant a speaking client on it with `clients:grant`.
-  - **Three audit event types**, also available to webhooks: `resource_server.authorization_enabled`,
-    `resource_server.authorization_disabled` and `resource_server.authorization_model_written` (the
-    model's id, never its content).
-  - **Migration `0052`** adds the authorization columns to `resource_servers` and the
-    `authorization_clients` table.
-
-- **OpenFGA beside Clavia** (#135, the first slice of fine-grained authorization, #133,
-  [design](docs/design/fine-grained-authorization.md)). Clavia can now talk to OpenFGA, the decision
-  engine that answers "may this person do this to that, now?" for your APIs. It runs beside Clavia, with
-  its own database, and Clavia alone reaches it.
-  - **Three settings**: `CLAVIA_FGA_URL` (unset by default, which keeps the feature off),
-    `CLAVIA_FGA_API_KEY` (the preshared key OpenFGA starts with, 16 to 512 characters, required with
-    the URL) and `CLAVIA_FGA_TIMEOUT` (2 seconds, 1 to 10). The URL is your own infrastructure, so a
-    private address is accepted. `bin/clavia config` masks the key.
-  - **Development**: `make up` also starts OpenFGA 1.22.1 and its own PostgreSQL. Its schema is
-    migrated before it starts, its caches are off (every answer is strongly consistent), it requires
-    the preshared key, and it publishes no port on the host.
-  - **Production** (#248): the Compose kit runs OpenFGA the same way, but only when asked to, under
-    the `fga` profile (`COMPOSE_PROFILES=fga`, with `CLAVIA_FGA_URL`, `CLAVIA_FGA_API_KEY` and
-    `OPENFGA_POSTGRES_PASSWORD` in `.env`, all in `env.example`). The Helm chart doesn't run it, as it
-    doesn't run PostgreSQL or Redis: set `env.CLAVIA_FGA_URL` and put the key in its Secret.
-    `docs/PRODUCTION.md` §8 lists the OpenFGA settings Clavia relies on, the first-start steps
-    (`management-api:register` registers the Authorization API) and how to back up and restore
-    OpenFGA's database with Clavia's.
+- **A guide to fine-grained authorization** (`docs/guides/fine-grained-authorization.md`, part of
+  clavia-auth/clavia-dashboard#48), for the developer of an API: what the operator sets up (the model,
+  the speaking client, its grant on the Authorization API), getting a token, asking for decisions one at
+  a time or in a batch, the three searches, writing and reading relationships, the facts Clavia adds to
+  the context, and why a `503` is a denial. Published with the other guides.
 
 ### Changed
 
@@ -145,8 +163,8 @@ All notable changes to Clavia are written here, for the people who run it. The f
   problem document, `"title": "Bad Request"`, with every violation in `errors`. `422` now means a
   well-formed request a rule refuses (an unknown permission, a breached password, a reserved claim
   name), with `"detail": "The request is well formed, but a rule refuses it."`. **A client that reads
-  `422` as "my fields are wrong" must read `400` too**; the dashboard does from its next release
-  (clavia-dashboard#85). A malformed audit-event filter (`type`, `since`, `until`, `target_*`) is `400`
+  `422` as "my fields are wrong" must read `400` too**. The dashboard 0.6.0 does not yet, and shows
+  such an answer as a general error (clavia-dashboard#85). A malformed audit-event filter (`type`, `since`, `until`, `target_*`) is `400`
   as well, and no longer repeats the value at fault. SCIM and the authorization server's endpoints are
   unchanged.
 
@@ -745,7 +763,8 @@ forbids passing (a code flow with neither PKCE nor a `nonce`); see
 - Request objects (`request`, `request_uri`) and the `address` and `phone` scopes.
 - A queue for mail: a sign-in email is sent while the person waits.
 
-[Unreleased]: https://github.com/clavia-auth/clavia/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/clavia-auth/clavia/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/clavia-auth/clavia/releases/tag/v0.6.0
 [0.5.1]: https://github.com/clavia-auth/clavia/releases/tag/v0.5.1
 [0.5.0]: https://github.com/clavia-auth/clavia/releases/tag/v0.5.0
 [0.4.0]: https://github.com/clavia-auth/clavia/releases/tag/v0.4.0

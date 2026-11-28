@@ -16,7 +16,7 @@ namespace Clavia\Configuration;
  */
 final class Version
 {
-    public const string CURRENT = '0.5.1';
+    public const string CURRENT = '0.6.0';
 
     private function __construct()
     {
