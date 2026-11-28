@@ -42,6 +42,14 @@ tags:
       resource? Answered from the calling API's store, with what Clavia knows of the subject added to
       the context its conditions read. As AuthZEN asks (§10.1.1), members this document does not
       define are ignored, and a request missing what it requires is `400`.
+  - name: search
+    x-displayName: Search
+    description: |
+      AuthZEN 1.0's Subject, Resource and Action Search APIs (§8): who may act on a resource, what a
+      subject may act on, what it may do. Results are capped at 1,000 (OpenFGA's own maximum, and
+      what it finds within its deadline), sorted by id, and paged: `page.limit` (1 to 1,000, 50 by
+      default) and `page.token`, the previous answer's `page.next_token`, which is empty on the last
+      page. The rest of the request must stay as it was between pages (§8.2), or the token is `400`.
   - name: metadata
     x-displayName: Metadata
     description: AuthZEN 1.0's decision point metadata (§9), public.
@@ -78,8 +86,9 @@ paths:
 
         A condition that cannot be evaluated (it reads an `app_metadata` key the person does not have,
         or a context member the request did not send) denies the question (`condition_failed`), and
-        that question alone: write conditions with `has()` where a fact may be missing, as in
-        `has(clavia.subject.app_metadata.department) && clavia.subject.app_metadata.department == department`.
+        that question alone: write conditions with `has()` where a fact may be missing, starting with
+        `has(clavia.subject)`, which a subject search needs (it has no subject's facts to give), as in
+        `has(clavia.subject) && has(clavia.subject.app_metadata.department) && clavia.subject.app_metadata.department == department`.
 
         `properties` on the subject, the action and the resource are not read. A denial carries its
         kind in `context.reason` (`no_relation`, `subject_inactive`, `condition_failed`) only when the
@@ -174,6 +183,149 @@ paths:
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
+  /access/v1/search/subject:
+    post:
+      tags: [search]
+      operationId: searchSubjects
+      summary: Search subjects
+      description: |
+        Who holds the action on the resource (AuthZEN 1.0 §8.4): the people (`subject.type: user`) or
+        the applications (`client`), directly or through other relations (§8.1). `subject.id` is
+        ignored. Deactivated or unknown accounts and deleted applications are left out. Each candidate's
+        facts cannot be known in advance, so `context.clavia` is an empty map here: a relationship whose
+        condition reads Clavia's subject facts does not count, provided the condition guards with
+        `has(clavia.subject)`; an unguarded one makes the engine refuse the listing, which is then empty,
+        `context.error` saying why.
+      security:
+        - authorizationToken: [search:access]
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubjectSearch'
+            examples:
+              SubjectSearch:
+                $ref: '#/components/examples/SubjectSearch'
+      responses:
+        '200':
+          description: One page of results, `page` first; `page.next_token` is empty on the last.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubjectResults'
+              examples:
+                SubjectResults:
+                  $ref: '#/components/examples/SubjectResults'
+        '400':
+          $ref: '#/components/responses/MalformedQuestion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /access/v1/search/resource:
+    post:
+      tags: [search]
+      operationId: searchResources
+      summary: Search resources
+      description: |
+        What the subject may act on (AuthZEN 1.0 §8.5): the objects of `resource.type` it holds the
+        action on, directly or through other relations. `resource.id` is ignored. Clavia's facts about the
+        subject are in the context, as for an evaluation; a subject Clavia does not know, or has
+        deactivated, has none.
+      security:
+        - authorizationToken: [search:access]
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceSearch'
+            examples:
+              ResourceSearch:
+                $ref: '#/components/examples/ResourceSearch'
+      responses:
+        '200':
+          description: One page of results, `page` first; `page.next_token` is empty on the last.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceResults'
+              examples:
+                ResourceResults:
+                  $ref: '#/components/examples/ResourceResults'
+        '400':
+          $ref: '#/components/responses/MalformedQuestion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /access/v1/search/action:
+    post:
+      tags: [search]
+      operationId: searchActions
+      summary: Search actions
+      description: |
+        What the subject may do to the resource (AuthZEN 1.0 §8.6): every relation of the resource's
+        type, asked at once, in the order the model declares them. There is no `action`. A relation
+        whose condition cannot be evaluated is not held.
+      security:
+        - authorizationToken: [search:access]
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionSearch'
+            examples:
+              ActionSearch:
+                $ref: '#/components/examples/ActionSearch'
+      responses:
+        '200':
+          description: One page of results, `page` first; `page.next_token` is empty on the last.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionResults'
+              examples:
+                ActionResults:
+                  $ref: '#/components/examples/ActionResults'
+        '400':
+          $ref: '#/components/responses/MalformedQuestion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
   /.well-known/authzen-configuration:
     get:
       tags: [metadata]
@@ -181,7 +333,8 @@ paths:
       summary: Read the decision point's metadata
       description: |
         AuthZEN 1.0 §9: the decision point's identifier (`https://management.{domain}`) and the
-        endpoints it offers, and none it does not. Public, and cacheable for an hour.
+        endpoints it offers, and none it does not; and Clavia's own `search_max_results`, the most
+        results a search considers. Public, and cacheable for an hour.
       security: []
       responses:
         '200':
@@ -470,6 +623,49 @@ components:
         policy_decision_point: "https://management.example.com"
         access_evaluation_endpoint: "https://management.example.com/access/v1/evaluation"
         access_evaluations_endpoint: "https://management.example.com/access/v1/evaluations"
+        search_subject_endpoint: "https://management.example.com/access/v1/search/subject"
+        search_resource_endpoint: "https://management.example.com/access/v1/search/resource"
+        search_action_endpoint: "https://management.example.com/access/v1/search/action"
+        search_max_results: 1000
+    SubjectSearch:
+      summary: Who may view the Q3 report?
+      value:
+        subject: {type: "user"}
+        action: {name: "viewer"}
+        resource: {type: "document", id: "q3-report"}
+        page: {limit: 2}
+    SubjectResults:
+      summary: The first two of them
+      value:
+        page: {next_token: "eyJvIjoyLCJmIjoiNGE5In0", count: 2}
+        results:
+          - {type: "user", id: "3f8e2d1c-5b4a-4c9e-8d7f-6a5b4c3d2e1f"}
+          - {type: "user", id: "9b2c7e4a-1d3f-4a6b-9c8e-2f1a0b3c4d5e"}
+    ResourceSearch:
+      summary: Which documents may Ada view?
+      value:
+        subject: {type: "user", id: "3f8e2d1c-5b4a-4c9e-8d7f-6a5b4c3d2e1f"}
+        action: {name: "viewer"}
+        resource: {type: "document"}
+    ResourceResults:
+      summary: All of them, in one page
+      value:
+        page: {next_token: "", count: 2}
+        results:
+          - {type: "document", id: "q3-report"}
+          - {type: "document", id: "q4-plan"}
+    ActionSearch:
+      summary: What may Ada do to the Q3 report?
+      value:
+        subject: {type: "user", id: "3f8e2d1c-5b4a-4c9e-8d7f-6a5b4c3d2e1f"}
+        resource: {type: "document", id: "q3-report"}
+    ActionResults:
+      summary: View and edit it
+      value:
+        page: {next_token: "", count: 2}
+        results:
+          - {name: "editor"}
+          - {name: "viewer"}
     UnknownType:
       summary: A type the API's model does not declare
       value:
@@ -707,6 +903,177 @@ components:
           type: object
           additionalProperties: true
 
+    SearchPage:
+      description: Which page (AuthZEN 1.0 §8.2.1).
+      type: object
+      additionalProperties: true
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 1000
+
+    SubjectSearch:
+      description: AuthZEN 1.0 §8.4.1; `subject.id` is ignored.
+      type: object
+      additionalProperties: true
+      required: [subject, action, resource]
+      properties:
+        subject:
+          type: object
+          additionalProperties: true
+          required: [type]
+          properties:
+            type:
+              type: string
+              minLength: 1
+              maxLength: 254
+        action:
+          $ref: '#/components/schemas/EvaluationAction'
+        resource:
+          $ref: '#/components/schemas/EvaluationEntity'
+        context:
+          type: object
+          additionalProperties: true
+        page:
+          $ref: '#/components/schemas/SearchPage'
+
+    ResourceSearch:
+      description: AuthZEN 1.0 §8.5.1; `resource.id` is ignored.
+      type: object
+      additionalProperties: true
+      required: [subject, action, resource]
+      properties:
+        subject:
+          $ref: '#/components/schemas/EvaluationEntity'
+        action:
+          $ref: '#/components/schemas/EvaluationAction'
+        resource:
+          type: object
+          additionalProperties: true
+          required: [type]
+          properties:
+            type:
+              type: string
+              minLength: 1
+              maxLength: 254
+        context:
+          type: object
+          additionalProperties: true
+        page:
+          $ref: '#/components/schemas/SearchPage'
+
+    ActionSearch:
+      description: AuthZEN 1.0 §8.6.1; no `action`.
+      type: object
+      additionalProperties: true
+      required: [subject, resource]
+      properties:
+        subject:
+          $ref: '#/components/schemas/EvaluationEntity'
+        resource:
+          $ref: '#/components/schemas/EvaluationEntity'
+        context:
+          type: object
+          additionalProperties: true
+        page:
+          $ref: '#/components/schemas/SearchPage'
+
+    ResultsPage:
+      description: AuthZEN 1.0 §8.2.2.
+      type: object
+      additionalProperties: false
+      required: [next_token]
+      properties:
+        next_token:
+          type: string
+          description: The next page's token; empty on the last page.
+        count:
+          type: integer
+          minimum: 0
+
+    SearchError:
+      description: Why a search has no results, when the engine could not evaluate it (it fails closed).
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [status, message]
+          properties:
+            status:
+              type: integer
+            message:
+              type: string
+
+    SubjectResults:
+      type: object
+      additionalProperties: false
+      required: [page, results]
+      properties:
+        page:
+          $ref: '#/components/schemas/ResultsPage'
+        results:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [type, id]
+            properties:
+              type:
+                type: string
+                enum: [user, client]
+              id:
+                type: string
+        context:
+          $ref: '#/components/schemas/SearchError'
+
+    ResourceResults:
+      type: object
+      additionalProperties: false
+      required: [page, results]
+      properties:
+        page:
+          $ref: '#/components/schemas/ResultsPage'
+        results:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [type, id]
+            properties:
+              type:
+                type: string
+              id:
+                type: string
+        context:
+          $ref: '#/components/schemas/SearchError'
+
+    ActionResults:
+      type: object
+      additionalProperties: false
+      required: [page, results]
+      properties:
+        page:
+          $ref: '#/components/schemas/ResultsPage'
+        results:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [name]
+            properties:
+              name:
+                type: string
+        context:
+          $ref: '#/components/schemas/SearchError'
+
     DecisionPointMetadata:
       description: AuthZEN 1.0 §9.1.
       type: object
@@ -719,6 +1086,15 @@ components:
           type: string
         access_evaluations_endpoint:
           type: string
+        search_subject_endpoint:
+          type: string
+        search_resource_endpoint:
+          type: string
+        search_action_endpoint:
+          type: string
+        search_max_results:
+          type: integer
+          description: Clavia's own, which AuthZEN clients ignore (§9.2.2); the most results a search considers.
 
     Entity:
       description: An object of the API's model, `type` and `id` as OpenFGA's notation takes them.

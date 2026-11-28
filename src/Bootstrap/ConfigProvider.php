@@ -45,6 +45,7 @@ use Clavia\Adapter\Primary\Http\Access\AccessContract;
 use Clavia\Adapter\Primary\Http\Access\AuthZenMetadataHandler;
 use Clavia\Adapter\Primary\Http\Access\EvaluationHandler;
 use Clavia\Adapter\Primary\Http\Access\RelationshipsHandler;
+use Clavia\Adapter\Primary\Http\Access\SearchHandler;
 use Clavia\Adapter\Primary\Http\Auth\AuthCookies;
 use Clavia\Adapter\Primary\Http\Auth\AuthPageResponder;
 use Clavia\Adapter\Primary\Http\Auth\BrandingHandler;
@@ -241,6 +242,7 @@ use Clavia\Application\Authorization\Feed\StoreReconciler;
 use Clavia\Application\Authorization\Feed\SyncIdentityFeed;
 use Clavia\Application\Authorization\Relationships\ReadRelationships;
 use Clavia\Application\Authorization\Relationships\WriteRelationships;
+use Clavia\Application\Authorization\Search\SearchAccess;
 use Clavia\Application\Authorization\SpokenForApi;
 use Clavia\Application\Clients\RegisterMachineClient;
 use Clavia\Application\Clients\Registration\DeleteClientConfiguration;
@@ -966,6 +968,8 @@ final class ConfigProvider
                     EvaluationHandler::class => Container\EvaluationHandlerFactory::class,
                     AuthZenMetadataHandler::class => Container\AuthZenMetadataHandlerFactory::class,
                     EvaluateAccess::class => Container\EvaluateAccessFactory::class,
+                    SearchAccess::class => Container\SearchAccessFactory::class,
+                    SearchHandler::class => Container\SearchHandlerFactory::class,
                     SubjectFacts::class => Container\SubjectFactsFactory::class,
                     UsersHandler::class => Container\UsersHandlerFactory::class,
                     UserHandler::class => Container\UserHandlerFactory::class,

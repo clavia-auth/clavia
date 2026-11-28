@@ -55,6 +55,12 @@ final class EvaluationRefused extends RuntimeException
         return new self('Each evaluation has a subject, an action and a resource, its own or the request\'s.');
     }
 
+    /** A search's page token that is not one this search handed out, or the search changed since (AuthZEN §8.2). */
+    public static function pageToken(): self
+    {
+        return new self('The page token is not one this search handed out, or the search changed since.');
+    }
+
     public static function malformed(): self
     {
         return new self('An identifier or an action is not one OpenFGA\'s notation takes.');
