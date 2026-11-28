@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Clavia API reference · {{RELEASE}}</title>
-  <meta name="description" content="Reference of the Clavia Management API and authorization server, for Clavia {{RELEASE}}.">
+  <meta name="description" content="Reference of the Clavia Management API, authorization server and Authorization API, for Clavia {{RELEASE}}.">
   <link rel="icon" href="{{ROOT}}clavia-icon.svg" type="image/svg+xml">
   <!--
     The API references, rendered by Scalar from the documents beside this file: management-api.yaml,
-    and authorization-server.yaml for a release that has it (Scalar's document switcher, one server
-    each). Built by docs/site/build.sh, which fills in the release, the path to the site's root and
-    whether the second document is there, and drops the Guides link for a release without guides
+    and authorization-server.yaml and authorization-api.yaml for a release that has them (Scalar's
+    document switcher, one server each). Built by docs/site/build.sh, which fills in the release, the
+    path to the site's root and whether the other documents are there, and drops the Guides link for a release without guides
     (guide.html renders them); published by .github/workflows/docs.yml. See docs/RELEASING.md.
   -->
   <style>
@@ -149,6 +149,18 @@
         servers: server('auth'),
         authentication: { preferredSecurityScheme: 'clientSecretBasic' },
         metaData: { title: 'Clavia authorization server · {{RELEASE}}' },
+      });
+    }
+    // Likewise the Authorization API's (#139), fine-grained authorization for APIs.
+    if ({{AUTHORIZATION_API}}) {
+      references.push({
+        ...common,
+        title: 'Authorization API',
+        slug: 'authorization-api',
+        url: './authorization-api.yaml',
+        servers: server('management'),
+        authentication: { preferredSecurityScheme: 'authorizationToken' },
+        metaData: { title: 'Clavia Authorization API · {{RELEASE}}' },
       });
     }
     Scalar.createApiReference('#app', references);

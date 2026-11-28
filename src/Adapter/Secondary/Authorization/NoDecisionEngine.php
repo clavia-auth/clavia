@@ -14,6 +14,7 @@ namespace Clavia\Adapter\Secondary\Authorization;
 use Clavia\Application\Port\AccessCheck;
 use Clavia\Application\Port\DecisionEngine;
 use Clavia\Application\Port\DecisionEngineFailed;
+use Clavia\Application\Port\TuplePage;
 use Clavia\Domain\Authorization\AuthorizationModel;
 use Clavia\Domain\Authorization\AuthorizationModelId;
 use Clavia\Domain\Authorization\ObjectRef;
@@ -97,6 +98,12 @@ final readonly class NoDecisionEngine implements DecisionEngine
 
     #[\Override]
     public function readByObject(StoreId $store, ObjectRef $object): array
+    {
+        throw DecisionEngineFailed::unavailable();
+    }
+
+    #[\Override]
+    public function readPage(StoreId $store, ObjectRef $object, int $pageSize, string $continuation = ''): TuplePage
     {
         throw DecisionEngineFailed::unavailable();
     }

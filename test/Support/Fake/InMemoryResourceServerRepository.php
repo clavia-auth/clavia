@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Support\Fake;
 
+use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\ResourceServer\ResourceServer;
 use Clavia\Domain\ResourceServer\ResourceServerId;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
@@ -111,5 +112,17 @@ final class InMemoryResourceServerRepository implements ResourceServerRepository
         );
 
         return $apis;
+    }
+
+    #[\Override]
+    public function spokenForBy(ClientId $client): ?ResourceServer
+    {
+        foreach ($this->resourceServers as $api) {
+            if ($api->authorization?->speaksFor($client) === true) {
+                return $api;
+            }
+        }
+
+        return null;
     }
 }

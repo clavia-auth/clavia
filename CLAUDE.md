@@ -117,7 +117,7 @@ src/
 templates/                  server-rendered pages: layout/, auth/, error/, partial/
 translations/               what a person reads, one ARB catalogue per language (en.arb the source)
 migrations/                 NNNN_name.sql, forward only
-docs/openapi/               management-api.yaml, the Management API's contract
+docs/openapi/               management-api.yaml, the Management API's contract; authorization-api.yaml, the Authorization API's
 test/e2e/                   the end-to-end stack: compose, up.sh, verify.sh (docs/design/end-to-end-scenarios.md)
 docs/site/                  the published API references: Scalar over both documents, and the guides (docs.yml)
 docs/guides/                the Management API guides, for callers: tokens, scopes, errors, paging, DPoP, registration
@@ -247,8 +247,8 @@ it. Two hosts must exist wherever Clavia runs, and their separation is a securit
   host-only (no `Domain` attribute), and no script runs on this origin but the one module a page
   that needs it loads (passkeys). Credentials are typed and tokens minted here, and nothing else
   shares it.
-- **`management.{domain}`**: the Management API at `/api/v1/*`, SCIM at `/scim/v2/*`, and the
-  dashboard at `/dashboard`. Keeping it apart means an XSS on the sign-in UI cannot reach the administrative
+- **`management.{domain}`**: the Management API at `/api/v1/*`, SCIM at `/scim/v2/*`, the
+  Authorization API at `/access/v1/*`, and the dashboard at `/dashboard`. Keeping it apart means an XSS on the sign-in UI cannot reach the administrative
   session, and the reverse.
 
 There is no `api.{domain}`: the Management API is a path on the dashboard's origin, so the
@@ -258,8 +258,8 @@ reserves and every resolver answers from `/etc/hosts`. Never `.local`, which mac
 through Bonjour at seconds per lookup, and never a real suffix such as `.dev`.
 
 **Caddy** terminates TLS (mkcert in development, a wildcard for `*.{domain}`), serves
-`public/auth/static/*` itself, sends everything else on `auth.*`, and `/api/v1/*` and `/scim/v2/*`
-on `management.*`, to PHP-FPM (both answer `404` on `auth.*`)
+`public/auth/static/*` itself, sends everything else on `auth.*`, and `/api/v1/*`, `/scim/v2/*` and
+`/access/v1/*` on `management.*`, to PHP-FPM (all three answer `404` on `auth.*`)
 (`index.php` is the only script it runs), and reverse-proxies `/dashboard` to
 `CLAVIA_DASHBOARD_UPSTREAM` with the `Host` header kept. No `X-Forwarded-*` header is trusted
 unless `CLAVIA_TRUSTED_PROXIES` names the proxy, and the host never comes from a header. In
@@ -269,7 +269,7 @@ ACME, or plain HTTP behind an Ingress whose `X-Forwarded-For` it alone believes
 PHP's `/healthz` is on `:8081` for probes. `DeploymentKitTest` fails when the two Caddyfiles part on a
 security rule, a scheduled command is missing from a kit, or a release's version is not everywhere.
 
-### Five surfaces, five authentication mechanisms
+### Six surfaces, six authentication mechanisms
 
 | Path | Purpose | The caller proves itself with |
 |---|---|---|
@@ -278,11 +278,13 @@ security rule, a scheduled command is missing from a kit, or a release's version
 | `/auth/*` | Sign-in, second factor, consent, device approval, sign-out | The browser session cookie |
 | `/api/v1/*` | Management API | A bearer access token for the Management API |
 | `/scim/v2/*` | SCIM 2.0 provisioning (RFC 7644), for directories | A provisioning token, as `Authorization: Bearer` |
+| `/access/v1/*` | The Authorization API: an API's relationships, then AuthZEN decisions | A bearer access token for the Authorization API, from a client speaking for that API |
 
 Keeping them apart is the central design constraint. The failure to avoid is authenticating
 `/api/v1/*` with the `/auth/*` session cookie: the Management API is a machine plane, reachable
 only with an access token, and the dashboard is an OAuth client like any other. A provisioning
-token reaches `/scim/v2` alone, and a Management API token never does.
+token reaches `/scim/v2` alone, and a Management API token never does. A token for the Authorization
+API reaches `/access/v1` alone, and only the store of the API its client speaks for.
 
 ### Storage split
 
@@ -339,8 +341,8 @@ decision engine (`DecisionEngine`, `AccessCheck`, `DecisionEngineFailed`).
 ### Fine-grained authorization
 
 Design in `docs/design/fine-grained-authorization.md` (AuthZEN over OpenFGA, #133), built in slices:
-the engine (#135), authorization on an API (#136), then the identity feed (#137). Nothing asks the
-engine for a decision yet.
+the engine (#135), authorization on an API (#136), the identity feed (#137), then relationships for
+APIs (#139). Nothing asks the engine for a decision yet.
 
 - **OpenFGA runs beside Clavia**, its own container and PostgreSQL, reached by Clavia alone with a
   preshared key (`CLAVIA_FGA_URL`, `CLAVIA_FGA_API_KEY`; unset, the feature is off and
@@ -351,9 +353,11 @@ engine for a decision yet.
 - **The port is `DecisionEngine`**: stores, model versions (`AuthorizationModel`, OpenFGA's JSON,
   kept as the text it came as), atomic writes of at most 100 tuples, check, batch check (any size;
   `OpenFgaDecisionEngine` sends parts of 50), list objects, list users (objects only, never a
-  wildcard or a userset), read by subject, read by object. `Domain\Authorization` holds the notation:
+  wildcard or a userset), read by subject, read by object, and one page of an object's (`readPage`,
+  OpenFGA's continuation token passed through). `Domain\Authorization` holds the notation:
   `ObjectType`, `ObjectRef` (`type:id`, never the wildcard `*`), `Relation`, `SubjectRef` (an object
-  or a userset `type:id#relation`), `Tuple`, and the engine's ULIDs (`StoreId`,
+  or a userset `type:id#relation`), `Tuple` (with an optional `Condition`: a name and its stored
+  context, at most 4 KiB, not part of the tuple's identity), and the engine's ULIDs (`StoreId`,
   `AuthorizationModelId`), each held to OpenFGA's rules.
 - **Fail closed**: every failure is one `DecisionEngineFailed`, never a decision. `refusal` is
   OpenFGA's error code when it refused the request (a 4xx but 401, 403, 408 and 429), null when it
@@ -398,6 +402,22 @@ engine for a decision yet.
   at a time, and is never given up. `fga:resync <api>` (`ResyncStore`, by id or identifier)
   reconciles every role Clavia knows, past the outbox. With `CLAVIA_FGA_URL` unset, entries are still
   queued for the APIs that kept a store (one per subject) and `fga:sync` sends nothing until it is set.
+- **The Authorization API** (`/access/v1/*`, #139, §5.3), only while `CLAVIA_FGA_URL` is set, is
+  contract-first like the Management API: `docs/openapi/authorization-api.yaml` (`AccessContract`) is
+  what `AccessApiMiddleware` checks, in the same order (credentials, a token for the Authorization API
+  by `AuthenticateAuthorizationCaller`, the operation's scope, the request), and errors are RFC 9457
+  problem documents (bearer refusals RFC 6750). `AuthorizationApiCoverageTest` keeps routes and
+  document equal; acceptance answers are checked against it; it is published beside the other two.
+  Every request is answered from the API its client speaks for (`SpokenForApi`, authorization on;
+  `SpeaksForNoApi` is `403`). `POST /access/v1/relationships` (`write:relationships`,
+  `WriteRelationships`) writes and deletes at most 100, all or none: objects of Clavia's types
+  (`user`, `client`, `role`, `group`) or of none the model declares are `422` pointing at them, and so
+  is a `user` or `client` subject Clavia does not know (a userset is the model's to accept); the
+  engine's refusal is `422` with its code alone; `204`. `GET …?object=type:id` (`ReadRelationships`)
+  reads one of the API's own objects a page at a time (`page_size` 1–100, `page_token`, the answer's
+  `next_page_token` absent on the last). The shape is AuthZEN's: `resource` and `subject` as
+  `{type, id}`, a subject's `relation` for a userset, an optional `condition` `{name, context}`. Nothing
+  of the relationships is stored, logged or audited by Clavia; the engine not answering is `503`.
 
 ## Flows
 
@@ -1484,7 +1504,8 @@ Tests state behaviour from the specifications, and name the RFC section where it
 - **A grant**: a class implementing `Token\Grant`, registered in `IssueTokenFactory`; discovery
   picks it up.
 - **An endpoint**: a route in `config/routes.php` (with the methods it answers), a handler that
-  translates, one use case. If it is advertised, add it to `ProviderMetadata`; `OidcTest` fetches
+  translates, one use case. Under `/access/v1`, describe it in `docs/openapi/authorization-api.yaml`
+  first: `AuthorizationApiCoverageTest` fails until it is. If it is advertised, add it to `ProviderMetadata`; `OidcTest` fetches
   it. On `auth.*` under `/oauth2`, `/oidc` or `/.well-known`, describe it in
   `docs/openapi/authorization-server.yaml`: `AuthorizationServerCoverageTest` fails until it is.
 - **A Management API operation**: the path in `docs/openapi/management-api.yaml` (a short

@@ -14,8 +14,10 @@ namespace Clavia\Adapter\Secondary\Authorization;
 use Clavia\Application\Port\AccessCheck;
 use Clavia\Application\Port\DecisionEngine;
 use Clavia\Application\Port\DecisionEngineFailed;
+use Clavia\Application\Port\TuplePage;
 use Clavia\Domain\Authorization\AuthorizationModel;
 use Clavia\Domain\Authorization\AuthorizationModelId;
+use Clavia\Domain\Authorization\Condition;
 use Clavia\Domain\Authorization\ObjectRef;
 use Clavia\Domain\Authorization\ObjectType;
 use Clavia\Domain\Authorization\Relation;
@@ -252,6 +254,14 @@ final readonly class OpenFgaDecisionEngine implements DecisionEngine
         return $this->readTuples($store, ['object' => $object->toString()]);
     }
 
+    #[\Override]
+    public function readPage(StoreId $store, ObjectRef $object, int $pageSize, string $continuation = ''): TuplePage
+    {
+        [$tuples, $next] = $this->readOnePage($store, ['object' => $object->toString()], $pageSize, $continuation);
+
+        return new TuplePage($tuples, $next);
+    }
+
     /**
      * Every tuple matching the key, page after page.
      *
@@ -264,35 +274,73 @@ final readonly class OpenFgaDecisionEngine implements DecisionEngine
         $tuples = [];
         $continuation = '';
         do {
-            $body = ['tuple_key' => $key, 'page_size' => self::READ_PAGE_SIZE];
-            if ($continuation !== '') {
-                $body['continuation_token'] = $continuation;
-            }
-
-            $answer = $this->send(RequestMethodInterface::METHOD_POST, $this->store($store) . '/read', $body, 'read');
-            [$page, $continuation] = $this->read('read', static function () use ($answer): array {
-                $page = [];
-                /** @var mixed $tuple */
-                foreach (self::list($answer, 'tuples') as $tuple) {
-                    $key = is_array($tuple) ? ($tuple['key'] ?? null) : null;
-                    if (! is_array($key)) {
-                        throw new InvalidValue('A tuple has a key.');
-                    }
-                    $page[] = Tuple::of(
-                        ObjectRef::fromString(self::string($key, 'object')),
-                        Relation::fromString(self::string($key, 'relation')),
-                        SubjectRef::fromString(self::string($key, 'user')),
-                    );
-                }
-                /** @var mixed $token */
-                $token = $answer['continuation_token'] ?? '';
-
-                return [$page, is_string($token) ? $token : ''];
-            });
+            [$page, $continuation] = $this->readOnePage($store, $key, self::READ_PAGE_SIZE, $continuation);
             array_push($tuples, ...$page);
         } while ($continuation !== '');
 
         return $tuples;
+    }
+
+    /**
+     * One page of OpenFGA's Read, and the token of the next ('' after the last).
+     *
+     * @param array<string, string> $key
+     * @param positive-int $pageSize At most {@see self::READ_PAGE_SIZE}.
+     *
+     * @return array{list<Tuple>, string}
+     */
+    private function readOnePage(StoreId $store, array $key, int $pageSize, string $continuation): array
+    {
+        $body = ['tuple_key' => $key, 'page_size' => min($pageSize, self::READ_PAGE_SIZE)];
+        if ($continuation !== '') {
+            $body['continuation_token'] = $continuation;
+        }
+
+        $answer = $this->send(RequestMethodInterface::METHOD_POST, $this->store($store) . '/read', $body, 'read');
+
+        return $this->read('read', static function () use ($answer): array {
+            $page = [];
+            /** @var mixed $tuple */
+            foreach (self::list($answer, 'tuples') as $tuple) {
+                $key = is_array($tuple) ? ($tuple['key'] ?? null) : null;
+                if (! is_array($key)) {
+                    throw new InvalidValue('A tuple has a key.');
+                }
+                $page[] = Tuple::of(
+                    ObjectRef::fromString(self::string($key, 'object')),
+                    Relation::fromString(self::string($key, 'relation')),
+                    SubjectRef::fromString(self::string($key, 'user')),
+                    self::condition($key['condition'] ?? null),
+                );
+            }
+            /** @var mixed $token */
+            $token = $answer['continuation_token'] ?? '';
+
+            return [$page, is_string($token) ? $token : ''];
+        });
+    }
+
+    /**
+     * A tuple's condition as OpenFGA returns it: a name, and its context when one was stored.
+     *
+     * @throws InvalidValue When it is not that shape.
+     */
+    private static function condition(mixed $condition): ?Condition
+    {
+        if ($condition === null) {
+            return null;
+        }
+        if (! is_array($condition)) {
+            throw new InvalidValue('A condition is an object.');
+        }
+        /** @var mixed $context */
+        $context = $condition['context'] ?? [];
+        if (! is_array($context) || ($context !== [] && array_is_list($context))) {
+            throw new InvalidValue('A condition\'s context is an object.');
+        }
+        /** @var array<string, mixed> $context */
+
+        return Condition::of(self::string($condition, 'name'), $context);
     }
 
     /**
@@ -462,14 +510,22 @@ final readonly class OpenFgaDecisionEngine implements DecisionEngine
         return '/stores/' . rawurlencode($store->value);
     }
 
-    /** @return array{user: string, relation: string, object: string} */
+    /** @return array<string, mixed> OpenFGA's tuple key, and the tuple's condition when it has one. */
     private static function tupleKey(Tuple $tuple): array
     {
-        return [
+        $key = [
             'user' => $tuple->subject->toString(),
             'relation' => $tuple->relation->name,
             'object' => $tuple->object->toString(),
         ];
+        if ($tuple->condition !== null) {
+            $key['condition'] = ['name' => $tuple->condition->name];
+            if ($tuple->condition->context !== []) {
+                $key['condition']['context'] = $tuple->condition->context;
+            }
+        }
+
+        return $key;
     }
 
     /** @return array{user: string, relation: string, object: string} */

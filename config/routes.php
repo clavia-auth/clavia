@@ -9,6 +9,8 @@
 
 declare(strict_types=1);
 
+use Clavia\Adapter\Primary\Http\Access\AccessApiMiddleware;
+use Clavia\Adapter\Primary\Http\Access\RelationshipsHandler;
 use Clavia\Adapter\Primary\Http\Auth\BrandingHandler;
 use Clavia\Adapter\Primary\Http\Auth\ConsentHandler;
 use Clavia\Adapter\Primary\Http\Auth\DeviceHandler;
@@ -491,4 +493,18 @@ return static function (Application $app, ContainerInterface $container): void {
         ],
         'scim.not-found',
     );
+
+    // ── /access/v1/* — the Authorization API (docs/design/fine-grained-authorization.md), a machine
+    // plane beside the Management API: a token for that API on every route, through AccessApiMiddleware,
+    // which checks each request against docs/openapi/authorization-api.yaml. Only while a decision
+    // engine is named (CLAVIA_FGA_URL); otherwise the routes do not exist. ──
+    if ($settings->fineGrainedAuthorization()) {
+        $access = static fn (string $handler): array => [AccessApiMiddleware::class, $handler];
+        $app->route(
+            '/access/v1/relationships',
+            $access(RelationshipsHandler::class),
+            [RequestMethodInterface::METHOD_GET, RequestMethodInterface::METHOD_POST],
+            'access.relationships',
+        );
+    }
 };

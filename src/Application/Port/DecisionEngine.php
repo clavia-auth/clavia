@@ -156,4 +156,16 @@ interface DecisionEngine
      * @throws DecisionEngineFailed
      */
     public function readByObject(StoreId $store, ObjectRef $object): array;
+
+    /**
+     * One page of the relationships written on exactly this object, as written, with their
+     * conditions: what an API reads back of its own resources (docs/design/fine-grained-authorization.md
+     * §5.3). `continuation` is the token a previous page gave, '' for the first.
+     *
+     * @param positive-int $pageSize At most 100, OpenFGA's largest page.
+     *
+     * @throws DecisionEngineFailed When the engine gives no answer, or refuses the token
+     *                              (`refusal` then says so).
+     */
+    public function readPage(StoreId $store, ObjectRef $object, int $pageSize, string $continuation = ''): TuplePage;
 }

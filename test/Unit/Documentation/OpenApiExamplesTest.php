@@ -24,7 +24,8 @@ use Symfony\Component\Yaml\Yaml;
 
 /**
  * The examples of each OpenAPI document (`docs/openapi`: the Management API's, the authorization
- * server's), held to the contract they illustrate: every one is validated against its schema by Clavia's
+ * server's, the Authorization API's), held to the contract they illustrate: every one is validated
+ * against its schema by Clavia's
  * own validator, in its direction, so an example cannot drift from what the API takes and answers. And
  * the reference has one wherever a reader looks for one: each request body, each success response, each
  * shared refusal.
@@ -261,6 +262,7 @@ final class OpenApiExamplesTest extends TestCase
     {
         yield 'the Management API' => [__DIR__ . '/../../../docs/openapi/management-api.yaml', 50];
         yield 'the authorization server' => [__DIR__ . '/../../../docs/openapi/authorization-server.yaml', 20];
+        yield 'the Authorization API' => [__DIR__ . '/../../../docs/openapi/authorization-api.yaml', 10];
     }
 
     private static function document(): Document

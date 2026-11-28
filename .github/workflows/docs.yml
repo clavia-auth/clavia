@@ -72,8 +72,14 @@ jobs:
             authorization_server="${RUNNER_TEMP}/authorization-server.yaml"
             git show "${TAG}:docs/openapi/authorization-server.yaml" > "${authorization_server}"
           fi
-          docs/site/build.sh "${VERSION}" "${RUNNER_TEMP}/management-api.yaml" "${RUNNER_TEMP}/site/v${VERSION}" "../" "${guides}" "${authorization_server}"
-          docs/site/build.sh "${VERSION}" "${RUNNER_TEMP}/management-api.yaml" "${RUNNER_TEMP}/site/root" "" "${guides}" "${authorization_server}"
+          # And the Authorization API's (#139).
+          authorization_api=""
+          if git cat-file -e "${TAG}:docs/openapi/authorization-api.yaml" 2>/dev/null; then
+            authorization_api="${RUNNER_TEMP}/authorization-api.yaml"
+            git show "${TAG}:docs/openapi/authorization-api.yaml" > "${authorization_api}"
+          fi
+          docs/site/build.sh "${VERSION}" "${RUNNER_TEMP}/management-api.yaml" "${RUNNER_TEMP}/site/v${VERSION}" "../" "${guides}" "${authorization_server}" "${authorization_api}"
+          docs/site/build.sh "${VERSION}" "${RUNNER_TEMP}/management-api.yaml" "${RUNNER_TEMP}/site/root" "" "${guides}" "${authorization_server}" "${authorization_api}"
 
       - name: Publish to gh-pages
         env:

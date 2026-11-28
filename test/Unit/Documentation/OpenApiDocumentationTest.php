@@ -16,8 +16,9 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Yaml\Yaml;
 
 /**
- * Each OpenAPI document (`docs/openapi`: the Management API's, the authorization server's) read as the
- * documentation it also is: a rendered reference (Scalar, Redoc) builds its navigation from each
+ * Each OpenAPI document (`docs/openapi`: the Management API's, the authorization server's, the
+ * Authorization API's) read as the documentation it also is: a rendered reference (Scalar, Redoc)
+ * builds its navigation from each
  * operation's `summary` and each tag's `x-displayName`, so those stay short labels, and the detail
  * lives in `description`.
  */
@@ -98,6 +99,7 @@ final class OpenApiDocumentationTest extends TestCase
     {
         yield 'the Management API' => [__DIR__ . '/../../../docs/openapi/management-api.yaml'];
         yield 'the authorization server' => [__DIR__ . '/../../../docs/openapi/authorization-server.yaml'];
+        yield 'the Authorization API' => [__DIR__ . '/../../../docs/openapi/authorization-api.yaml'];
     }
 
     /** @return array<array-key, mixed> */
