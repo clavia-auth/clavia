@@ -49,6 +49,11 @@ final class AuthorizationModelTest extends TestCase
         self::assertFalse($model->relates($document, Relation::fromString('member')));
         self::assertFalse($model->relates(ObjectType::fromString('user'), Relation::fromString('viewer')));
         self::assertFalse($model->relates(ObjectType::fromString('invoice'), Relation::fromString('viewer')));
+        self::assertSame(['parent', 'owner', 'editor', 'viewer'], array_map(
+            static fn (Relation $relation): string => $relation->name,
+            $model->relationsOf($document),
+        ));
+        self::assertSame([], $model->relationsOf(ObjectType::fromString('user')));
     }
 
     /** @return iterable<string, array{string}> */

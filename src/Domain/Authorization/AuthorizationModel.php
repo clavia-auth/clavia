@@ -160,6 +160,16 @@ final readonly class AuthorizationModel
         return array_any($this->types, static fn (ObjectType $declared): bool => $declared->equals($type));
     }
 
+    /**
+     * The relations the type declares, in the order the model names them: what an action search asks.
+     *
+     * @return list<Relation>
+     */
+    public function relationsOf(ObjectType $type): array
+    {
+        return array_map(Relation::fromString(...), $this->relations[$type->value] ?? []);
+    }
+
     /** Whether the type declares the relation: what a question may ask of an object of that type. */
     public function relates(ObjectType $type, Relation $relation): bool
     {

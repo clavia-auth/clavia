@@ -56,6 +56,21 @@ final readonly class AccessRequest
         return $this->validated->parameter(ParameterLocation::Query, $name);
     }
 
+    /**
+     * A JSON object's members by name (a `context`); its own objects stay objects, so the engine reads
+     * them as such.
+     *
+     * @return array<string, mixed>
+     */
+    public static function members(stdClass $object): array
+    {
+        /** @var array<string, mixed> JSON members are named by strings, whatever PHP made of digits. */
+        return array_combine(
+            array_map(strval(...), array_keys(get_object_vars($object))),
+            array_values(get_object_vars($object)),
+        );
+    }
+
     /** The body, as the contract validated it: an object, or an empty one for an operation without. */
     public function body(): stdClass
     {
