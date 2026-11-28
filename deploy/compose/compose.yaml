@@ -12,6 +12,10 @@
 #   dashboard   the administration dashboard, from ghcr.io/clavia-auth/clavia-dashboard
 #   db, redis   PostgreSQL 17 and Redis 7. Point the settings at managed services instead and
 #               delete these two services (and their depends_on) to keep storage elsewhere.
+#   openfga     with `--profile fga` only: OpenFGA, the decision engine of fine-grained
+#               authorization, with its own PostgreSQL (openfga-db) and its migration
+#               (openfga-migrate). Set CLAVIA_FGA_URL and CLAVIA_FGA_API_KEY in .env to turn the
+#               feature on (docs/PRODUCTION.md).
 #
 # And, once per `up`: `migrate` applies the database migrations before the application starts, and
 # `assets` copies the image's public/ for Caddy to serve, so an upgraded image's static files are
@@ -52,6 +56,10 @@ services:
       redis:
         condition: service_healthy
         required: false
+      # Waited for when the fga profile runs it; ignored otherwise.
+      openfga:
+        condition: service_healthy
+        required: false
 
   scheduler:
     <<: *clavia
@@ -62,6 +70,9 @@ services:
       migrate:
         condition: service_completed_successfully
       redis:
+        condition: service_healthy
+        required: false
+      openfga:
         condition: service_healthy
         required: false
 
@@ -150,6 +161,70 @@ services:
       timeout: 3s
       retries: 20
 
+  # ── OpenFGA, with `--profile fga` (docs/design/fine-grained-authorization.md §2) ──
+  # Beside Clavia, with a database of its own: the relationship graph never enters Clavia's. Only
+  # Clavia reaches it, on the clavia network, with the preshared key CLAVIA_FGA_API_KEY names; no port
+  # is published. Every cache is off, so every answer is strongly consistent: a relationship taken
+  # away is never answered from a stale copy. Or run OpenFGA elsewhere, delete these three services
+  # and point CLAVIA_FGA_URL at it, with the same settings.
+  openfga-db:
+    profiles: [fga]
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: openfga
+      # Set in .env with the fga profile: the image refuses to start without one.
+      POSTGRES_PASSWORD: ${OPENFGA_POSTGRES_PASSWORD:-}
+      POSTGRES_DB: openfga
+    volumes:
+      - openfga-pgdata:/var/lib/postgresql/data
+    networks: [clavia]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openfga -d openfga"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # OpenFGA's schema, brought up to date before the server starts, on every `up`; exits when done.
+  openfga-migrate:
+    profiles: [fga]
+    image: openfga/openfga:v1.22.1
+    command: migrate
+    restart: "no"
+    environment: &openfga-datastore
+      OPENFGA_DATASTORE_ENGINE: postgres
+      OPENFGA_DATASTORE_URI: postgres://openfga-db:5432/openfga?sslmode=disable
+      OPENFGA_DATASTORE_USERNAME: openfga
+      OPENFGA_DATASTORE_PASSWORD: ${OPENFGA_POSTGRES_PASSWORD:-}
+    depends_on:
+      openfga-db:
+        condition: service_healthy
+    networks: [clavia]
+
+  openfga:
+    profiles: [fga]
+    image: openfga/openfga:v1.22.1
+    command: run
+    restart: unless-stopped
+    environment:
+      <<: *openfga-datastore
+      OPENFGA_AUTHN_METHOD: preshared
+      OPENFGA_AUTHN_PRESHARED_KEYS: ${CLAVIA_FGA_API_KEY:-}
+      OPENFGA_CHECK_QUERY_CACHE_ENABLED: "false"
+      OPENFGA_CHECK_ITERATOR_CACHE_ENABLED: "false"
+      OPENFGA_LIST_OBJECTS_ITERATOR_CACHE_ENABLED: "false"
+      OPENFGA_PLAYGROUND_ENABLED: "false"
+      OPENFGA_LOG_FORMAT: json
+    depends_on:
+      openfga-migrate:
+        condition: service_completed_successfully
+    networks: [clavia]
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=127.0.0.1:8081"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
 networks:
   clavia:
   edge:
@@ -158,5 +233,6 @@ volumes:
   public:
   pgdata:
   redisdata:
+  openfga-pgdata:
   caddy-data:
   caddy-config:

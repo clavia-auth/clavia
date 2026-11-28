@@ -14,6 +14,7 @@ namespace ClaviaTest\Unit\Deployment;
 use Clavia\Configuration\Version;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Yaml\Yaml;
 
 /**
  * The production kit (deploy/, docs/PRODUCTION.md) kept in step with the code it ships: the
@@ -130,6 +131,91 @@ final class DeploymentKitTest extends TestCase
         self::assertStringContainsString('${CLAVIA_DASHBOARD_VERSION:-' . $version . '}', $compose);
         self::assertStringContainsString("CLAVIA_VERSION=" . $version . "\n", $env);
         self::assertStringContainsString("CLAVIA_DASHBOARD_VERSION=" . $version . "\n", $env);
+    }
+
+    /**
+     * OpenFGA answers Clavia's decisions, so wherever it runs it is the same engine set up the same
+     * way (docs/design/fine-grained-authorization.md §2): one pinned version, its own database, the
+     * preshared key, every cache off for strongly consistent answers, no playground, nothing published.
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function composeFilesRunningOpenFga(): iterable
+    {
+        yield 'development' => ['docker-compose.yml'];
+        yield 'end to end' => ['test/e2e/compose.yaml'];
+        yield 'production' => ['deploy/compose/compose.yaml'];
+    }
+
+    #[DataProvider('composeFilesRunningOpenFga')]
+    public function testOpenFgaIsSetUpAlikeWhereverItRuns(string $path): void
+    {
+        $services = self::services($path);
+        $reference = self::services('docker-compose.yml');
+
+        foreach (['openfga-db', 'openfga-migrate', 'openfga'] as $name) {
+            self::assertArrayHasKey($name, $services, $name . ' in ' . $path);
+            self::assertArrayNotHasKey('ports', $services[$name], $name . ' publishes nothing in ' . $path);
+        }
+        foreach (['openfga-migrate', 'openfga'] as $name) {
+            self::assertSame(
+                $reference[$name]['image'] ?? null,
+                $services[$name]['image'] ?? null,
+                $name . ' in ' . $path,
+            );
+        }
+        self::assertSame('migrate', $services['openfga-migrate']['command'] ?? null);
+        $dependsOn = $services['openfga']['depends_on'] ?? [];
+        self::assertSame(
+            'service_completed_successfully',
+            $dependsOn['openfga-migrate']['condition'] ?? null,
+            'OpenFGA starts on a migrated schema in ' . $path,
+        );
+        $environment = $services['openfga']['environment'] ?? [];
+        foreach (
+            [
+                'OPENFGA_DATASTORE_ENGINE' => 'postgres',
+                'OPENFGA_AUTHN_METHOD' => 'preshared',
+                'OPENFGA_CHECK_QUERY_CACHE_ENABLED' => 'false',
+                'OPENFGA_CHECK_ITERATOR_CACHE_ENABLED' => 'false',
+                'OPENFGA_LIST_OBJECTS_ITERATOR_CACHE_ENABLED' => 'false',
+                'OPENFGA_PLAYGROUND_ENABLED' => 'false',
+            ] as $variable => $value
+        ) {
+            self::assertSame($value, $environment[$variable] ?? null, $variable . ' in ' . $path);
+        }
+        self::assertNotEmpty($environment['OPENFGA_AUTHN_PRESHARED_KEYS'] ?? null, 'The key, in ' . $path);
+    }
+
+    public function testTheProductionKitRunsOpenFgaOnlyWhenAskedTo(): void
+    {
+        $services = self::services('deploy/compose/compose.yaml');
+
+        foreach (['openfga-db', 'openfga-migrate', 'openfga'] as $name) {
+            self::assertSame(['fga'], $services[$name]['profiles'] ?? null, $name);
+        }
+        foreach (['php', 'scheduler'] as $name) {
+            // Waited for with the profile, and no dependency without it.
+            $dependsOn = $services[$name]['depends_on'] ?? [];
+            self::assertFalse($dependsOn['openfga']['required'] ?? true, $name);
+        }
+    }
+
+    /**
+     * The services of a Compose file, as far as these tests read them.
+     *
+     * @return array<string, array{image?: string, command?: string|list<string>, ports?: list<string>,
+     *     profiles?: list<string>, environment?: array<string, string>,
+     *     depends_on?: array<string, array{condition?: string, required?: bool}>}>
+     */
+    private static function services(string $path): array
+    {
+        /** @var array{services: array<string, array{image?: string, command?: string|list<string>,
+         *     ports?: list<string>, profiles?: list<string>, environment?: array<string, string>,
+         *     depends_on?: array<string, array{condition?: string, required?: bool}>}>} $compose */
+        $compose = Yaml::parse(self::read($path));
+
+        return $compose['services'];
     }
 
     private static function read(string $path): string

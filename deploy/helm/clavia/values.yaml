@@ -17,7 +17,8 @@ imagePullSecrets: []
 
 # A Secret in the release's namespace with Clavia's secret settings, passed whole as environment
 # variables: CLAVIA_SECRET_ENCRYPTION_KEY, CLAVIA_DATABASE_URL, CLAVIA_REDIS_URL, CLAVIA_SMTP_PASSWORD,
-# and any other secret setting (a KMS's credentials, a social provider's client secret). Required.
+# and any other secret setting (a KMS's credentials, a social provider's client secret, OpenFGA's
+# preshared key CLAVIA_FGA_API_KEY). Required.
 existingSecret: ""
 
 # Clavia's other settings, as environment variables (every one is in src/Configuration/Settings.php).
@@ -31,6 +32,10 @@ env:
   # CLAVIA_SIGNING_BACKEND: aws-kms
   # CLAVIA_SIGNING_KEY_REF: arn:aws:kms:eu-west-1:111122223333:key/…
   # CLAVIA_AWS_REGION: eu-west-1
+  # Fine-grained authorization: OpenFGA, which this chart does not run (as with PostgreSQL and Redis), at
+  # the address the server pods reach it by, with CLAVIA_FGA_API_KEY in existingSecret. docs/PRODUCTION.md
+  # says how OpenFGA must be set up. The fga-sync CronJob below sends nothing while this is unset.
+  # CLAVIA_FGA_URL: http://openfga.openfga.svc.cluster.local:8080
 
 replicaCount: 2
 

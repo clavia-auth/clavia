@@ -267,7 +267,11 @@ production (`deploy/helm/clavia/files/Caddyfile`, for Compose and Helm alike) Ca
 ACME, or plain HTTP behind an Ingress whose `X-Forwarded-For` it alone believes
 (`CLAVIA_CADDY_TRUSTED_PROXIES`), passing `{client_ip}` as `REMOTE_ADDR`; any other host is `404`, and
 PHP's `/healthz` is on `:8081` for probes. `DeploymentKitTest` fails when the two Caddyfiles part on a
-security rule, a scheduled command is missing from a kit, or a release's version is not everywhere.
+security rule, a scheduled command is missing from a kit, a release's version is not everywhere, or a
+Compose file (development, end to end, production) runs OpenFGA otherwise than the others: one pinned
+image, migrated first, its own database, the preshared key, caches and playground off, no port
+published. The production kit runs it only under the `fga` profile; the chart names an external one
+(`env.CLAVIA_FGA_URL`, the key in its Secret), as it does PostgreSQL and Redis.
 
 ### Six surfaces, six authentication mechanisms
 

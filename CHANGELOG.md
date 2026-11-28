@@ -121,8 +121,7 @@ All notable changes to Clavia are written here, for the people who run it. The f
 - **OpenFGA beside Clavia** (#135, the first slice of fine-grained authorization, #133,
   [design](docs/design/fine-grained-authorization.md)). Clavia can now talk to OpenFGA, the decision
   engine that answers "may this person do this to that, now?" for your APIs. It runs beside Clavia, with
-  its own database, and Clavia alone reaches it. The production kit does not run it yet (#248): bring
-  your own OpenFGA, and point Clavia at it.
+  its own database, and Clavia alone reaches it.
   - **Three settings**: `CLAVIA_FGA_URL` (unset by default, which keeps the feature off),
     `CLAVIA_FGA_API_KEY` (the preshared key OpenFGA starts with, 16 to 512 characters, required with
     the URL) and `CLAVIA_FGA_TIMEOUT` (2 seconds, 1 to 10). The URL is your own infrastructure, so a
@@ -130,6 +129,13 @@ All notable changes to Clavia are written here, for the people who run it. The f
   - **Development**: `make up` also starts OpenFGA 1.22.1 and its own PostgreSQL. Its schema is
     migrated before it starts, its caches are off (every answer is strongly consistent), it requires
     the preshared key, and it publishes no port on the host.
+  - **Production** (#248): the Compose kit runs OpenFGA the same way, but only when asked to, under
+    the `fga` profile (`COMPOSE_PROFILES=fga`, with `CLAVIA_FGA_URL`, `CLAVIA_FGA_API_KEY` and
+    `OPENFGA_POSTGRES_PASSWORD` in `.env`, all in `env.example`). The Helm chart doesn't run it, as it
+    doesn't run PostgreSQL or Redis: set `env.CLAVIA_FGA_URL` and put the key in its Secret.
+    `docs/PRODUCTION.md` §8 lists the OpenFGA settings Clavia relies on, the first-start steps
+    (`management-api:register` registers the Authorization API) and how to back up and restore
+    OpenFGA's database with Clavia's.
 
 ### Changed
 
