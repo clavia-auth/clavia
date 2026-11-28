@@ -14,6 +14,8 @@ namespace Clavia\Adapter\Secondary\Authorization;
 use Clavia\Application\Port\AccessCheck;
 use Clavia\Application\Port\DecisionEngine;
 use Clavia\Application\Port\DecisionEngineFailed;
+use Clavia\Application\Port\ModelPage;
+use Clavia\Application\Port\ModelVersion;
 use Clavia\Application\Port\TuplePage;
 use Clavia\Domain\Authorization\AuthorizationModel;
 use Clavia\Domain\Authorization\AuthorizationModelId;
@@ -34,6 +36,7 @@ use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
 use Psr\Http\Message\StreamFactoryInterface;
 use Psr\Log\LoggerInterface;
+use stdClass;
 
 /**
  * {@see DecisionEngine} on OpenFGA's HTTP API (https://openfga.dev/api/service), its stable,
@@ -59,6 +62,9 @@ final readonly class OpenFgaDecisionEngine implements DecisionEngine
 
     /** Tuples asked for per page when reading. OpenFGA's maximum page size is 100. */
     public const int READ_PAGE_SIZE = 100;
+
+    /** How deep a page of models may nest: a model nests 64 deep at most, two more around it. */
+    private const int MODEL_DEPTH = 128;
 
     private string $baseUrl;
 
@@ -104,6 +110,57 @@ final readonly class OpenFgaDecisionEngine implements DecisionEngine
                 self::string($answer, 'authorization_model_id'),
             ),
         );
+    }
+
+    #[\Override]
+    public function readModels(StoreId $store, int $pageSize, string $continuation = ''): ModelPage
+    {
+        $query = ['page_size' => (string) min($pageSize, self::MAX_MODEL_PAGE)];
+        if ($continuation !== '') {
+            $query['continuation_token'] = $continuation;
+        }
+        [, $text] = $this->exchange(
+            RequestMethodInterface::METHOD_GET,
+            $this->store($store) . '/authorization-models?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986),
+            null,
+            'read models',
+            self::MODEL_DEPTH,
+        );
+
+        return $this->read('read models', static function () use ($text): ModelPage {
+            // Objects kept as objects: a model's `{}` is not `[]`.
+            /** @var mixed $answer */
+            $answer = json_decode($text, false, self::MODEL_DEPTH);
+            /** @var mixed $models */
+            $models = $answer instanceof stdClass ? ($answer->authorization_models ?? null) : null;
+            if (! is_array($models)) {
+                throw new InvalidValue('An answer lists its models.');
+            }
+            $versions = [];
+            /** @var mixed $model */
+            foreach ($models as $model) {
+                /** @var mixed $id */
+                $id = $model instanceof stdClass ? ($model->id ?? null) : null;
+                if (! $model instanceof stdClass || ! is_string($id)) {
+                    throw new InvalidValue('A model has an id.');
+                }
+                $model = clone $model;
+                unset($model->id);
+                try {
+                    $json = json_encode(
+                        $model,
+                        JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION,
+                    );
+                } catch (JsonException) {
+                    throw new InvalidValue('A model is JSON.');
+                }
+                $versions[] = new ModelVersion(AuthorizationModelId::fromString($id), $json);
+            }
+            /** @var mixed $token */
+            $token = $answer instanceof stdClass ? ($answer->continuation_token ?? '') : '';
+
+            return new ModelPage($versions, is_string($token) ? $token : '');
+        });
     }
 
     #[\Override]
@@ -423,6 +480,26 @@ final readonly class OpenFgaDecisionEngine implements DecisionEngine
      */
     private function send(string $method, string $path, array|string|null $body, string $operation): array
     {
+        return $this->exchange($method, $path, $body, $operation)[0];
+    }
+
+    /**
+     * One request and its answer: the members, and the text they were read from.
+     *
+     * @param array<array-key, mixed>|string|null $body
+     * @param int<1, 2147483647> $depth How deep the answer may nest.
+     *
+     * @return array{array<array-key, mixed>, string}
+     *
+     * @throws DecisionEngineFailed
+     */
+    private function exchange(
+        string $method,
+        string $path,
+        array|string|null $body,
+        string $operation,
+        int $depth = 64,
+    ): array {
         $request = $this->requests->createRequest($method, $this->baseUrl . $path)
             ->withHeader('Authorization', 'Bearer ' . $this->apiKey)
             ->withHeader('Accept', 'application/json');
@@ -448,7 +525,7 @@ final readonly class OpenFgaDecisionEngine implements DecisionEngine
         $status = $response->getStatusCode();
         $text = (string) $response->getBody();
         try {
-            $answer = $text === '' ? [] : json_decode($text, true, 64, JSON_THROW_ON_ERROR);
+            $answer = $text === '' ? [] : json_decode($text, true, $depth, JSON_THROW_ON_ERROR);
         } catch (JsonException) {
             $answer = null;
         }
@@ -458,7 +535,7 @@ final readonly class OpenFgaDecisionEngine implements DecisionEngine
                 throw $this->unavailable($operation, sprintf('it answered %d with no JSON object', $status));
             }
 
-            return $answer;
+            return [$answer, $text];
         }
         if (self::isRefusal($status)) {
             /** @var mixed $code */

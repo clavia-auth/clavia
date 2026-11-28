@@ -202,6 +202,47 @@ final class OpenFgaDecisionEngineTest extends TestCase
         self::assertSame('next-page', self::body($this->http->requests[1])['continuation_token']);
     }
 
+    public function testModelVersionsAreReadAPageAtATimeWithTheirObjectsKept(): void
+    {
+        $this->http->answerWith(static fn (): ResponseInterface => new TextResponse(
+            '{"authorization_models": [{"id": "' . self::MODEL . '", "schema_version": "1.1", '
+            . '"type_definitions": [{"type": "user", "relations": {}, "metadata": null}, '
+            . '{"type": "role", "relations": {"member": {"this": {}}}}], "conditions": {}}], '
+            . '"continuation_token": "next-page"}',
+            headers: ['Content-Type' => 'application/json'],
+        ));
+
+        $page = $this->engine()->readModels(self::store(), 10, 'this-page');
+
+        $request = $this->http->requests[0];
+        self::assertSame(RequestMethodInterface::METHOD_GET, $request->getMethod());
+        self::assertSame(
+            'http://openfga:8080/stores/' . self::STORE
+            . '/authorization-models?page_size=10&continuation_token=this-page',
+            (string) $request->getUri(),
+        );
+        self::assertSame('next-page', $page->next);
+        self::assertCount(1, $page->models);
+        self::assertSame(self::MODEL, $page->models[0]->id->value);
+        // The id is the version's, not the model's; `{}` stays an object.
+        self::assertSame(
+            '{"schema_version":"1.1","type_definitions":[{"type":"user","relations":{},"metadata":null},'
+            . '{"type":"role","relations":{"member":{"this":{}}}}],"conditions":{}}',
+            $page->models[0]->json,
+        );
+    }
+
+    public function testAPageOfModelsIsNeverLargerThanTheEnginesLargest(): void
+    {
+        $this->http->answerWith(static fn (): ResponseInterface => new JsonResponse(['authorization_models' => []]));
+
+        $page = $this->engine()->readModels(self::store(), 500);
+
+        self::assertSame([], $page->models);
+        self::assertSame('', $page->next);
+        self::assertStringEndsWith('?page_size=50', (string) $this->http->requests[0]->getUri());
+    }
+
     public function testDeletingAStoreExpectsNoAnswerBody(): void
     {
         $this->http->answerWith(static fn (): ResponseInterface => new EmptyResponse());
