@@ -42,6 +42,19 @@ All notable changes to Clavia are written here, for the people who run it. The f
     migrated before it starts, its caches are off (every answer is strongly consistent), it requires
     the preshared key, and it publishes no port on the host.
 
+### Changed
+
+- **A request the contract refuses is `400`, not `422`** (#239), on the Management API (`/api/v1`) and
+  the Authorization API (`/access/v1`). An unknown field, a wrong type, a value out of range or a
+  parameter an operation does not take is a request built wrong (RFC 9110 §15.5.1): the same RFC 9457
+  problem document, `"title": "Bad Request"`, with every violation in `errors`. `422` now means a
+  well-formed request a rule refuses (an unknown permission, a breached password, a reserved claim
+  name), with `"detail": "The request is well formed, but a rule refuses it."`. **A client that reads
+  `422` as "my fields are wrong" must read `400` too**; the dashboard does from its next release
+  (clavia-dashboard#85). A malformed audit-event filter (`type`, `since`, `until`, `target_*`) is `400`
+  as well, and no longer repeats the value at fault. SCIM and the authorization server's endpoints are
+  unchanged.
+
 ## [0.5.1] - 2026-11-27
 
 Sign-in pages that outlive their request, and small fixes to the pages and the guides. A sign-in page
