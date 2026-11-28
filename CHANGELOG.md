@@ -20,8 +20,7 @@ changes for a deployment that does not set it, except the `400` described under 
 - **Run `bin/clavia management-api:register`** for the new Management API scope,
   `read:relationships`, then give it to your administrators' role.
 - **A client of the Management API** that treats `422` as "my request is wrong" must treat `400` the
-  same way (see Changed). The dashboard 0.6.0 does not yet: where a form used to point at the field at
-  fault, it shows a general error (clavia-dashboard#85).
+  same way (see Changed). The dashboard does, 0.5 included.
 - **To turn fine-grained authorization on**, follow `docs/PRODUCTION.md` §8.
 
 ### Added
@@ -163,8 +162,8 @@ changes for a deployment that does not set it, except the `400` described under 
   problem document, `"title": "Bad Request"`, with every violation in `errors`. `422` now means a
   well-formed request a rule refuses (an unknown permission, a breached password, a reserved claim
   name), with `"detail": "The request is well formed, but a rule refuses it."`. **A client that reads
-  `422` as "my fields are wrong" must read `400` too**. The dashboard 0.6.0 does not yet, and shows
-  such an answer as a general error (clavia-dashboard#85). A malformed audit-event filter (`type`, `since`, `until`, `target_*`) is `400`
+  `422` as "my fields are wrong" must read `400` too**; the dashboard already does
+  (clavia-dashboard#85). A malformed audit-event filter (`type`, `since`, `until`, `target_*`) is `400`
   as well, and no longer repeats the value at fault. SCIM and the authorization server's endpoints are
   unchanged.
 
