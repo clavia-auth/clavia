@@ -48,7 +48,7 @@ final readonly class EvaluationHandler implements RequestHandlerInterface
         $batch = str_ends_with($request->getUri()->getPath(), '/evaluations');
 
         if (! $batch || ! is_array($items) || $items === []) {
-            return $this->responder->json(self::document(
+            return $this->responder->json(DecisionDocument::of(
                 $this->evaluate->one($access->caller->clientId, self::question($body, new stdClass())),
             ));
         }
@@ -63,7 +63,7 @@ final readonly class EvaluationHandler implements RequestHandlerInterface
         /** @var mixed $semantic */
         $semantic = $options instanceof stdClass ? ($options->evaluations_semantic ?? null) : null;
 
-        return $this->responder->json(['evaluations' => array_map(self::document(...), $this->evaluate->many(
+        return $this->responder->json(['evaluations' => array_map(DecisionDocument::of(...), $this->evaluate->many(
             $access->caller->clientId,
             $questions,
             EvaluationSemantic::tryFrom(is_string($semantic) ? $semantic : '') ?? EvaluationSemantic::ExecuteAll,
@@ -109,22 +109,5 @@ final readonly class EvaluationHandler implements RequestHandlerInterface
         $value = $object->{$name} ?? null;
 
         return is_string($value) ? $value : '';
-    }
-
-    /** @return array<string, mixed> AuthZEN's Decision (§5.5): `decision`, and a context when there is something to say. */
-    private static function document(Decision $decision): array
-    {
-        $context = [];
-        if ($decision->reason !== null) {
-            $context['reason'] = $decision->reason->value;
-        }
-        if ($decision->errorStatus !== null) {
-            $context['error'] = ['status' => $decision->errorStatus, 'message' => (string) $decision->errorMessage];
-        }
-
-        return $context === [] ? ['decision' => $decision->decision] : [
-            'decision' => $decision->decision,
-            'context' => $context,
-        ];
     }
 }

@@ -16,6 +16,7 @@ use Clavia\Application\Authorization\SpokenForApi;
 use Clavia\Application\Port\DecisionEngine;
 use Clavia\Application\Port\DecisionEngineFailed;
 use Clavia\Application\Port\TuplePage;
+use Clavia\Domain\Authorization\AuthorizationSettings;
 use Clavia\Domain\Authorization\ObjectRef;
 use Clavia\Domain\Authorization\ReservedType;
 use Clavia\Domain\Client\ClientId;
@@ -47,6 +48,25 @@ final readonly class ReadRelationships
     public function __invoke(ClientId $caller, ObjectRef $object, int $pageSize, string $pageToken = ''): TuplePage
     {
         [, $settings] = $this->apis->of($caller);
+
+        return $this->of($settings, $object, $pageSize, $pageToken);
+    }
+
+    /**
+     * The same read from the store of an API named otherwise: the one an operator names
+     * (docs/design/fine-grained-authorization.md §5.6), switched on or off.
+     *
+     * @param positive-int $pageSize At most 100.
+     *
+     * @throws RelationshipRefused
+     * @throws DecisionEngineFailed
+     */
+    public function of(
+        AuthorizationSettings $settings,
+        ObjectRef $object,
+        int $pageSize,
+        string $pageToken = '',
+    ): TuplePage {
         if (ReservedType::of($object->type) !== null) {
             throw RelationshipRefused::reservedType(parameter: 'object');
         }

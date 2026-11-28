@@ -29,6 +29,10 @@ namespace Clavia\Application\Management;
  * `create:signing_keys` rotates the signing key (a rotation makes a new one), as the hosted
  * providers name it; nothing in this API reads, exports or deletes key material.
  *
+ * `read:relationships` reads an API's relationship graph and tries its decisions
+ * (docs/design/fine-grained-authorization.md §5.6): the API's data about people, asked about anyone,
+ * so not part of `read:resource_servers`, which is configuration.
+ *
  * `update:roles` is the one to guard most carefully: it can attach any permission on any
  * API to a role and give that role to anyone, the caller included. Giving somebody a role
  * needs it wherever that happens — on the role or on the account — and `update:users`
@@ -53,6 +57,7 @@ enum ManagementPermission: string
     case CreateResourceServers = 'create:resource_servers';
     case UpdateResourceServers = 'update:resource_servers';
     case DeleteResourceServers = 'delete:resource_servers';
+    case ReadRelationships = 'read:relationships';
     case ReadRoles = 'read:roles';
     case CreateRoles = 'create:roles';
     case UpdateRoles = 'update:roles';
@@ -108,6 +113,7 @@ enum ManagementPermission: string
             'signing_keys' => 'the keys tokens are signed with',
             'webhooks' => 'the endpoints audit events are sent to',
             'provisioning_tokens' => 'the tokens directories provision accounts with',
+            'relationships' => 'the relationships of APIs, and what they decide',
             default => 'APIs',
         };
     }

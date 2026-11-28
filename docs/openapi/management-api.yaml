@@ -1651,6 +1651,183 @@ paths:
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
+  /api/v1/resource-servers/{resource_server_id}/authorization/models:
+    parameters:
+      - $ref: '#/components/parameters/ResourceServerId'
+    get:
+      tags: [resource-servers]
+      operationId: listResourceServerAuthorizationModels
+      summary: List model versions
+      description: |
+        The versions of the API's model its store holds, newest first, a page at a time. The decision
+        engine keeps every version; `in_force` marks the one the API's questions are answered with.
+        Each model is shown as the engine keeps it, and reading one never puts it in force.
+
+        The store is read whether authorization is on or off. 404 when the API has no store (never set
+        up, or deleted), 409 while this server names no decision engine, 503 when the engine does not
+        answer. A page token that is not one a previous page gave is a 400.
+      security:
+        - managementToken: [read:resource_servers]
+      parameters:
+        - name: page_size
+          in: query
+          required: false
+          description: How many versions a page holds. A model can be 256 KiB.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 10
+        - $ref: '#/components/parameters/EnginePageToken'
+      responses:
+        '200':
+          description: One page of model versions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorizationModelPage'
+              examples:
+                AuthorizationModelPage:
+                  $ref: '#/components/examples/AuthorizationModelPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /api/v1/resource-servers/{resource_server_id}/authorization/relationships:
+    parameters:
+      - $ref: '#/components/parameters/ResourceServerId'
+    get:
+      tags: [resource-servers]
+      operationId: listResourceServerRelationships
+      summary: List an object's relationships
+      description: |
+        The relationships written on one of the API's own objects, a page at a time, as the decision
+        engine keeps them: what the API's clients read at `GET /access/v1/relationships`, read by an
+        operator. Clavia's own types (`user`, `client`, `role`, `group`) are not read here: who holds a
+        role is the roles' to tell. An object of one of them, or of a type the model does not declare,
+        is a 422 at `object`.
+
+        The store is read whether authorization is on or off. 404 when the API has no store, 409 while
+        this server names no decision engine, 503 when the engine does not answer. A page token that
+        is not one a previous page gave is a 400.
+      security:
+        - managementToken: [read:relationships]
+      parameters:
+        - name: object
+          in: query
+          required: true
+          description: The object, `type:id`.
+          schema:
+            type: string
+            minLength: 3
+            maxLength: 512
+            pattern: '^[^:#@\s]+:[^#:\s]+$'
+        - name: page_size
+          in: query
+          required: false
+          description: How many relationships a page holds.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - $ref: '#/components/parameters/EnginePageToken'
+      responses:
+        '200':
+          description: One page of relationships.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipPage'
+              examples:
+                RelationshipPage:
+                  $ref: '#/components/examples/RelationshipPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /api/v1/resource-servers/{resource_server_id}/authorization/evaluation:
+    parameters:
+      - $ref: '#/components/parameters/ResourceServerId'
+    post:
+      tags: [resource-servers]
+      operationId: evaluateResourceServerAuthorization
+      summary: Try a decision
+      description: |
+        Ask the API's store one question, as the API's own clients ask it at
+        `POST /access/v1/evaluation` (AuthZEN 1.0 §6), and get the decision they would get. Every step
+        of theirs is taken. A subject Clavia does not know, a deactivated account or a deleted client
+        is denied (`subject_inactive`) before the engine is asked. Clavia adds what it knows of the
+        subject as `context.clavia.subject`, and a condition the engine cannot evaluate is a denial
+        (`condition_failed`). A denial always says which kind it is, whatever the API's
+        `denial_reasons`. The facts Clavia added are not returned. Nothing is recorded in the audit
+        trail.
+
+        A subject that is not a `user` or a `client` the model declares, a resource type the model
+        does not declare, an action that is not a relation of that type, or a `context.clavia` (which
+        is Clavia's to write) is a 422 pointing at the member. The store is asked whether
+        authorization is on or off. 404 when the API has no store, 409 while this server names no
+        decision engine, 503 when the engine does not answer: never a decision.
+      security:
+        - managementToken: [read:relationships]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessEvaluation'
+            examples:
+              AccessEvaluation:
+                $ref: '#/components/examples/AccessEvaluation'
+      responses:
+        '200':
+          description: The decision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessDecision'
+              examples:
+                AccessDenied:
+                  $ref: '#/components/examples/AccessDenied'
+                AccessPermitted:
+                  $ref: '#/components/examples/AccessPermitted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
   /api/v1/roles:
     get:
       tags: [roles]
@@ -2822,6 +2999,7 @@ components:
             create:resource_servers: Create APIs
             update:resource_servers: Modify APIs
             delete:resource_servers: Delete APIs
+            read:relationships: View the relationships of APIs, and what they decide
             read:roles: View roles and who holds them
             create:roles: Create roles and who holds them
             update:roles: Modify roles and who holds them
@@ -2901,6 +3079,15 @@ components:
         maxLength: 64
         # Visible ASCII without a colon, as a client id is (HTTP Basic cannot carry one).
         pattern: '^[\x21-\x39\x3B-\x7E]+$'
+    EnginePageToken:
+      name: page_token
+      in: query
+      required: false
+      description: The `next_page_token` of the previous page.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 4096
     ResourceServerId:
       name: resource_server_id
       in: path
@@ -3713,6 +3900,58 @@ components:
                         relation: "member"
         clients: ["Mc8tR3vN6qL1wZ4yB7hJ2dF9gS5aE0kX"]
         denial_reasons: false
+    AuthorizationModelPage:
+      summary: The two versions of the Reports API's model
+      value:
+        items:
+          - id: "01JQ8ZK4A2HG7Y3W5P9S1T6VQF"
+            created_at: "2025-03-28T09:14:02Z"
+            in_force: true
+            model:
+              schema_version: "1.1"
+              type_definitions:
+                - type: "user"
+                - type: "report"
+                  relations:
+                    viewer:
+                      this: {}
+                  metadata:
+                    relations:
+                      viewer:
+                        directly_related_user_types:
+                          - type: "user"
+              conditions: {}
+          - id: "01JQ8ZK3Z8C4N6R2T1V7W9X5YB"
+            created_at: "2025-03-28T09:13:51Z"
+            in_force: false
+            model:
+              schema_version: "1.1"
+              type_definitions:
+                - type: "user"
+              conditions: {}
+    RelationshipPage:
+      summary: The first page of a report's relationships
+      value:
+        items:
+          - resource: {type: "report", id: "q3-revenue"}
+            relation: "viewer"
+            subject: {type: "user", id: "3f8e2d1c-5b4a-4c9e-8d7f-6a5b4c3d2e1f"}
+          - resource: {type: "report", id: "q3-revenue"}
+            relation: "viewer"
+            subject: {type: "role", id: "rol_S4f9Gh2Jk7Lp3Qa1", relation: "member"}
+        next_page_token: "eyJ1bGlkIjoiMDFKOVgifQ"
+    AccessEvaluation:
+      summary: May Ada view the Q3 revenue report?
+      value:
+        subject: {type: "user", id: "3f8e2d1c-5b4a-4c9e-8d7f-6a5b4c3d2e1f"}
+        action: {name: "viewer"}
+        resource: {type: "report", id: "q3-revenue"}
+    AccessPermitted:
+      summary: Permitted
+      value: {decision: true}
+    AccessDenied:
+      summary: Denied, with its kind
+      value: {decision: false, context: {reason: "no_relation"}}
     ResourceServerAuthorization:
       summary: Fine-grained authorization on the Reports API
       value:
@@ -6052,6 +6291,152 @@ components:
         conditions:
           type: object
           additionalProperties: true
+
+    AuthorizationModelVersion:
+      type: object
+      additionalProperties: false
+      required: [id, created_at, in_force, model]
+      properties:
+        id:
+          type: string
+          description: The version, a ULID.
+        created_at:
+          type: string
+          format: date-time
+          description: When the decision engine made it, read from its id.
+        in_force:
+          type: boolean
+          description: Whether the API's questions are answered with this version.
+        model:
+          type: object
+          additionalProperties: true
+          description: The model as the decision engine keeps it (OpenFGA's JSON, schema 1.1).
+
+    AuthorizationModelPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/AuthorizationModelVersion'
+        next_page_token:
+          type: string
+          description: Read the next page with it; absent on the last page.
+
+    AuthorizationEntity:
+      description: An object of the API's model, `type` and `id` as OpenFGA's notation takes them.
+      type: object
+      additionalProperties: false
+      required: [type, id]
+      properties:
+        type:
+          type: string
+          minLength: 1
+          maxLength: 254
+          pattern: '^[^:#@\s]+$'
+        id:
+          type: string
+          minLength: 1
+          maxLength: 256
+          pattern: '^[^#:\s]+$'
+
+    RelationshipSubject:
+      description: |
+        Who holds the relation: a person (`user`), an application (`client`), one of the API's own
+        objects, or with `relation` a userset, everybody holding that relation on the object.
+      type: object
+      additionalProperties: false
+      required: [type, id]
+      properties:
+        type:
+          type: string
+        id:
+          type: string
+        relation:
+          type: string
+
+    Relationship:
+      type: object
+      additionalProperties: false
+      required: [resource, relation, subject]
+      properties:
+        resource:
+          $ref: '#/components/schemas/AuthorizationEntity'
+        relation:
+          type: string
+        subject:
+          $ref: '#/components/schemas/RelationshipSubject'
+        condition:
+          type: object
+          additionalProperties: false
+          required: [name]
+          description: The condition the relationship is written under, and the values kept with it.
+          properties:
+            name:
+              type: string
+            context:
+              type: object
+              additionalProperties: true
+
+    RelationshipPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/Relationship'
+        next_page_token:
+          type: string
+          description: Read the next page with it; absent on the last page.
+
+    AccessEvaluation:
+      description: One question, as AuthZEN 1.0 asks it (§6.1). Members it does not define are ignored.
+      type: object
+      additionalProperties: true
+      required: [subject, action, resource]
+      properties:
+        subject:
+          $ref: '#/components/schemas/AuthorizationEntity'
+        action:
+          type: object
+          additionalProperties: true
+          required: [name]
+          properties:
+            name:
+              type: string
+              minLength: 1
+              maxLength: 50
+              description: A relation of the resource's type.
+        resource:
+          $ref: '#/components/schemas/AuthorizationEntity'
+        context:
+          type: object
+          additionalProperties: true
+          description: What the model's conditions read. `clavia` is Clavia's to write.
+
+    AccessDecision:
+      description: AuthZEN 1.0 §5.5.
+      type: object
+      additionalProperties: false
+      required: [decision]
+      properties:
+        decision:
+          type: boolean
+        context:
+          type: object
+          additionalProperties: false
+          required: [reason]
+          properties:
+            reason:
+              type: string
+              enum: [no_relation, subject_inactive, unknown_type, condition_failed]
+              description: The kind of denial.
 
     ConnectionName:
       type: string

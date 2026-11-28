@@ -335,7 +335,7 @@ final class DocumentReaderTest extends TestCase
     {
         $document = Document::fromYamlFile(__DIR__ . '/../../../../../../docs/openapi/management-api.yaml');
 
-        self::assertCount(75, $document->operations());
+        self::assertCount(78, $document->operations());
     }
 
     /**

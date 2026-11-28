@@ -122,6 +122,30 @@ final readonly class JsonObject
     }
 
     /**
+     * An object member's own members, by name, their objects kept as objects (a context the decision
+     * engine reads); null when absent or null.
+     *
+     * @return array<string, mixed>|null
+     *
+     * @throws LogicException When the contract let something other than an object through.
+     */
+    public function members(string $name): ?array
+    {
+        /** @var mixed $value */
+        $value = $this->value($name);
+        if ($value === null) {
+            return null;
+        }
+        if (! $value instanceof stdClass) {
+            throw self::mistyped($name, 'an object');
+        }
+        $members = get_object_vars($value);
+
+        /** @var array<string, mixed> JSON members are named by strings, whatever PHP made of digits. */
+        return array_combine(array_map(strval(...), array_keys($members)), array_values($members));
+    }
+
+    /**
      * An object member as its JSON, for a value the domain reads whole (application metadata);
      * null when absent or null.
      *

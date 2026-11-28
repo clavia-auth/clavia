@@ -21,9 +21,19 @@ use RuntimeException;
  */
 final class EvaluationRefused extends RuntimeException
 {
-    private function __construct(string $message, public readonly ?DenialReason $reason = null)
-    {
+    private function __construct(
+        string $message,
+        public readonly ?DenialReason $reason = null,
+        /** The member at fault, as a JSON pointer into an evaluation (`/resource/type`); '' when none is. */
+        public readonly string $pointer = '',
+    ) {
         parent::__construct($message);
+    }
+
+    /** The same refusal, pointing at the member at fault. */
+    public function at(string $pointer): self
+    {
+        return new self($this->getMessage(), $this->reason, $pointer);
     }
 
     public static function subjectKind(): self

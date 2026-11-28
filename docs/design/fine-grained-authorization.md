@@ -1,7 +1,7 @@
 # Design: Fine-grained authorization, AuthZEN over OpenFGA
 
 **Status:** agreed · **Date:** 2026-11-25 · **Issue:** clavia-auth/clavia#133 ·
-**Amended:** 2026-11-28, operators' reads (#242, §5.6; proposed) ·
+**Amended:** 2026-11-28, operators' reads (#242, §5.6; agreed) ·
 **Specifications:** OpenID AuthZEN Authorization API 1.0 (Final, January 2026: the information
 model of subject, action, resource and context; the Access Evaluation and Access Evaluations APIs;
 the Subject, Resource and Action Search APIs; the PDP metadata document), OpenFGA's API and

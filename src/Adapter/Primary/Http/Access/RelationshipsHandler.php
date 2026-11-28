@@ -70,7 +70,7 @@ final readonly class RelationshipsHandler implements RequestHandlerInterface
             is_string($token) ? $token : '',
         );
 
-        $document = ['items' => array_map(self::document(...), $page->tuples)];
+        $document = ['items' => array_map(RelationshipDocument::of(...), $page->tuples)];
         if ($page->next !== '') {
             $document['next_page_token'] = $page->next;
         }
@@ -134,27 +134,5 @@ final readonly class RelationshipsHandler implements RequestHandlerInterface
     private static function object(stdClass $entity): ObjectRef
     {
         return ObjectRef::of(ObjectType::fromString((string) $entity->type), (string) $entity->id);
-    }
-
-    /** @return array<string, mixed> */
-    private static function document(Tuple $tuple): array
-    {
-        $subject = ['type' => $tuple->subject->object->type->value, 'id' => $tuple->subject->object->id];
-        if ($tuple->subject->relation !== null) {
-            $subject['relation'] = $tuple->subject->relation->name;
-        }
-        $document = [
-            'resource' => ['type' => $tuple->object->type->value, 'id' => $tuple->object->id],
-            'relation' => $tuple->relation->name,
-            'subject' => $subject,
-        ];
-        if ($tuple->condition !== null) {
-            $document['condition'] = ['name' => $tuple->condition->name];
-            if ($tuple->condition->context !== []) {
-                $document['condition']['context'] = $tuple->condition->context;
-            }
-        }
-
-        return $document;
     }
 }
