@@ -174,6 +174,21 @@ deletes, at most 100, applied atomically by OpenFGA. Each tuple's object type mu
 non-reserved type of the model, and a `user` or `client` subject must exist in Clavia. `GET
 /access/v1/relationships?object=…` reads them back, paged. Nothing of the tuples is stored in Clavia.
 
+Decided in slice 5 (#139): the Authorization API is **contract-first**, like the Management API:
+`docs/openapi/authorization-api.yaml` is what its front door (`AccessApiMiddleware`) validates
+against, is kept equal to the routes by a test, and is published beside the other references; its
+refusals are RFC 9457 problem documents (bearer refusals RFC 6750), never repeating a value. The front
+door runs only while `CLAVIA_FGA_URL` is set. A relationship has AuthZEN's shape: `resource` and
+`subject` as `{type, id}` (a subject's `relation` makes it a userset), `relation`, and an optional
+`condition` `{name, context}` the model declares, its context (at most 4 KiB) kept with the tuple;
+`204` for a write. A reserved or undeclared type, or a `user` or `client` subject Clavia does not know,
+is `422` pointing at it (`/writes/0/resource/type`); a deletion does not look the subject up, so a
+deleted person's relationships can still be taken away. The engine's own refusal (a tuple written
+twice, deleted unwritten, or one the model does not take) is `422` naming its code. Reading is one
+object at a time, of the API's own types (who holds a role is Clavia's to tell), a page of 1 to 100
+with OpenFGA's continuation token passed through as `page_token`/`next_page_token`; a token it does
+not take is `422`. Writes are not in the audit trail: they are the API's data, not Clavia's.
+
 ### 5.4 The identity feed
 
 1. A role given, taken or replaced, a role's permissions moved, or an account or a client deleted:

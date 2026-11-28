@@ -40,6 +40,9 @@ use Clavia\Adapter\Primary\Cli\SeedDevelopmentDataCommand;
 use Clavia\Adapter\Primary\Cli\ShowConfigCommand;
 use Clavia\Adapter\Primary\Cli\Sqs\QueueMessagesFactory;
 use Clavia\Adapter\Primary\Cli\SyncIdentityFeedCommand;
+use Clavia\Adapter\Primary\Http\Access\AccessApiMiddleware;
+use Clavia\Adapter\Primary\Http\Access\AccessContract;
+use Clavia\Adapter\Primary\Http\Access\RelationshipsHandler;
 use Clavia\Adapter\Primary\Http\Auth\AuthCookies;
 use Clavia\Adapter\Primary\Http\Auth\AuthPageResponder;
 use Clavia\Adapter\Primary\Http\Auth\BrandingHandler;
@@ -227,10 +230,14 @@ use Clavia\Application\Authentication\SignIn\SignInWithPasskey;
 use Clavia\Application\Authentication\SignIn\SignInWithPassword;
 use Clavia\Application\Authentication\SignOut;
 use Clavia\Application\Authentication\SignOutEverywhere;
+use Clavia\Application\Authorization\Caller\AuthenticateAuthorizationCaller;
 use Clavia\Application\Authorization\Feed\IdentityFeed;
 use Clavia\Application\Authorization\Feed\ResyncStore;
 use Clavia\Application\Authorization\Feed\StoreReconciler;
 use Clavia\Application\Authorization\Feed\SyncIdentityFeed;
+use Clavia\Application\Authorization\Relationships\ReadRelationships;
+use Clavia\Application\Authorization\Relationships\WriteRelationships;
+use Clavia\Application\Authorization\SpokenForApi;
 use Clavia\Application\Clients\RegisterMachineClient;
 use Clavia\Application\Clients\Registration\DeleteClientConfiguration;
 use Clavia\Application\Clients\Registration\MarkRegistrationUsed;
@@ -945,6 +952,13 @@ final class ConfigProvider
                     ManagementContract::class => Container\ManagementContractFactory::class,
                     ManagementResponder::class => Container\ManagementResponderFactory::class,
                     ManagementApiMiddleware::class => Container\ManagementApiMiddlewareFactory::class,
+                    AccessContract::class => Container\AccessContractFactory::class,
+                    AccessApiMiddleware::class => Container\AccessApiMiddlewareFactory::class,
+                    RelationshipsHandler::class => Container\RelationshipsHandlerFactory::class,
+                    AuthenticateAuthorizationCaller::class => Container\AuthenticateAuthorizationCallerFactory::class,
+                    SpokenForApi::class => Container\SpokenForApiFactory::class,
+                    WriteRelationships::class => Container\WriteRelationshipsFactory::class,
+                    ReadRelationships::class => Container\ReadRelationshipsFactory::class,
                     UsersHandler::class => Container\UsersHandlerFactory::class,
                     UserHandler::class => Container\UserHandlerFactory::class,
                     ClientsHandler::class => Container\ClientsHandlerFactory::class,

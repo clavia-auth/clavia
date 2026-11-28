@@ -1,0 +1,501 @@
+openapi: 3.0.3
+
+info:
+  title: Clavia Authorization API
+  # The API's own version, the `v1` of its paths.
+  version: '1'
+  license:
+    name: BSD-3-Clause
+    url: https://opensource.org/licenses/BSD-3-Clause
+  description: |
+    Fine-grained authorization for the APIs a Clavia deployment protects: the relationships of an
+    API's own resources (who may view a document, which team owns a folder), kept in the API's own
+    store of the decision engine (OpenFGA, run beside Clavia and reached by Clavia alone).
+
+    **Who calls.** An API's own machine client, named by an operator as one that speaks for the API
+    (`PUT /api/v1/resource-servers/{id}/authorization` in the Management API), with a client
+    credentials token for this API: its `aud` is the Authorization API identifier,
+    `https://management.{domain}/access`, and it carries the scope an operation names, granted from the
+    shell (`bin/clavia clients:grant`). A client speaks for one API at most, and every request is
+    answered from that API's store and model alone: an API can neither read nor write another's
+    relationships. A client that speaks for no API with authorization on is refused (`403`).
+
+    **What an API may write.** Relationships on its own types: `user`, `client`, `role` and `group`
+    are Clavia's, and their relationships are written by Clavia alone (who holds a role is fed from
+    Clavia's roles). A person (`user`, by the `sub` of their tokens) or an application (`client`, by its
+    client id) named as a subject must exist in Clavia. A userset (`team:sales#member`,
+    `role:<role id>#member`) and a condition the model declares are the model's to accept.
+
+    **This document is the contract.** Every request is validated against it before it reaches the
+    application. Errors other than authentication failures are RFC 9457 problem documents, which
+    never repeat a value the request sent; authentication failures are RFC 6750 challenges. When the
+    decision engine cannot be reached, the answer is `503`: nothing was written, and nothing should
+    be assumed.
+servers:
+  - url: /
+
+tags:
+  - name: relationships
+    x-displayName: Relationships
+    description: |
+      The relationships of an API's own resources, as its authorization model takes them: `subject`
+      holds `relation` on `resource`, possibly under a condition.
+
+security:
+  - authorizationToken: []
+
+paths:
+  /access/v1/relationships:
+    post:
+      tags: [relationships]
+      operationId: writeRelationships
+      summary: Write relationships
+      description: |
+        Writes and deletes relationships in the calling API's store, all of them or none: at most a
+        hundred in all. Writing one already written, or deleting one that is not, refuses the whole
+        request, as does a relationship the API's model does not take (`422`, the engine's own error
+        code in `detail`). A relationship is deleted by its resource, relation and subject, whatever
+        its condition. Nothing of the relationships is kept or logged by Clavia.
+      security:
+        - authorizationToken: [write:relationships]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RelationshipChanges'
+            examples:
+              RelationshipChanges:
+                $ref: '#/components/examples/RelationshipChanges'
+      responses:
+        '204':
+          description: Every write and every deletion is done.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    get:
+      tags: [relationships]
+      operationId: readRelationships
+      summary: Read an object's relationships
+      description: |
+        The relationships written on one of the API's own objects, as they were written (nothing
+        worked out through other relations), a page at a time. A page ends the listing when it carries
+        no `next_page_token`. Clavia's own types are not read here.
+      security:
+        - authorizationToken: [write:relationships]
+      parameters:
+        - name: object
+          in: query
+          required: true
+          description: The object, `type:id`.
+          schema:
+            type: string
+            minLength: 3
+            maxLength: 512
+            pattern: '^[^:#@\s]+:[^#:\s]+$'
+        - name: page_size
+          in: query
+          required: false
+          description: How many relationships a page holds.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: page_token
+          in: query
+          required: false
+          description: The `next_page_token` of the previous page.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 4096
+      responses:
+        '200':
+          description: One page of relationships.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipPage'
+              examples:
+                RelationshipPage:
+                  $ref: '#/components/examples/RelationshipPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+components:
+  securitySchemes:
+    authorizationToken:
+      type: oauth2
+      description: |
+        An access token whose audience is the Authorization API, obtained by the calling API's own
+        client with the client credentials grant, naming the API in `audience`.
+      flows:
+        clientCredentials:
+          tokenUrl: /oauth2/token
+          scopes:
+            evaluate:access: Ask whether a subject may act on a resource
+            search:access: Search the subjects, resources and actions a decision allows
+            write:relationships: Write and read the relationships of the API's resources
+
+  responses:
+    BadRequest:
+      description: |
+        The request could not be read: malformed JSON or a parameter sent twice (a problem
+        document), or a malformed `Authorization` header (`invalid_request`, an RFC 6750
+        challenge).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            MalformedRequest:
+              $ref: '#/components/examples/MalformedRequest'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BearerError'
+          examples:
+            MalformedBearer:
+              $ref: '#/components/examples/MalformedBearer'
+    Unauthorized:
+      description: |
+        No usable token: none at all (a bare `Bearer` challenge and `{}`), or one that is unknown,
+        expired, revoked, issued for another API or for an account that cannot be used
+        (`invalid_token`). A token bound to a DPoP key (RFC 9449) is presented as
+        `Authorization: DPoP <token>` with a fresh proof for this method and URL.
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BearerError'
+          examples:
+            InvalidToken:
+              $ref: '#/components/examples/InvalidToken'
+            MissingToken:
+              $ref: '#/components/examples/MissingToken'
+    Forbidden:
+      description: |
+        The token does not carry the scope this operation requires (`insufficient_scope`, an RFC 6750
+        challenge), or its client speaks for no API with fine-grained authorization on (a problem
+        document).
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BearerError'
+          examples:
+            InsufficientScope:
+              $ref: '#/components/examples/InsufficientScope'
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            SpeaksForNoApi:
+              $ref: '#/components/examples/SpeaksForNoApi'
+    UnsupportedMediaType:
+      description: The body is not `application/json`.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            UnsupportedMediaType:
+              $ref: '#/components/examples/UnsupportedMediaType'
+    Unprocessable:
+      description: |
+        The request does not satisfy this document, names a type that is Clavia's or that the API's
+        model does not declare, a person or an application Clavia does not know, or the decision
+        engine refused it. The first fault is pointed at; nothing was written.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            Unprocessable:
+              $ref: '#/components/examples/Unprocessable'
+            ReservedType:
+              $ref: '#/components/examples/ReservedType'
+    ServiceUnavailable:
+      description: The decision engine cannot be reached, or is too slow; nothing was done.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            ServiceUnavailable:
+              $ref: '#/components/examples/ServiceUnavailable'
+
+  examples:
+    RelationshipChanges:
+      summary: A person, a team and an application given documents, one taken back
+      value:
+        writes:
+          - resource: {type: "document", id: "q3-report"}
+            relation: "viewer"
+            subject: {type: "user", id: "3f8e2d1c-5b4a-4c9e-8d7f-6a5b4c3d2e1f"}
+          - resource: {type: "document", id: "q3-report"}
+            relation: "editor"
+            subject: {type: "team", id: "finance", relation: "member"}
+          - resource: {type: "document", id: "q3-report"}
+            relation: "viewer"
+            subject: {type: "client", id: "reports-job"}
+            condition:
+              name: "before_publication"
+              context: {publication: "2026-12-01T09:00:00Z"}
+        deletes:
+          - resource: {type: "document", id: "q2-report"}
+            relation: "viewer"
+            subject: {type: "user", id: "9b2c7e4a-1d3f-4a6b-9c8e-2f1a0b3c4d5e"}
+    RelationshipPage:
+      summary: The first page of a document's relationships
+      value:
+        items:
+          - resource: {type: "document", id: "q3-report"}
+            relation: "viewer"
+            subject: {type: "user", id: "3f8e2d1c-5b4a-4c9e-8d7f-6a5b4c3d2e1f"}
+          - resource: {type: "document", id: "q3-report"}
+            relation: "editor"
+            subject: {type: "team", id: "finance", relation: "member"}
+        next_page_token: "eyJ1bGlkIjoiMDFKOVgifQ"
+    MissingToken:
+      summary: "No token at all: a bare challenge"
+      value:
+        {}
+    InvalidToken:
+      summary: A token that cannot be used
+      value:
+        error: "invalid_token"
+        error_description: "The access token is expired, revoked, or not valid for this API."
+    InsufficientScope:
+      summary: A scope missing
+      value:
+        error: "insufficient_scope"
+        error_description: "The access token does not carry the 'write:relationships' scope."
+    SpeaksForNoApi:
+      summary: A client that speaks for no API
+      value:
+        type: "about:blank"
+        title: "Forbidden"
+        status: 403
+        detail: "This client speaks for no API with fine-grained authorization on."
+    MalformedRequest:
+      summary: Unreadable JSON
+      value:
+        type: "about:blank"
+        title: "Bad Request"
+        status: 400
+        detail: "The request cannot be read."
+    MalformedBearer:
+      summary: A malformed Authorization header
+      value:
+        error: "invalid_request"
+        error_description: "Malformed 'Authorization' header."
+    UnsupportedMediaType:
+      summary: Not JSON
+      value:
+        type: "about:blank"
+        title: "Unsupported Media Type"
+        status: 415
+        detail: "The body must be application/json."
+    Unprocessable:
+      summary: What the contract refuses, every violation listed
+      value:
+        type: "about:blank"
+        title: "Unprocessable Content"
+        status: 422
+        detail: "The request does not satisfy the API's contract."
+        errors:
+          - pointer: "/writes/0/relation"
+            detail: "Must be a string."
+    ReservedType:
+      summary: A relationship on one of Clavia's types
+      value:
+        type: "about:blank"
+        title: "Unprocessable Content"
+        status: 422
+        detail: "This type is Clavia's: its relationships are written by Clavia alone."
+        errors:
+          - pointer: "/writes/0/resource/type"
+            detail: "This type is Clavia's: its relationships are written by Clavia alone."
+    ServiceUnavailable:
+      summary: The decision engine does not answer
+      value:
+        type: "about:blank"
+        title: "Service Unavailable"
+        status: 503
+        detail: "The decision engine cannot answer now; nothing was done. Try again later."
+
+  schemas:
+    Entity:
+      description: An object of the API's model, `type` and `id` as OpenFGA's notation takes them.
+      type: object
+      additionalProperties: false
+      required: [type, id]
+      properties:
+        type:
+          type: string
+          minLength: 1
+          maxLength: 254
+          pattern: '^[^:#@\s]+$'
+        id:
+          type: string
+          minLength: 1
+          maxLength: 256
+          pattern: '^[^#:\s]+$'
+
+    Subject:
+      description: |
+        Who holds the relation: a person (`user`, their `sub`), an application (`client`, its client
+        id), one of the API's own objects, or with `relation` a userset, everybody holding that relation
+        on the object (`team:finance#member`, `role:<role id>#member`).
+      type: object
+      additionalProperties: false
+      required: [type, id]
+      properties:
+        type:
+          type: string
+          minLength: 1
+          maxLength: 254
+          pattern: '^[^:#@\s]+$'
+        id:
+          type: string
+          minLength: 1
+          maxLength: 256
+          pattern: '^[^#:\s]+$'
+        relation:
+          type: string
+          minLength: 1
+          maxLength: 50
+          pattern: '^[^:#@\s]+$'
+
+    Condition:
+      description: |
+        A condition the model declares and the relation takes, and the values of its parameters kept
+        with the relationship (at most 4 KiB of JSON). It is evaluated when a question is asked.
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+          pattern: '^[^:#@\s]+$'
+        context:
+          type: object
+          additionalProperties: true
+
+    Relationship:
+      type: object
+      additionalProperties: false
+      required: [resource, relation, subject]
+      properties:
+        resource:
+          $ref: '#/components/schemas/Entity'
+        relation:
+          type: string
+          minLength: 1
+          maxLength: 50
+          pattern: '^[^:#@\s]+$'
+        subject:
+          $ref: '#/components/schemas/Subject'
+        condition:
+          $ref: '#/components/schemas/Condition'
+
+    RelationshipChanges:
+      description: What to write and what to delete, a hundred at most in all, applied all or none.
+      type: object
+      additionalProperties: false
+      properties:
+        writes:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/Relationship'
+        deletes:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/Relationship'
+
+    RelationshipPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Relationship'
+        next_page_token:
+          type: string
+          description: Read the next page with it; absent on the last page.
+
+    Problem:
+      description: An RFC 9457 problem document.
+      type: object
+      additionalProperties: false
+      required: [type, title, status, detail]
+      properties:
+        type:
+          type: string
+          description: Always `about:blank`; `title` is the HTTP status phrase.
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+          description: What went wrong, for a person to read.
+        errors:
+          type: array
+          description: Where and why, for a request at fault.
+          items:
+            type: object
+            additionalProperties: false
+            required: [detail]
+            properties:
+              pointer:
+                type: string
+                description: An RFC 6901 JSON pointer into the request body, when the problem is there.
+              parameter:
+                type: string
+                description: The name of the parameter at fault, when the problem is one.
+              detail:
+                type: string
+
+    BearerError:
+      description: |
+        An RFC 6750 §3 error (or RFC 9449 §7.1's `invalid_dpop_proof`). Empty when the request carried
+        no credentials at all: there is nothing yet to be wrong with.
+      type: object
+      additionalProperties: false
+      properties:
+        error:
+          type: string
+          enum: [invalid_request, invalid_token, insufficient_scope, invalid_dpop_proof]
+        error_description:
+          type: string

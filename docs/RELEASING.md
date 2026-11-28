@@ -141,7 +141,7 @@ To preview the page from a branch, with no tag and no workflow:
 
 ```bash
 docs/site/build.sh dev docs/openapi/management-api.yaml /tmp/clavia-docs "" docs/guides \
-  docs/openapi/authorization-server.yaml
+  docs/openapi/authorization-server.yaml docs/openapi/authorization-api.yaml
 cd /tmp/clavia-docs && python3 -m http.server 8080   # the page loads its documents over HTTP
 ```
 

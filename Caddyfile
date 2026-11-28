@@ -118,6 +118,11 @@ auth.{$CLAVIA_ROOT_DOMAIN} {
 	handle /scim/v2/* {
 		respond 404
 	}
+	# The Authorization API (/access/v1/*), fine-grained authorization's machine plane, is
+	# management.*'s too.
+	handle /access/v1/* {
+		respond 404
+	}
 	# Metrics are the internal listener's alone.
 	handle /metrics {
 		respond 404
@@ -185,6 +190,15 @@ management.{$CLAVIA_ROOT_DOMAIN} {
 	# SCIM 2.0 (RFC 7644): directories provisioning accounts with a provisioning token, the
 	# fifth surface. Served by the same PHP application; nothing on it is cacheable.
 	handle /scim/v2/* {
+		header Cache-Control "no-store" {
+			defer
+		}
+		import clavia_app
+	}
+
+	# The Authorization API (docs/design/fine-grained-authorization.md): APIs' own clients writing
+	# their resources' relationships and, later, asking for decisions. Nothing on it is cacheable.
+	handle /access/v1/* {
 		header Cache-Control "no-store" {
 			defer
 		}
