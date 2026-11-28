@@ -6,6 +6,14 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ## [Unreleased]
 
+### Added
+
+- **The image for arm64 too** (#257). `ghcr.io/clavia-auth/clavia` (each release, its `X.Y` and
+  `latest`, and `:edge`) is one manifest list for `linux/amd64` and `linux/arm64`, so `docker pull`
+  on an arm64 host (AWS Graviton, Ampere, Apple silicon) takes the native image. Both are built from
+  the same commit, each natively on a runner of its own. Nothing changes on amd64. The dashboard's
+  image follows at the same version (clavia-auth/clavia-dashboard#92).
+
 ## [0.6.0] - 2026-11-28
 
 **Fine-grained authorization** (#133, [design](docs/design/fine-grained-authorization.md)): an API can

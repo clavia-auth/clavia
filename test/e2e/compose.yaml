@@ -119,7 +119,7 @@ services:
   # The dashboard, behind Caddy at /dashboard as in production: it reaches Clavia by the names Caddy answers
   # to on the `edge` network. Off unless asked for (CLAVIA_E2E_DASHBOARD=1, see up.sh), so a run that does not
   # test it does not pull it. CLAVIA_E2E_DASHBOARD_IMAGE names another image, such as one built from a pull
-  # request; the published images are linux/amd64, so on another architecture build it locally and name it.
+  # request. The published images, `:edge` included, are for linux/amd64 and linux/arm64 from 0.6.1.
   dashboard:
     profiles: [dashboard]
     image: ${CLAVIA_E2E_DASHBOARD_IMAGE:-ghcr.io/clavia-auth/clavia-dashboard:edge}
