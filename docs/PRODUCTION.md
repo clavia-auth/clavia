@@ -16,6 +16,7 @@ setting is declared and documented in
        ┌───────────┐  FastCGI    └──────────────────────────────────────────────────┘
        │   Caddy   │───────────▶ PHP-FPM (ghcr.io/clavia-auth/clavia)  ──▶ PostgreSQL 17
        │  (edge)   │                                                   ──▶ Redis 7
+       │           │                                                   ──▶ OpenFGA, optional (§8)
        └───────────┘───────────▶ the dashboard (ghcr.io/clavia-auth/clavia-dashboard)
                                  the scheduled commands (bin/clavia …, every minute and daily)
 ```
@@ -30,6 +31,8 @@ setting is declared and documented in
 - **PostgreSQL** holds everything durable: accounts, clients, tokens, keys sealed with the postgres
   backend, the audit trail. **Redis** holds what is short-lived: sessions, challenges, throttling.
   Losing Redis signs everyone out and corrupts nothing.
+- **OpenFGA**, only for fine-grained authorization (§8), holds the relationship graph of the APIs
+  that use it, in a PostgreSQL of its own. Only Clavia calls it.
 - **The scheduled commands** each exit when done:
 
   | Command | When | What |
@@ -55,6 +58,8 @@ setting is declared and documented in
 - **A mail server** (SMTP with STARTTLS, or SMTPS on 465), unless you sign nobody in by email: then
   `CLAVIA_EMAIL_BACKEND=none`.
 - **For the signing keys, a KMS** (AWS KMS, Google Cloud KMS or Azure Key Vault) if you can (see §4).
+- **For fine-grained authorization**, if your APIs will use it: OpenFGA. The Compose file can run it;
+  on Kubernetes it is yours, like the databases (§8).
 
 ## 3. Settings and secrets
 
@@ -80,6 +85,7 @@ sees it, with secrets masked.
 | `CLAVIA_REDIS_URL` | `redis://[user:password@]host:6379/0`, or `rediss://` for TLS |
 | `CLAVIA_EMAIL_BACKEND`, `CLAVIA_EMAIL_FROM`, `CLAVIA_SMTP_*` | `smtp`, or `none` |
 | `CLAVIA_TRUSTED_PROXIES` | Leave empty: Caddy reports the client address to PHP itself |
+| `CLAVIA_FGA_URL`, `CLAVIA_FGA_API_KEY` | Fine-grained authorization (§8). Unset, it is off. The key is a secret |
 
 Keep secrets in a secret store: Compose's `.env` file, readable by root only, or a Kubernetes
 Secret. Never put them in a values file, an image or a repository.
@@ -139,6 +145,9 @@ Keep two volumes:
 To keep storage elsewhere, delete the `db` and `redis` services and point the settings at your
 servers. The `depends_on` entries on them are optional, so nothing else needs changing.
 
+OpenFGA and its database run only with the `fga` profile (§8): `COMPOSE_PROFILES=fga` in `.env`, or
+`--profile fga`. Keep its volume, `openfga-pgdata`, too.
+
 ## 6. On Kubernetes
 
 The chart runs:
@@ -149,7 +158,8 @@ The chart runs:
 - **The dashboard.**
 - **One Ingress** for both hosts.
 
-PostgreSQL and Redis are yours: a managed service, or an operator.
+PostgreSQL and Redis are yours: a managed service, or an operator. So is OpenFGA, if your APIs use
+fine-grained authorization (§8).
 
 ```bash
 kubectl create namespace clavia
@@ -233,19 +243,77 @@ Once, on a new installation. `$CLAVIA` stands for how you run a command:
    factor when its MFA policy says so; enrol one when asked. Then **delete the Bootstrap client**
    from the dashboard's Applications: a client cannot delete itself.
 
-## 8. Backups
+## 8. Fine-grained authorization
+
+An API can ask Clavia who may do what to its own resources (AuthZEN, at
+`https://management.{domain}/access/v1`). The answers come from [OpenFGA](https://openfga.dev),
+which runs beside Clavia with a PostgreSQL of its own and is reached by Clavia alone. The feature is
+off until `CLAVIA_FGA_URL` names OpenFGA.
+
+**Run OpenFGA.**
+- **Compose**: the kit's `fga` profile runs `openfga`, `openfga-db` and `openfga-migrate`, which
+  brings OpenFGA's schema up to date before it starts, on every `up`. In `.env`:
+  ```bash
+  COMPOSE_PROFILES=fga
+  CLAVIA_FGA_URL=http://openfga:8080
+  CLAVIA_FGA_API_KEY=…            # openssl rand -base64 32
+  OPENFGA_POSTGRES_PASSWORD=…     # openssl rand -hex 24: OpenFGA's database, not Clavia's
+  ```
+  then `docker compose up -d`. No port of OpenFGA is published.
+- **Kubernetes**, or OpenFGA run any other way (OpenFGA's own Helm chart, for instance): it must be set
+  up as the Compose file sets it up, since Clavia relies on each of these:
+
+  | OpenFGA setting | Value | Why |
+  |---|---|---|
+  | `OPENFGA_DATASTORE_ENGINE` | `postgres` | A database of its own, never Clavia's; `memory` loses everything on a restart |
+  | `OPENFGA_AUTHN_METHOD`, `OPENFGA_AUTHN_PRESHARED_KEYS` | `preshared`, the key in `CLAVIA_FGA_API_KEY` | Nobody but Clavia may read or write the graph |
+  | `OPENFGA_CHECK_QUERY_CACHE_ENABLED`, `OPENFGA_CHECK_ITERATOR_CACHE_ENABLED`, `OPENFGA_LIST_OBJECTS_ITERATOR_CACHE_ENABLED` | `false` | Every answer strongly consistent: a relationship taken away is never answered from a cache |
+  | `OPENFGA_PLAYGROUND_ENABLED` | `false` | The playground is a development tool |
+
+  Run its `migrate` command before every start of a new version, as its documentation says. Let no
+  one but the server pods reach it (a NetworkPolicy on OpenFGA's side). Then set
+  `env.CLAVIA_FGA_URL` in the chart's values, and `CLAVIA_FGA_API_KEY` in its Secret.
+
+**Then, once:**
+1. `$CLAVIA management-api:register`. With `CLAVIA_FGA_URL` set it registers the **Authorization
+   API** (`https://management.{domain}/access`) beside the Management API, and gives the Management
+   API `read:relationships`. Give that scope to the roles of administrators who should read an API's
+   relationships.
+2. Check it: `https://management.{domain}/.well-known/authzen-configuration` answers, and names
+   `https://management.{domain}`.
+3. Turn it on for an API: in the dashboard (the API's Authorization tab), or
+   `PUT /api/v1/resource-servers/{id}/authorization`, naming the API's own machine client among the
+   clients speaking for it. Grant that client on the Authorization API:
+   ```bash
+   $CLAVIA clients:grant <client_id> --audience https://management.example.com/access \
+     --scope "evaluate:access search:access write:relationships"
+   ```
+   The [guide](guides/fine-grained-authorization.md) is for the API's developers.
+
+`fga:sync` (every minute, §1) sends OpenFGA the changes to people and roles. A failure is retried
+for as long as it takes, so OpenFGA can be stopped for an upgrade. While it cannot be reached, every
+decision is `503`, never a grant.
+
+## 9. Backups
 
 | What | How | Why |
 |---|---|---|
 | **PostgreSQL** | Point-in-time recovery, or `pg_dump --format=custom` daily at least | Everything durable lives there |
 | **`CLAVIA_SECRET_ENCRYPTION_KEY`** | In your secret store, **apart from the database's backups** | Without it the sealed secrets cannot be read; with a backup, it opens them |
+| **OpenFGA's PostgreSQL**, with fine-grained authorization | Like Clavia's: `pg_dump --format=custom` daily at least (Compose: `docker compose exec openfga-db pg_dump -U openfga --format=custom openfga > openfga.dump`), or point-in-time recovery | The relationships your APIs wrote are only there |
 | Redis | Nothing to back up | Losing it signs everyone out |
 | Caddy's data (Compose) | Keep the volume | New certificates otherwise |
 
 A restore is the database and the same encryption key, then the same release, or a later one whose
 migrations run over it. Practise it on a copy.
 
-## 9. Upgrades
+Restore OpenFGA's database from a backup taken at the same time as Clavia's. Clavia's database keeps
+which store belongs to which API, and OpenFGA's keeps what is in that store, so the two must come
+from the same point. Then run `$CLAVIA fga:resync <api>` for each API that uses it: it rewrites the
+role memberships Clavia knows. The relationships an API wrote itself come back only from OpenFGA's
+backup.
+
+## 10. Upgrades
 
 1. **Read the release notes** (`CHANGELOG.md`). They say what changes, and what you must do.
 2. **Back up the database.** Migrations are forward only: rolling back is restoring that backup.
@@ -263,7 +331,7 @@ migrations run over it. Practise it on a copy.
      CronJobs come with `helm upgrade`;
    - a change to the proxy in front.
 
-## 10. Operating it
+## 11. Operating it
 
 - **Logs**: one line per event on stderr, from every container. An unexpected error is logged
   under a 12-character reference, which the client receives in `X-Error-Reference` and nothing
@@ -291,7 +359,7 @@ migrations run over it. Practise it on a copy.
 - **The audit trail**: `GET /api/v1/audit-events`, or the dashboard, or stream it to your SIEM with
   webhooks.
 
-## 11. Before you go live
+## 12. Before you go live
 
 - [ ] Both hosts are served over https, as two origins.
 - [ ] `bin/clavia config` shows `CLAVIA_ENV production` and no warning you did not choose.
@@ -301,7 +369,9 @@ migrations run over it. Practise it on a copy.
 - [ ] The scheduled commands run: `jobs:run`, `webhooks:deliver` and `fga:sync` every minute, `audit:purge`
       and `clients:purge-unused` daily.
 - [ ] The Bootstrap client is deleted, and administrators hold a second factor.
-- [ ] Nothing but Caddy (or your Ingress) is reachable from outside: PHP-FPM, PostgreSQL and
-      Redis listen on the private network only.
+- [ ] Nothing but Caddy (or your Ingress) is reachable from outside: PHP-FPM, PostgreSQL,
+      Redis and OpenFGA listen on the private network only.
+- [ ] With fine-grained authorization, OpenFGA takes only the preshared key, its caches are off, and
+      its database is backed up with Clavia's.
 - [ ] On Kubernetes, `caddy.trustedProxies` names only the Ingress controller, or `networkPolicy`
       is on.
