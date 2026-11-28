@@ -120,7 +120,7 @@ migrations/                 NNNN_name.sql, forward only
 docs/openapi/               management-api.yaml, the Management API's contract; authorization-api.yaml, the Authorization API's
 test/e2e/                   the end-to-end stack: compose, up.sh, verify.sh (docs/design/end-to-end-scenarios.md)
 docs/site/                  the published API references: Scalar over both documents, and the guides (docs.yml)
-docs/guides/                the Management API guides, for callers: tokens, scopes, errors, paging, DPoP, registration
+docs/guides/                the guides, for callers: tokens, scopes, errors, paging, DPoP, registration, fine-grained authorization
 docs/SECURITY-REVIEW.md     review of every adapter against the invariants
 docs/RELEASING.md           how a release is made: changelog, version, tag, the Release workflow
 docs/PRODUCTION.md          how a release is run: hosts, TLS, secrets, keys, first start, backups, upgrades
@@ -968,7 +968,8 @@ pinned) to GitHub Pages for each release, `/vX.Y.Z/` and the root following the 
 (`docs/RELEASING.md` §6).
 
 **The guides** (`docs/guides/*.md`, #98) come before the reference: getting a token, scopes and
-roles, errors and stepping up, paging and search, DPoP, registering clients. They are written for
+roles, errors and stepping up, paging and search, DPoP, registering clients, and fine-grained
+authorization (for an API's developer: its token, decisions, search, relationships). They are written for
 someone calling the API, and checked against a running server; `README.md` orders them, and the
 introduction (`info.description`) links each one. They are published with the reference, from the
 same tag (`docs/site/guide.html`). `ManagementGuidesTest` fails when one names an operation, a scope,
