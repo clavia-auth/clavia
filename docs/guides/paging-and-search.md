@@ -28,7 +28,7 @@ curl -s 'https://management.example.com/api/v1/users?page=2&per_page=2' \
 - **`total`** counts every item matching the request, across all pages.
 - **Lists are newest first.**
 - **A page past the end is not an error.** It comes back with no `items` and the same `total`.
-- **Out of range is refused, not adjusted.** `per_page=500` is `422`, never quietly cut to 100.
+- **Out of range is refused, not adjusted.** `per_page=500` is `400`, never quietly cut to 100.
 
 To read everything, ask for pages until `page × per_page ≥ total`:
 
@@ -86,7 +86,7 @@ Filters combine: an event must match all of them to be listed.
 ## Parameters are exact
 
 Every parameter is read exactly as the reference describes it:
-- one the operation doesn't take is refused (`422`, `"Is not a parameter of this operation."`);
+- one the operation doesn't take is refused (`400`, `"Is not a parameter of this operation."`);
 - a parameter sent twice is refused (`400`);
 - a number is digits only: `per_page=02` is `"Must be an integer."`.
 

@@ -103,7 +103,7 @@ final readonly class ResourceServerAuthorizationHandler implements RequestHandle
     {
         return $this->responder->problem(new Problem(
             StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
-            ContractViolation::DETAIL,
+            ContractViolation::REFUSED,
             [['pointer' => $pointer, 'detail' => $detail]],
         ));
     }

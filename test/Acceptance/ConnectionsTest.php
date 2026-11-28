@@ -385,7 +385,7 @@ final class ConnectionsTest extends AcceptanceTestCase
         );
         // Creating one needs a strategy and a display name: the contract is strict.
         self::assertSame(
-            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
+            StatusCodeInterface::STATUS_BAD_REQUEST,
             $this->api(RequestMethodInterface::METHOD_POST, self::CONNECTIONS, ['name' => 'x'])->getStatusCode(),
         );
     }
@@ -437,7 +437,7 @@ final class ConnectionsTest extends AcceptanceTestCase
             'strategy' => 'database',
         ]);
 
-        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
     }
 
     // ── Pools: several connections with passwords ───────────────────────────────
@@ -479,7 +479,8 @@ final class ConnectionsTest extends AcceptanceTestCase
             [
                 'google' => StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
                 'nope' => StatusCodeInterface::STATUS_NOT_FOUND,
-                'Not A Name' => StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
+                // Not a connection name at all: the contract refuses it.
+                'Not A Name' => StatusCodeInterface::STATUS_BAD_REQUEST,
             ] as $connection => $status
         ) {
             self::assertSame($status, $this->api(RequestMethodInterface::METHOD_POST, self::USERS, [

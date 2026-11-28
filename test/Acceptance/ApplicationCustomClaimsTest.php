@@ -117,7 +117,7 @@ final class ApplicationCustomClaimsTest extends AcceptanceTestCase
             ['name' => 'plan', 'source' => 'email', 'in' => ['access_token']],
         ]]);
         self::assertSame(
-            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
+            StatusCodeInterface::STATUS_BAD_REQUEST,
             $accessToken->getStatusCode(),
             'The contract refuses it.',
         );

@@ -343,9 +343,9 @@ components:
               $ref: '#/components/examples/MalformedBearer'
     BadRequest:
       description: |
-        The request could not be read: malformed JSON or a parameter sent twice (a problem
-        document), or a malformed `Authorization` header (`invalid_request`, an RFC 6750
-        challenge).
+        The request was built wrong (RFC 9110 §15.5.1), a problem document: it cannot be read
+        (malformed JSON, a parameter sent twice), or this document refuses it, every violation
+        listed. Or a malformed `Authorization` header (`invalid_request`, an RFC 6750 challenge).
       content:
         application/problem+json:
           schema:
@@ -353,6 +353,8 @@ components:
           examples:
             MalformedRequest:
               $ref: '#/components/examples/MalformedRequest'
+            ContractViolation:
+              $ref: '#/components/examples/ContractViolation'
         application/json:
           schema:
             $ref: '#/components/schemas/BearerError'
@@ -411,16 +413,14 @@ components:
               $ref: '#/components/examples/UnsupportedMediaType'
     Unprocessable:
       description: |
-        The request does not satisfy this document, names a type that is Clavia's or that the API's
-        model does not declare, a person or an application Clavia does not know, or the decision
-        engine refused it. The first fault is pointed at; nothing was written.
+        The request is well formed, but a rule refuses it (RFC 9110 §15.5.21): it names a type that is
+        Clavia's or that the API's model does not declare, a person or an application Clavia does not
+        know, or the decision engine refused it. The first fault is pointed at; nothing was written.
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
           examples:
-            Unprocessable:
-              $ref: '#/components/examples/Unprocessable'
             ReservedType:
               $ref: '#/components/examples/ReservedType'
     ServiceUnavailable:
@@ -548,12 +548,12 @@ components:
         title: "Unsupported Media Type"
         status: 415
         detail: "The body must be application/json."
-    Unprocessable:
+    ContractViolation:
       summary: What the contract refuses, every violation listed
       value:
         type: "about:blank"
-        title: "Unprocessable Content"
-        status: 422
+        title: "Bad Request"
+        status: 400
         detail: "The request does not satisfy the API's contract."
         errors:
           - pointer: "/writes/0/relation"

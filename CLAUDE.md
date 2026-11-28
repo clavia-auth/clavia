@@ -420,7 +420,7 @@ the engine (#135), authorization on an API (#136), the identity feed (#137), rel
   of the relationships is stored, logged or audited by Clavia; the engine not answering is `503`.
 - **AuthZEN evaluation** (#138, §5.2): `POST /access/v1/evaluation` and `/evaluations`
   (`evaluate:access`, `EvaluateAccess`), held to AuthZEN 1.0: unknown members ignored, a malformed
-  request `400` (`AccessContract::isAuthZen()`), `X-Request-ID` sent back. A subject is a `user` or a
+  request `400` (as everywhere since #239), `X-Request-ID` sent back. A subject is a `user` or a
   `client` the model declares, a resource of a declared type that can be related to, an action a
   relation of that type (`AuthorizationModel::relates()`), no `context.clavia` (all `400`,
   `EvaluationRefused`). **A subject Clavia does not know, a deactivated account or a deleted client is
@@ -920,8 +920,10 @@ source of truth. `ManagementApiMiddleware` checks every request in one order:
    is marked by `ManagementPermission::isRequiredByAField()`, and is named in the operation's
    description; refused, it is the same `403`, before anything changes;
 4. the request against the contract: a parameter twice, unreadable JSON or bad
-   percent-encoding is 400; not JSON is 415; anything the contract or the domain refuses is
-   422, with every violation listed (at most fifty).
+   percent-encoding is 400; not JSON is 415; anything the contract refuses is 400 too, with every
+   violation listed (at most fifty): a request built wrong (RFC 9110 §15.5.1). A well-formed
+   request a domain rule refuses is 422 (`ContractViolation::REFUSED`, the fault pointed at). A
+   parameter the handler must read itself and finds malformed is `MalformedParameter`, 400.
 
 Handlers then read a `ManagementRequest`, call one use case and render with `ManagementViews`.
 The middleware maps expected refusals: `NotFound` is 404; `Conflict`, `AlreadyExists` and

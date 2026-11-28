@@ -433,7 +433,7 @@ final class ConsentTest extends AcceptanceTestCase
         // Identity, not configuration: the contract has no such field on an update.
         $path = '/api/v1/clients/' . (string) $body['client_id'];
         self::assertSame(
-            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
+            StatusCodeInterface::STATUS_BAD_REQUEST,
             $this->api(RequestMethodInterface::METHOD_PATCH, $path, ['is_first_party' => true])->getStatusCode(),
         );
         self::assertFalse(self::document($this->api(RequestMethodInterface::METHOD_GET, $path))['is_first_party']);

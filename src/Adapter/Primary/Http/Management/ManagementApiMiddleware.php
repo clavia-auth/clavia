@@ -45,9 +45,10 @@ use stdClass;
  *     checked before any scope: a scope means nothing without one.
  *  3. **The scope** — the one the operation's `security` requirement names in the
  *     contract (`insufficient_scope`, 403).
- *  4. **The request** — readable (400: JSON syntax, a parameter sent twice), JSON at
- *     all (415), then everything the contract describes (422), every violation listed
- *     ({@see ContractViolation}).
+ *  4. **The request** — readable (JSON syntax, a parameter sent twice), JSON at all
+ *     (415), then everything the contract describes: a request built wrong is 400, every
+ *     violation listed ({@see ContractViolation}). What a domain rule refuses of a
+ *     well-formed request is 422.
  *
  * Authentication comes before validation on purpose: a caller without a token learns
  * nothing about what the API would have accepted.
@@ -108,6 +109,12 @@ final readonly class ManagementApiMiddleware implements MiddlewareInterface
             // A scope an operation needs only for some of what it is sent (`app_metadata` on a user):
             // refused as the operation's own scope is, before anything changed.
             return $this->challenger->refuse($error, $credentials->scheme);
+        } catch (MalformedParameter $refusal) {
+            return $this->responder->problem(new Problem(
+                StatusCodeInterface::STATUS_BAD_REQUEST,
+                ContractViolation::DETAIL,
+                [['parameter' => $refusal->parameter, 'detail' => $refusal->getMessage()]],
+            ));
         } catch (NotFound $refusal) {
             return $this->responder->problem(
                 new Problem(StatusCodeInterface::STATUS_NOT_FOUND, $refusal->getMessage()),

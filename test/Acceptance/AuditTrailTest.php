@@ -165,14 +165,17 @@ final class AuditTrailTest extends AcceptanceTestCase
     {
         $this->adminToken();
 
-        self::assertSame(
-            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
-            $this->api(
-                RequestMethodInterface::METHOD_GET,
-                self::EVENTS,
-                query: ['type' => 'user.exploded'],
-            )->getStatusCode(),
-        );
+        $response = $this->api(RequestMethodInterface::METHOD_GET, self::EVENTS, query: ['type' => 'user.exploded']);
+
+        // A filter built wrong: the parameter named, never its value.
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
+        self::assertSame('type', self::document($response)['errors'][0]['parameter'] ?? null);
+        self::assertStringNotContainsString('exploded', (string) $response->getBody());
+
+        foreach (['since' => 'yesterday-ish', 'target_type' => 'user'] as $parameter => $value) {
+            $refused = $this->api(RequestMethodInterface::METHOD_GET, self::EVENTS, query: [$parameter => $value]);
+            self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $refused->getStatusCode(), $parameter);
+        }
     }
 
     /**

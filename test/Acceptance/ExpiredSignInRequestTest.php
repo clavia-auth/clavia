@@ -84,9 +84,16 @@ final class ExpiredSignInRequestTest extends AcceptanceTestCase
     {
         $this->adminToken();
 
-        foreach (['http://client.test/sign-in', 'https://client.test/sign-in#here', 'not a url'] as $refused) {
+        // The scheme is the contract's to refuse (400); a fragment, the domain's (422).
+        foreach (
+            [
+                'http://client.test/sign-in' => StatusCodeInterface::STATUS_BAD_REQUEST,
+                'https://client.test/sign-in#here' => StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
+                'not a url' => StatusCodeInterface::STATUS_BAD_REQUEST,
+            ] as $refused => $status
+        ) {
             self::assertSame(
-                StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
+                $status,
                 $this->patchClient(['initiate_login_uri' => $refused])->getStatusCode(),
                 $refused,
             );

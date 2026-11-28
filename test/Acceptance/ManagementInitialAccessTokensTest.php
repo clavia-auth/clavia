@@ -139,33 +139,33 @@ final class ManagementInitialAccessTokensTest extends AcceptanceTestCase
 
     /**
      * @param array<string, mixed> $body
+     * @param int $status 400 for what the contract refuses, 422 for what a rule does.
      */
     #[\PHPUnit\Framework\Attributes\DataProvider('outOfBounds')]
-    public function testWhatIsOutOfBoundsIsRefused(array $body): void
+    public function testWhatIsOutOfBoundsIsRefused(array $body, int $status): void
     {
         $this->adminToken();
 
         $response = $this->api(RequestMethodInterface::METHOD_POST, self::TOKENS, $body);
 
-        self::assertSame(
-            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
-            $response->getStatusCode(),
-            (string) $response->getBody(),
-        );
+        self::assertSame($status, $response->getStatusCode(), (string) $response->getBody());
         self::assertSame(0, (int) TestStorage::database()->fetchValue('SELECT count(*) FROM initial_access_tokens'));
     }
 
-    /** @return iterable<string, array{array<string, mixed>}> */
+    /** @return iterable<string, array{array<string, mixed>, int}> */
     public static function outOfBounds(): iterable
     {
-        yield 'no description' => [['max_uses' => 1]];
-        yield 'an empty description' => [['description' => '']];
-        yield 'a description too long' => [['description' => str_repeat('a', 121)]];
-        yield 'a control character' => [['description' => "two\nlines"]];
-        yield 'no use' => [['description' => 'x', 'max_uses' => 0]];
-        yield 'too many uses' => [['description' => 'x', 'max_uses' => 1001]];
-        yield 'too short a life' => [['description' => 'x', 'expires_in' => 59]];
-        yield 'too long a life' => [['description' => 'x', 'expires_in' => 7_776_001]];
+        $built = StatusCodeInterface::STATUS_BAD_REQUEST;
+        yield 'no description' => [['max_uses' => 1], $built];
+        yield 'an empty description' => [['description' => ''], $built];
+        yield 'a description too long' => [['description' => str_repeat('a', 121)], $built];
+        // One line is the domain's rule, not the contract's.
+        $ruled = StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY;
+        yield 'a control character' => [['description' => "two\nlines"], $ruled];
+        yield 'no use' => [['description' => 'x', 'max_uses' => 0], $built];
+        yield 'too many uses' => [['description' => 'x', 'max_uses' => 1001], $built];
+        yield 'too short a life' => [['description' => 'x', 'expires_in' => 59], $built];
+        yield 'too long a life' => [['description' => 'x', 'expires_in' => 7_776_001], $built];
     }
 
     public function testEachOperationNeedsItsScope(): void

@@ -61,7 +61,7 @@ final readonly class UserHandler implements RequestHandlerInterface
                     } catch (InvalidValue $refusal) {
                         return $this->responder->problem(new Problem(
                             StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
-                            ContractViolation::DETAIL,
+                            ContractViolation::REFUSED,
                             [['pointer' => '/app_metadata', 'detail' => $refusal->getMessage()]],
                         ));
                     }

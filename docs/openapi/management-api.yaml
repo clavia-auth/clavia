@@ -167,8 +167,6 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
     post:
       tags: [users]
       operationId: createUser
@@ -246,8 +244,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
     patch:
       tags: [users]
       operationId: updateUser
@@ -322,8 +318,6 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/users/{user_id}/mfa:
     parameters:
@@ -352,8 +346,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/users/{user_id}/password-reset:
     parameters:
@@ -441,8 +433,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/users/{user_id}/consents/{client_id}:
     parameters:
@@ -471,8 +461,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/users/{user_id}/sessions:
     parameters:
@@ -507,8 +495,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
     delete:
       tags: [users]
       operationId: endUserSessions
@@ -533,8 +519,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/users/{user_id}/sessions/{sid}:
     parameters:
@@ -558,8 +542,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/users/{user_id}/identities:
     parameters:
@@ -591,8 +573,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/users/{user_id}/identities/{connection}:
     parameters:
@@ -623,8 +603,6 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/users/{user_id}/passkeys:
     parameters:
@@ -658,8 +636,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/users/{user_id}/passkeys/{passkey_id}:
     parameters:
@@ -688,8 +664,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/users/{user_id}/roles:
     parameters:
@@ -721,8 +695,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
     put:
       tags: [users]
       operationId: setUserRoles
@@ -803,8 +775,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/clients:
     get:
@@ -834,8 +804,6 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
     post:
       tags: [clients]
       operationId: createClient
@@ -912,8 +880,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
     patch:
       tags: [clients]
       operationId: updateClient
@@ -982,8 +948,6 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/clients/{client_id}/logo:
     parameters:
@@ -1024,8 +988,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
     put:
       tags: [clients]
       operationId: setClientLogo
@@ -1092,8 +1054,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/clients/{client_id}/rotate-secret:
     parameters:
@@ -1205,8 +1165,6 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
     post:
       tags: [connections]
       operationId: createConnection
@@ -1328,8 +1286,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
     patch:
       tags: [connections]
       operationId: updateConnection
@@ -1399,8 +1355,6 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/resource-servers:
     get:
@@ -1430,8 +1384,6 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
     post:
       tags: [resource-servers]
       operationId: createResourceServer
@@ -1501,8 +1453,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
     patch:
       tags: [resource-servers]
       operationId: updateResourceServer
@@ -1575,8 +1525,6 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/resource-servers/{resource_server_id}/authorization:
     parameters:
@@ -1609,8 +1557,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
     put:
       tags: [resource-servers]
       operationId: putResourceServerAuthorization
@@ -1702,8 +1648,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
@@ -1735,8 +1679,6 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
     post:
       tags: [roles]
       operationId: createRole
@@ -1810,8 +1752,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
     patch:
       tags: [roles]
       operationId: updateRole
@@ -1877,8 +1817,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/roles/{role_id}/users:
     parameters:
@@ -1911,8 +1849,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
     post:
       tags: [roles]
       operationId: assignRole
@@ -1974,8 +1910,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/signing-keys:
     get:
@@ -2141,8 +2075,6 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
     post:
       tags: [initial-access-tokens]
       operationId: issueInitialAccessToken
@@ -2209,8 +2141,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/provisioning-tokens:
     get:
@@ -2249,8 +2179,6 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
     post:
       tags: [provisioning-tokens]
       operationId: issueProvisioningToken
@@ -2323,8 +2251,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
     delete:
       tags: [provisioning-tokens]
       operationId: revokeProvisioningToken
@@ -2345,8 +2271,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/webhooks:
     get:
@@ -2375,8 +2299,6 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
     post:
       tags: [webhooks]
       operationId: createWebhook
@@ -2456,8 +2378,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
     patch:
       tags: [webhooks]
       operationId: updateWebhook
@@ -2517,8 +2437,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/webhooks/{webhook_id}/rotate-secret:
     parameters:
@@ -2551,8 +2469,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/webhooks/{webhook_id}/test:
     parameters:
@@ -2581,8 +2497,6 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/webhooks/{webhook_id}/deliveries:
     parameters:
@@ -2619,8 +2533,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/jobs/users-imports:
     post:
@@ -2734,8 +2646,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/jobs/{job_id}/output:
     parameters:
@@ -2776,8 +2686,6 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/jobs/{job_id}:
     parameters:
@@ -2809,8 +2717,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
 
   /api/v1/audit-events:
     get:
@@ -2993,6 +2899,8 @@ components:
         type: string
         minLength: 1
         maxLength: 64
+        # Visible ASCII without a colon, as a client id is (HTTP Basic cannot carry one).
+        pattern: '^[\x21-\x39\x3B-\x7E]+$'
     ResourceServerId:
       name: resource_server_id
       in: path
@@ -3059,9 +2967,11 @@ components:
   responses:
     BadRequest:
       description: |
-        The request could not be read: malformed JSON or a parameter sent twice (a problem
-        document), or a malformed `Authorization` header (`invalid_request`, an RFC 6750
-        challenge).
+        The request was built wrong (RFC 9110 §15.5.1), a problem document: it cannot be read
+        (malformed JSON, a parameter sent twice), or this document refuses it (a field it does not
+        describe, a wrong type, a value out of range, a parameter the operation does not take),
+        every violation listed with its `pointer` or `parameter`. Or a malformed `Authorization`
+        header (`invalid_request`, an RFC 6750 challenge).
       content:
         application/problem+json:
           schema:
@@ -3069,6 +2979,8 @@ components:
           examples:
             MalformedRequest:
               $ref: '#/components/examples/MalformedRequest'
+            ContractViolation:
+              $ref: '#/components/examples/ContractViolation'
         application/json:
           schema:
             $ref: '#/components/schemas/BearerError'
@@ -3147,7 +3059,10 @@ components:
             Conflict:
               $ref: '#/components/examples/Conflict'
     Unprocessable:
-      description: The request does not satisfy this document, or describes something that could never work.
+      description: |
+        The request is well formed, but a rule refuses it (RFC 9110 §15.5.21): a permission the API
+        does not define, a password found in a breach, metadata that does not hold together. Each
+        fault is pointed at; nothing changed.
       content:
         application/problem+json:
           schema:
@@ -4237,18 +4152,28 @@ components:
         title: "Unsupported Media Type"
         status: 415
         detail: "The body must be application/json."
-    Unprocessable:
+    ContractViolation:
       summary: What the contract refuses, every violation listed
       value:
         type: "about:blank"
-        title: "Unprocessable Content"
-        status: 422
+        title: "Bad Request"
+        status: 400
         detail: "The request does not satisfy the API's contract."
         errors:
           - pointer: "/email"
             detail: "Must be a string."
           - parameter: "per_page"
             detail: "Must be at most 100."
+    Unprocessable:
+      summary: A rule refuses a well-formed request
+      value:
+        type: "about:blank"
+        title: "Unprocessable Content"
+        status: 422
+        detail: "The request is well formed, but a rule refuses it."
+        errors:
+          - pointer: "/claims/0"
+            detail: "That claim name is reserved: the protocol or this server defines it."
     TooManyRequests:
       summary: The send limit reached
       value:

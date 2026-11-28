@@ -171,7 +171,7 @@ Decided in slice 4 (#138):
 
 - **AuthZEN's rules on the wire.** Members AuthZEN does not define are ignored (§10.1.1), so its
   schemas in `docs/openapi/authorization-api.yaml` are open; a request missing what it requires, or
-  that the contract refuses, is `400`, not Clavia's usual `422`. A request's `X-Request-ID` is sent
+  that the contract refuses, is `400` (and since #239, everywhere in Clavia's APIs). A request's `X-Request-ID` is sent
   back on every answer (§10.1.3). `properties` are not read.
 - **A batch** (§7) takes the request's `subject`, `action`, `resource` and `context` as defaults an
   item replaces member by member; at most 50; answered in order, up to and including the first denial

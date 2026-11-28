@@ -54,7 +54,8 @@ final readonly class AuditEventsHandler implements RequestHandlerInterface
     }
 
     /**
-     * @throws InvalidValue
+     * @throws MalformedParameter A parameter built wrong: 400.
+     * @throws InvalidValue When the period ends before it starts: a rule, 422.
      */
     private static function query(ManagementRequest $request): AuditQuery
     {
@@ -65,7 +66,10 @@ final readonly class AuditEventsHandler implements RequestHandlerInterface
         $targetId = self::text($request, 'target_id');
         $outcome = self::text($request, 'outcome');
         if (($targetType === null) !== ($targetId === null)) {
-            throw new InvalidValue("'target_type' and 'target_id' go together.");
+            throw new MalformedParameter(
+                $targetType === null ? 'target_type' : 'target_id',
+                "'target_type' and 'target_id' go together.",
+            );
         }
 
         return new AuditQuery(
@@ -84,7 +88,7 @@ final readonly class AuditEventsHandler implements RequestHandlerInterface
     private static function type(string $value): AuditEventType
     {
         return AuditEventType::tryFrom(trim($value))
-            ?? throw new InvalidValue(sprintf("'%s' is not an audit event type.", trim($value)));
+            ?? throw new MalformedParameter('type', "'type' names an event type that does not exist.");
     }
 
     private static function text(ManagementRequest $request, string $name): ?string
@@ -96,7 +100,7 @@ final readonly class AuditEventsHandler implements RequestHandlerInterface
     }
 
     /**
-     * @throws InvalidValue
+     * @throws MalformedParameter
      */
     private static function instant(ManagementRequest $request, string $name): ?DateTimeImmutable
     {
@@ -108,7 +112,7 @@ final readonly class AuditEventsHandler implements RequestHandlerInterface
         try {
             return new DateTimeImmutable($value);
         } catch (Exception) {
-            throw new InvalidValue(sprintf("'%s' is an RFC 3339 date-time.", $name));
+            throw new MalformedParameter($name, sprintf("'%s' is an RFC 3339 date-time.", $name));
         }
     }
 }

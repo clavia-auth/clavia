@@ -144,7 +144,7 @@ final class ManagementContractTest extends TestCase
             '{"identifier":"https://x.test/","permissions":[{"value":"has space"}]}',
         ));
 
-        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $problem->status);
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $problem->status);
         self::assertSame('/permissions/0/value', $problem->errors[0]['pointer'] ?? null);
         self::assertStringNotContainsString('has space', $problem->errors[0]['detail']);
     }
@@ -153,7 +153,7 @@ final class ManagementContractTest extends TestCase
     {
         $problem = self::problem(self::request(RequestMethodInterface::METHOD_GET, '/api/v1/users?page=0'));
 
-        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $problem->status);
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $problem->status);
         self::assertSame(
             [['parameter' => 'page', 'detail' => 'Must be greater than or equal to 1.']],
             $problem->errors,

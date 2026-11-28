@@ -65,8 +65,8 @@ scope is missing. Machine tokens are never asked: there's nobody to step up.
 ```json
 {
   "type": "about:blank",
-  "title": "Unprocessable Content",
-  "status": 422,
+  "title": "Bad Request",
+  "status": 400,
   "detail": "The request does not satisfy the API's contract.",
   "errors": [
     {"parameter": "per_page", "detail": "Must be less than or equal to 100."},
@@ -84,16 +84,19 @@ The value at fault is never repeated.
 
 | Status | When |
 |---|---|
-| `400` | The request can't be read: unreadable JSON, a parameter sent twice, a value that isn't UTF-8 |
+| `400` | The request was built wrong: it can't be read (unreadable JSON, a parameter sent twice, a value that isn't UTF-8), or the contract refuses it (an unknown field, a wrong type, a value out of range) |
 | `404` | No such resource (`"detail": "No such user."`) |
 | `409` | A conflict with what exists: a name already taken, a system API not to be deleted, a job not finished |
 | `415` | A body that is not `application/json` |
-| `422` | The contract or a rule refuses it: an unknown field, a value out of range, an unknown permission |
+| `422` | The request is well formed, but a rule refuses it: an unknown permission, a breached password, a claim name the protocol reserves. `"detail": "The request is well formed, but a rule refuses it."`, with `errors` pointing at each fault |
 | `429` | A limit was reached, such as the mail sent to one address; nothing was done, so try later |
 | `503` | Something the operation needs can't be reached, such as mail for a password link |
 
-**The contract is strict.** A field or query parameter the reference doesn't describe is refused,
-not ignored (`"Is not allowed."`, `"Is not a parameter of this operation."`). A typo therefore
+So a `400` means fix the request, and a `422` means the request was understood and the server's
+rules or state won't take it. Both carry `errors` where a field or a parameter is at fault.
+
+**The contract is strict.** A field or query parameter the reference doesn't describe is refused
+(`400`), not ignored (`"Is not allowed."`, `"Is not a parameter of this operation."`). A typo therefore
 fails loudly instead of being dropped. Values are taken exactly as typed: `"02"` is not an integer,
 and `"true"` is not a boolean.
 
