@@ -61,6 +61,9 @@ build=(--build)
 [[ -n "${CLAVIA_E2E_IMAGE:-}" ]] && build=(--no-build)
 "${compose[@]}" up -d "${build[@]}" --wait
 "${compose[@]}" exec -T php php bin/clavia seed-dev >"${work}/seed.txt"
+# seed-dev registers the Management API; with CLAVIA_FGA_URL set (e2e.env), this registers the Authorization
+# API beside it, so an API's client can be granted on it (`clients:grant`). Safe to run again.
+"${compose[@]}" exec -T php php bin/clavia management-api:register >"${work}/register.txt"
 
 echo "Up: https://auth.${domain} and https://management.${domain} (127.0.0.1)."
 for name in auth management; do

@@ -39,6 +39,8 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_healthy
+      openfga:
+        condition: service_healthy
 
   migrate:
     <<: *clavia
@@ -66,6 +68,8 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      openfga:
+        condition: service_healthy
 
   caddy:
     image: caddy:2-alpine
@@ -174,6 +178,61 @@ services:
     networks: [clavia]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # OpenFGA, the decision engine of fine-grained authorization, as docker-compose.yml runs it: beside Clavia
+  # with its own database (docs/design/fine-grained-authorization.md §2), reached by Clavia alone with the
+  # preshared key of e2e.env, published on no port, every cache off so every answer is strongly consistent.
+  openfga-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: openfga
+      POSTGRES_PASSWORD: openfga
+      POSTGRES_DB: openfga
+    # Nothing to keep between runs.
+    tmpfs:
+      - /var/lib/postgresql/data
+    networks: [clavia]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openfga -d openfga"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # OpenFGA's schema, brought up to date before the server starts; exits when done.
+  openfga-migrate:
+    image: openfga/openfga:v1.22.1
+    command: migrate
+    environment:
+      OPENFGA_DATASTORE_ENGINE: postgres
+      OPENFGA_DATASTORE_URI: postgres://openfga:openfga@openfga-db:5432/openfga?sslmode=disable
+    depends_on:
+      openfga-db:
+        condition: service_healthy
+    networks: [clavia]
+
+  openfga:
+    image: openfga/openfga:v1.22.1
+    command: run
+    environment:
+      OPENFGA_DATASTORE_ENGINE: postgres
+      OPENFGA_DATASTORE_URI: postgres://openfga:openfga@openfga-db:5432/openfga?sslmode=disable
+      OPENFGA_AUTHN_METHOD: preshared
+      # The same throwaway as CLAVIA_FGA_API_KEY in e2e.env.
+      OPENFGA_AUTHN_PRESHARED_KEYS: e2e-only-openfga-preshared-key
+      OPENFGA_CHECK_QUERY_CACHE_ENABLED: "false"
+      OPENFGA_CHECK_ITERATOR_CACHE_ENABLED: "false"
+      OPENFGA_LIST_OBJECTS_ITERATOR_CACHE_ENABLED: "false"
+      OPENFGA_PLAYGROUND_ENABLED: "false"
+      OPENFGA_LOG_FORMAT: json
+    depends_on:
+      openfga-migrate:
+        condition: service_completed_successfully
+    networks: [clavia]
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=127.0.0.1:8081"]
       interval: 2s
       timeout: 3s
       retries: 30

@@ -25,6 +25,24 @@ else
   exit 1
 fi
 
+# Fine-grained authorization is on: the AuthZEN metadata exists only while a decision engine is named, and the
+# Authorization API was registered by up.sh.
+authzen="$(curl -sS --max-time 10 --cacert "${here}/.work/rootCA.pem" \
+  --connect-to "management.clavia.test:443:127.0.0.1:${port}" \
+  https://management.clavia.test/.well-known/authzen-configuration)"
+if [[ "${authzen}" =~ \"policy_decision_point\":\"https://management\.clavia\.test\" ]]; then
+  echo "ok   the AuthZEN metadata names the decision point"
+else
+  echo "FAIL the AuthZEN metadata does not name the decision point: ${authzen:0:200}"
+  exit 1
+fi
+if grep -q '^Authorization API registered as ' "${here}/.work/register.txt" 2>/dev/null; then
+  echo "ok   the Authorization API is registered"
+else
+  echo "FAIL the Authorization API is not registered (test/e2e/.work/register.txt)"
+  exit 1
+fi
+
 # With the dashboard in the stack: it answers at /dashboard, and a visitor with no session is sent to sign
 # in through Clavia, which proves it reached Clavia's discovery over TLS (its settings are read on first use).
 if [[ -n "${CLAVIA_E2E_DASHBOARD:-}" ]]; then
