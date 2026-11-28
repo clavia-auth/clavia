@@ -7,8 +7,8 @@
 #   caddy       the edge: TLS for auth.{domain} and management.{domain} (ACME), static files,
 #               PHP-FPM over FastCGI, the dashboard behind /dashboard
 #   php         the application, PHP-FPM, from ghcr.io/clavia-auth/clavia
-#   scheduler   bin/clavia's scheduled commands (scheduler.sh): jobs:run and webhooks:deliver every
-#               minute, audit:purge and clients:purge-unused daily
+#   scheduler   bin/clavia's scheduled commands (scheduler.sh): jobs:run, webhooks:deliver and fga:sync
+#               every minute, audit:purge and clients:purge-unused daily
 #   dashboard   the administration dashboard, from ghcr.io/clavia-auth/clavia-dashboard
 #   db, redis   PostgreSQL 17 and Redis 7. Point the settings at managed services instead and
 #               delete these two services (and their depends_on) to keep storage elsewhere.

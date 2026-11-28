@@ -167,6 +167,10 @@ first start, backups and upgrades. In short:
 - **Run bulk jobs every minute** (user imports and exports): `* * * * * bin/clavia jobs:run`.
 - **Deliver webhooks every minute**: `* * * * * bin/clavia webhooks:deliver` sends the audit events
   your webhook endpoints subscribe to, signed, retrying a failure for about a day and a half.
+- **With fine-grained authorization on (`CLAVIA_FGA_URL`), sync identity changes every minute**:
+  `* * * * * bin/clavia fga:sync` sends OpenFGA the role memberships and deletions it has not taken
+  yet (most are sent right after the change); `bin/clavia fga:resync <api>` repairs an API's store
+  that has drifted from Clavia.
 - **Import accounts from an AWS SQS queue**, one account per message (the JSON object of an import
   line; the pool in a `connection` message attribute, the default pool without one):
   `bin/clavia users:import-sqs https://sqs.<region>.amazonaws.com/<account>/<queue>`, run as a

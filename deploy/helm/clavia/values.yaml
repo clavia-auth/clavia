@@ -48,6 +48,9 @@ schedules:
   - name: webhooks
     schedule: "* * * * *"
     command: webhooks:deliver
+  - name: fga-sync
+    schedule: "* * * * *"
+    command: fga:sync
   - name: audit-purge
     schedule: "0 3 * * *"
     command: audit:purge

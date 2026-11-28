@@ -7,5 +7,6 @@ trap 'exit 0' TERM INT
 while true; do
     php bin/clavia jobs:run || echo "scheduler: jobs:run failed" >&2
     php bin/clavia webhooks:deliver || echo "scheduler: webhooks:deliver failed" >&2
+    php bin/clavia fga:sync || echo "scheduler: fga:sync failed" >&2
     sleep 2
 done

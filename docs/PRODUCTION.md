@@ -36,6 +36,7 @@ setting is declared and documented in
   |---|---|---|
   | `bin/clavia jobs:run` | every minute | queued bulk jobs on the users (imports, exports) |
   | `bin/clavia webhooks:deliver` | every minute | the webhook deliveries due, within 50 seconds |
+  | `bin/clavia fga:sync` | every minute | identity changes OpenFGA has not taken yet; nothing while `CLAVIA_FGA_URL` is unset |
   | `bin/clavia audit:purge` | daily | audit events older than `CLAVIA_AUDIT_RETENTION_DAYS` |
   | `bin/clavia clients:purge-unused` | daily | self-registered clients never used |
 
@@ -295,7 +296,7 @@ migrations run over it. Practise it on a copy.
 - [ ] Signing keys are in a KMS, or you accept the postgres backend's warning.
 - [ ] `CLAVIA_SECRET_ENCRYPTION_KEY` is kept apart from the database backups, and a restore has
       been practised.
-- [ ] The scheduled commands run: `jobs:run` and `webhooks:deliver` every minute, `audit:purge`
+- [ ] The scheduled commands run: `jobs:run`, `webhooks:deliver` and `fga:sync` every minute, `audit:purge`
       and `clients:purge-unused` daily.
 - [ ] The Bootstrap client is deleted, and administrators hold a second factor.
 - [ ] Nothing but Caddy (or your Ingress) is reachable from outside: PHP-FPM, PostgreSQL and

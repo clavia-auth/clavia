@@ -5,11 +5,12 @@
 #
 #   * * * * *   bin/clavia jobs:run              queued bulk jobs on the users (imports, exports)
 #   * * * * *   bin/clavia webhooks:deliver      webhook deliveries due, within a 50-second budget
+#   * * * * *   bin/clavia fga:sync              identity changes OpenFGA has not taken yet
 #   0 3 * * *   bin/clavia audit:purge           audit events past CLAVIA_AUDIT_RETENTION_DAYS
 #   15 3 * * *  bin/clavia clients:purge-unused  self-registered clients never used
 #
-# Every command exits when done, and each is safe to run twice at once (jobs and deliveries are
-# claimed with FOR UPDATE SKIP LOCKED), so a slow minute only delays the next. Times are UTC.
+# Every command exits when done, and each is safe to run twice at once (jobs, deliveries and identity
+# changes are claimed with FOR UPDATE SKIP LOCKED), so a slow minute only delays the next. Times are UTC.
 
 set -u
 
@@ -27,6 +28,7 @@ while true; do
     minute=$(date -u +%H%M)
     run jobs:run
     run webhooks:deliver
+    run fga:sync
     [ "$minute" = "0300" ] && run audit:purge
     [ "$minute" = "0315" ] && run clients:purge-unused
 done

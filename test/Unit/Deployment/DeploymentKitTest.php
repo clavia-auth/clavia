@@ -30,7 +30,7 @@ final class DeploymentKitTest extends TestCase
         . '|try_files|@dashboard|redir \* \/dashboard)/';
 
     /** What the console's commands ask to be run on a schedule (their own descriptions say so). */
-    private const array SCHEDULED = ['jobs:run', 'webhooks:deliver', 'audit:purge', 'clients:purge-unused'];
+    private const array SCHEDULED = ['jobs:run', 'webhooks:deliver', 'fga:sync', 'audit:purge', 'clients:purge-unused'];
 
     /**
      * The development Caddyfile's lines that are security rules: the response headers, what is
