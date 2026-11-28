@@ -22,7 +22,7 @@ Where the board cannot be reached (`board.sh` exits 3), count work in progress i
 of the ticket form in both repositories that have no open pull request yet.
 
 ```bash
-for r in clavia clavia-dashboard; do
+for r in clavia clavia-dashboard authzen-php clavia-js-core clavia-js-next clavia-js-effect; do
   open=$(gh api "repos/clavia-auth/$r/pulls?state=open&per_page=100" --jq '[.[].head.ref]')
   gh api "repos/clavia-auth/$r/branches?per_page=100" | jq -r --argjson open "$open" \
     '.[].name | select(test("^(feature|fix|chore|design)/")) | select(. as $b | $open | index($b) | not)'

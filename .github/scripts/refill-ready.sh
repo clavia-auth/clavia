@@ -74,7 +74,7 @@ fi
 
 # Open issues still to do in a milestone, across the repositories on the board, by milestone title.
 declare -A open_in_milestone=()
-for repo in clavia clavia-dashboard authzen-php; do
+for repo in clavia clavia-dashboard authzen-php clavia-js-core clavia-js-next clavia-js-effect; do
   while IFS=$'\t' read -r title open; do
     [ -n "$title" ] || continue
     open_in_milestone["$title"]=$(( ${open_in_milestone["$title"]:-0} + open ))
