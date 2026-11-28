@@ -13,6 +13,7 @@ use Clavia\Adapter\Primary\Http\Access\AccessApiMiddleware;
 use Clavia\Adapter\Primary\Http\Access\AuthZenMetadataHandler;
 use Clavia\Adapter\Primary\Http\Access\EvaluationHandler;
 use Clavia\Adapter\Primary\Http\Access\RelationshipsHandler;
+use Clavia\Adapter\Primary\Http\Access\SearchHandler;
 use Clavia\Adapter\Primary\Http\Auth\BrandingHandler;
 use Clavia\Adapter\Primary\Http\Auth\ConsentHandler;
 use Clavia\Adapter\Primary\Http\Auth\DeviceHandler;
@@ -508,9 +509,12 @@ return static function (Application $app, ContainerInterface $container): void {
             [RequestMethodInterface::METHOD_GET, RequestMethodInterface::METHOD_POST],
             'access.relationships',
         );
-        // AuthZEN 1.0 §6, §7, §9: the decisions, and the decision point's metadata (public).
+        // AuthZEN 1.0 §6–§9: decisions, searches, and the decision point's metadata (public).
         $app->post('/access/v1/evaluation', $access(EvaluationHandler::class), 'access.evaluation');
         $app->post('/access/v1/evaluations', $access(EvaluationHandler::class), 'access.evaluations');
+        $app->post('/access/v1/search/subject', $access(SearchHandler::class), 'access.search.subject');
+        $app->post('/access/v1/search/resource', $access(SearchHandler::class), 'access.search.resource');
+        $app->post('/access/v1/search/action', $access(SearchHandler::class), 'access.search.action');
         $app->get('/.well-known/authzen-configuration', AuthZenMetadataHandler::class, 'access.metadata');
     }
 };

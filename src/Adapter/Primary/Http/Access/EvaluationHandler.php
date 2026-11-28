@@ -91,21 +91,7 @@ final readonly class EvaluationHandler implements RequestHandlerInterface
             self::string($action, 'name'),
             self::string($resource, 'type'),
             self::string($resource, 'id'),
-            $context === null ? [] : self::members($context),
-        );
-    }
-
-    /**
-     * A JSON object's members by name; its own objects stay objects, so the engine reads them as such.
-     *
-     * @return array<string, mixed>
-     */
-    private static function members(stdClass $object): array
-    {
-        /** @var array<string, mixed> JSON members are named by strings, whatever PHP made of digits. */
-        return array_combine(
-            array_map(strval(...), array_keys(get_object_vars($object))),
-            array_values(get_object_vars($object)),
+            $context === null ? [] : AccessRequest::members($context),
         );
     }
 

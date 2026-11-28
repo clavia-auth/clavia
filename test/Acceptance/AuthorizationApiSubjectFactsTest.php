@@ -184,9 +184,79 @@ final class AuthorizationApiSubjectFactsTest extends AcceptanceTestCase
         self::assertSame(400, $forged->getStatusCode());
     }
 
-    private function api(string $identifier): ResourceServer
+    public function testASubjectSearchCountsNoRelationshipThatReadsClaviasFacts(): void
     {
-        $api = $this->apiWithAuthorization($identifier, self::MODEL);
+        $guarded = str_replace(
+            '"clavia.subject.app_metadata.department == department"',
+            '"has(clavia.subject) && clavia.subject.app_metadata.department == department"',
+            self::MODEL,
+        );
+        $api = $this->api('https://documents.test/api/', $guarded);
+        $token = $this->tokenSpeakingFor($api, 'docs-backend', 'evaluate:access search:access');
+        $ada = $this->user()->id->value;
+        $this->metadata('{"department": "finance"}');
+        $this->relate($api, 'document:q3', 'user:' . $ada, Condition::of('same_department', [
+            'department' => 'finance',
+        ]));
+
+        $subjects = $this->searchFor($token, 'subject', [
+            'subject' => ['type' => 'user'],
+            'action' => ['name' => 'viewer'],
+            'resource' => ['type' => 'document', 'id' => 'q3'],
+        ]);
+        $resources = $this->searchFor($token, 'resource', [
+            'subject' => ['type' => 'user', 'id' => $ada],
+            'action' => ['name' => 'viewer'],
+            'resource' => ['type' => 'document'],
+        ]);
+
+        self::assertSame([], $subjects['results'], 'Her facts cannot be known while searching for her.');
+        self::assertArrayNotHasKey('context', $subjects);
+        self::assertSame([['type' => 'document', 'id' => 'q3']], $resources['results'], 'Hers are known here.');
+    }
+
+    public function testASubjectSearchTheEngineCannotEvaluateIsEmptyAndSaysWhy(): void
+    {
+        $api = $this->api('https://documents.test/api/');
+        $token = $this->tokenSpeakingFor($api, 'docs-backend', 'search:access');
+        $this->relate($api, 'document:q3', 'user:' . $this->user()->id->value, Condition::of('same_department', [
+            'department' => 'finance',
+        ]));
+
+        $subjects = $this->searchFor($token, 'subject', [
+            'subject' => ['type' => 'user'],
+            'action' => ['name' => 'viewer'],
+            'resource' => ['type' => 'document', 'id' => 'q3'],
+        ]);
+
+        self::assertSame([], $subjects['results']);
+        self::assertSame(['next_token' => '', 'count' => 0], $subjects['page']);
+        $context = $subjects['context'] ?? null;
+        self::assertIsArray($context);
+        self::assertSame(['status' => 400], array_intersect_key((array) $context['error'], ['status' => 0]));
+    }
+
+    /**
+     * @param array<string, mixed> $search
+     *
+     * @return array<array-key, mixed>
+     */
+    private function searchFor(string $token, string $kind, array $search): array
+    {
+        $response = $this->sendAccess(
+            RequestMethodInterface::METHOD_POST,
+            '/access/v1/search/' . $kind,
+            $token,
+            json_encode($search, JSON_THROW_ON_ERROR),
+        );
+        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+
+        return self::decoded($response);
+    }
+
+    private function api(string $identifier, string $model = self::MODEL): ResourceServer
+    {
+        $api = $this->apiWithAuthorization($identifier, $model);
         $this->stores[] = $this->storeOf($api);
 
         return $api;

@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Clavia\Adapter\Primary\Http\Access;
 
+use Clavia\Application\Authorization\Search\SearchAccess;
 use Fig\Http\Message\StatusCodeInterface;
 use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\ResponseInterface;
@@ -43,6 +44,11 @@ final readonly class AuthZenMetadataHandler implements RequestHandlerInterface
                 'policy_decision_point' => $this->origin,
                 'access_evaluation_endpoint' => $this->origin . '/access/v1/evaluation',
                 'access_evaluations_endpoint' => $this->origin . '/access/v1/evaluations',
+                'search_subject_endpoint' => $this->origin . '/access/v1/search/subject',
+                'search_resource_endpoint' => $this->origin . '/access/v1/search/resource',
+                'search_action_endpoint' => $this->origin . '/access/v1/search/action',
+                // Clavia's own: a search considers at most this many results (OpenFGA's list maximum).
+                'search_max_results' => SearchAccess::MAX_RESULTS,
             ],
             StatusCodeInterface::STATUS_OK,
             ['Cache-Control' => sprintf('public, max-age=%d', self::CACHE_MAX_AGE)],

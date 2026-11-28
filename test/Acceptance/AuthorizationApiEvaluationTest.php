@@ -321,6 +321,10 @@ final class AuthorizationApiEvaluationTest extends AcceptanceTestCase
             'policy_decision_point' => 'https://management.clavia.test',
             'access_evaluation_endpoint' => 'https://management.clavia.test/access/v1/evaluation',
             'access_evaluations_endpoint' => 'https://management.clavia.test/access/v1/evaluations',
+            'search_subject_endpoint' => 'https://management.clavia.test/access/v1/search/subject',
+            'search_resource_endpoint' => 'https://management.clavia.test/access/v1/search/resource',
+            'search_action_endpoint' => 'https://management.clavia.test/access/v1/search/action',
+            'search_max_results' => 1000,
         ], self::json($response));
         self::assertStringContainsString('max-age=', $response->getHeaderLine('Cache-Control'));
 

@@ -17,10 +17,6 @@ use Clavia\Application\Port\AccessCheck;
 use Clavia\Application\Port\DecisionEngine;
 use Clavia\Application\Port\DecisionEngineFailed;
 use Clavia\Domain\Authorization\AuthorizationSettings;
-use Clavia\Domain\Authorization\ObjectRef;
-use Clavia\Domain\Authorization\ObjectType;
-use Clavia\Domain\Authorization\Relation;
-use Clavia\Domain\Authorization\ReservedType;
 use Clavia\Domain\Authorization\SubjectRef;
 use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\ResourceServer\ResourceServer;
@@ -158,33 +154,17 @@ final readonly class EvaluateAccess
      */
     private function prepare(AuthorizationSettings $settings, EvaluationRequest $question): AccessCheck
     {
-        if (array_key_exists('clavia', $question->context)) {
-            throw EvaluationRefused::claviaContext();
-        }
-        $subjectKind = ReservedType::tryFrom($question->subjectType);
-        if ($subjectKind === null || ! $subjectKind->isSubjectOnly()) {
-            throw EvaluationRefused::subjectKind();
-        }
-        try {
-            $subject = ObjectRef::of(ObjectType::fromString($question->subjectType), $question->subjectId);
-            $resource = ObjectRef::of(ObjectType::fromString($question->resourceType), $question->resourceId);
-            $relation = Relation::fromString($question->action);
-        } catch (InvalidValue) {
-            throw EvaluationRefused::malformed();
-        }
+        QuestionRules::context($question->context);
         $model = $settings->model;
-        if (
-            ! $model->declares($subject->type)
-            || ! $model->declares($resource->type)
-            || ReservedType::of($resource->type)?->isSubjectOnly() === true
-        ) {
-            throw EvaluationRefused::unknownType();
-        }
-        if (! $model->relates($resource->type, $relation)) {
-            throw EvaluationRefused::unknownRelation();
-        }
+        $subjectType = QuestionRules::subjectType($model, $question->subjectType);
+        $resourceType = QuestionRules::resourceType($model, $question->resourceType);
+        $relation = QuestionRules::relation($model, $resourceType, $question->action);
 
-        return AccessCheck::of($resource, $relation, SubjectRef::object($subject));
+        return AccessCheck::of(
+            QuestionRules::object($resourceType, $question->resourceId),
+            $relation,
+            SubjectRef::object(QuestionRules::object($subjectType, $question->subjectId)),
+        );
     }
 
     /**

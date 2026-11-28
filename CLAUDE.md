@@ -342,7 +342,7 @@ decision engine (`DecisionEngine`, `AccessCheck`, `DecisionEngineFailed`).
 
 Design in `docs/design/fine-grained-authorization.md` (AuthZEN over OpenFGA, #133), built in slices:
 the engine (#135), authorization on an API (#136), the identity feed (#137), relationships for APIs
-(#139), then AuthZEN evaluation (#138). Search (#140) is to come.
+(#139), AuthZEN evaluation (#138), then AuthZEN search (#140).
 
 - **OpenFGA runs beside Clavia**, its own container and PostgreSQL, reached by Clavia alone with a
   preshared key (`CLAVIA_FGA_URL`, `CLAVIA_FGA_API_KEY`; unset, the feature is off and
@@ -435,8 +435,19 @@ the engine (#135), authorization on an API (#136), the identity feed (#137), rel
   alone, `condition_failed`, the batch asked again question by question. Reasons (`no_relation`,
   `subject_inactive`, `unknown_type`, `condition_failed`) only to an API with `denial_reasons`; the
   engine not answering is `503`. `GET /.well-known/authzen-configuration` (`AuthZenMetadataHandler`,
-  public, an hour) names `https://management.{domain}` and the two endpoints; Caddy answers it on
+  public, an hour) names `https://management.{domain}`, the five endpoints and `search_max_results`;
+  Caddy answers it on
   `management.*` and `404` on `auth.*`.
+- **AuthZEN search** (#140, §5.5): `POST /access/v1/search/subject|resource|action` (`search:access`,
+  `SearchAccess`), the evaluation's rules (`QuestionRules`). Subjects through `listUsers()` (`user` or
+  `client`), deactivated or unknown accounts and deleted clients left out as the page fills; there
+  `context.clavia` is an empty map, so a condition guarded with `has(clavia.subject)` does not count and
+  an unguarded one makes OpenFGA refuse: no results and `context.error` (fail closed). Resources through
+  `listObjects()` with the subject's facts; actions: every relation of the type
+  (`AuthorizationModel::relationsOf()`) in one batch, in the model's order. A subject Clavia does not know
+  has neither, the engine not asked. Sorted by id, capped at 1,000 (`search_max_results` in the metadata),
+  paged statelessly: `page.limit` 1–1,000 (50), `page.next_token` an offset with the search's digest
+  (another search's or a changed search's token is `400`), empty on the last page; no `total`.
 
 ## Flows
 

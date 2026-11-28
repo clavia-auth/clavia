@@ -254,6 +254,19 @@ OpenFGA's Read API reads by object, or by type and subject, but not a whole type
 - **Action search** (`/search/action`): every relation of the resource's type checked in one batch.
 - Each answer capped and paged as in §2.
 
+Decided in slice 6 (#140): OpenFGA's list endpoints evaluate every conditional relationship and refuse
+the whole listing (`validation_error`) when one lacks a parameter. A subject search cannot know each
+candidate's facts, so `context.clavia` is an **empty map** there: a condition that starts with
+`has(clavia.subject)` is false and its relationship does not count, as §2 asks; an unguarded one makes
+the engine refuse, and the search answers no results with `context.error` saying why (failing closed),
+as does any listing the engine refuses. Results are sorted by id, capped at 1,000 (OpenFGA's own list
+maximum; `search_max_results` in the metadata, Clavia's own field, which AuthZEN clients ignore), and
+paged statelessly: `page.limit` 1 to 1,000 (50 by default), `page.next_token` an opaque offset with a
+digest of the search, so a token used on another search, or a search changed between pages, is `400`
+(§8.2). Removed subjects are filtered as a page is filled, so `page.total` is not given (optional in
+§8.2.2). A subject Clavia does not know has no resources and no actions, the engine not asked. Action
+search answers in the model's order of relations, a relation the engine cannot evaluate not held.
+
 ## 6. Interfaces
 
 - **AuthZEN** on `management.{domain}`: the five endpoints and `/.well-known/authzen-configuration`
