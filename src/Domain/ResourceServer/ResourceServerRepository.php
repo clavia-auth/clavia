@@ -44,4 +44,12 @@ interface ResourceServerRepository
      * @return Page<ResourceServer>
      */
     public function page(PageRequest $request): Page;
+
+    /**
+     * Every API with fine-grained authorization set up, switched on or off: those with a store of
+     * their own in the decision engine, oldest first.
+     *
+     * @return list<ResourceServer>
+     */
+    public function withAuthorization(): array;
 }

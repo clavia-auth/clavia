@@ -114,6 +114,17 @@ final readonly class PhpDbResourceServerRepository implements ResourceServerRepo
         return new Page(array_map($this->hydrate(...), $rows), max(0, (int) $total), $request);
     }
 
+    #[\Override]
+    public function withAuthorization(): array
+    {
+        /** @var list<ResourceServerRow> $rows */
+        $rows = $this->database->fetchAll(
+            'SELECT ' . self::COLUMNS . ' FROM resource_servers WHERE fga_store_id IS NOT NULL ORDER BY created_at, id',
+        );
+
+        return array_map($this->hydrate(...), $rows);
+    }
+
     private function write(ResourceServer $resourceServer): void
     {
         $authorization = $resourceServer->authorization;

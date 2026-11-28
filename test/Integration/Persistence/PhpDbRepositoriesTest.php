@@ -11,33 +11,25 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Integration\Persistence;
 
-use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientLogoRepository;
-use Clavia\Domain\Client\ClientLogoRepository;
-use ClaviaTest\Support\Contract\ClientLogoRepositoryContract;
-use ClaviaTest\Support\Contract\ClientRegistrationRepositoryContract;
-use ClaviaTest\Support\Contract\InitialAccessTokenRepositoryContract;
-use ClaviaTest\Support\Contract\ProvisionedAccountRepositoryContract;
-use ClaviaTest\Support\Contract\ProvisioningTokenRepositoryContract;
-use ClaviaTest\Support\Contract\ScimGroupRepositoryContract;
-use ClaviaTest\Support\Contract\UserJobRepositoryContract;
-use ClaviaTest\Support\Contract\WebhookEndpointRepositoryContract;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\Database;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbAuthorizationCodeRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientGrantRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientLogoRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientRegistrationRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbClientRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbConnectionRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbConsentRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbExternalIdentityRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbIdentityFeedOutbox;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbInitialAccessTokenRepository;
-use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbProvisionedAccountRepository;
-use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbProvisioningTokenRepository;
-use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbScimGroupRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbMfaFactorRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbPasskeyRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbProvisionedAccountRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbProvisioningTokenRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbRecoveryCodeRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbResourceServerRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbRoleRepository;
+use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbScimGroupRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbTransactionManager;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbUserJobRepository;
 use Clavia\Adapter\Secondary\Persistence\PhpDb\PhpDbUserRepository;
@@ -52,17 +44,16 @@ use Clavia\Domain\Authentication\Passkey\Passkey;
 use Clavia\Domain\Authentication\Passkey\PasskeyId;
 use Clavia\Domain\Authentication\Passkey\PasskeyName;
 use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
+use Clavia\Domain\Authorization\IdentityFeedOutbox;
 use Clavia\Domain\Client\Client;
 use Clavia\Domain\Client\ClientAuthMethod;
 use Clavia\Domain\Client\ClientId;
+use Clavia\Domain\Client\ClientLogoRepository;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\ClientType;
 use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\Client\Registration\ClientRegistrationRepository;
 use Clavia\Domain\Client\Registration\InitialAccessTokenRepository;
-use Clavia\Domain\Provisioning\ProvisionedAccountRepository;
-use Clavia\Domain\Provisioning\ProvisioningTokenRepository;
-use Clavia\Domain\Provisioning\ScimGroupRepository;
 use Clavia\Domain\Client\ResponseType;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Consent\ConsentRepository;
@@ -73,6 +64,9 @@ use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AuthorizationCode;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
+use Clavia\Domain\Provisioning\ProvisionedAccountRepository;
+use Clavia\Domain\Provisioning\ProvisioningTokenRepository;
+use Clavia\Domain\Provisioning\ScimGroupRepository;
 use Clavia\Domain\Rbac\RoleRepository;
 use Clavia\Domain\ResourceServer\ClientGrantRepository;
 use Clavia\Domain\ResourceServer\ResourceServer;
@@ -81,21 +75,30 @@ use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\Digest;
 use Clavia\Domain\Shared\Url;
+use Clavia\Domain\Webhook\WebhookEndpointRepository;
 use ClaviaTest\Support\Contract\AuthorizationCodeRepositoryContract;
+use ClaviaTest\Support\Contract\ClientLogoRepositoryContract;
+use ClaviaTest\Support\Contract\ClientRegistrationRepositoryContract;
 use ClaviaTest\Support\Contract\ClientRepositoryContract;
 use ClaviaTest\Support\Contract\ConnectionRepositoryContract;
 use ClaviaTest\Support\Contract\ConsentRepositoryContract;
 use ClaviaTest\Support\Contract\ExternalIdentityRepositoryContract;
+use ClaviaTest\Support\Contract\IdentityFeedOutboxContract;
+use ClaviaTest\Support\Contract\InitialAccessTokenRepositoryContract;
 use ClaviaTest\Support\Contract\MfaRepositoriesContract;
 use ClaviaTest\Support\Contract\PasskeyRepositoryContract;
+use ClaviaTest\Support\Contract\ProvisionedAccountRepositoryContract;
+use ClaviaTest\Support\Contract\ProvisioningTokenRepositoryContract;
 use ClaviaTest\Support\Contract\ResourceServerRepositoryContract;
 use ClaviaTest\Support\Contract\RoleRepositoryContract;
+use ClaviaTest\Support\Contract\ScimGroupRepositoryContract;
+use ClaviaTest\Support\Contract\UserJobRepositoryContract;
 use ClaviaTest\Support\Contract\UserRepositoryContract;
+use ClaviaTest\Support\Contract\WebhookEndpointRepositoryContract;
 use ClaviaTest\Support\Fake\SeededRandomSource;
 use ClaviaTest\Support\IntegrationTestCase;
 use ClaviaTest\Support\TestEnvironment;
 use ClaviaTest\Support\TestStorage;
-use Clavia\Domain\Webhook\WebhookEndpointRepository;
 use DateTimeImmutable;
 use LogicException;
 use PHPUnit\Framework\Attributes\Test;
@@ -112,6 +115,7 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
     use ClientLogoRepositoryContract;
     use AuthorizationCodeRepositoryContract;
     use ResourceServerRepositoryContract;
+    use IdentityFeedOutboxContract;
     use MfaRepositoriesContract;
     use PasskeyRepositoryContract;
     use ExternalIdentityRepositoryContract;
@@ -249,6 +253,12 @@ final class PhpDbRepositoriesTest extends IntegrationTestCase
             TestStorage::database(),
             new PhpDbTransactionManager(TestStorage::database()),
         );
+    }
+
+    #[\Override]
+    protected function identityFeedOutbox(): IdentityFeedOutbox
+    {
+        return new PhpDbIdentityFeedOutbox(TestStorage::database());
     }
 
     #[\Override]
