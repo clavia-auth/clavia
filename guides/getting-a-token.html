@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Getting a token · Clavia Management API · 0.5.1</title>
-  <meta name="description" content="Getting a token: a guide to the Clavia Management API, for Clavia 0.5.1.">
+  <title>Getting a token · Clavia Management API · 0.6.0</title>
+  <meta name="description" content="Getting a token: a guide to the Clavia Management API, for Clavia 0.6.0.">
   <link rel="icon" href="../clavia-icon.svg" type="image/svg+xml">
   <!--
     One guide (docs/guides/getting-a-token.md, served beside this page), rendered in the browser: marked
@@ -173,7 +173,7 @@
     <span class="spacer"></span>
     <label class="muted hide-narrow" for="clavia-release">Release</label>
     <select id="clavia-release" aria-label="Clavia release">
-      <option value="">0.5.1</option>
+      <option value="">0.6.0</option>
     </select>
     <a class="muted hide-narrow" href="https://github.com/clavia-auth/clavia">GitHub</a>
     <button type="button" class="theme-switch" id="clavia-theme" aria-label="Switch between light and dark">
@@ -199,6 +199,7 @@
         <li><a href="paging-and-search.html">Paging and search</a></li>
         <li><a href="dpop.html">DPoP-bound tokens</a></li>
         <li><a href="registering-clients.html">Registering clients</a></li>
+        <li><a href="fine-grained-authorization.html">Fine-grained authorization</a></li>
       </ul>
       <h2>Reference</h2>
       <ul>
@@ -292,7 +293,7 @@
           const option = document.createElement('option');
           option.value = version === latest ? '../' : '../v' + version + '/';
           option.textContent = version === latest ? version + ' (latest)' : version;
-          option.selected = version === '0.5.1';
+          option.selected = version === '0.6.0';
           return option;
         }));
       } catch {

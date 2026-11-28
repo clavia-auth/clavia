@@ -16,8 +16,8 @@ A scope is a verb on a resource:
 | `delete` | Deleting, or revoking a token. |
 
 The resources are `users`, `clients`, `resource_servers` (the APIs tokens are issued for), `roles`,
-`connections`, `audit_events`, `signing_keys`, `initial_access_tokens`, `provisioning_tokens` and
-`webhooks`. Not every verb exists for every resource: the reference lists them all, and so does
+`connections`, `audit_events`, `signing_keys`, `initial_access_tokens`, `provisioning_tokens`,
+`webhooks` and `relationships` (an API's fine-grained authorization data). Not every verb exists for every resource: the reference lists them all, and so does
 `$CLAVIA management-api:scopes`.
 
 A few scopes are worth knowing before you grant them:
@@ -29,6 +29,10 @@ A few scopes are worth knowing before you grant them:
 - **`update:users_app_metadata`** is needed, on top of `update:users`, to send `app_metadata` in
   `PATCH /api/v1/users/{user_id}`. Application metadata feeds claims and authorization, so writing
   it is granting access. Without the scope, the whole request is refused before anything changes.
+- **`read:relationships`** reads an API's relationships
+  (`GET /api/v1/resource-servers/{resource_server_id}/authorization/relationships`) and tries its
+  decisions (`POST …/authorization/evaluation`) about anyone. It is the API's data about people, so
+  `read:resource_servers`, which shows the model, never suffices.
 - **`create:user_tickets`** mails a person a link to choose a password
   (`POST /api/v1/users/{user_id}/password-reset`). It reaches their mailbox, not their record.
 - **`read:audit_events`** is needed beside the webhook scopes to create an endpoint, change its
