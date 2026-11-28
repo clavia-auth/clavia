@@ -342,7 +342,8 @@ decision engine (`DecisionEngine`, `AccessCheck`, `DecisionEngineFailed`).
 
 Design in `docs/design/fine-grained-authorization.md` (AuthZEN over OpenFGA, #133), built in slices:
 the engine (#135), authorization on an API (#136), the identity feed (#137), relationships for APIs
-(#139), AuthZEN evaluation (#138), then AuthZEN search (#140).
+(#139), AuthZEN evaluation (#138), AuthZEN search (#140), then operators' reads (#242) for the
+dashboard.
 
 - **OpenFGA runs beside Clavia**, its own container and PostgreSQL, reached by Clavia alone with a
   preshared key (`CLAVIA_FGA_URL`, `CLAVIA_FGA_API_KEY`; unset, the feature is off and
@@ -448,6 +449,16 @@ the engine (#135), authorization on an API (#136), the identity feed (#137), rel
   has neither, the engine not asked. Sorted by id, capped at 1,000 (`search_max_results` in the metadata),
   paged statelessly: `page.limit` 1–1,000 (50), `page.next_token` an offset with the search's digest
   (another search's or a changed search's token is `400`), empty on the last page; no `total`.
+- **Operators' reads** (#242, §5.6): the dashboard speaks for no API, so the Management API answers for
+  it from the store of the API in the path (`AuthorizedApi`: no store `404`, no engine `409`; on or off
+  alike): `GET …/authorization/models` (`read:resource_servers`, `ReadModelVersions`,
+  `DecisionEngine::readModels()`: newest first, `in_force`, `created_at` from the ULID, the model as the
+  engine keeps it, 1–20 a page); `GET …/authorization/relationships?object=` (`read:relationships`,
+  `ReadApiRelationships`, the Authorization API's read and refusals); `POST …/authorization/evaluation`
+  (`read:relationships`, `TryDecision`, `EvaluateAccess::forOperator()`: every step of an API's
+  question, a refusal `422` at the member, the reason on every denial). Both lists are
+  `{items, next_page_token}` (a refused token `400`); nothing is audited; the engine not answering is
+  `503`.
 
 ## Flows
 

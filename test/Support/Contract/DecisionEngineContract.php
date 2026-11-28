@@ -14,6 +14,7 @@ namespace ClaviaTest\Support\Contract;
 use Clavia\Application\Port\AccessCheck;
 use Clavia\Application\Port\DecisionEngine;
 use Clavia\Application\Port\DecisionEngineFailed;
+use Clavia\Application\Port\ModelVersion;
 use Clavia\Domain\Authorization\AuthorizationModel;
 use Clavia\Domain\Authorization\AuthorizationModelId;
 use Clavia\Domain\Authorization\Condition;
@@ -26,6 +27,7 @@ use Clavia\Domain\Authorization\Tuple;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use stdClass;
 
 /**
  * What every {@see DecisionEngine} must do: OpenFGA itself, and the double the use cases are
@@ -135,6 +137,41 @@ abstract class DecisionEngineContract extends TestCase
 
         self::assertFalse($first->equals($second));
         self::assertFalse($this->store()->equals($store));
+    }
+
+    public function testTheModelVersionsAreReadNewestFirstAPageAtATime(): void
+    {
+        $store = $this->store();
+        $written = [];
+        foreach (range(1, 3) as $ignored) {
+            $written[] = $this->engine()->writeModel($store, self::model())->value;
+        }
+
+        $first = $this->engine()->readModels($store, 2);
+        self::assertCount(2, $first->models);
+        self::assertNotSame('', $first->next);
+        $second = $this->engine()->readModels($store, 2, $first->next);
+        self::assertSame('', $second->next);
+
+        $read = array_map(
+            static fn (ModelVersion $version): string => $version->id->value,
+            [...$first->models, ...$second->models],
+        );
+        self::assertSame(array_reverse($written), $read);
+        /** @var mixed $model */
+        $model = json_decode($first->models[0]->json, false, 128, JSON_THROW_ON_ERROR);
+        self::assertInstanceOf(stdClass::class, $model);
+        self::assertSame('1.1', $model->schema_version ?? null);
+        // `this` is an empty object, never a list.
+        self::assertStringContainsString('"this":{}', str_replace(' ', '', $first->models[0]->json));
+    }
+
+    public function testAStoreWithoutAModelHasNoVersions(): void
+    {
+        $page = $this->engine()->readModels($this->store(), 10);
+
+        self::assertSame([], $page->models);
+        self::assertSame('', $page->next);
     }
 
     public function testARelationNamedOnTheObjectIsHeld(): void
@@ -614,6 +651,7 @@ abstract class DecisionEngineContract extends TestCase
             ),
             static fn (): mixed => $engine->readByObject($store, ObjectRef::fromString('team:sales')),
             static fn (): mixed => $engine->readPage($store, ObjectRef::fromString('team:sales'), 10),
+            static fn (): mixed => $engine->readModels($store, 10),
         ];
 
         foreach ($calls as $call) {

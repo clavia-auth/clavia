@@ -23,7 +23,8 @@ use Clavia\Domain\Shared\InvalidValue;
  * step 3), for an evaluation and a search alike: a subject that is a person (`user`) or an application
  * (`client`) the model declares; a resource of a type the model declares and that can be related to;
  * an action that is a relation of that type; and no `context.clavia`, which is Clavia's to write.
- * Each refusal is an {@see EvaluationRefused}: a `400`.
+ * Each refusal is an {@see EvaluationRefused} pointing at the member of an evaluation at fault: a
+ * `400` to an API's client, a `422` to an operator (§5.6).
  */
 final readonly class QuestionRules
 {
@@ -36,11 +37,11 @@ final readonly class QuestionRules
     {
         $kind = ReservedType::tryFrom($type);
         if ($kind === null || ! $kind->isSubjectOnly()) {
-            throw EvaluationRefused::subjectKind();
+            throw EvaluationRefused::subjectKind()->at('/subject/type');
         }
         $declared = ObjectType::fromString($type);
         if (! $model->declares($declared)) {
-            throw EvaluationRefused::unknownType();
+            throw EvaluationRefused::unknownType()->at('/subject/type');
         }
 
         return $declared;
@@ -52,10 +53,10 @@ final readonly class QuestionRules
         try {
             $declared = ObjectType::fromString($type);
         } catch (InvalidValue) {
-            throw EvaluationRefused::malformed();
+            throw EvaluationRefused::malformed()->at('/resource/type');
         }
         if (! $model->declares($declared) || ReservedType::of($declared)?->isSubjectOnly() === true) {
-            throw EvaluationRefused::unknownType();
+            throw EvaluationRefused::unknownType()->at('/resource/type');
         }
 
         return $declared;
@@ -67,22 +68,26 @@ final readonly class QuestionRules
         try {
             $relation = Relation::fromString($action);
         } catch (InvalidValue) {
-            throw EvaluationRefused::malformed();
+            throw EvaluationRefused::malformed()->at('/action/name');
         }
         if (! $model->relates($type, $relation)) {
-            throw EvaluationRefused::unknownRelation();
+            throw EvaluationRefused::unknownRelation()->at('/action/name');
         }
 
         return $relation;
     }
 
-    /** @throws EvaluationRefused */
-    public static function object(ObjectType $type, string $id): ObjectRef
+    /**
+     * @param string $pointer Where the id is: `/subject/id`, `/resource/id`.
+     *
+     * @throws EvaluationRefused
+     */
+    public static function object(ObjectType $type, string $id, string $pointer = ''): ObjectRef
     {
         try {
             return ObjectRef::of($type, $id);
         } catch (InvalidValue) {
-            throw EvaluationRefused::malformed();
+            throw EvaluationRefused::malformed()->at($pointer);
         }
     }
 
@@ -94,7 +99,7 @@ final readonly class QuestionRules
     public static function context(array $context): void
     {
         if (array_key_exists('clavia', $context)) {
-            throw EvaluationRefused::claviaContext();
+            throw EvaluationRefused::claviaContext()->at('/context/clavia');
         }
     }
 }

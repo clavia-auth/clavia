@@ -8,6 +8,17 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ### Added
 
+- **An API's authorization, read by operators** (#242, part of #133,
+  [design](docs/design/fine-grained-authorization.md) §5.6). Three Management API operations answer
+  from the store of the API in the path, whether its authorization is on or off: `GET
+  …/authorization/models` lists the model versions, newest first, with the one in force marked
+  (`read:resource_servers`). `GET …/authorization/relationships?object=type:id` reads one object's
+  relationships, and `POST …/authorization/evaluation` tries a decision with every check an API's own
+  question goes through, a denial always saying which kind it is. Both need the new
+  `read:relationships` scope.
+  - **Upgrading**: run `management-api:register` so the Management API gets the new scope, then
+    give it to your administrators' role. The dashboard asks for every scope its operator holds.
+
 - **Fine-grained authorization on an API** (#136, part of #133,
   [design](docs/design/fine-grained-authorization.md) §5.1). `PUT
   /api/v1/resource-servers/{id}/authorization` (`update:resource_servers`) turns it on with an OpenFGA

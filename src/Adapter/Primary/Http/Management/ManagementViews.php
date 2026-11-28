@@ -633,7 +633,7 @@ final class ManagementViews
         ];
     }
 
-    private static function instant(DateTimeImmutable $instant): string
+    public static function instant(DateTimeImmutable $instant): string
     {
         return $instant->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z');
     }

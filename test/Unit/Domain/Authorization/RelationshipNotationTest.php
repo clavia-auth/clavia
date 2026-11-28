@@ -146,4 +146,13 @@ final class RelationshipNotationTest extends TestCase
             }
         }
     }
+
+    public function testAModelVersionSaysWhenItWasMade(): void
+    {
+        // 1469918176385 ms after the epoch, the ULID specification's own example.
+        self::assertSame(
+            '2016-07-30T22:36:16.385+00:00',
+            AuthorizationModelId::fromString('01ARYZ6S41TSV4RRFFQ69G5FAV')->createdAt()->format('Y-m-d\TH:i:s.vP'),
+        );
+    }
 }

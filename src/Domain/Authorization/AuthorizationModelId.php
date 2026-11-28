@@ -12,6 +12,9 @@ declare(strict_types=1);
 namespace Clavia\Domain\Authorization;
 
 use Clavia\Domain\Shared\InvalidValue;
+use DateTimeImmutable;
+use DateTimeZone;
+use LogicException;
 
 /**
  * One version of an authorization model. Versions are immutable: writing a model makes a new one.
@@ -22,6 +25,8 @@ use Clavia\Domain\Shared\InvalidValue;
  */
 final readonly class AuthorizationModelId
 {
+    private const string CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+
     private const string PATTERN = '/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/D';
 
     private function __construct(public string $value)
@@ -38,6 +43,25 @@ final readonly class AuthorizationModelId
         }
 
         return new self($value);
+    }
+
+    /**
+     * When the engine made the version: a ULID's first ten characters are its millisecond since the
+     * Unix epoch, in Crockford's base 32 (https://github.com/ulid/spec).
+     */
+    public function createdAt(): DateTimeImmutable
+    {
+        $milliseconds = 0;
+        foreach (str_split(substr($this->value, 0, 10)) as $character) {
+            $milliseconds = $milliseconds * 32 + (int) strpos(self::CROCKFORD, $character);
+        }
+        $instant = DateTimeImmutable::createFromFormat(
+            'U.v',
+            sprintf('%d.%03d', intdiv($milliseconds, 1000), $milliseconds % 1000),
+            new DateTimeZone('UTC'),
+        );
+
+        return $instant ?: throw new LogicException('A ULID\'s time is an instant.');
     }
 
     public function equals(self $other): bool

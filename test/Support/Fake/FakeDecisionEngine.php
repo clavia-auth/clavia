@@ -14,6 +14,8 @@ namespace ClaviaTest\Support\Fake;
 use Clavia\Application\Port\AccessCheck;
 use Clavia\Application\Port\DecisionEngine;
 use Clavia\Application\Port\DecisionEngineFailed;
+use Clavia\Application\Port\ModelPage;
+use Clavia\Application\Port\ModelVersion;
 use Clavia\Application\Port\TuplePage;
 use Clavia\Domain\Authorization\AuthorizationModel;
 use Clavia\Domain\Authorization\AuthorizationModelId;
@@ -58,6 +60,9 @@ final class FakeDecisionEngine implements DecisionEngine
      */
     private array $models = [];
 
+    /** @var array<string, array<string, string>> Per store, each model's JSON, oldest first. */
+    private array $modelTexts = [];
+
     /** @var array<string, array<string, Tuple>> Per store, the tuples by their notation. */
     private array $tuples = [];
 
@@ -101,6 +106,7 @@ final class FakeDecisionEngine implements DecisionEngine
         }
         $store = StoreId::fromString($this->nextUlid());
         $this->models[$store->value] = [];
+        $this->modelTexts[$store->value] = [];
         $this->tuples[$store->value] = [];
 
         return $store;
@@ -111,7 +117,7 @@ final class FakeDecisionEngine implements DecisionEngine
     {
         $this->reachable();
         $this->storeOf($store);
-        unset($this->models[$store->value], $this->tuples[$store->value]);
+        unset($this->models[$store->value], $this->modelTexts[$store->value], $this->tuples[$store->value]);
     }
 
     #[\Override]
@@ -122,8 +128,25 @@ final class FakeDecisionEngine implements DecisionEngine
         $relations = self::relationsOf($model);
         $id = AuthorizationModelId::fromString($this->nextUlid());
         $this->models[$store->value][$id->value] = $relations;
+        $this->modelTexts[$store->value][$id->value] = $model->json;
 
         return $id;
+    }
+
+    #[\Override]
+    public function readModels(StoreId $store, int $pageSize, string $continuation = ''): ModelPage
+    {
+        $this->reachable();
+        $this->storeOf($store);
+        $offset = $this->offsetIn($store, $continuation);
+        $versions = [];
+        foreach (array_reverse($this->modelTexts[$store->value], true) as $id => $json) {
+            $versions[] = new ModelVersion(AuthorizationModelId::fromString($id), $json);
+        }
+        $size = min($pageSize, self::MAX_MODEL_PAGE);
+        $next = $offset + $size < count($versions) ? base64_encode($store->value . ':' . ($offset + $size)) : '';
+
+        return new ModelPage(array_slice($versions, $offset, $size), $next);
     }
 
     #[\Override]
@@ -278,15 +301,7 @@ final class FakeDecisionEngine implements DecisionEngine
     {
         $this->reachable();
         $this->storeOf($store);
-        $offset = 0;
-        if ($continuation !== '') {
-            $decoded = base64_decode($continuation, true);
-            $pattern = '/^' . preg_quote($store->value, '/') . ':(\d+)$/D';
-            if ($decoded === false || preg_match($pattern, $decoded, $m) !== 1) {
-                throw DecisionEngineFailed::refused('invalid_continuation_token');
-            }
-            $offset = (int) $m[1];
-        }
+        $offset = $this->offsetIn($store, $continuation);
         $all = array_values(array_filter(
             $this->tuples[$store->value],
             static fn (Tuple $tuple): bool => $tuple->object->equals($object),
@@ -564,6 +579,21 @@ final class FakeDecisionEngine implements DecisionEngine
     }
 
     /** A ULID the engine might have issued: increasing, like OpenFGA's. */
+    /** Where a page starts: 0, or what a token this double gave for the store says. */
+    private function offsetIn(StoreId $store, string $continuation): int
+    {
+        if ($continuation === '') {
+            return 0;
+        }
+        $decoded = base64_decode($continuation, true);
+        $pattern = '/^' . preg_quote($store->value, '/') . ':(\d+)$/D';
+        if ($decoded === false || preg_match($pattern, $decoded, $m) !== 1) {
+            throw DecisionEngineFailed::refused('invalid_continuation_token');
+        }
+
+        return (int) $m[1];
+    }
+
     private function nextUlid(): string
     {
         return '01' . str_pad((string) ++$this->ids, 24, '0', STR_PAD_LEFT);

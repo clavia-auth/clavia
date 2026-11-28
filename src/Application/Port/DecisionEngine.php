@@ -37,6 +37,9 @@ interface DecisionEngine
     /** The most tuples one {@see self::write()} takes, writes and deletes together (OpenFGA's default). */
     public const int MAX_WRITES = 100;
 
+    /** The most model versions one {@see self::readModels()} page holds (OpenFGA's largest page). */
+    public const int MAX_MODEL_PAGE = 50;
+
     /**
      * A new, empty store.
      *
@@ -65,6 +68,18 @@ interface DecisionEngine
      * @throws DecisionEngineFailed When the engine refuses the model (`refusal` says why).
      */
     public function writeModel(StoreId $store, AuthorizationModel $model): AuthorizationModelId;
+
+    /**
+     * One page of the store's model versions, newest first, each as the engine keeps it: what an
+     * operator reads of an API's history (docs/design/fine-grained-authorization.md §5.6).
+     * `continuation` is the token a previous page gave, '' for the first.
+     *
+     * @param positive-int $pageSize At most {@see self::MAX_MODEL_PAGE}, OpenFGA's largest page.
+     *
+     * @throws DecisionEngineFailed When the engine gives no answer, or refuses the token
+     *                              (`refusal` then says so).
+     */
+    public function readModels(StoreId $store, int $pageSize, string $continuation = ''): ModelPage;
 
     /**
      * Relationships written and deleted, all of them or none: a tuple the model does not allow,

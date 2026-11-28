@@ -89,6 +89,9 @@ use Clavia\Adapter\Primary\Http\Management\ProvisioningTokensHandler;
 use Clavia\Adapter\Primary\Http\Management\ManagementApiMiddleware;
 use Clavia\Adapter\Primary\Http\Management\ManagementContract;
 use Clavia\Adapter\Primary\Http\Management\ManagementResponder;
+use Clavia\Adapter\Primary\Http\Management\AuthorizationEvaluationHandler;
+use Clavia\Adapter\Primary\Http\Management\AuthorizationModelsHandler;
+use Clavia\Adapter\Primary\Http\Management\AuthorizationRelationshipsHandler;
 use Clavia\Adapter\Primary\Http\Management\ResourceServerAuthorizationHandler;
 use Clavia\Adapter\Primary\Http\Management\ResourceServerHandler;
 use Clavia\Adapter\Primary\Http\Management\ResourceServersHandler;
@@ -294,7 +297,11 @@ use Clavia\Application\Management\Provisioning\GrantClientAccess;
 use Clavia\Application\Management\Provisioning\RegisterAuthorizationApi;
 use Clavia\Application\Management\Provisioning\RegisterManagementApi;
 use Clavia\Application\Management\Provisioning\SystemApiRegistration;
+use Clavia\Application\Management\ResourceServers\AuthorizedApi;
 use Clavia\Application\Management\ResourceServers\ConfigureAuthorization;
+use Clavia\Application\Management\ResourceServers\ReadApiRelationships;
+use Clavia\Application\Management\ResourceServers\ReadModelVersions;
+use Clavia\Application\Management\ResourceServers\TryDecision;
 use Clavia\Application\Management\ResourceServers\DeleteResourceServer;
 use Clavia\Application\Management\ResourceServers\DisableAuthorization;
 use Clavia\Application\Management\ResourceServers\ReadResourceServers;
@@ -795,6 +802,10 @@ final class ConfigProvider
                     UpdateResourceServer::class => Container\UpdateResourceServerFactory::class,
                     DeleteResourceServer::class => Container\DeleteResourceServerFactory::class,
                     ConfigureAuthorization::class => Container\ConfigureAuthorizationFactory::class,
+                    AuthorizedApi::class => Container\AuthorizedApiFactory::class,
+                    ReadModelVersions::class => Container\ReadModelVersionsFactory::class,
+                    ReadApiRelationships::class => Container\ReadApiRelationshipsFactory::class,
+                    TryDecision::class => Container\TryDecisionFactory::class,
                     StoreReconciler::class => Container\StoreReconcilerFactory::class,
                     SyncIdentityFeed::class => Container\SyncIdentityFeedFactory::class,
                     ResyncStore::class => Container\ResyncStoreFactory::class,
@@ -983,6 +994,10 @@ final class ConfigProvider
                     ResourceServerHandler::class => Container\ResourceServerHandlerFactory::class,
                     ResourceServerAuthorizationHandler::class
                         => Container\ResourceServerAuthorizationHandlerFactory::class,
+                    AuthorizationModelsHandler::class => Container\AuthorizationModelsHandlerFactory::class,
+                    AuthorizationRelationshipsHandler::class
+                        => Container\AuthorizationRelationshipsHandlerFactory::class,
+                    AuthorizationEvaluationHandler::class => Container\AuthorizationEvaluationHandlerFactory::class,
                     RolesHandler::class => Container\RolesHandlerFactory::class,
                     RoleHandler::class => Container\RoleHandlerFactory::class,
                     RoleUsersHandler::class => Container\RoleUsersHandlerFactory::class,

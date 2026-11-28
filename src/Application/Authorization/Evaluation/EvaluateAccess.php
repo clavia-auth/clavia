@@ -66,13 +66,39 @@ final readonly class EvaluateAccess
     public function one(ClientId $caller, EvaluationRequest $question): Decision
     {
         [$api, $settings] = $this->apis->of($caller);
+
+        return $this->told($settings, $this->decide($api, $settings, $question));
+    }
+
+    /**
+     * One question an operator tries on the API they name (docs/design/fine-grained-authorization.md
+     * §5.6): every step above, from that API's store, switched on or off, and the reason for a denial
+     * always given, whatever the API's `denial_reasons`.
+     *
+     * @throws EvaluationRefused When it cannot be asked.
+     * @throws DecisionEngineFailed
+     */
+    public function forOperator(
+        ResourceServer $api,
+        AuthorizationSettings $settings,
+        EvaluationRequest $question,
+    ): Decision {
+        return $this->decide($api, $settings, $question);
+    }
+
+    /**
+     * @throws EvaluationRefused
+     * @throws DecisionEngineFailed
+     */
+    private function decide(ResourceServer $api, AuthorizationSettings $settings, EvaluationRequest $question): Decision
+    {
         $check = $this->prepare($settings, $question);
         $context = $this->contextFor($api, $question);
         if ($context === null) {
-            return $this->told($settings, Decision::deny(DenialReason::SubjectInactive));
+            return Decision::deny(DenialReason::SubjectInactive);
         }
 
-        return $this->told($settings, $this->answer($settings, self::with($check, $context)));
+        return $this->answer($settings, self::with($check, $context));
     }
 
     /**
@@ -161,9 +187,9 @@ final readonly class EvaluateAccess
         $relation = QuestionRules::relation($model, $resourceType, $question->action);
 
         return AccessCheck::of(
-            QuestionRules::object($resourceType, $question->resourceId),
+            QuestionRules::object($resourceType, $question->resourceId, '/resource/id'),
             $relation,
-            SubjectRef::object(QuestionRules::object($subjectType, $question->subjectId)),
+            SubjectRef::object(QuestionRules::object($subjectType, $question->subjectId, '/subject/id')),
         );
     }
 
