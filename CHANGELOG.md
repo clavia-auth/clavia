@@ -18,7 +18,9 @@ changes for a deployment that does not set it, except the `400` described under 
 - **Schedule `bin/clavia fga:sync` every minute**, whether or not you use the feature. With Compose,
   take this release's `scheduler.sh`; with Helm, `helm upgrade` brings the CronJob.
 - **Run `bin/clavia management-api:register`** for the new Management API scope,
-  `read:relationships`, then give it to your administrators' role.
+  `read:relationships`, then give it to your administrators' role, **before upgrading the
+  dashboard**: the dashboard 0.6.0 asks for that scope, and a Clavia without it refuses its sign-in
+  (`invalid_scope`).
 - **A client of the Management API** that treats `422` as "my request is wrong" must treat `400` the
   same way (see Changed). The dashboard does, 0.5 included.
 - **To turn fine-grained authorization on**, follow `docs/PRODUCTION.md` §8.
