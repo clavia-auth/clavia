@@ -1,6 +1,6 @@
-# Design: SDKs for Next.js and PHP applications
+# Design: SDKs for JavaScript and PHP applications
 
-**Status:** proposed · **Date:** 2026-11-28 · **Issue:** clavia-auth/clavia#224 ·
+**Status:** proposed · **Date:** 2026-11-28 (revised: the JavaScript repositories) · **Issue:** clavia-auth/clavia#224 ·
 **Specifications:** OpenID Connect Core 1.0 (§3.1, §5.3), OpenID Connect Discovery 1.0,
 OpenID Connect RP-Initiated Logout 1.0, OpenID Connect Back-Channel Logout 1.0 (§2.4–§2.8),
 RFC 6749 §10.4, RFC 7636, RFC 9126 (PAR), RFC 9207 (`iss` in the authorization response),
@@ -22,8 +22,9 @@ signed out at random, under load, in production only.
 
 The dashboard already solved this for itself (clavia-dashboard, `src/core/auth`): a backend for
 frontend on `oauth4webapi`, the session on the server behind an opaque handle, refresh under a
-lock held across processes, back-channel logout, step-up. This design turns that into SDKs, and
-adds the PHP side the same way.
+lock held across processes, back-channel logout, step-up. This design turns that into SDKs: a
+framework-free JavaScript core, published on its own, with a Next.js package and an Effect package
+on top of it, and the PHP side the same way.
 
 Auth0's open-source libraries are the bar for ergonomics: configure from a few settings, mount
 the routes in one line, ask `getSession()` and `getAccessToken()` anywhere on the server. They
@@ -33,15 +34,23 @@ sign-out on `GET`), the SDK keeps the rule, and says why in §2.
 
 ### Goals
 
-- **`@clavia/nextjs`**: sign-in for a Next.js App Router application as a backend for frontend.
-  Routes in one line, `session()` and `accessToken()` on the server, refresh serialised across
-  processes, back-channel logout, RP-initiated logout, step-up (RFC 9470), PAR, opt-in DPoP.
-- **`@clavia/api`**: access-token checks for any JavaScript server that speaks the Fetch API's
-  `Request` (a Next.js route handler, Hono, Bun): JWT access tokens (RFC 9068), opaque ones by
-  introspection (RFC 7662), the DPoP binding (RFC 9449 §7), RFC 6750 and RFC 9470 challenges,
-  RFC 9728 metadata.
-- **`@clavia/management`**: a typed Management API client generated from
-  `docs/openapi/management-api.yaml`, with its own client-credentials token.
+- **`@clavia-auth/core`** (repository `clavia-js-core`): the framework-free core every JavaScript
+  SDK stands on, on the Fetch API's `Request` and `Response`, WebCrypto and Promises. Three entry
+  points:
+  - `@clavia-auth/core`: sign-in as a backend for frontend (§5.1–§5.5) behind ports for the store,
+    the lock and the clock, refresh serialised, back-channel logout, RP-initiated logout, step-up,
+    PAR, opt-in DPoP;
+  - `@clavia-auth/core/api`: access-token checks for any server speaking `Request` (Hono, Bun, a
+    Next.js route handler): JWT access tokens (RFC 9068), opaque ones by introspection (RFC 7662),
+    the DPoP binding (RFC 9449 §7), RFC 6750 and RFC 9470 challenges, RFC 9728 metadata;
+  - `@clavia-auth/core/management`: a typed Management API client generated from
+    `docs/openapi/management-api.yaml`, with its own client-credentials token.
+- **`@clavia-auth/next`** (repository `clavia-js-next`): the core adapted to a Next.js App Router
+  application. Routes in one line, `session()` and `accessToken()` on the server, cookies, the proxy.
+- **`@clavia-auth/effect`** (repository `clavia-js-effect`): the core with an Effect-native surface,
+  for applications built with [Effect](https://effect.website): a `ClaviaClient` service provided by
+  a `Layer` from `Config`, the core's errors as `Data.TaggedError`s, `Schema` for claims, and an
+  `HttpApi` middleware checking access tokens.
 - **`clavia/sdk`** (PHP): the same three on PSR-7, PSR-15, PSR-17 and PSR-18, framework-free:
   `Clavia\Sdk\Application` (sign-in), `Clavia\Sdk\Api` (token checks), `Clavia\Sdk\Management`.
 - **Standards only.** Each SDK configures itself from the issuer's discovery document and uses
@@ -52,10 +61,11 @@ sign-out on `GET`), the SDK keeps the rule, and says why in §2.
 
 ### Not in scope
 
-- **Framework packages** (Laravel, Symfony, Express). The PHP SDK is PSR-only; a framework
-  package is a thin layer someone can add later without changing it.
+- **Other framework packages** (Laravel, Symfony, Express, Remix). The PHP SDK is PSR-only, and
+  the JavaScript core is framework-free: a framework package is a thin layer on either, as
+  `@clavia-auth/next` and `@clavia-auth/effect` are, added later without changing the core.
 - **Browser and mobile SDKs** (a single-page application holding tokens, React Native, Swift,
-  Kotlin). A browser application uses a backend for frontend, which is what `@clavia/nextjs` is;
+  Kotlin). A browser application uses a backend for frontend, which is what `@clavia-auth/next` is;
   native applications are another design.
 - **Several APIs per session.** A Clavia access token names one API (`audience`), and a refresh
   ignores `audience`. A session asks for one API at sign-in; a second API is a later design
@@ -70,11 +80,13 @@ sign-out on `GET`), the SDK keeps the rule, and says why in §2.
 |---|---|---|
 | Protocol layer (JavaScript) | **`oauth4webapi` and `jose`**, as the dashboard uses them; no protocol code of our own | Both are maintained, certified relying-party code on WebCrypto, with PAR, DPoP and RFC 9207 already. Auth0 writes its own layer (`@auth0/auth0-auth-js`) over the same libraries; one more layer to maintain buys nothing with one framework to serve |
 | Protocol layer (PHP) | **Our own, small**, on `web-token/jwt-library` (verification and JWKs only, as the server uses it) and PSR-18, limited to the flows of §5 | There is no maintained PHP relying-party library that does PAR, DPoP, RFC 9207 and back-channel logout: `league/oauth2-client` is OAuth 2.0 only and leaves the ID token to the application; the OpenID Connect ones are unmaintained or incomplete. The server already shows the rules can be written from the RFCs and tested |
-| Packages | **Two repositories**, `clavia-auth/clavia-js` (npm workspaces: `@clavia/nextjs`, `@clavia/api`, `@clavia/management`) and `clavia-auth/clavia-php` (one Composer package, `clavia/sdk`, three namespaces) | One repository per language keeps one CI, one release train and one example stack. JavaScript splits into packages because their dependencies differ (Next.js, nothing, `openapi-fetch`); PHP has no such cost, and one package is one version to state |
-| Framework-free core (JavaScript) | **Inside `@clavia/nextjs`**, as the dashboard has it (`core/` with ports, `adapters/`), not a published package | Auth0 publishes `@auth0/auth0-server-js` for every framework; we have one. The split is kept in the code, so publishing the core later is a move, not a rewrite |
+| Packages (JavaScript) | **Three repositories, one package each**: `clavia-js-core` (`@clavia-auth/core`, with the `/api` and `/management` entry points), `clavia-js-next` (`@clavia-auth/next`), `clavia-js-effect` (`@clavia-auth/effect`). The scope is the organisation's | A framework package depends on a framework and moves at its pace; the core must not. One repository each gives each its own CI, its own versions and its own issues, so a Next.js release never waits on Effect and the reverse. Token checks and the Management client stay in the core as entry points: they share its discovery, its JWKS cache and its errors, and one more repository each would buy a release train for a few files |
+| Framework-free core (JavaScript) | **Published** (`@clavia-auth/core`), on Promises, the Fetch API and WebCrypto; not written in Effect | Two frameworks stand on it from the first release, and an application with neither (Hono, Express, a worker) can use it directly. Written in Effect, it would make every Next.js user carry Effect for a surface of Promises; the Effect package gives Effect users their own surface instead |
+| Packages (PHP) | **One repository**, `clavia-auth/clavia-php`: one Composer package, `clavia/sdk`, three namespaces | PHP has no framework split to pay for here (the SDK is PSR-only), and one package is one version to state |
+| The Effect package | **An adapter on the core, nothing more**: no protocol logic, `effect` and `@effect/platform` as peer dependencies | It exists so an Effect application keeps typed errors, layers, interruption and `Schema` end to end, which wrapping Promises in `Effect.tryPromise` loses. Every rule stays in the core, tested once |
 | Where the session lives | **On the server, in a store** (Redis, or the application's own through a port); the browser holds a 256-bit handle in one cookie, the store keys it by its SHA-256, the record is sealed (AES-256-GCM, the digest as associated data) | Refresh needs one lock per session across processes (next row), and a cookie cannot be locked: two requests carrying the same cookie both refresh. A handle never changes when the tokens do, so a server component, which cannot set a cookie, can still refresh. Auth0's default (the whole session in an encrypted cookie) works only because Auth0 offers a reuse interval; question 1 |
 | Refresh | **Serialised per session**: under the store's lock, read the session again, refresh only if it is still due, save, release. A refresh refused (`invalid_grant`) ends the session. Refreshed a minute ahead of `exp` | The server spends a refresh token on every use and revokes the family on replay (RFC 6749 §10.4, RFC 9700 §4.14.2). Re-reading under the lock means the requests that waited take the new tokens instead of spending the old one |
-| Tokens and the browser | **Never.** No route hands an access token to the browser; `session()` returns the person and the scopes, never a token; `accessToken()` is server-only (`server-only` import) | The point of a backend for frontend (Browser-Based Apps §6.1). Auth0's `/auth/access-token` route and its client-side `getAccessToken()` put the token where an XSS reads it |
+| Tokens and the browser | **Never.** No route hands an access token to the browser; `session()` returns the person and the scopes, never a token; `accessToken()` is server-only (`@clavia-auth/next` imports `server-only`) | The point of a backend for frontend (Browser-Based Apps §6.1). Auth0's `/auth/access-token` route and its client-side `getAccessToken()` put the token where an XSS reads it |
 | Client components | **No client package.** A server component reads the session and passes the person down as props | A `useUser()` hook needs a profile route the browser polls: one more endpoint, one more cache to keep fresh, for what a server component already has |
 | Authorization request | **PAR whenever discovery names the endpoint**, then the authorization URL carries `client_id` and `request_uri` alone. PKCE S256, `state`, `nonce` always; RFC 9207's `iss` checked when `authorization_response_iss_parameter_supported` | The request's parameters never reach the address bar, and a client registered with `require_pushed_authorization_requests` works with no setting |
 | Client authentication | `client_secret_basic` (the default) or `client_secret_post`, as registered. No public client | A server keeps a secret. What Clavia supports (`ClientAuthMethod`) |
@@ -90,10 +102,10 @@ sign-out on `GET`), the SDK keeps the rule, and says why in §2.
 | DPoP (API) | Verified as Clavia verifies its own resources (RFC 9449 §7, `CheckSenderConstraint`): `htu` from the **configured public URL**, never `Host`; `ath`; the key's thumbprint against `cnf.jkt`; `jti` once per key through a replay-cache port. A bound token as `Bearer` is refused | The `Host` header is the caller's; a proof checked against it proves nothing |
 | Management API client | **Generated from the document of a Clavia release**: TypeScript by `openapi-typescript` and `openapi-fetch` (the dashboard's own), PHP by a small generator in the repository (one method per `operationId`, Psalm array shapes); CI fails when the generated code differs from the document | The document is the contract (CLAUDE.md, *Management API*). Hand-written resources drift; a generic generator (OpenAPI Generator) brings a JVM and code nobody would write |
 | Management token | Client credentials for the Management API's `audience`, cached until a minute before `exp`, one request in flight per process; a `401` takes a new token once | A machine token has no refresh token. A second fetch at once is waste, not a replay, so a process-local guard is enough |
-| Errors | Typed: `SignInRefused` with a reason (`unknown_attempt`, `access_denied`, `provider_error`, `unreachable`), `StepUpRequired`, `TokenRefused` (with the challenge to send), `ManagementError` (the RFC 9457 document: `status`, `type`, `title`, `errors[]`). A provider's `error_description` never reaches a page | The server's rule for external sign-in: a provider's words never reach the page. The application decides what to show; the SDK's default page says nothing more than "sign-in failed" |
+| Errors | Typed: `SignInRefused` with a reason (`unknown_attempt`, `access_denied`, `provider_error`, `unreachable`), `StepUpRequired`, `TokenRefused` (with the challenge to send), `ManagementError` (the RFC 9457 document: `status`, `type`, `title`, `errors[]`); a closed set, each with a `_tag`, exported as one union (`ClaviaError`). A provider's `error_description` never reaches a page | The server's rule for external sign-in: a provider's words never reach the page. The application decides what to show; the SDK's default page says nothing more than "sign-in failed". A closed, tagged set lets `@clavia-auth/effect` map each one to a `Data.TaggedError` and a `switch` be exhaustive |
 | Configuration | Explicit options, each with an environment default the server never reads: `CLAVIA_ISSUER`, `CLAVIA_CLIENT_ID`, `CLAVIA_CLIENT_SECRET`, `CLAVIA_APP_URL`, `CLAVIA_SESSION_KEY` (32 bytes, base64url) | The dashboard's names. The issuer is the single source of every endpoint (Discovery §4); nothing else is configured by URL |
-| Runtimes | `@clavia/nextjs`: Node.js, Next.js 16 and later (`proxy.ts`). `@clavia/api`, `@clavia/management`: any runtime with `fetch` and WebCrypto. PHP 8.3 and later | Next.js 16's proxy runs on Node.js, and a Redis store needs it; WebCrypto everywhere keeps the edge open later. PHP 8.3 is the oldest release with security support through 2027 |
-| Versions | Semantic versions of their own; each release states the oldest Clavia release it is tested against, and CI runs both that release and `edge` | An SDK and the server ship apart; the matrix says when an SDK starts needing a newer server |
+| Runtimes | `@clavia-auth/core`: any runtime with `fetch` and WebCrypto (Node.js 22 and later, Bun, Deno, workers); its Redis store needs Node.js. `@clavia-auth/next`: Next.js 16 and later (`proxy.ts`) on Node.js. `@clavia-auth/effect`: Effect 3. PHP 8.3 and later | Next.js 16's proxy runs on Node.js, and a Redis store needs it; WebCrypto everywhere keeps the edge open later. PHP 8.3 is the oldest release with security support through 2027 |
+| Versions | Semantic versions of their own, per package; `@clavia-auth/next` and `@clavia-auth/effect` state the range of `@clavia-auth/core` they support (a peer dependency); each release states the oldest Clavia release it is tested against, and CI runs both that release and `edge` | An SDK and the server ship apart; the matrix says when an SDK starts needing a newer server |
 
 ## 3. Settings
 
@@ -120,7 +132,9 @@ ends it first when it is shorter.
 ## 4. Model
 
 The same shape in both languages: a core that holds the rules and speaks through ports, and
-adapters. Names below are TypeScript; PHP uses the same names as classes and interfaces.
+adapters. In JavaScript the core is its own package (`@clavia-auth/core`) and the adapters are
+packages on it; in PHP they are namespaces of one package. Names below are TypeScript; PHP uses the
+same names as classes and interfaces.
 
 **Values.** `TokenSet` (access token, its expiry, refresh token or null, ID token, scopes, DPoP
 key or null), `Person` (`sub`, `name`, `email`, `email_verified`, `picture`), `Session` (person,
@@ -157,10 +171,14 @@ the package, so an application's own store (a database, Memcached) runs the same
 **Core.** `Authentication` (begin and complete a sign-in, `session()`, `accessToken()`, sign
 out, back-channel logout), `Provider` (the protocol, on `oauth4webapi` or the PHP core: discovery
 cached for its `max-age`, at most a day; JWKS fetched again on an unknown `kid`, at most once a
-minute), `TokenVerifier` (§2's API rules), `ManagementClient`.
+minute), `TokenVerifier` (§2's API rules, `@clavia-auth/core/api`), `ManagementClient`
+(`@clavia-auth/core/management`).
 
-Nothing in the core reads a request, a cookie or the environment: the Next.js and PSR-15 layers
-translate, as the server's primary adapters do.
+Nothing in the core reads a cookie or the environment: it takes and returns the Fetch API's
+`Request` and `Response`, or plain values. The Next.js package, the Effect package and the PSR-15
+layer translate, as the server's primary adapters do. Its ports are the extension points: the
+Effect package provides a lock built on a `Semaphore` over the store's, and an application its own
+store.
 
 ## 5. Flows
 
@@ -213,7 +231,7 @@ token is checked (§7); refused, `400` `invalid_request`. Then every session of 
 
 ### 5.5 Step-up
 
-An API (the Management API, or one using `@clavia/api`) answers `401` with
+An API (the Management API, or one using `@clavia-auth/core/api`) answers `401` with
 `error="insufficient_user_authentication"` and `acr_values`. The helper the application calls
 throws `StepUpRequired(acrValues, maxAge?)`; the application sends the browser to
 `{base}/sign-in?acr_values=…&return_to=…`. Clavia raises the session with a factor and the new
@@ -246,7 +264,16 @@ a `429` carries its `Retry-After`; nothing is retried but a `401` on an expired 
 
 ## 6. Interfaces
 
-**`@clavia/nextjs`**
+**`@clavia-auth/core`**, for an application with no framework package
+
+```ts
+const clavia = createClavia({ store: redisStore(redis), audience: "https://reports.example.com" });
+const response = await clavia.handle(request);     // the four routes, Fetch API Request to Response
+const session = await clavia.session(request);     // { person, scopes, data } | null
+const token = await clavia.accessToken(request);   // string | null; throws StepUpRequired
+```
+
+**`@clavia-auth/next`**
 
 ```ts
 // lib/clavia.ts
@@ -265,13 +292,28 @@ const token = await clavia.accessToken();          // string | null; throws Step
 const response = await clavia.fetch(url, init);    // the token attached, DPoP when on
 ```
 
-**`@clavia/api`**
+**`@clavia-auth/core/api`**
 
 ```ts
 const verifier = createVerifier({ issuer, audience, url: "https://reports.example.com" });
 const token = await verifier.verify(request, { scopes: ["read:reports"], acr: "mfa" });
 // on TokenRefused: return error.response()
 export const GET = verifier.metadataRoute(); // /.well-known/oauth-protected-resource (RFC 9728)
+```
+
+**`@clavia-auth/effect`**
+
+```ts
+const ClaviaLive = ClaviaClient.layer({ store: redisStore(redis) });   // issuer and client from Config
+
+const report = Effect.gen(function* () {
+  const clavia = yield* ClaviaClient;
+  const token = yield* clavia.accessToken;          // fails with StepUpRequired | SignInRefused, typed
+  return yield* fetchReport(token);
+});
+
+// an HttpApi: the token checked, the AccessToken in context, refusals as the core renders them
+const Authenticated = ClaviaAuthentication.middleware({ audience, scopes: ["read:reports"] });
 ```
 
 **`clavia/sdk`** (PHP)
@@ -291,7 +333,7 @@ each repository runs it from `ghcr.io/clavia-auth/clavia:<release>` and `:edge`
 (`CLAVIA_E2E_IMAGE`), and registers its example applications through the Management API as the
 scenarios do. The last slice links the SDKs from `README.md` and the published guides.
 
-**The dashboard** moves onto `@clavia/nextjs` and `@clavia/management` (slice 5) and deletes its
+**The dashboard** moves onto `@clavia-auth/next` and `@clavia-auth/core/management` (slice 6) and deletes its
 own `core/auth`: the first user of the SDK is the one it was taken from.
 
 ## 7. Security rules
@@ -320,13 +362,14 @@ own `core/auth`: the first user of the SDK is the one it was taken from.
   is never accepted as a bearer token.
 - **A provider's error text never reaches a page**, and nothing logs a token, a code, a secret
   or a proof: errors are logged by kind and code.
-- **Secrets stay on the server**: `@clavia/nextjs` and `@clavia/management` import `server-only`;
-  the PHP SDK has no browser side.
+- **Secrets stay on the server**: `@clavia-auth/next` imports `server-only`, and the core refuses
+  to run in a browser; the PHP SDK has no browser side.
 - **Every outbound call goes to the issuer's endpoints**, over https, following no redirect.
 
 ## 8. Tests
 
-- **Unit**, in each repository: the core against in-memory ports and a fake provider; every
+- **Unit**, in each repository: the core against in-memory ports and a fake provider (the
+  adapters against the core's fakes, which `@clavia-auth/core` publishes for them); every
   refusal of §5 and §7 with its reason; the ID-token, logout-token, access-token and DPoP checks
   against tokens signed by keys the test holds, attacks included (`alg: none`, a header naming
   another algorithm, a foreign `kid`, a wrong `typ`, an `htu` from `Host`).
@@ -337,7 +380,8 @@ own `core/auth`: the first user of the SDK is the one it was taken from.
   Next.js application and an example PHP application (PSR-15 on PHP's built-in server), driven by
   Playwright: sign in, refresh past an access token's lifetime, the parallel-refresh test above,
   sign out, back-channel logout when an operator ends the session, step-up against an API whose
-  `mfa_policy` is `required`, DPoP. An example API with each `@clavia/api` and `Clavia\Sdk\Api`.
+  `mfa_policy` is `required`, DPoP. An example API with each `@clavia-auth/core/api` and
+  `Clavia\Sdk\Api`, and an example Effect application with `@clavia-auth/effect`.
 - **Conformance**: the OpenID Foundation's relying-party plans (Basic RP, Config RP, and the
   Back-Channel RP logout profile) run nightly in each repository against the suite, as
   `conformance/` does for the server, with a baseline.
@@ -348,38 +392,47 @@ own `core/auth`: the first user of the SDK is the one it was taken from.
 
 Each slice is a pull request in the repository named.
 
-1. **`@clavia/management`** (clavia-js, new). The workspace, its CI and release workflow, the
-   generated client, the client-credentials token, `ManagementError`. *Done when* `0.1.0` is
-   published from a tag, an end-to-end test against the stack creates and lists a user, and CI
-   fails when the client and the document part.
-2. **`@clavia/nextjs`: sign-in** (clavia-js). The core and its ports, the Redis and in-memory
-   stores with their contracts, sealing, `routes()` (sign-in, callback, sign-out), `session()`,
-   `requireSession()`, `accessToken()` with the serialised refresh, PAR, the example application.
-   *Done when* the example signs in, survives the parallel-refresh test, and signs out at Clavia.
-3. **`@clavia/nextjs`: sessions ended elsewhere and step-up** (clavia-js). Back-channel logout
-   with `ReplayCache`, `StepUpRequired`, `acr_values` at sign-in, `proxy()`, `fetch()`. *Done
-   when* an operator ending a person's sessions at Clavia ends the application's, and an MFA-only
-   API sends the person through a step-up and back.
-4. **`@clavia/nextjs`: DPoP** (clavia-js). *Done when* a client registered with
+1. **The core's toolchain and `@clavia-auth/core/management`** (clavia-js-core). The package, its
+   CI and release workflow, the generated client, the client-credentials token, `ManagementError`.
+   *Done when* `0.1.0` is published from a tag, an end-to-end test against the stack creates and
+   lists a user, and CI fails when the client and the document part.
+2. **The core's sign-in** (clavia-js-core). `Authentication` and its ports, the Redis and
+   in-memory stores with their contracts, sealing, `handle()` (sign-in, callback, sign-out),
+   `session()`, `accessToken()` with the serialised refresh, PAR, the published fakes. *Done when*
+   an example on the core alone signs in, survives the parallel-refresh test, and signs out at
+   Clavia.
+3. **`@clavia-auth/next`: sign-in** (clavia-js-next). The package and its CI on the core,
+   `routes()`, `session()`, `requireSession()`, `accessToken()` with cookies, the example
+   application. *Done when* the example passes slice 2's scenarios through Next.js.
+4. **Sessions ended elsewhere and step-up** (clavia-js-core, then clavia-js-next). Back-channel
+   logout with `ReplayCache`, `StepUpRequired`, `acr_values` at sign-in; in Next.js, `proxy()` and
+   `fetch()`. *Done when* an operator ending a person's sessions at Clavia ends the application's,
+   and an MFA-only API sends the person through a step-up and back.
+5. **DPoP** (clavia-js-core, then clavia-js-next). *Done when* a client registered with
    `dpop_bound_access_tokens` signs in, refreshes and calls userinfo with `dpop: true`.
-5. **The dashboard on the SDK** (clavia-dashboard). `@clavia/nextjs` and `@clavia/management`
-   replace `src/core/auth`, the identity provider and the generated contract. *Done when* the
-   dashboard's Playwright suite passes unchanged and its own sign-in code is gone.
-6. **`@clavia/api`** (clavia-js). JWT and introspection, the DPoP binding, the challenges, RFC
-   9728 metadata. *Done when* the example API accepts a JWT, an opaque and a DPoP-bound token from
-   the stack, and refuses each attack of §8 with the right challenge.
-7. **`clavia/sdk`: the core and `Clavia\Sdk\Api`** (clavia-php, new). The repository, its CI and
+6. **The dashboard on the SDK** (clavia-dashboard). `@clavia-auth/next` and
+   `@clavia-auth/core/management` replace `src/core/auth`, the identity provider and the generated
+   contract. *Done when* the dashboard's Playwright suite passes unchanged and its own sign-in code
+   is gone.
+7. **`@clavia-auth/core/api`** (clavia-js-core). JWT and introspection, the DPoP binding, the
+   challenges, RFC 9728 metadata. *Done when* the example API accepts a JWT, an opaque and a
+   DPoP-bound token from the stack, and refuses each attack of §8 with the right challenge.
+8. **`@clavia-auth/effect`** (clavia-js-effect). The package and its CI, `ClaviaClient` and its
+   layer, tagged errors, `Schema` claims, the lock on a `Semaphore`, the `HttpApi` middleware on
+   `@clavia-auth/core/api`. *Done when* an example Effect application signs in and refreshes in
+   parallel without a replay, and an Effect API passes slice 7's checks.
+9. **`clavia/sdk`: the core and `Clavia\Sdk\Api`** (clavia-php, new). The repository, its CI and
    Packagist release; discovery, JWKS, the PSR-15 middleware, introspection, DPoP. *Done when*
-   the example PHP API passes what slice 6's does.
-8. **`clavia/sdk`: `Clavia\Sdk\Application`** (clavia-php). The sign-in flows of §5, the Redis
-   store with its contract, the PSR-15 routes and middleware. *Done when* the example PHP
-   application passes slices 2 and 3's scenarios.
-9. **`clavia/sdk`: `Clavia\Sdk\Management`** (clavia-php). The generator and the client. *Done
-   when* it passes slice 1's test, and CI fails when it and the document part.
-10. **Conformance and documentation** (both repositories, and this one). The relying-party plans
+   the example PHP API passes what slice 7's does.
+10. **`clavia/sdk`: `Clavia\Sdk\Application`** (clavia-php). The sign-in flows of §5, the Redis
+    store with its contract, the PSR-15 routes and middleware. *Done when* the example PHP
+    application passes slices 2 and 4's scenarios.
+11. **`clavia/sdk`: `Clavia\Sdk\Management`** (clavia-php). The generator and the client. *Done
+    when* it passes slice 1's test, and CI fails when it and the document part.
+12. **Conformance and documentation** (every SDK repository, and this one). The relying-party plans
     nightly with a baseline; a README per package; `README.md` and the published guides here
-    linking them, and `CLAUDE.md` naming the repositories. *Done when* both repositories pass
-    Basic RP and Config RP, and a newcomer reaches a signed-in example from Clavia's README.
+    linking them, and `CLAUDE.md` naming the repositories. *Done when* the core and the PHP SDK
+    pass Basic RP and Config RP, and a newcomer reaches a signed-in example from Clavia's README.
 
 ## Open questions
 
@@ -388,10 +441,16 @@ Each slice is a pull request in the repository named.
    safely. *Recommendation*: not in the first release. Later, a cookie store allowed only with
    `refresh: false`, for applications that call no API and live by their ID token's session;
    refused at start otherwise. The server keeps its rule.
-2. **Names.** The npm scope `@clavia` and the Packagist vendor `clavia` must be claimed before
-   slice 1. *Recommendation*: claim both now, under the organisation's accounts.
+2. **Names.** The npm scope `@clavia-auth`, the organisation's name, is taken by the JavaScript
+   packages; the Packagist vendor is still to settle. *Recommendation*: claim the npm organisation
+   `clavia-auth` now, and use the same vendor on Packagist (`clavia-auth/sdk`) rather than
+   `clavia`, so every package is found under one name.
 3. **PHP native sessions.** Many PHP applications keep state in `$_SESSION`. Its file handler
    locks a session across requests, but the Redis handlers do not by default, so the refresh rule
    would hold for some deployments and not others. *Recommendation*: no `$_SESSION` store in the
    first release; the port and its contract let an application write one knowingly.
 4. **Licence.** *Recommendation*: BSD-3, as the server, with the same header.
+5. **Entry points or packages.** The token checks and the Management client are entry points of
+   `@clavia-auth/core` (§2). An API that checks tokens then installs the sign-in code too, unused
+   and tree-shaken away. *Recommendation*: entry points for the first release; split one into its
+   own package only if its dependencies or its pace start to differ from the core's.
