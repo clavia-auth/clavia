@@ -15,6 +15,7 @@ use Clavia\Domain\Authorization\FeedEntry;
 use Clavia\Domain\Authorization\FeedSubject;
 use Clavia\Domain\Authorization\IdentityFeedOutbox;
 use Clavia\Domain\ResourceServer\ResourceServerId;
+use Clavia\Domain\ResourceServer\ResourceServerRepository;
 use DateTimeImmutable;
 
 /**
@@ -32,9 +33,22 @@ final class InMemoryIdentityFeedOutbox implements IdentityFeedOutbox
     /** @var positive-int */
     private int $next = 1;
 
+    /** The APIs entries refer to, once a repository names itself (it does when built with this outbox). */
+    private ?ResourceServerRepository $apis = null;
+
+    /** Hold entries to the APIs of `$apis`, as the table's foreign key does. */
+    public function referTo(ResourceServerRepository $apis): void
+    {
+        $this->apis = $apis;
+    }
+
     #[\Override]
     public function enqueue(ResourceServerId $api, array $subjects, DateTimeImmutable $now): void
     {
+        // The foreign key on `resource_servers`: an API gone queues nothing.
+        if ($this->apis !== null && $this->apis->find($api) === null) {
+            return;
+        }
         foreach ($subjects as $subject) {
             $key = $api->value . ' ' . $subject->toString();
             $row = $this->rows[$key] ?? null;

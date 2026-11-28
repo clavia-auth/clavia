@@ -126,6 +126,23 @@ trait IdentityFeedOutboxContract
         self::assertSame(0, $this->identityFeedOutbox()->pending());
     }
 
+    #[Test]
+    public function anApiGoneBeforeItsEntryIsQueuedNothingAndFailsNothing(): void
+    {
+        // Another request deleted the API between the feed reading it and queuing for it: its store went with
+        // it, so there is nothing to send, and the change that queued must not fail for it.
+        $kept = $this->feedApi('https://documents.example/api/');
+        $gone = $this->feedApi('https://invoices.example/api/');
+        $this->resourceServers()->delete($gone);
+        $now = self::start();
+
+        $this->identityFeedOutbox()->enqueue($gone, [FeedSubject::everyRole()], $now);
+        $this->identityFeedOutbox()->enqueue($kept, [FeedSubject::everyRole()], $now);
+
+        self::assertSame(1, $this->identityFeedOutbox()->pending());
+        self::assertTrue(self::first($this->claimAt(0, 10))->resourceServerId->equals($kept));
+    }
+
     /**
      * Claim, `$seconds` after the test's start, for the thirty seconds a worker holds an entry.
      *

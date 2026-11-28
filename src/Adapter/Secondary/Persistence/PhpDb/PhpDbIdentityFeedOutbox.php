@@ -23,6 +23,12 @@ use DateTimeImmutable;
  * with `FOR UPDATE SKIP LOCKED` and marks them claimed for a while, so two workers never send the
  * same one and no transaction stays open while the engine is called.
  *
+ * An entry is queued only for an API that still exists, read with `FOR KEY SHARE`: under READ
+ * COMMITTED the feed may have read an API another transaction then deletes, and the insert would
+ * break the foreign key and fail the change that queued. The lock waits for a deletion in flight
+ * and then finds no row, so nothing is queued (the store went with the API); once held, it keeps
+ * the API until this transaction ends.
+ *
  * @psalm-type EntryRow = array{id: int|string, resource_server_id: string, subject: string,
  *     generation: int|string, attempts: int|string}
  */
@@ -39,7 +45,7 @@ final readonly class PhpDbIdentityFeedOutbox implements IdentityFeedOutbox
             $this->database->execute(
                 <<<'SQL'
                     INSERT INTO fga_outbox (resource_server_id, subject, next_attempt_at, created_at)
-                    VALUES (:api, :subject, :now, :now)
+                    SELECT id, :subject, :now, :now FROM resource_servers WHERE id = :api FOR KEY SHARE
                     ON CONFLICT (resource_server_id, subject) DO UPDATE SET
                         generation = fga_outbox.generation + 1,
                         next_attempt_at = LEAST(fga_outbox.next_attempt_at, EXCLUDED.next_attempt_at)

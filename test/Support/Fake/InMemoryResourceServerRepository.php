@@ -34,6 +34,7 @@ final class InMemoryResourceServerRepository implements ResourceServerRepository
         private readonly ?InMemoryClientGrantRepository $clientGrants = null,
         private readonly ?InMemoryIdentityFeedOutbox $feed = null,
     ) {
+        $this->feed?->referTo($this);
     }
 
     #[\Override]
