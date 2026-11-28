@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Domain\ResourceServer;
 
 use Clavia\Domain\Shared\AlreadyExists;
+use Clavia\Domain\Client\ClientId;
 use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\Page;
 use Clavia\Domain\Shared\PageRequest;
@@ -52,4 +53,10 @@ interface ResourceServerRepository
      * @return list<ResourceServer>
      */
     public function withAuthorization(): array;
+
+    /**
+     * The API the client speaks for in fine-grained authorization (docs/design/fine-grained-authorization.md
+     * §2), switched on or off: at most one, since a client speaks for one API.
+     */
+    public function spokenForBy(ClientId $client): ?ResourceServer;
 }

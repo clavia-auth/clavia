@@ -192,6 +192,9 @@ trait ResourceServerRepositoryContract
         // Saving the first again, speaking for it still, is no conflict.
         $this->resourceServers()->save($first->withAuthorization($settings->disabled()));
         self::assertTrue($this->resourceServers()->find($first->id)?->authorization?->speaksFor($client));
+        // And the client is found speaking for it, on or off; another for none.
+        self::assertSame($first->id->value, $this->resourceServers()->spokenForBy($client)?->id->value);
+        self::assertNull($this->resourceServers()->spokenForBy(ClientId::fromString('nobody')));
     }
 
     #[Test]

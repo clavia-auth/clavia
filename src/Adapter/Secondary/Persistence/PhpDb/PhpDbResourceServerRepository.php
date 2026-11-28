@@ -125,6 +125,15 @@ final readonly class PhpDbResourceServerRepository implements ResourceServerRepo
         return array_map($this->hydrate(...), $rows);
     }
 
+    #[\Override]
+    public function spokenForBy(ClientId $client): ?ResourceServer
+    {
+        return $this->one(
+            'id = (SELECT resource_server_id FROM authorization_clients WHERE client_id = :key)',
+            $client->value,
+        );
+    }
+
     private function write(ResourceServer $resourceServer): void
     {
         $authorization = $resourceServer->authorization;
