@@ -94,4 +94,10 @@ final readonly class NoDecisionEngine implements DecisionEngine
     {
         throw DecisionEngineFailed::unavailable();
     }
+
+    #[\Override]
+    public function readByObject(StoreId $store, ObjectRef $object): array
+    {
+        throw DecisionEngineFailed::unavailable();
+    }
 }
