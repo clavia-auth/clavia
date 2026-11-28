@@ -17,7 +17,10 @@ namespace Clavia\Domain\Authorization;
  *
  * It says nothing of whether the model allows it; the decision engine refuses a tuple its model
  * does not (a type it does not declare, a relation the type lacks, a subject the relation does
- * not take).
+ * not take, a condition it does not declare or the relation does not take).
+ *
+ * A relationship is one per object, relation and subject: its condition, if any, is not part of what
+ * it is, so {@see self::toString()} and {@see self::equals()} leave it out, as OpenFGA does.
  */
 final readonly class Tuple
 {
@@ -25,12 +28,17 @@ final readonly class Tuple
         public ObjectRef $object,
         public Relation $relation,
         public SubjectRef $subject,
+        public ?Condition $condition = null,
     ) {
     }
 
-    public static function of(ObjectRef $object, Relation $relation, SubjectRef $subject): self
-    {
-        return new self($object, $relation, $subject);
+    public static function of(
+        ObjectRef $object,
+        Relation $relation,
+        SubjectRef $subject,
+        ?Condition $condition = null,
+    ): self {
+        return new self($object, $relation, $subject, $condition);
     }
 
     /** `object#relation@subject`, Zanzibar's notation: for messages and comparison. */

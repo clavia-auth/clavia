@@ -16,6 +16,7 @@ use Clavia\Application\Port\DecisionEngine;
 use Clavia\Application\Port\DecisionEngineFailed;
 use Clavia\Domain\Authorization\AuthorizationModel;
 use Clavia\Domain\Authorization\AuthorizationModelId;
+use Clavia\Domain\Authorization\Condition;
 use Clavia\Domain\Authorization\ObjectRef;
 use Clavia\Domain\Authorization\ObjectType;
 use Clavia\Domain\Authorization\Relation;
@@ -72,6 +73,36 @@ abstract class DecisionEngineContract extends TestCase
               }}
             }
           ]
+        }
+        JSON;
+
+    /**
+     * A folder viewed by anybody named on it, or, under `in_office`, by somebody whose address is the
+     * office's: OpenFGA's conditional relationships.
+     */
+    public const string CONDITIONAL_MODEL = <<<'JSON'
+        {
+          "schema_version": "1.1",
+          "type_definitions": [
+            {"type": "user"},
+            {
+              "type": "folder",
+              "relations": {"viewer": {"this": {}}},
+              "metadata": {"relations": {"viewer": {"directly_related_user_types": [
+                {"type": "user"}, {"type": "user", "condition": "in_office"}
+              ]}}}
+            }
+          ],
+          "conditions": {
+            "in_office": {
+              "name": "in_office",
+              "expression": "address == office",
+              "parameters": {
+                "address": {"type_name": "TYPE_NAME_STRING"},
+                "office": {"type_name": "TYPE_NAME_STRING"}
+              }
+            }
+          }
         }
         JSON;
 
@@ -372,6 +403,90 @@ abstract class DecisionEngineContract extends TestCase
         self::assertSame([], $this->engine()->readByObject($store, ObjectRef::fromString('team:nobody')));
     }
 
+    public function testARelationshipKeepsItsConditionAndContext(): void
+    {
+        $store = $this->store();
+        $model = $this->engine()->writeModel($store, AuthorizationModel::fromJson(self::CONDITIONAL_MODEL));
+        $conditional = Tuple::of(
+            ObjectRef::fromString('folder:reports'),
+            Relation::fromString('viewer'),
+            SubjectRef::fromString('user:ada'),
+            Condition::of('in_office', ['office' => '10.0.0.1']),
+        );
+
+        $this->engine()->write($store, $model, [$conditional, self::tuple('folder:reports#viewer@user:bob')]);
+
+        $read = $this->engine()->readPage($store, ObjectRef::fromString('folder:reports'), 10)->tuples;
+        usort($read, static fn (Tuple $a, Tuple $b): int => $a->toString() <=> $b->toString());
+        self::assertSame(['folder:reports#viewer@user:ada', 'folder:reports#viewer@user:bob'], array_map(
+            static fn (Tuple $tuple): string => $tuple->toString(),
+            $read,
+        ));
+        $condition = $read[0]->condition;
+        self::assertNotNull($condition);
+        self::assertSame('in_office', $condition->name);
+        self::assertSame(['office' => '10.0.0.1'], $condition->context);
+        self::assertNull($read[1]->condition);
+        // Deleted by what it is, whatever its condition.
+        $this->engine()->write($store, $model, [], [self::tuple('folder:reports#viewer@user:ada')]);
+        self::assertCount(1, $this->engine()->readPage($store, ObjectRef::fromString('folder:reports'), 10)->tuples);
+    }
+
+    public function testAConditionTheRelationDoesNotTakeIsRefused(): void
+    {
+        [$store, $model] = $this->modelled();
+
+        try {
+            $this->engine()->write($store, $model, [Tuple::of(
+                ObjectRef::fromString('folder:reports'),
+                Relation::fromString('viewer'),
+                SubjectRef::fromString('user:ada'),
+                Condition::of('in_office'),
+            )]);
+            self::fail('A condition the model does not declare was written.');
+        } catch (DecisionEngineFailed $failed) {
+            self::assertNotNull($failed->refusal);
+        }
+    }
+
+    public function testAnObjectsRelationshipsAreReadAPageAtATime(): void
+    {
+        [$store, $model] = $this->modelled();
+        $viewers = array_map(
+            static fn (int $i): string => sprintf('folder:reports#viewer@user:u%03d', $i),
+            range(1, 25),
+        );
+        $this->write($store, $model, ...$viewers);
+        $this->write($store, $model, 'folder:archive#viewer@user:u001');
+
+        $found = [];
+        $token = '';
+        $pages = 0;
+        do {
+            $page = $this->engine()->readPage($store, ObjectRef::fromString('folder:reports'), 10, $token);
+            self::assertLessThanOrEqual(10, count($page->tuples));
+            array_push($found, ...array_map(static fn (Tuple $tuple): string => $tuple->toString(), $page->tuples));
+            $token = $page->next;
+            ++$pages;
+        } while ($token !== '' && $pages < 10);
+
+        sort($found);
+        self::assertSame($viewers, $found);
+        self::assertGreaterThanOrEqual(3, $pages);
+    }
+
+    public function testAContinuationTokenThatIsNotTheEnginesIsRefused(): void
+    {
+        [$store] = $this->modelled();
+
+        try {
+            $this->engine()->readPage($store, ObjectRef::fromString('folder:reports'), 10, 'bm90LWEtdG9rZW4');
+            self::fail('A forged continuation token was taken.');
+        } catch (DecisionEngineFailed $failed) {
+            self::assertNotNull($failed->refusal);
+        }
+    }
+
     public function testAStoreIsAWorldOfItsOwn(): void
     {
         [$store, $model] = $this->modelled();
@@ -483,6 +598,7 @@ abstract class DecisionEngineContract extends TestCase
                 ObjectType::fromString('document'),
             ),
             static fn (): mixed => $engine->readByObject($store, ObjectRef::fromString('team:sales')),
+            static fn (): mixed => $engine->readPage($store, ObjectRef::fromString('team:sales'), 10),
         ];
 
         foreach ($calls as $call) {

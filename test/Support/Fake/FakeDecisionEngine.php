@@ -14,6 +14,7 @@ namespace ClaviaTest\Support\Fake;
 use Clavia\Application\Port\AccessCheck;
 use Clavia\Application\Port\DecisionEngine;
 use Clavia\Application\Port\DecisionEngineFailed;
+use Clavia\Application\Port\TuplePage;
 use Clavia\Domain\Authorization\AuthorizationModel;
 use Clavia\Domain\Authorization\AuthorizationModelId;
 use Clavia\Domain\Authorization\ObjectRef;
@@ -32,8 +33,10 @@ use LogicException;
  * It works out the **union subset** of schema 1.1: a relation is direct (`this`, with the types
  * and usersets it takes), another relation of the same object (`computedUserset`), a relation of
  * a related object (`tupleToUserset`, "viewer from parent"), or a union of these. A model using
- * anything else (an intersection, an exclusion, a condition, a wildcard) is a test asking more of
- * the double than it does: a {@see LogicException}, never a wrong answer.
+ * anything else (an intersection, an exclusion, a wildcard) is a test asking more of the double than
+ * it does: a {@see LogicException}, never a wrong answer. Conditions are declared, written and read
+ * back as OpenFGA keeps them (a relation taking `user with in_office` takes only that), but never
+ * evaluated: a question that meets a conditional relationship is a {@see LogicException} too.
  *
  * Refusals use OpenFGA's codes: `invalid_authorization_model` for a model that does not hold
  * together, `validation_error` for a tuple or a question the model does not take,
@@ -270,6 +273,30 @@ final class FakeDecisionEngine implements DecisionEngine
         return $tuples;
     }
 
+    #[\Override]
+    public function readPage(StoreId $store, ObjectRef $object, int $pageSize, string $continuation = ''): TuplePage
+    {
+        $this->reachable();
+        $this->storeOf($store);
+        $offset = 0;
+        if ($continuation !== '') {
+            $decoded = base64_decode($continuation, true);
+            $pattern = '/^' . preg_quote($store->value, '/') . ':(\d+)$/D';
+            if ($decoded === false || preg_match($pattern, $decoded, $m) !== 1) {
+                throw DecisionEngineFailed::refused('invalid_continuation_token');
+            }
+            $offset = (int) $m[1];
+        }
+        $all = array_values(array_filter(
+            $this->tuples[$store->value],
+            static fn (Tuple $tuple): bool => $tuple->object->equals($object),
+        ));
+        $size = min($pageSize, 100);
+        $next = $offset + $size < count($all) ? base64_encode($store->value . ':' . ($offset + $size)) : '';
+
+        return new TuplePage(array_slice($all, $offset, $size), $next);
+    }
+
     /**
      * Whether `subject` holds `relation` on `object`, as the model works it out.
      *
@@ -315,6 +342,9 @@ final class FakeDecisionEngine implements DecisionEngine
             foreach ($this->tuples[$store->value] as $tuple) {
                 if (! $tuple->object->equals($object) || ! $tuple->relation->equals($relation)) {
                     continue;
+                }
+                if ($tuple->condition !== null) {
+                    throw new LogicException('The fake decision engine does not evaluate conditions.');
                 }
                 if ($tuple->subject->equals($subject)) {
                     return true;
@@ -376,9 +406,9 @@ final class FakeDecisionEngine implements DecisionEngine
     {
         /** @var array{type_definitions: list<array<string, mixed>>, conditions?: mixed} $document */
         $document = json_decode($model->json, true, 64, JSON_THROW_ON_ERROR);
-        if (($document['conditions'] ?? []) !== []) {
-            throw new LogicException('The fake decision engine does not evaluate conditions.');
-        }
+        /** @var mixed $conditionDefinitions */
+        $conditionDefinitions = $document['conditions'] ?? null;
+        $conditions = is_array($conditionDefinitions) ? array_map('strval', array_keys($conditionDefinitions)) : [];
 
         $relations = [];
         foreach ($document['type_definitions'] as $definition) {
@@ -398,10 +428,17 @@ final class FakeDecisionEngine implements DecisionEngine
                  */
                 $direct = $metadata[$name]['directly_related_user_types'] ?? [];
                 foreach ($direct as $taken) {
-                    if (isset($taken['wildcard']) || isset($taken['condition'])) {
-                        throw new LogicException('The fake decision engine does not evaluate wildcards or conditions.');
+                    if (isset($taken['wildcard'])) {
+                        throw new LogicException('The fake decision engine does not evaluate wildcards.');
                     }
-                    $takes[] = $taken['type'] . (isset($taken['relation']) ? '#' . $taken['relation'] : '');
+                    /** @var mixed $named */
+                    $named = $taken['condition'] ?? null;
+                    $condition = is_string($named) ? $named : '';
+                    if ($condition !== '' && ! in_array($condition, $conditions, true)) {
+                        throw DecisionEngineFailed::refused('invalid_authorization_model');
+                    }
+                    $takes[] = $taken['type'] . (isset($taken['relation']) ? '#' . $taken['relation'] : '')
+                        . ($condition === '' ? '' : ' with ' . $condition);
                 }
                 $relations[$type][$name] = ['rewrite' => $rewrite, 'takes' => $takes];
             }
@@ -428,8 +465,10 @@ final class FakeDecisionEngine implements DecisionEngine
                 throw DecisionEngineFailed::refused('invalid_authorization_model');
             }
             foreach ($takes as $taken) {
-                $takenType = explode('#', $taken, 2)[0];
-                $takenRelation = explode('#', $taken, 2)[1] ?? null;
+                // `team#member with in_office`: the condition was checked against the model's already.
+                $userset = explode(' with ', $taken, 2)[0];
+                $takenType = explode('#', $userset, 2)[0];
+                $takenRelation = explode('#', $userset, 2)[1] ?? null;
                 if (
                     ! isset($relations[$takenType])
                     || ($takenRelation !== null && ! isset($relations[$takenType][$takenRelation]))
@@ -477,7 +516,8 @@ final class FakeDecisionEngine implements DecisionEngine
     {
         $definition = self::relationOf($relations, $tuple->object->type, $tuple->relation);
         $subject = $tuple->subject->object->type->value
-            . ($tuple->subject->relation === null ? '' : '#' . $tuple->subject->relation->name);
+            . ($tuple->subject->relation === null ? '' : '#' . $tuple->subject->relation->name)
+            . ($tuple->condition === null ? '' : ' with ' . $tuple->condition->name);
         if (! in_array($subject, $definition['takes'], true)) {
             throw DecisionEngineFailed::refused('validation_error');
         }
