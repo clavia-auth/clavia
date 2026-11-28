@@ -10,7 +10,7 @@ What a release publishes:
 | What | Where | Made by |
 |---|---|---|
 | A git tag `vX.Y.Z` | the repository | the maintainer |
-| The container image | `ghcr.io/clavia-auth/clavia:X.Y.Z` (also `X.Y` and `latest`) | the **Release** workflow |
+| The container image, for `linux/amd64` and `linux/arm64` | `ghcr.io/clavia-auth/clavia:X.Y.Z` (also `X.Y` and `latest`) | the **Release** workflow |
 | The GitHub release, with the changelog section as its notes | GitHub | the **Release** workflow |
 | The Management API reference, `/vX.Y.Z/` and the site's root | GitHub Pages (`gh-pages`) | the **Docs** workflow, once **Release** succeeded |
 | The dashboard's tag | clavia-dashboard | the maintainer |
@@ -78,7 +78,10 @@ and `latest` and `X.Y` do not move.
 1. **Verify.** The tagged commit is on `main`; the CI checks succeeded on it; `composer.json`
    declares the tag's version; `CHANGELOG.md` has a section for it.
 2. **Image.** Builds the `production` target of `docker/php`, with the repository as the named
-   build context `app`, and pushes it to `ghcr.io/clavia-auth/clavia`. The image holds the
+   build context `app`, and pushes it to `ghcr.io/clavia-auth/clavia`, for `linux/amd64` and
+   `linux/arm64` (`publish-image.yml`): each architecture is built natively on a runner of its own
+   (`ubuntu-24.04-arm` for arm64, never emulated) and pushed by digest, then one manifest list
+   takes every tag, so a tag never names one architecture alone. `:edge` is published the same way. The image holds the
    application and its runtime dependencies (`composer install --no-dev`, an authoritative
    classmap, OPcache that does not re-read files); it is PHP-FPM alone, so put Caddy, or any
    FastCGI proxy, in front of it, serving `/app/public`. It does not hold configuration:
@@ -91,6 +94,9 @@ Build the image yourself the same way:
 ```bash
 docker buildx build docker/php --target production --build-context app=. -t clavia:local
 ```
+
+`--platform linux/arm64` (or `linux/amd64`) builds the other architecture; under emulation it takes
+many times as long.
 
 ## 5. After the workflow
 

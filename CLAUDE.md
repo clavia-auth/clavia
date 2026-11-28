@@ -129,7 +129,7 @@ deploy/helm/clavia/         production on Kubernetes; files/Caddyfile is the pro
 CHANGELOG.md                what each release changed, for operators
 conformance/                OpenID Foundation conformance: results and how to run them
 test/{Unit,Integration,Acceptance,Support}/
-docker/php/                 the PHP-FPM image: `development` (default) and `production` (published)
+docker/php/                 the PHP-FPM image: `development` (default) and `production` (published for amd64 and arm64)
 .claude/                    the ticket-* skills and board.sh, which move work through the backlog
 .github/                    CI, the release workflow, the @claude workflow, issue forms, the pull request template
 Caddyfile, docker-compose.yml, setup-ssl.sh, Makefile

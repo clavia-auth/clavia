@@ -27,7 +27,9 @@ setting is declared and documented in
 - **Caddy** terminates TLS (or sits behind an Ingress that does), serves the sign-in pages' static
   files, and sends everything else to PHP-FPM. It is the one place that decides a request's client
   address: the application believes no forwarded header.
-- **PHP-FPM** is share-nothing: run as many as you like behind one Caddy, or one pod each.
+- **PHP-FPM** is share-nothing: run as many as you like behind one Caddy, or one pod each. Its image,
+  and the dashboard's, is published for `linux/amd64` and `linux/arm64` (Graviton, Ampere, Apple
+  silicon) from 0.6.1.
 - **PostgreSQL** holds everything durable: accounts, clients, tokens, keys sealed with the postgres
   backend, the audit trail. **Redis** holds what is short-lived: sessions, challenges, throttling.
   Losing Redis signs everyone out and corrupts nothing.

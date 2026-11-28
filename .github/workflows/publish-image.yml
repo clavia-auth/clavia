@@ -1,0 +1,141 @@
+name: Publish image
+
+# Pushes the production image of docker/php to ghcr.io for linux/amd64 and linux/arm64, under the tags
+# its caller names: a release's (release.yml) or `edge` (image.yml). Each architecture is built on a
+# runner of its own (arm64 natively on `ubuntu-24.04-arm`, never emulated: compiling PHP's extensions
+# under QEMU takes many times as long) and pushed by digest, with no tag; then one manifest list names
+# both under every tag at once, so a tag never points at one architecture alone
+# (https://docs.docker.com/build/ci/github-actions/multi-platform/#distribute-build-across-multiple-runners).
+#
+# The third-party actions, which run with `packages: write`, are pinned to a commit (the version is in
+# the comment); Dependabot's weekly `github-actions` update moves them.
+on:
+  workflow_call:
+    inputs:
+      tags:
+        description: The tags, as docker/metadata-action's `tags` input.
+        type: string
+        required: true
+      cache-from-ci:
+        description: Start from the layers the Image workflow's build cached on this commit.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  build:
+    name: Build (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The labels only: the tags go on the manifest list, below.
+      - name: Labels
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: docker/php
+          build-contexts: app=.
+          target: production
+          platforms: linux/${{ matrix.arch }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: ${{ inputs.cache-from-ci && format('type=gha,scope=image-{0}', matrix.arch) || '' }}
+
+      - name: Keep the digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/digests"
+          touch "${RUNNER_TEMP}/digests/${DIGEST#sha256:}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  manifest:
+    name: Tag both architectures
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tags and annotations
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        env:
+          # On the manifest list, where ghcr.io reads the source and the description of a multi-platform image.
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: index
+        with:
+          images: ${{ env.IMAGE }}
+          tags: ${{ inputs.tags }}
+
+      - name: One manifest list under every tag
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          args=()
+          while IFS= read -r tag; do args+=(--tag "${tag}"); done \
+            < <(jq -r '.tags[]' <<<"${DOCKER_METADATA_OUTPUT_JSON}")
+          while IFS= read -r annotation; do args+=(--annotation "${annotation}"); done \
+            < <(jq -r '.annotations[]' <<<"${DOCKER_METADATA_OUTPUT_JSON}")
+          sources=()
+          for digest in *; do sources+=("${IMAGE}@sha256:${digest}"); done
+          [ "${#sources[@]}" -eq 2 ] || { echo "::error::Expected two digests, found: ${sources[*]}"; exit 1; }
+          docker buildx imagetools create "${args[@]}" "${sources[@]}"
+
+      - name: Both architectures are there
+        env:
+          TAG: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+        run: |
+          docker buildx imagetools inspect "${TAG}"
+          platforms=$(docker buildx imagetools inspect "${TAG}" --format '{{json .Manifest.Manifests}}' \
+            | jq -r '[.[] | .platform | select(.os != "unknown") | "\(.os)/\(.architecture)"] | sort | join(" ")')
+          [ "${platforms}" = "linux/amd64 linux/arm64" ] \
+            || { echo "::error::${TAG} is for ${platforms}, not linux/amd64 and linux/arm64."; exit 1; }
