@@ -5,13 +5,13 @@ description: Prepare a Clavia release when a milestone is complete — check the
 
 # Release a milestone
 
-Milestones are versions with the same name in clavia and clavia-dashboard; both repositories are
+Milestones are versions with the same name in every Clavia repository; the repositories are
 released together, at the same version number.
 
 ## 1. Is it complete?
 
 ```bash
-for r in clavia clavia-dashboard; do
+for r in clavia clavia-dashboard authzen-php clavia-js-core clavia-js-next clavia-js-effect; do
   gh api "repos/clavia-auth/$r/milestones?state=open" --jq '.[] | "\(.number) \(.title) open=\(.open_issues)"'
 done
 ```

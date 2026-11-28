@@ -5,14 +5,16 @@ a change must meet to be merged.
 
 ## How work is planned
 
-Everything is tracked on the [Clavia project board](https://github.com/orgs/clavia-auth/projects),
-shared by [clavia](https://github.com/clavia-auth/clavia) and
-[clavia-dashboard](https://github.com/clavia-auth/clavia-dashboard).
+Everything is tracked on the [Clavia project board](https://github.com/orgs/clavia-auth/projects/1),
+shared by every Clavia repository: the server ([clavia](https://github.com/clavia-auth/clavia)), its
+[dashboard](https://github.com/clavia-auth/clavia-dashboard) and the SDKs
+([core](https://github.com/clavia-auth/clavia-js-core), [Next.js](https://github.com/clavia-auth/clavia-js-next),
+[Effect](https://github.com/clavia-auth/clavia-js-effect)).
 
 - **Issues** describe one need each. The issue type says what kind (Feature, Bug, Task,
   Security), `area: …` labels say where, and the board adds priority (P0–P3) and size (XS–XL).
 - **Milestones** are versions (`0.1 First release`, `0.2 Passkeys`, …), with the same names in
-  both repositories, so a release can span them.
+  every repository, so a release can span them.
 - **Large features** get a design first, in `docs/design/` of the clavia repository, and an
   issue labelled `needs-design`. Once the design is agreed, it is cut into issues small enough
   for one pull request each.
