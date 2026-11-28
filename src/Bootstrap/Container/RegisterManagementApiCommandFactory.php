@@ -12,7 +12,9 @@ declare(strict_types=1);
 namespace Clavia\Bootstrap\Container;
 
 use Clavia\Adapter\Primary\Cli\RegisterManagementApiCommand;
+use Clavia\Application\Management\Provisioning\RegisterAuthorizationApi;
 use Clavia\Application\Management\Provisioning\RegisterManagementApi;
+use Clavia\Configuration\Settings;
 use Psr\Container\ContainerInterface;
 
 final class RegisterManagementApiCommandFactory
@@ -22,6 +24,13 @@ final class RegisterManagementApiCommandFactory
         /** @var RegisterManagementApi $register */
         $register = $container->get(RegisterManagementApi::class);
 
-        return new RegisterManagementApiCommand($register);
+        /** @var Settings $settings */
+        $settings = $container->get(Settings::class);
+        /** @var RegisterAuthorizationApi|null $registerAuthorizationApi */
+        $registerAuthorizationApi = $settings->fineGrainedAuthorization()
+            ? $container->get(RegisterAuthorizationApi::class)
+            : null;
+
+        return new RegisterManagementApiCommand($register, $registerAuthorizationApi);
     }
 }

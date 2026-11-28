@@ -12,6 +12,8 @@ declare(strict_types=1);
 namespace Clavia\Application\Management\ResourceServers;
 
 use Clavia\Application\Management\NotFound;
+use Clavia\Application\Port\DecisionEngine;
+use Clavia\Application\Port\DecisionEngineFailed;
 use Clavia\Application\Port\DomainEvents;
 use Clavia\Domain\ResourceServer\Event\ResourceServerDeleted;
 use Clavia\Domain\ResourceServer\ResourceServerId;
@@ -22,12 +24,17 @@ use Clavia\Domain\ResourceServer\SystemApiProtected;
  * `DELETE /api/v1/resource-servers/{resource_server_id}`: the API, its permissions and
  * every client grant on it. Tokens already issued for it keep their `aud` and expire as
  * they would.
+ *
+ * Its store in the decision engine, if it has one, goes too, best effort: the id is forgotten with
+ * the API, and Clavia alone holds the key that could ask with it, so a store the engine failed to
+ * delete is unreachable (docs/design/fine-grained-authorization.md §5.1).
  */
 final readonly class DeleteResourceServer
 {
     public function __construct(
         private ResourceServerRepository $resourceServers,
         private DomainEvents $events,
+        private DecisionEngine $engine,
     ) {
     }
 
@@ -42,5 +49,14 @@ final readonly class DeleteResourceServer
 
         $this->resourceServers->delete($resourceServer->id);
         $this->events->dispatch(new ResourceServerDeleted($resourceServer));
+
+        $store = $resourceServer->authorization?->store;
+        if ($store !== null) {
+            try {
+                $this->engine->deleteStore($store);
+            } catch (DecisionEngineFailed) {
+                // Logged by the adapter; the store is unreachable now that its id is forgotten.
+            }
+        }
     }
 }

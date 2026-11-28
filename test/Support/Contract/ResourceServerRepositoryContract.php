@@ -11,6 +11,10 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Support\Contract;
 
+use Clavia\Domain\Authorization\AuthorizationModel;
+use Clavia\Domain\Authorization\AuthorizationModelId;
+use Clavia\Domain\Authorization\AuthorizationSettings;
+use Clavia\Domain\Authorization\StoreId;
 use Clavia\Domain\Claims\ClaimMapping;
 use Clavia\Domain\Claims\ClaimMappings;
 use Clavia\Domain\Claims\ClaimName;
@@ -89,6 +93,74 @@ trait ResourceServerRepositoryContract
                 Audience::fromString('https://reports.example/api/'),
             )?->claims->toJson(),
         );
+    }
+
+    #[Test]
+    public function itsAuthorizationSettingsAreSavedAndReadBackWhole(): void
+    {
+        $api = $this->anApi('https://documents.example/api/', ['read:documents']);
+        $this->resourceServers()->save($api);
+        self::assertNull($this->resourceServers()->find($api->id)?->authorization);
+
+        $settings = AuthorizationSettings::of(
+            true,
+            StoreId::fromString('01JAAAAAAAAAAAAAAAAAAAAAAA'),
+            AuthorizationModelId::fromString('01JBBBBBBBBBBBBBBBBBBBBBBB'),
+            AuthorizationModel::fromJson(DecisionEngineContract::MODEL),
+            [$this->aClient('documents-backend'), $this->aClient('documents-jobs')],
+            true,
+        );
+        $this->resourceServers()->save($api->withAuthorization($settings));
+
+        $stored = $this->resourceServers()->find($api->id)?->authorization;
+        self::assertNotNull($stored);
+        self::assertTrue($stored->enabled);
+        self::assertSame('01JAAAAAAAAAAAAAAAAAAAAAAA', $stored->store->value);
+        self::assertSame('01JBBBBBBBBBBBBBBBBBBBBBBB', $stored->modelId->value);
+        // The text the operator wrote, byte for byte: OpenFGA reads `{}` and `[]` apart.
+        self::assertSame(DecisionEngineContract::MODEL, $stored->model->json);
+        self::assertSame(
+            ['documents-backend', 'documents-jobs'],
+            array_map(static fn (ClientId $client): string => $client->value, $stored->clients),
+        );
+        self::assertTrue($stored->denialReasons);
+
+        $this->resourceServers()->save($api->withAuthorization($settings->disabled()));
+        $disabled = $this->resourceServers()->find($api->id);
+        self::assertFalse($disabled?->authorizes());
+        self::assertSame('01JAAAAAAAAAAAAAAAAAAAAAAA', $disabled?->authorization?->store->value);
+
+        $this->resourceServers()->save($api->withoutAuthorization());
+        self::assertNull($this->resourceServers()->find($api->id)?->authorization);
+    }
+
+    #[Test]
+    public function aClientSpeaksForOneApiAtMost(): void
+    {
+        $client = $this->aClient('shared-backend');
+        $settings = AuthorizationSettings::of(
+            true,
+            StoreId::fromString('01JAAAAAAAAAAAAAAAAAAAAAAA'),
+            AuthorizationModelId::fromString('01JBBBBBBBBBBBBBBBBBBBBBBB'),
+            AuthorizationModel::fromJson(DecisionEngineContract::MODEL),
+            [$client],
+            false,
+        );
+        $first = $this->anApi('https://documents.example/api/', []);
+        $second = $this->anApi('https://invoices.example/api/', []);
+        $this->resourceServers()->save($first->withAuthorization($settings));
+        $this->resourceServers()->save($second);
+
+        try {
+            $this->resourceServers()->save($second->withAuthorization($settings));
+            self::fail('A client spoke for two APIs.');
+        } catch (AlreadyExists) {
+            self::assertNull($this->resourceServers()->find($second->id)?->authorization);
+        }
+
+        // Saving the first again, speaking for it still, is no conflict.
+        $this->resourceServers()->save($first->withAuthorization($settings->disabled()));
+        self::assertTrue($this->resourceServers()->find($first->id)?->authorization?->speaksFor($client));
     }
 
     #[Test]

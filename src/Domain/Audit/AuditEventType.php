@@ -66,6 +66,9 @@ enum AuditEventType: string
     case ResourceServerCreated = 'resource_server.created';
     case ResourceServerUpdated = 'resource_server.updated';
     case ResourceServerDeleted = 'resource_server.deleted';
+    case AuthorizationEnabled = 'resource_server.authorization_enabled';
+    case AuthorizationDisabled = 'resource_server.authorization_disabled';
+    case AuthorizationModelWritten = 'resource_server.authorization_model_written';
     case ConnectionCreated = 'connection.created';
     case ConnectionUpdated = 'connection.updated';
     case ConnectionDeleted = 'connection.deleted';

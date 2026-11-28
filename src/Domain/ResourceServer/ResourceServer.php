@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Clavia\Domain\ResourceServer;
 
 use Clavia\Domain\Authentication\MfaPolicy;
+use Clavia\Domain\Authorization\AuthorizationSettings;
 use Clavia\Domain\Claims\ClaimMappings;
 use Clavia\Domain\Shared\Audience;
 use Clavia\Domain\Shared\InvalidValue;
@@ -54,6 +55,7 @@ final readonly class ResourceServer
         public AccessTokenFormat $accessTokenFormat,
         public MfaPolicy $mfaPolicy,
         public ClaimMappings $claims,
+        public ?AuthorizationSettings $authorization,
     ) {
     }
 
@@ -79,10 +81,13 @@ final readonly class ResourceServer
      *                                             validates on its own (RFC 9068).
      * @param MfaPolicy         $mfaPolicy         Whether a person must sign in with more than one factor
      *                                             to be issued a token for it.
+     * @param AuthorizationSettings|null $authorization Fine-grained authorization on it, or none ever
+     *                                                  set up (docs/design/fine-grained-authorization.md).
      *
      * @throws InvalidValue When the identifier is longer than 255 bytes, the name longer than
      *                      120 characters, a permission is defined twice, or a system API would
-     *                      not enforce roles or would ask for consent.
+     *                      not enforce roles, would ask for consent or would have fine-grained
+     *                      authorization.
      */
     public static function register(
         ResourceServerId $id,
@@ -96,6 +101,7 @@ final readonly class ResourceServer
         AccessTokenFormat $accessTokenFormat = AccessTokenFormat::Opaque,
         MfaPolicy $mfaPolicy = MfaPolicy::Optional,
         ?ClaimMappings $claims = null,
+        ?AuthorizationSettings $authorization = null,
     ): self {
         if (strlen($identifier->value) > self::MAX_IDENTIFIER_LENGTH) {
             throw new InvalidValue('An API identifier is at most 255 bytes.');
@@ -108,6 +114,9 @@ final readonly class ResourceServer
         }
         if ($isSystem && ! $allowSkippingConsent) {
             throw new InvalidValue('A system API never asks for consent: only first-party applications reach it.');
+        }
+        if ($isSystem && $authorization !== null) {
+            throw new InvalidValue('A system API has no fine-grained authorization: its permissions are its rules.');
         }
 
         $byValue = [];
@@ -134,6 +143,7 @@ final readonly class ResourceServer
             $accessTokenFormat,
             $mfaPolicy,
             $claims ?? ClaimMappings::none(),
+            $authorization,
         );
     }
 
@@ -156,6 +166,7 @@ final readonly class ResourceServer
             $this->accessTokenFormat,
             $this->mfaPolicy,
             $this->claims,
+            $this->authorization,
         );
     }
 
@@ -185,6 +196,7 @@ final readonly class ResourceServer
             $this->accessTokenFormat,
             $this->mfaPolicy,
             $this->claims,
+            $this->authorization,
         );
     }
 
@@ -215,6 +227,7 @@ final readonly class ResourceServer
             $this->accessTokenFormat,
             $this->mfaPolicy,
             $this->claims,
+            $this->authorization,
         );
     }
 
@@ -248,6 +261,7 @@ final readonly class ResourceServer
             $this->accessTokenFormat,
             $this->mfaPolicy,
             $this->claims,
+            $this->authorization,
         );
     }
 
@@ -274,6 +288,7 @@ final readonly class ResourceServer
             $this->accessTokenFormat,
             $this->mfaPolicy,
             $this->claims,
+            $this->authorization,
         );
     }
 
@@ -296,6 +311,7 @@ final readonly class ResourceServer
             $format,
             $this->mfaPolicy,
             $this->claims,
+            $this->authorization,
         );
     }
 
@@ -317,6 +333,7 @@ final readonly class ResourceServer
             $this->accessTokenFormat,
             $policy,
             $this->claims,
+            $this->authorization,
         );
     }
 
@@ -333,6 +350,33 @@ final readonly class ResourceServer
         }
 
         return clone($this, ['claims' => $claims]);
+    }
+
+    /**
+     * The same API, with fine-grained authorization set up as `$settings` say: on or off, its store,
+     * its model and the clients that speak for it.
+     *
+     * @throws SystemApiProtected For a system API: what may be done there is its permissions' to say.
+     */
+    public function withAuthorization(AuthorizationSettings $settings): self
+    {
+        if ($this->isSystem) {
+            throw SystemApiProtected::authorization($this);
+        }
+
+        return clone($this, ['authorization' => $settings]);
+    }
+
+    /** The same API with no fine-grained authorization: its store deleted, nothing of it kept. */
+    public function withoutAuthorization(): self
+    {
+        return clone($this, ['authorization' => null]);
+    }
+
+    /** Whether fine-grained authorization is on for it. */
+    public function authorizes(): bool
+    {
+        return $this->authorization?->enabled === true;
     }
 
     /**

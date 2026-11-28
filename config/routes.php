@@ -47,6 +47,7 @@ use Clavia\Adapter\Primary\Http\Management\InitialAccessTokensHandler;
 use Clavia\Adapter\Primary\Http\Management\ProvisioningTokenHandler;
 use Clavia\Adapter\Primary\Http\Management\ProvisioningTokensHandler;
 use Clavia\Adapter\Primary\Http\Management\ManagementApiMiddleware;
+use Clavia\Adapter\Primary\Http\Management\ResourceServerAuthorizationHandler;
 use Clavia\Adapter\Primary\Http\Management\ResourceServerHandler;
 use Clavia\Adapter\Primary\Http\Management\ResourceServersHandler;
 use Clavia\Adapter\Primary\Http\Management\RoleHandler;
@@ -339,6 +340,16 @@ return static function (Application $app, ContainerInterface $container): void {
             RequestMethodInterface::METHOD_DELETE,
         ],
         'api.resource-server',
+    );
+    $app->route(
+        '/api/v1/resource-servers/{resource_server_id}/authorization',
+        $management(ResourceServerAuthorizationHandler::class),
+        [
+            RequestMethodInterface::METHOD_GET,
+            RequestMethodInterface::METHOD_PUT,
+            RequestMethodInterface::METHOD_DELETE,
+        ],
+        'api.resource-server.authorization',
     );
     $app->route('/api/v1/roles', $management(RolesHandler::class), $getAndPost, 'api.roles');
     $app->get('/api/v1/signing-keys', $management(SigningKeysHandler::class), 'api.signing-keys');

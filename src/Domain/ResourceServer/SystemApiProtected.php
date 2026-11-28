@@ -28,6 +28,15 @@ final class SystemApiProtected extends DomainException
         ));
     }
 
+    public static function authorization(ResourceServer $api): self
+    {
+        return new self(sprintf(
+            "The system API '%s' takes no fine-grained authorization: what may be done there is its "
+            . "permissions' to say.",
+            $api->identifier->value,
+        ));
+    }
+
     public static function policies(ResourceServer $api): self
     {
         return new self(sprintf(

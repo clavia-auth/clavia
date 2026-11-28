@@ -61,6 +61,15 @@ final class InMemoryResourceServerRepository implements ResourceServerRepository
         if ($other !== null && ! $other->id->equals($resourceServer->id)) {
             throw new AlreadyExists('An API is already registered with this identifier.');
         }
+        // The key of `authorization_clients`: a client speaks for one API at most.
+        foreach ($resourceServer->authorization->clients ?? [] as $client) {
+            foreach ($this->resourceServers as $stored) {
+                $elsewhere = ! $stored->id->equals($resourceServer->id);
+                if ($elsewhere && $stored->authorization?->speaksFor($client) === true) {
+                    throw new AlreadyExists('A client already speaks for another API.');
+                }
+            }
+        }
 
         $this->resourceServers[$resourceServer->id->value] = $resourceServer;
     }

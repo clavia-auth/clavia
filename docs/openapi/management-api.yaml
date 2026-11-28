@@ -1578,6 +1578,135 @@ paths:
         '422':
           $ref: '#/components/responses/Unprocessable'
 
+  /api/v1/resource-servers/{resource_server_id}/authorization:
+    parameters:
+      - $ref: '#/components/parameters/ResourceServerId'
+    get:
+      tags: [resource-servers]
+      operationId: getResourceServerAuthorization
+      summary: Get the authorization of an API
+      description: |
+        Whether fine-grained authorization is on for the API, its store in the decision engine
+        (OpenFGA), the model in force there, and the clients that speak for the API. 404 when it was
+        never set up, or its store was deleted.
+      security:
+        - managementToken: [read:resource_servers]
+      responses:
+        '200':
+          description: The API's fine-grained authorization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceServerAuthorization'
+              examples:
+                ResourceServerAuthorization:
+                  $ref: '#/components/examples/ResourceServerAuthorization'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    put:
+      tags: [resource-servers]
+      operationId: putResourceServerAuthorization
+      summary: Turn on authorization
+      description: |
+        Turn on fine-grained authorization for the API, with this model and these clients speaking
+        for it, or change them. The first time, the API gets a store of its own in the decision engine,
+        kept from then on. A model that differs from the one in force is written as a new version, and
+        the store's relationships stay with it.
+
+        The model is OpenFGA's JSON form (schema 1.1), as OpenFGA's own tools convert the modelling
+        language to. It declares `type user`, the people Clavia knows. The types `user`, `client`,
+        `role` and `group` are Clavia's. `user` and `client` have no relation of their own. `role`
+        and `group`, when declared, are exactly `define member: [user]`. Clavia alone writes their
+        relationships. A model the engine refuses is a 422 at `/model`, with the engine's error code
+        and nothing else.
+
+        Each client speaking for the API is a first-party machine client (`client_credentials`), at
+        most twenty. A client speaks for one API at most (409 when it already speaks for another), and
+        asks for decisions with a token for the Authorization API, granted from the shell
+        (`clients:grant`). Refused on a system API (409), and while this server names no decision
+        engine (409). A decision engine that does not answer is a 503: nothing was changed.
+      security:
+        - managementToken: [update:resource_servers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceServerAuthorizationUpdate'
+            examples:
+              ResourceServerAuthorizationUpdate:
+                $ref: '#/components/examples/ResourceServerAuthorizationUpdate'
+      responses:
+        '200':
+          description: The API's fine-grained authorization, as it is now.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceServerAuthorization'
+              examples:
+                ResourceServerAuthorization:
+                  $ref: '#/components/examples/ResourceServerAuthorization'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    delete:
+      tags: [resource-servers]
+      operationId: deleteResourceServerAuthorization
+      summary: Turn off authorization
+      description: |
+        Turn off fine-grained authorization for the API. Its store, its model and the relationships
+        in it are kept, so turning it on again brings them back.
+
+        With `confirm=delete`, the store is deleted instead, with every relationship in it, and
+        Clavia forgets it. That cannot be undone. A decision engine that does not answer is then a 503,
+        and nothing was changed.
+      security:
+        - managementToken: [update:resource_servers]
+      parameters:
+        - name: confirm
+          in: query
+          required: false
+          description: '`delete` to delete the store and every relationship in it.'
+          schema:
+            type: string
+            enum: [delete]
+      responses:
+        '204':
+          description: Turned off, or deleted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
   /api/v1/roles:
     get:
       tags: [roles]
@@ -3631,6 +3760,85 @@ components:
           - name: "https://example.com/deployment"
             source: "constant"
             value: "eu-1"
+    ResourceServerAuthorizationUpdate:
+      summary: Reports, which their owner and anybody holding a role may view
+      value:
+        model:
+          schema_version: "1.1"
+          type_definitions:
+            - type: "user"
+            - type: "role"
+              relations:
+                member:
+                  this: {}
+              metadata:
+                relations:
+                  member:
+                    directly_related_user_types:
+                      - type: "user"
+            - type: "report"
+              relations:
+                owner:
+                  this: {}
+                viewer:
+                  union:
+                    child:
+                      - this: {}
+                      - computedUserset:
+                          relation: "owner"
+              metadata:
+                relations:
+                  owner:
+                    directly_related_user_types:
+                      - type: "user"
+                  viewer:
+                    directly_related_user_types:
+                      - type: "user"
+                      - type: "role"
+                        relation: "member"
+        clients: ["Mc8tR3vN6qL1wZ4yB7hJ2dF9gS5aE0kX"]
+        denial_reasons: false
+    ResourceServerAuthorization:
+      summary: Fine-grained authorization on the Reports API
+      value:
+        enabled: true
+        store_id: "01JQ8ZK3V6M2XW4T9B7N5R1CDE"
+        model_id: "01JQ8ZK4A2HG7Y3W5P9S1T6VQF"
+        model:
+          schema_version: "1.1"
+          type_definitions:
+            - type: "user"
+            - type: "role"
+              relations:
+                member:
+                  this: {}
+              metadata:
+                relations:
+                  member:
+                    directly_related_user_types:
+                      - type: "user"
+            - type: "report"
+              relations:
+                owner:
+                  this: {}
+                viewer:
+                  union:
+                    child:
+                      - this: {}
+                      - computedUserset:
+                          relation: "owner"
+              metadata:
+                relations:
+                  owner:
+                    directly_related_user_types:
+                      - type: "user"
+                  viewer:
+                    directly_related_user_types:
+                      - type: "user"
+                      - type: "role"
+                        relation: "member"
+        clients: ["Mc8tR3vN6qL1wZ4yB7hJ2dF9gS5aE0kX"]
+        denial_reasons: false
     RolePage:
       summary: A page of roles
       value:
@@ -4243,7 +4451,7 @@ components:
           format: uuid
         type:
           type: string
-          enum: [authentication.succeeded, authentication.failed, session.ended, session.stepped_up, mfa.enrolled, mfa.removed, passkey.registered, passkey.renamed, passkey.removed, passkey.counter_regressed, consent.given, consent.refused, consent.withdrawn, device.approved, device.refused, token.issued, token.revoked, token.code_replayed, token.refresh_replayed, client.created, client.updated, client.deleted, client.secret_rotated, client.granted, user.created, user.updated, user.deleted, user.identity_unlinked, user.roles_changed, user.signed_up, user.email_verified, user.password_reset, user.password_link_sent, user.exported, role.created, role.updated, role.deleted, resource_server.created, resource_server.updated, resource_server.deleted, connection.created, connection.updated, connection.deleted, signing_key.created, signing_key.rotated, saml_key.generated, saml_key.rotated, initial_access_token.issued, initial_access_token.revoked, provisioning_token.issued, provisioning_token.revoked, webhook.created, webhook.updated, webhook.deleted, webhook.secret_rotated, webhook.tested, webhook.disabled]
+          enum: [authentication.succeeded, authentication.failed, session.ended, session.stepped_up, mfa.enrolled, mfa.removed, passkey.registered, passkey.renamed, passkey.removed, passkey.counter_regressed, consent.given, consent.refused, consent.withdrawn, device.approved, device.refused, token.issued, token.revoked, token.code_replayed, token.refresh_replayed, client.created, client.updated, client.deleted, client.secret_rotated, client.granted, user.created, user.updated, user.deleted, user.identity_unlinked, user.roles_changed, user.signed_up, user.email_verified, user.password_reset, user.password_link_sent, user.exported, role.created, role.updated, role.deleted, resource_server.created, resource_server.updated, resource_server.deleted, resource_server.authorization_enabled, resource_server.authorization_disabled, resource_server.authorization_model_written, connection.created, connection.updated, connection.deleted, signing_key.created, signing_key.rotated, saml_key.generated, saml_key.rotated, initial_access_token.issued, initial_access_token.revoked, provisioning_token.issued, provisioning_token.revoked, webhook.created, webhook.updated, webhook.deleted, webhook.secret_rotated, webhook.tested, webhook.disabled]
         occurred_at:
           type: string
           format: date-time
@@ -5854,6 +6062,71 @@ components:
           maxItems: 20
           items:
             $ref: '#/components/schemas/ClaimMapping'
+
+    ResourceServerAuthorization:
+      type: object
+      additionalProperties: false
+      required: [enabled, store_id, model_id, model, clients, denial_reasons]
+      properties:
+        enabled:
+          type: boolean
+          description: Whether the API's clients get decisions. Off, the store and its relationships are kept.
+        store_id:
+          type: string
+          description: The API's store in the decision engine, a ULID.
+        model_id:
+          type: string
+          description: The version of the model in force, a ULID.
+        model:
+          $ref: '#/components/schemas/AuthorizationModel'
+        clients:
+          type: array
+          maxItems: 20
+          description: The clients that speak for the API.
+          items:
+            type: string
+        denial_reasons:
+          type: boolean
+          description: Whether a denial says which kind it is (`no_relation`, `subject_inactive`, `unknown_type`), never more.
+
+    ResourceServerAuthorizationUpdate:
+      type: object
+      additionalProperties: false
+      required: [model]
+      properties:
+        model:
+          $ref: '#/components/schemas/AuthorizationModel'
+        clients:
+          type: array
+          maxItems: 20
+          description: The clients that speak for the API; none when left out.
+          items:
+            type: string
+        denial_reasons:
+          type: boolean
+          description: Whether a denial says which kind it is; off when left out.
+
+    AuthorizationModel:
+      type: object
+      additionalProperties: false
+      required: [schema_version, type_definitions]
+      description: |
+        An OpenFGA authorization model in its JSON form, schema 1.1, kept as it was sent. It declares
+        `type user`. `user` and `client` have no relation of their own. `role` and `group` are exactly
+        `define member: [user]`.
+      properties:
+        schema_version:
+          type: string
+          enum: ['1.1']
+        type_definitions:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: true
+        conditions:
+          type: object
+          additionalProperties: true
 
     ConnectionName:
       type: string

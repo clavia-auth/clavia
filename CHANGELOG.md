@@ -8,6 +8,28 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 ### Added
 
+- **Fine-grained authorization on an API** (#136, part of #133,
+  [design](docs/design/fine-grained-authorization.md) §5.1). `PUT
+  /api/v1/resource-servers/{id}/authorization` (`update:resource_servers`) turns it on with an OpenFGA
+  model (its JSON form, schema 1.1) and the clients that speak for the API. The API gets its own
+  OpenFGA store, kept from then on, and a model that changes is written as a new version. `GET` shows
+  the settings and the model. `DELETE` turns it off and keeps the store; `?confirm=delete` deletes the
+  store and every relationship in it. Deleting an API deletes its store too. Nothing asks for a
+  decision yet: that comes with the evaluation endpoints.
+  - **A model declares `type user`**. `user`, `client`, `role` and `group` are Clavia's: `user` and
+    `client` have no relation, and `role` and `group` are exactly `define member: [user]`. Clavia
+    alone will write their relationships.
+  - **A speaking client** is a first-party machine client (`client_credentials`). It speaks for one
+    API at most, and an API has at most twenty.
+  - **The Authorization API** (`https://management.{domain}/access`) is a new system API, with the
+    scopes `evaluate:access`, `search:access` and `write:relationships`. `management-api:register`
+    registers it when `CLAVIA_FGA_URL` is set; grant a speaking client on it with `clients:grant`.
+  - **Three audit event types**, also available to webhooks: `resource_server.authorization_enabled`,
+    `resource_server.authorization_disabled` and `resource_server.authorization_model_written` (the
+    model's id, never its content).
+  - **Migration `0052`** adds the authorization columns to `resource_servers` and the
+    `authorization_clients` table.
+
 - **OpenFGA beside Clavia** (#135, the first slice of fine-grained authorization, #133,
   [design](docs/design/fine-grained-authorization.md)). Clavia can now talk to OpenFGA, the decision
   engine that will answer "may this person do this to that, now?" for your APIs. Nothing uses it
