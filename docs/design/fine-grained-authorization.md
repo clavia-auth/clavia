@@ -1,6 +1,7 @@
 # Design: Fine-grained authorization, AuthZEN over OpenFGA
 
 **Status:** agreed · **Date:** 2026-11-25 · **Issue:** clavia-auth/clavia#133 ·
+**Amended:** 2026-11-28, operators' reads (#242, §5.6; proposed) ·
 **Specifications:** OpenID AuthZEN Authorization API 1.0 (Final, January 2026: the information
 model of subject, action, resource and context; the Access Evaluation and Access Evaluations APIs;
 the Subject, Resource and Action Search APIs; the PDP metadata document), OpenFGA's API and
@@ -76,6 +77,9 @@ This design makes Clavia the **front door of a policy decision point**:
 | Batch semantics | AuthZEN's `evaluations` with its three semantics (execute all, deny on first deny, permit on first permit), mapped to OpenFGA's `batch-check`, split to its per-request maximum (50 by default) | The semantics are AuthZEN's to honour; short-circuiting is applied by Clavia over the batch results |
 | Search | Subject search → `list-users`; resource search → `list-objects`; action search → a batch check of every relation of the resource's type. Results are **capped** (OpenFGA's own maximum and deadline, both its server settings), and AuthZEN's page token is used to page through what OpenFGA returned | OpenFGA's list endpoints return up to a configured maximum, not pages. Paging over a capped result is honest: the metadata and the document state the cap, and an API needing more narrows its question |
 | Answers | `{"decision": true|false}`, no reason by default; an operator may turn on reasons for **denials** per API, returning only the category (`no_relation`, `subject_inactive`, `unknown_type`) | AuthZEN allows a context in the answer. A reason that reveals the graph (who would have granted it) leaks more than the caller should know |
+| Operators' reads (#242) | The dashboard reads an API's **model versions** and **relationships**, and **tries a decision**, through the **Management API**, under the API's id (`/api/v1/resource-servers/{id}/authorization/models`, `…/relationships`, `…/evaluation`), answered from that API's store as the Authorization API answers its speaking client | §6 first said the panel calls `evaluation` "through the dashboard's own client", which cannot work: a speaking client is a first-party machine client, for one API at most, and the dashboard's client signs operators in with `authorization_code`. Letting it speak for every API would break confinement for every other caller; a machine client of the dashboard's own per API would be credentials to mint and keep for each. The operator's own token, scoped and audited like every other Management API call, is the credential that fits |
+| Who may read the graph | A new Management API scope, **`read:relationships`**, for the relationships read and the evaluation; the model versions under **`read:resource_servers`**, like the model in force | The model is configuration, held by whoever sets an API up. The relationships are the API's data about people (who may open which document), and an evaluation can be asked about anyone: a grant of its own, as `update:users_app_metadata` is, so an operator can configure an API without reading its data. The Authorization API's `write:relationships` is another audience's scope, and a system API's scopes never cross |
+| Operators' answers | An operator's evaluation **always** says why a denial is one (the category), whatever the API's `denial_reasons`; never the facts Clavia added | `denial_reasons` keeps the graph from an API's callers; an operator holding `read:relationships` may read the graph anyway, and a "try a decision" panel that only says *no* explains nothing. The facts stay OpenFGA's only (§2): an operator reads them on the person, under `read:users` |
 | Failures | OpenFGA unreachable, slow (2 s per call) or failing: **`503`**, never a decision. An API must treat that as a denial | Fail closed. A decision invented by the front door would be a grant nobody made |
 | Limits | A batch at most 50 evaluations from a caller per request (higher only by splitting); 100 tuples per relationships write (OpenFGA's default); a request body at most 256 KiB | Bounded work per request, matching OpenFGA's defaults so nothing is split silently |
 
@@ -267,6 +271,49 @@ digest of the search, so a token used on another search, or a search changed bet
 §8.2.2). A subject Clavia does not know has no resources and no actions, the engine not asked. Action
 search answers in the model's order of relations, a relation the engine cannot evaluate not held.
 
+### 5.6 Operators' reads (#242)
+
+The dashboard is the Management API's client: it speaks for no API, and cannot (§2, "Operators'
+reads"). What it shows of an API's authorization comes from the Management API, under the API's id,
+answered from that API's store and model alone:
+
+- **`GET /api/v1/resource-servers/{id}/authorization/models`** (`read:resource_servers`): the model
+  versions the store holds, newest first, through a new port method, `DecisionEngine::readModels()`
+  (OpenFGA's `ReadAuthorizationModels`, which pages by continuation token). Each is
+  `{id, created_at, in_force, model}`: `created_at` read from the id (a ULID carries its
+  millisecond), `in_force` true for the settings' `model_id`, `model` the JSON the engine returns,
+  not held again to today's rules (a version written under earlier ones is still shown, never put in
+  force by being read). `page_size` 1 to 20 (10 by default: a model can be 256 KiB), `page_token`,
+  and the answer's `next_page_token` absent on the last page.
+- **`GET …/authorization/relationships?object=type:id`** (`read:relationships`): the Authorization
+  API's read (§5.3) for an operator: the same page size and token, the same shape (`resource`,
+  `relation`, `subject`, an optional `condition`). Clavia's types are refused there too (`422` at
+  `object`): who holds a role is the Roles section's to tell. An object of a type the model does not
+  declare is `422`.
+- **`POST …/authorization/evaluation`** (`read:relationships`): one AuthZEN evaluation (§5.2), the
+  body AuthZEN's (`subject`, `action`, `resource`, `context`), with every step of §5.2 in its order:
+  the question's rules (`QuestionRules`; a type or relation the model lacks, or a `context.clavia`, is
+  `422` pointing at it, a well-formed request a rule refuses in the Management API's terms, #239;
+  malformed is `400`); a subject Clavia does not know, a deactivated account or a deleted client
+  denied (`subject_inactive`) before the engine is asked; `context.clavia.subject` added; a condition
+  the engine cannot evaluate denied (`condition_failed`). The answer is
+  `{decision, context: {reason}}`, the reason on every denial (§2, "Operators' answers").
+
+For the three:
+
+1. The API must exist (`404`) and have a store, authorization on or off: switched off, the store is
+   kept (§5.1) and still answers, which is what an operator checks before switching it back on.
+   None (never set up, or deleted with `?confirm=delete`) is `404`, as for `GET …/authorization`.
+2. A server naming no engine (`CLAVIA_FGA_URL` unset) is `409`, as for `PUT …/authorization`.
+3. The engine not answering is `503`; a page token it refuses is `400` at `page_token`.
+4. Nothing is cached, nothing of the graph is stored or logged, and nothing is recorded in the trail:
+   a Management API read never is, and a decision is a read (§10, question 3).
+
+The two lists are `{items, next_page_token}`, not the Management API's `{items, total, page,
+per_page}`: the engine pages by token and gives no total, and the Authorization API's read already
+has this shape. Not built here: search and batch evaluation for operators. The panel asks one question
+at a time; a search can follow when the dashboard needs one.
+
 ## 6. Interfaces
 
 - **AuthZEN** on `management.{domain}`: the five endpoints and `/.well-known/authzen-configuration`
@@ -275,14 +322,18 @@ search answers in the model's order of relations, a relation the engine cannot e
 - **Relationships**: `POST|GET /access/v1/relationships`.
 - **Management API**: `GET|PUT|DELETE /api/v1/resource-servers/{id}/authorization`; the speaking
   clients (`authorization.clients`); `management-api:register` also registers the Authorization API
-  and its scopes.
+  and its scopes. For operators (§5.6): `GET …/authorization/models`, `GET …/authorization/relationships`
+  and `POST …/authorization/evaluation`, and the scope `read:relationships`, which
+  `management-api:register` adds to the Management API on upgrade (the changelog tells operators to
+  give it to their administrators' role).
 - **Console**: `fga:sync` (every minute), `fga:resync <api>`.
 - **Development and deployment**: an `openfga` service and its database in `docker-compose.yml`
   (its migration run before it starts); the production kit (#22) with the same; README and
   CLAUDE.md (the surface, the settings, the cron line).
 - **Dashboard** (clavia-dashboard): authorization on an API's page (enable, the model edited as DSL
   through OpenFGA's syntax transformer, versions, the speaking clients); a relationship browser
-  (read-only); a "try a decision" panel calling `evaluation` through the dashboard's own client.
+  (read-only); a "try a decision" panel. All three through the Management API with the operator's
+  token (§5.6), never the Authorization API: the dashboard speaks for no API.
 - **Documentation**: a guide for API developers: getting a token, asking, writing relationships,
   what `503` means.
 
@@ -304,6 +355,10 @@ search answers in the model's order of relations, a relation the engine cannot e
 - **No leak through answers**: decisions without reasons by default; categories only when on; search
   results stripped of inactive accounts.
 - **Bounded work**: batch and write sizes, search caps, a timeout per call.
+- **An operator reads one API's store at a time, and only by its own grant** (§5.6): the API named
+  in the path, `read:relationships` for the graph, the same refusals as the Authorization API (no
+  reserved type read, every subject checked in Clavia first, no `context.clavia` taken), and never
+  the facts Clavia adds.
 
 ## 8. Tests
 
@@ -321,6 +376,11 @@ search answers in the model's order of relations, a relation the engine cannot e
 - The PIP: `context.clavia.subject` built from the account (its `app_metadata`, the API's roles only)
   and from a client; an API's `context.clavia` refused; a condition on `app_metadata` decided both
   ways; a subject search leaving conditional relationships on subject facts out.
+- Operators' reads (§5.6): each operation answered from the API in the path and no other (two APIs,
+  each with a store); `read:relationships` refused where missing, before the engine is asked; a store
+  switched off still read; no store `404`; no engine `409`; the engine failing `503`; the reason given
+  on a denial with `denial_reasons` off; versions newest first, `in_force` on the one in force, paged;
+  every answer against the OpenAPI document; `readModels()` in `DecisionEngineContract`.
 - The identity feed: a role given reaches the stores of its APIs only; taken, it leaves them; a
   deleted account's and a deleted client's tuples removed; an outbox row surviving a failed send; `fga:resync` repairing a
   drift.
@@ -349,7 +409,11 @@ search answers in the model's order of relations, a relation the engine cannot e
    *Done when* an API can keep its resources' relationships through Clavia alone.
 6. **AuthZEN search.** Subject, resource and action search, caps and paging, inactive accounts
    removed. *Done when* the three searches answer the specification's examples and respect the caps.
-7. **Dashboard** (clavia-dashboard), and the developer guide. *Done when* an operator can enable
+6a. **Operators' reads** (#242, §5.6), in clavia: `readModels()` on the port (the double, the
+   contract, OpenFGA's adapter), the three operations in `docs/openapi/management-api.yaml`, the
+   scope `read:relationships`. *Done when* an operator's token reads an API's versions and
+   relationships and tries a decision, and §8's operator cases pass.
+7. **Dashboard** (clavia-dashboard#48; it needs 6a), and the developer guide. *Done when* an operator can enable
    authorization, edit a model and try a decision without the API.
 8. **A PHP enforcement middleware** (its own repository, §10 question 5): an AuthZEN client on PSR-18
    (discovery from the metadata document, a client-credentials token cached through PSR-16), a PSR-15
@@ -379,3 +443,13 @@ search answers in the model's order of relations, a relation the engine cannot e
 7. **CI**: the integration contract against a real OpenFGA needs an `openfga` service in
    `.github/workflows/ci.yml`, which is the maintainer's file. *Recommendation:* add it with slice 1;
    until then the contract runs against the double in CI and against OpenFGA locally.
+8. **The scope of the graph** (§2, "Who may read the graph"): `read:relationships` for the
+   relationships and the evaluation, the versions under `read:resource_servers`? *Recommendation:*
+   yes. Folding the graph into `read:resource_servers` would give it to everyone who configures an
+   API.
+9. **An operator's evaluation in the trail** (§5.6)? *Recommendation:* no, as for every read. An
+   operator probing what a person may open is worth knowing only once someone asks; it would then be
+   one event type, `authorization.evaluated`, naming the API and the subject, never the answer.
+10. **Search for operators** (§5.6)? *Recommendation:* not now. The panel asks one question; "what
+    may Ada open?" is the next thing an operator will want, and it is the same pattern on
+    `/search/resource` when the dashboard needs it.
