@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Documentation;
 
+use Clavia\Application\Authorization\AuthorizationPermission;
 use Clavia\Application\Management\ManagementPermission;
 use Clavia\Bootstrap\ConfigProvider;
 use Clavia\Configuration\Settings;
@@ -30,11 +31,12 @@ final class ManagementGuidesTest extends TestCase
     private const string GUIDES = __DIR__ . '/../../../docs/guides';
     private const string DOCUMENT = __DIR__ . '/../../../docs/openapi/management-api.yaml';
     private const string AUTHORIZATION_SERVER = __DIR__ . '/../../../docs/openapi/authorization-server.yaml';
+    private const string AUTHORIZATION_API = __DIR__ . '/../../../docs/openapi/authorization-api.yaml';
     private const string PAGE = __DIR__ . '/../../../docs/site/guide.html';
 
-    /** Hosts a guide may name: the reader's own (example.com), a partner's, and the specifications. */
+    /** Hosts a guide may name: the reader's own (example.com), a partner's, the specifications and OpenFGA's. */
     private const string ALLOWED_HOSTS = '/^(?:(?:auth|management)\.example\.com|reports\.acme\.example|'
-        . 'www\.rfc-editor\.org|github\.com|schemas\.openid\.net)$/D';
+        . 'www\.rfc-editor\.org|github\.com|(?:schemas\.)?openid\.net|openfga\.dev)$/D';
 
     public function testTheIndexListsEveryGuideInItsOrder(): void
     {
@@ -67,16 +69,24 @@ final class ManagementGuidesTest extends TestCase
         self::assertSame(self::listed(), $linked, 'info.description links every guide, in order.');
     }
 
-    /** An operation a guide names is in the document of its host: `/api/v1` or the authorization server's. */
+    /**
+     * An operation a guide names is in the document that describes it: the Management API's (`/api/v1`),
+     * the Authorization API's (`/access/v1` and AuthZEN's metadata) or the authorization server's.
+     */
     #[DataProvider('guides')]
     public function testEachOperationNamedExists(string $guide): void
     {
         $operation = '#\b(GET|POST|PUT|PATCH|DELETE) '
-            . '(/(?:api/v1|oauth2|oidc|\.well-known)/[A-Za-z0-9_/{}.-]*[A-Za-z0-9_}])#';
+            . '(/(?:api/v1|access/v1|oauth2|oidc|\.well-known)/[A-Za-z0-9_/{}.-]*[A-Za-z0-9_}])#';
         preg_match_all($operation, self::text($guide), $named, PREG_SET_ORDER);
 
         foreach ($named as [, $method, $path]) {
-            $paths = self::paths(str_starts_with($path, '/api/v1/') ? self::DOCUMENT : self::AUTHORIZATION_SERVER);
+            $paths = self::paths(match (true) {
+                str_starts_with($path, '/api/v1/') => self::DOCUMENT,
+                str_starts_with($path, '/access/v1/'),
+                $path === '/.well-known/authzen-configuration' => self::AUTHORIZATION_API,
+                default => self::AUTHORIZATION_SERVER,
+            });
             self::assertArrayHasKey(
                 strtolower($method),
                 $paths[$path] ?? [],
@@ -116,8 +126,11 @@ final class ManagementGuidesTest extends TestCase
     #[DataProvider('guides')]
     public function testEachScopeNamedExists(string $guide): void
     {
-        $scopes = array_map(static fn (ManagementPermission $p): string => $p->value, ManagementPermission::cases());
-        preg_match_all('/\b(?:read|create|update|delete):[a-z_]+\b/', self::text($guide), $named);
+        $scopes = [
+            ...array_map(static fn (ManagementPermission $p): string => $p->value, ManagementPermission::cases()),
+            ...array_map(static fn (AuthorizationPermission $p): string => $p->value, AuthorizationPermission::cases()),
+        ];
+        preg_match_all('/\b(?:read|create|update|delete|evaluate|search|write):[a-z_]+\b/', self::text($guide), $named);
 
         foreach (array_unique($named[0]) as $scope) {
             self::assertContains($scope, $scopes, sprintf('%s.md names %s.', $guide, $scope));

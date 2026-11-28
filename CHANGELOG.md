@@ -19,6 +19,12 @@ All notable changes to Clavia are written here, for the people who run it. The f
   - **Upgrading**: run `management-api:register` so the Management API gets the new scope, then
     give it to your administrators' role. The dashboard asks for every scope its operator holds.
 
+- **A guide to fine-grained authorization** (`docs/guides/fine-grained-authorization.md`, part of
+  clavia-auth/clavia-dashboard#48), for the developer of an API: what the operator sets up (the model,
+  the speaking client, its grant on the Authorization API), getting a token, asking for decisions one at
+  a time or in a batch, the three searches, writing and reading relationships, the facts Clavia adds to
+  the context, and why a `503` is a denial. Published with the other guides.
+
 - **AuthZEN search** (#140, part of #133, [design](docs/design/fine-grained-authorization.md) §5.5).
   An API's client asks who may act on a resource (`POST /access/v1/search/subject`), what a subject may
   act on (`/search/resource`) and what it may do to a resource (`/search/action`), with the new

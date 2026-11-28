@@ -45,6 +45,7 @@ info:
     - [Paging and search](guides/paging-and-search.html): reading a list.
     - [DPoP-bound tokens](guides/dpop.html): tokens a stolen copy of is useless.
     - [Registering clients](guides/registering-clients.html): letting others register their applications.
+    - [Fine-grained authorization](guides/fine-grained-authorization.html): asking an API's decisions, and keeping its relationships.
 
 servers:
   - url: /
