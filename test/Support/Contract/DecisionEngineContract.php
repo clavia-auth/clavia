@@ -579,6 +579,21 @@ abstract class DecisionEngineContract extends TestCase
         $this->check($store, $model, 'folder:reports', 'owner', 'user:ada');
     }
 
+    public function testABatchWithAQuestionTheEngineRefusesIsRefused(): void
+    {
+        [$store, $model] = $this->modelled();
+
+        try {
+            $this->engine()->batchCheck($store, $model, [
+                self::question('folder:reports', 'viewer', 'user:ada'),
+                self::question('folder:reports', 'owner', 'user:ada'),
+            ]);
+            self::fail('A batch with a question the model cannot answer was answered.');
+        } catch (DecisionEngineFailed $failed) {
+            self::assertNotNull($failed->refusal, 'Refused, as that question would be alone.');
+        }
+    }
+
     public function testAnEngineThatCannotBeReachedGivesNoAnswer(): void
     {
         $engine = $this->unreachableEngine();

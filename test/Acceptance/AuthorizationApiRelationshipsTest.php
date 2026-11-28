@@ -11,30 +11,15 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Acceptance;
 
-use Clavia\Adapter\Primary\Http\Access\AccessContract;
-use Clavia\Adapter\Primary\Http\OpenApi\Validation\ResponseDoesNotMatch;
 use Clavia\Application\Management\Provisioning\RegisterAuthorizationApi;
 use Clavia\Application\Port\DecisionEngine;
-use Clavia\Application\Port\PasswordHasher;
-use Clavia\Domain\Authorization\AuthorizationModel;
-use Clavia\Domain\Authorization\AuthorizationSettings;
-use Clavia\Domain\Client\Client;
-use Clavia\Domain\Client\ClientAuthMethod;
-use Clavia\Domain\Client\ClientId;
-use Clavia\Domain\Client\ClientRepository;
-use Clavia\Domain\Client\ClientType;
-use Clavia\Domain\Client\GrantType;
 use Clavia\Domain\ResourceServer\ResourceServer;
-use Clavia\Domain\ResourceServer\ResourceServerRepository;
-use Clavia\Domain\Shared\Clock;
 use ClaviaTest\Support\AcceptanceTestCase;
-use ClaviaTest\Support\Contract\DecisionEngineContract;
 use ClaviaTest\Support\Fake\FakeDecisionEngine;
-use ClaviaTest\Support\MachineFixtures;
+use ClaviaTest\Support\AuthorizationApiFixtures;
 use ClaviaTest\Support\OAuth2Fixtures;
 use Fig\Http\Message\RequestMethodInterface;
 use Fig\Http\Message\StatusCodeInterface;
-use Laminas\Diactoros\ServerRequest;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -46,10 +31,9 @@ use Psr\Http\Message\ResponseInterface;
 final class AuthorizationApiRelationshipsTest extends AcceptanceTestCase
 {
     use OAuth2Fixtures;
-    use MachineFixtures;
+    use AuthorizationApiFixtures;
 
     private const string PATH = '/access/v1/relationships';
-    private const string SECRET = 'speaking-client-secret';
 
     /** People, applications, roles and teams, and documents they may view or edit, some under a condition. */
     private const string MODEL = <<<'JSON'
@@ -97,7 +81,7 @@ final class AuthorizationApiRelationshipsTest extends AcceptanceTestCase
 
     public function testAnApisRelationshipsAreWrittenAndReadBackAPageAtATime(): void
     {
-        $token = $this->tokenSpeakingFor($this->apiWithAuthorization('https://documents.test/api/'), 'docs-backend');
+        $token = $this->tokenSpeakingFor($this->api('https://documents.test/api/'), 'docs-backend');
         $ada = $this->user()->id->value;
 
         $written = $this->call($token, RequestMethodInterface::METHOD_POST, [
@@ -151,8 +135,8 @@ final class AuthorizationApiRelationshipsTest extends AcceptanceTestCase
 
     public function testAnApiNeverReachesAnotherApisStoreOrTypes(): void
     {
-        $documents = $this->apiWithAuthorization('https://documents.test/api/');
-        $invoices = $this->apiWithAuthorization(
+        $documents = $this->api('https://documents.test/api/');
+        $invoices = $this->api(
             'https://invoices.test/api/',
             str_replace('"document"', '"invoice"', self::MODEL),
         );
@@ -175,7 +159,7 @@ final class AuthorizationApiRelationshipsTest extends AcceptanceTestCase
 
     public function testClaviasOwnTypesAreRefusedAndEverySubjectMustExist(): void
     {
-        $api = $this->apiWithAuthorization('https://documents.test/api/');
+        $api = $this->api('https://documents.test/api/');
         $token = $this->tokenSpeakingFor($api, 'docs-backend');
         $ada = $this->user()->id->value;
         $cases = [
@@ -209,7 +193,7 @@ final class AuthorizationApiRelationshipsTest extends AcceptanceTestCase
 
     public function testAWriteIsAllOrNothingAndTheEnginesRefusalIsNamed(): void
     {
-        $api = $this->apiWithAuthorization('https://documents.test/api/');
+        $api = $this->api('https://documents.test/api/');
         $token = $this->tokenSpeakingFor($api, 'docs-backend');
         $ada = $this->user()->id->value;
 
@@ -236,7 +220,7 @@ final class AuthorizationApiRelationshipsTest extends AcceptanceTestCase
 
     public function testOnlyAClientSpeakingForAnApiWithTheScopeIsAnswered(): void
     {
-        $api = $this->apiWithAuthorization('https://documents.test/api/');
+        $api = $this->api('https://documents.test/api/');
         $token = $this->tokenSpeakingFor($api, 'docs-backend');
         $silent = $this->clientWithAToken('stranger', 'write:relationships');
         $scopeless = $this->clientWithAToken('reader', 'evaluate:access');
@@ -282,73 +266,15 @@ final class AuthorizationApiRelationshipsTest extends AcceptanceTestCase
         return ['resource' => ['type' => $type, 'id' => $id], 'relation' => $relation, 'subject' => $subject];
     }
 
-    private function apiWithAuthorization(string $identifier, string $json = self::MODEL): ResourceServer
+    #[\Override]
+    protected function decisionEngine(): DecisionEngine
     {
-        $model = AuthorizationModel::fromJson($json);
-        $store = $this->engine->createStore('clavia-test');
-        $api = $this->anApi($identifier, ['read'])->withAuthorization(
-            AuthorizationSettings::of(true, $store, $this->engine->writeModel($store, $model), $model, [], false),
-        );
-        $this->container()->get(ResourceServerRepository::class)->save($api);
-
-        return $api;
+        return $this->engine;
     }
 
-    /** A first-party machine client speaking for the API, and a token it obtained for the Authorization API. */
-    private function tokenSpeakingFor(ResourceServer $api, string $clientId): string
+    private function api(string $identifier, string $json = self::MODEL): ResourceServer
     {
-        $token = $this->clientWithAToken($clientId, 'write:relationships');
-        $settings = $api->authorization;
-        self::assertNotNull($settings);
-        $repository = $this->container()->get(ResourceServerRepository::class);
-        $repository->save($api->withAuthorization(AuthorizationSettings::of(
-            true,
-            $settings->store,
-            $settings->modelId,
-            $settings->model,
-            [ClientId::fromString($clientId)],
-            false,
-        )));
-
-        return $token;
-    }
-
-    private function clientWithAToken(string $clientId, string $scope): string
-    {
-        $client = Client::register(
-            ClientId::fromString($clientId),
-            $clientId,
-            ClientType::Confidential,
-            ClientAuthMethod::ClientSecretBasic,
-            $this->container()->get(PasswordHasher::class)->hash(self::SECRET),
-            [],
-            [GrantType::ClientCredentials],
-            [],
-            $this->container()->get(Clock::class)->now(),
-        );
-        $this->container()->get(ClientRepository::class)->save($client);
-        $authorizationApi = $this->container()->get(ResourceServerRepository::class)
-            ->findByIdentifier(\Clavia\Domain\Shared\Audience::fromString('https://management.clavia.test/access'));
-        self::assertNotNull($authorizationApi);
-        $this->grantClient($client, $authorizationApi, $scope);
-
-        $response = $this->requestMachineToken(
-            ['audience' => $authorizationApi->identifier->value, 'scope' => $scope],
-            [$clientId, self::SECRET],
-        );
-        self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode(), (string) $response->getBody());
-        $token = self::json($response)['access_token'] ?? null;
-        self::assertIsString($token);
-
-        return $token;
-    }
-
-    private function storeOf(ResourceServer $api): \Clavia\Domain\Authorization\StoreId
-    {
-        $settings = $this->container()->get(ResourceServerRepository::class)->find($api->id)?->authorization;
-        self::assertNotNull($settings);
-
-        return $settings->store;
+        return $this->apiWithAuthorization($identifier, $json);
     }
 
     /** @param array<string, mixed> $body */
@@ -370,24 +296,7 @@ final class AuthorizationApiRelationshipsTest extends AcceptanceTestCase
 
     private function send(string $method, string $target, ?string $token, string $body): ResponseInterface
     {
-        $headers = $token === null ? [] : ['Authorization' => 'Bearer ' . $token];
-        if ($body !== '') {
-            $headers['Content-Type'] = 'application/json';
-        }
-        $response = $this->request($method, $target, $headers, self::MANAGEMENT_HOST, $body);
-
-        $contract = $this->container()->get(AccessContract::class);
-        $operation = $contract->operationFor(
-            new ServerRequest(uri: 'https://' . self::MANAGEMENT_HOST . $target, method: $method),
-        );
-        self::assertNotNull($operation);
-        try {
-            $contract->validateResponse($operation, $response);
-        } catch (ResponseDoesNotMatch $mismatch) {
-            self::fail($mismatch->getMessage() . "\n" . (string) $response->getBody());
-        }
-
-        return $response;
+        return $this->sendAccess($method, $target, $token, $body);
     }
 
     /** @param array{pointer?: string, parameter?: string} $where */
@@ -401,17 +310,6 @@ final class AuthorizationApiRelationshipsTest extends AcceptanceTestCase
         $errors = self::decoded($response)['errors'] ?? [];
         self::assertIsArray($errors);
         self::assertSame($where, array_diff_key((array) ($errors[0] ?? []), ['detail' => true]), $case);
-    }
-
-    /**
-     * A problem document, or any JSON answer.
-     *
-     * @return array<array-key, mixed>
-     */
-    private static function decoded(ResponseInterface $response): array
-    {
-        /** @var array<array-key, mixed> */
-        return json_decode((string) $response->getBody(), true, flags: JSON_THROW_ON_ERROR);
     }
 
     /** @return array{type: string, id: string} */

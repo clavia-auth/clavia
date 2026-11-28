@@ -94,7 +94,8 @@ interface DecisionEngine
      *
      * @return list<bool>
      *
-     * @throws DecisionEngineFailed When any one of them gets no answer.
+     * @throws DecisionEngineFailed When any one of them gets no answer, or is refused (`refusal` then
+     *                              says why, as it would for that question alone).
      */
     public function batchCheck(StoreId $store, AuthorizationModelId $model, array $checks): array;
 

@@ -372,10 +372,24 @@ final readonly class OpenFgaDecisionEngine implements DecisionEngine
 
         $decisions = [];
         foreach (array_keys($checks) as $index) {
-            // A check the engine could not answer (`{"error": …}`) has no `allowed`: no decision.
             /** @var mixed $result */
             $result = $results[self::correlation($index)] ?? null;
-            if (! is_array($result) || isset($result['error'])) {
+            /** @var mixed $error */
+            $error = is_array($result) ? ($result['error'] ?? null) : null;
+            // A check the engine refused (`{"error": {"input_error": "validation_error"}}`: a condition
+            // it could not evaluate) is a refusal, as it is alone; any other error is no decision.
+            /** @var mixed $refused */
+            $refused = is_array($error) ? ($error['input_error'] ?? null) : null;
+            if (is_string($refused) && preg_match('/^[a-z0-9_]{1,64}$/D', $refused) === 1) {
+                $this->logger->notice('The decision engine refused {operation}: {code} ({status})', [
+                    'operation' => 'batch check',
+                    'code' => $refused,
+                    'status' => StatusCodeInterface::STATUS_OK,
+                ]);
+
+                throw DecisionEngineFailed::refused($refused);
+            }
+            if (! is_array($result) || $error !== null) {
                 throw $this->unavailable('batch check', 'a check has no decision');
             }
             /** @var mixed $allowed */

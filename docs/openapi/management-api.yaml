@@ -6087,7 +6087,7 @@ components:
             type: string
         denial_reasons:
           type: boolean
-          description: Whether a denial says which kind it is (`no_relation`, `subject_inactive`, `unknown_type`), never more.
+          description: Whether a denial says which kind it is (`no_relation`, `subject_inactive`, `unknown_type`, `condition_failed`), never more.
 
     ResourceServerAuthorizationUpdate:
       type: object

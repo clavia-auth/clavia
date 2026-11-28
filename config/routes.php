@@ -10,6 +10,8 @@
 declare(strict_types=1);
 
 use Clavia\Adapter\Primary\Http\Access\AccessApiMiddleware;
+use Clavia\Adapter\Primary\Http\Access\AuthZenMetadataHandler;
+use Clavia\Adapter\Primary\Http\Access\EvaluationHandler;
 use Clavia\Adapter\Primary\Http\Access\RelationshipsHandler;
 use Clavia\Adapter\Primary\Http\Auth\BrandingHandler;
 use Clavia\Adapter\Primary\Http\Auth\ConsentHandler;
@@ -496,8 +498,8 @@ return static function (Application $app, ContainerInterface $container): void {
 
     // ── /access/v1/* — the Authorization API (docs/design/fine-grained-authorization.md), a machine
     // plane beside the Management API: a token for that API on every route, through AccessApiMiddleware,
-    // which checks each request against docs/openapi/authorization-api.yaml. Only while a decision
-    // engine is named (CLAVIA_FGA_URL); otherwise the routes do not exist. ──
+    // which checks each request against docs/openapi/authorization-api.yaml; its metadata is public.
+    // Only while a decision engine is named (CLAVIA_FGA_URL); otherwise the routes do not exist. ──
     if ($settings->fineGrainedAuthorization()) {
         $access = static fn (string $handler): array => [AccessApiMiddleware::class, $handler];
         $app->route(
@@ -506,5 +508,9 @@ return static function (Application $app, ContainerInterface $container): void {
             [RequestMethodInterface::METHOD_GET, RequestMethodInterface::METHOD_POST],
             'access.relationships',
         );
+        // AuthZEN 1.0 §6, §7, §9: the decisions, and the decision point's metadata (public).
+        $app->post('/access/v1/evaluation', $access(EvaluationHandler::class), 'access.evaluation');
+        $app->post('/access/v1/evaluations', $access(EvaluationHandler::class), 'access.evaluations');
+        $app->get('/.well-known/authzen-configuration', AuthZenMetadataHandler::class, 'access.metadata');
     }
 };

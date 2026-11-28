@@ -17,11 +17,15 @@ use ClaviaTest\Support\AcceptanceTestCase;
 use Mezzio\Router\RouteCollector;
 
 /**
- * `docs/openapi/authorization-api.yaml` and the routes under `/access/v1` are the same set: an
+ * `docs/openapi/authorization-api.yaml` and the routes under `/access/v1`, with AuthZEN's metadata, are
+ * the same set: an
  * endpoint is not added without its contract, and the contract describes nothing that is not served.
  */
 final class AuthorizationApiCoverageTest extends AcceptanceTestCase
 {
+    /** AuthZEN's metadata (§9), the management host's, described here and not by the authorization server's document. */
+    public const string METADATA = '/.well-known/authzen-configuration';
+
     public function testEveryRouteIsAnOperationAndEveryOperationARoute(): void
     {
         // The routes exist only while a decision engine is named.
@@ -33,7 +37,7 @@ final class AuthorizationApiCoverageTest extends AcceptanceTestCase
 
         $routed = [];
         foreach ($this->container()->get(RouteCollector::class)->getRoutes() as $route) {
-            if (! str_starts_with($route->getPath(), '/access/')) {
+            if (! str_starts_with($route->getPath(), '/access/') && $route->getPath() !== self::METADATA) {
                 continue;
             }
             foreach ($route->getAllowedMethods() ?? [] as $method) {

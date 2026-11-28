@@ -33,7 +33,11 @@ final class AuthorizationServerCoverageTest extends AcceptanceTestCase
 
         $routed = [];
         foreach ($this->container()->get(RouteCollector::class)->getRoutes() as $route) {
-            if (preg_match('#^/(oauth2|oidc|\.well-known)/#', $route->getPath()) !== 1) {
+            // AuthZEN's metadata is the management host's, in the Authorization API's document.
+            if (
+                preg_match('#^/(oauth2|oidc|\.well-known)/#', $route->getPath()) !== 1
+                || $route->getPath() === AuthorizationApiCoverageTest::METADATA
+            ) {
                 continue;
             }
             foreach ($route->getAllowedMethods() ?? [] as $method) {

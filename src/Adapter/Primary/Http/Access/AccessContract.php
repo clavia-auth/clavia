@@ -33,6 +33,9 @@ final readonly class AccessContract
 {
     private const string SECURITY_SCHEME = 'authorizationToken';
 
+    /** AuthZEN's own operations, by `operationId`; the rest (relationships) are Clavia's. */
+    private const array AUTHZEN_OPERATIONS = ['evaluateAccess', 'evaluateAccessBatch'];
+
     private RequestValidator $requests;
 
     public function __construct(private Document $document)
@@ -91,6 +94,16 @@ final readonly class AccessContract
     public function validateResponse(Operation $operation, ResponseInterface $response): void
     {
         ResponseValidator::validate($operation, $response);
+    }
+
+    /**
+     * Whether the operation is one of AuthZEN's (evaluation, and search to come), which answer a request
+     * they cannot read or that lacks what they require with 400 (AuthZEN 1.0 §10.1.1), rather than
+     * Clavia's 422.
+     */
+    public function isAuthZen(Operation $operation): bool
+    {
+        return in_array($operation->operationId, self::AUTHZEN_OPERATIONS, true);
     }
 
     /** @return list<Operation> */
