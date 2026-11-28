@@ -31,6 +31,12 @@ final class ContractViolation
 {
     public const string DETAIL = "The request does not satisfy the API's contract.";
 
+    /**
+     * What a `422` says: the request is well formed (the contract took it), and a rule of the domain
+     * refuses it, each fault pointed at in `errors`.
+     */
+    public const string REFUSED = 'The request is well formed, but a rule refuses it.';
+
     /** Enough to fix a request; a body with thousands of faults does not need them all listed. */
     private const int MAX_ERRORS = 50;
 
@@ -49,7 +55,9 @@ final class ContractViolation
                 StatusCodeInterface::STATUS_UNSUPPORTED_MEDIA_TYPE,
                 $rejection->getMessage(),
             ],
-            default => [StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, self::DETAIL],
+            // What the contract refuses is a request built wrong (RFC 9110 §15.5.1); 422 is left to
+            // the rules that refuse a well-formed one.
+            default => [StatusCodeInterface::STATUS_BAD_REQUEST, self::DETAIL],
         };
 
         return new Problem($status, $detail, array_map(

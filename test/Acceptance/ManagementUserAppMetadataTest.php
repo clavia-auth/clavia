@@ -106,8 +106,15 @@ final class ManagementUserAppMetadataTest extends AcceptanceTestCase
         $badKey = $this->api(RequestMethodInterface::METHOD_PATCH, $path, ['app_metadata' => ['the plan' => 'pro']]);
         $notAnObject = $this->api(RequestMethodInterface::METHOD_PATCH, $path, ['app_metadata' => ['pro']]);
 
-        foreach ([$tooDeep, $badKey, $notAnObject] as $response) {
-            self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
+        // Its bounds are a rule of the domain (422); not being an object, the contract's (400).
+        foreach (
+            [
+                [$tooDeep, StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY],
+                [$badKey, StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY],
+                [$notAnObject, StatusCodeInterface::STATUS_BAD_REQUEST],
+            ] as [$response, $status]
+        ) {
+            self::assertSame($status, $response->getStatusCode());
             self::assertStringContainsString('"pointer":"/app_metadata', (string) $response->getBody());
         }
         self::assertStringNotContainsString('the plan', (string) $badKey->getBody(), 'Never the value at fault.');

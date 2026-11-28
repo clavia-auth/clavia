@@ -88,7 +88,7 @@ final class MfaPoliciesTest extends AcceptanceTestCase
         $patched = $this->api(RequestMethodInterface::METHOD_PATCH, $path, ['mfa_policy' => 'optional']);
         self::assertSame('optional', self::document($patched)['mfa_policy']);
         self::assertSame(
-            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
+            StatusCodeInterface::STATUS_BAD_REQUEST,
             $this->api(RequestMethodInterface::METHOD_PATCH, $path, ['mfa_policy' => 'sometimes'])->getStatusCode(),
         );
 

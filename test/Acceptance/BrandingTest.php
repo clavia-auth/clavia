@@ -194,7 +194,7 @@ final class BrandingTest extends AcceptanceTestCase
     {
         foreach (['0f766e', '#0f766', 'red', '#0f766e;}', '#GGGGGG'] as $color) {
             self::assertSame(
-                StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
+                StatusCodeInterface::STATUS_BAD_REQUEST,
                 $this->patch(['accent_color' => $color])->getStatusCode(),
                 $color,
             );

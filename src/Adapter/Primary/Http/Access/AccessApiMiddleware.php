@@ -42,9 +42,8 @@ use Psr\Http\Server\RequestHandlerInterface;
  *     ({@see AuthenticateAuthorizationCaller}; `invalid_token`, 401), the audience before any scope.
  *  3. **The scope** the operation's `security` names in `docs/openapi/authorization-api.yaml`
  *     (`insufficient_scope`, 403).
- *  4. **The request** against the contract: 400, 415 or 422, every violation listed. AuthZEN's own
- *     operations answer what the contract refuses with 400 (AuthZEN 1.0 §10.1.1), and a question
- *     that cannot be asked too.
+ *  4. **The request** against the contract: 400 (as AuthZEN 1.0 §10.1.1 asks of its own operations)
+ *     or 415, every violation listed. A question that cannot be asked is 400 too.
  *
  * A request's `X-Request-ID` is echoed on every answer (AuthZEN 1.0 §10.1.3), when it is one a header
  * can carry back.
@@ -105,14 +104,7 @@ final readonly class AccessApiMiddleware implements MiddlewareInterface
         try {
             $validated = $this->contract->validateRequest($request);
         } catch (RequestRejected $rejection) {
-            $problem = ContractViolation::problem($rejection);
-            $unprocessable = $problem->status === StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY;
-
-            return $this->responder->problem(
-                $unprocessable && $this->contract->isAuthZen($operation)
-                    ? new Problem(StatusCodeInterface::STATUS_BAD_REQUEST, $problem->detail, $problem->errors)
-                    : $problem,
-            );
+            return $this->responder->problem(ContractViolation::problem($rejection));
         }
 
         try {

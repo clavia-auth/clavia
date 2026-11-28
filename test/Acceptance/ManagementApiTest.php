@@ -317,7 +317,7 @@ final class ManagementApiTest extends AcceptanceTestCase
 
         $response = $this->api(RequestMethodInterface::METHOD_POST, self::CLIENTS, rawBody: '[]');
 
-        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame([['pointer' => '', 'detail' => 'Must be an object.']], self::document($response)['errors']);
     }
 
@@ -331,7 +331,7 @@ final class ManagementApiTest extends AcceptanceTestCase
             ['email' => 'ok@clavia.dev', 'password' => 'hunter2'],
         );
 
-        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         /** @var list<array{pointer?: string, detail: string}> $errors */
         $errors = self::document($response)['errors'];
         self::assertSame('/password', $errors[0]['pointer'] ?? null);
@@ -446,7 +446,7 @@ final class ManagementApiTest extends AcceptanceTestCase
             ['email' => 'null@clavia.dev', 'password' => null],
         );
 
-        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame('/password', self::document($response)['errors'][0]['pointer'] ?? null);
     }
 
@@ -498,7 +498,7 @@ final class ManagementApiTest extends AcceptanceTestCase
                 ->getStatusCode(),
         );
         self::assertSame(
-            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
+            StatusCodeInterface::STATUS_BAD_REQUEST,
             $this->api(
                 RequestMethodInterface::METHOD_POST,
                 self::USERS,
@@ -507,7 +507,7 @@ final class ManagementApiTest extends AcceptanceTestCase
         );
         // Past the contract's 256 characters: refused, never truncated.
         self::assertSame(
-            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
+            StatusCodeInterface::STATUS_BAD_REQUEST,
             $this->api(
                 RequestMethodInterface::METHOD_POST,
                 self::USERS,
@@ -537,7 +537,7 @@ final class ManagementApiTest extends AcceptanceTestCase
             ['email' => 'x@clavia.dev', 'password' => 'a-good-password', 'role' => 'admin'],
         );
 
-        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame([['pointer' => '/role', 'detail' => 'Is not allowed.']], self::document($response)['errors']);
     }
 
@@ -551,7 +551,7 @@ final class ManagementApiTest extends AcceptanceTestCase
             ['password' => 'short', 'name' => 5, 'role' => 'admin'],
         );
 
-        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertEqualsCanonicalizing(
             ['/email', '/password', '/name', '/role'],
             array_column((array) self::document($response)['errors'], 'pointer'),
@@ -564,7 +564,7 @@ final class ManagementApiTest extends AcceptanceTestCase
 
         $response = $this->api(RequestMethodInterface::METHOD_GET, self::USERS, query: ['sort' => 'email']);
 
-        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
         self::assertSame(
             [['parameter' => 'sort', 'detail' => 'Is not a parameter of this operation.']],
             self::document($response)['errors'],
@@ -583,7 +583,7 @@ final class ManagementApiTest extends AcceptanceTestCase
 
         $response = $this->api(RequestMethodInterface::METHOD_POST, $path, ['x' => 1]);
 
-        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
     }
 
     public function testAUserTheTokenActsAsCannotBeDeleted(): void
@@ -635,7 +635,7 @@ final class ManagementApiTest extends AcceptanceTestCase
             )['total'],
         );
         self::assertSame(
-            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
+            StatusCodeInterface::STATUS_BAD_REQUEST,
             $this->api(RequestMethodInterface::METHOD_GET, self::USERS, query: ['per_page' => '500'])->getStatusCode(),
         );
     }
@@ -684,7 +684,7 @@ final class ManagementApiTest extends AcceptanceTestCase
             ['client_id' => 'attacker-chosen', 'client_type' => 'public'],
         );
 
-        self::assertSame(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, $response->getStatusCode());
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $response->getStatusCode());
     }
 
     public function testPublicClientGetsNoSecret(): void
@@ -822,8 +822,6 @@ final class ManagementApiTest extends AcceptanceTestCase
                 'grant_types' => ['urn:ietf:params:oauth:grant-type:device_code'],
                 'is_first_party' => false,
             ],
-            // Grants this server does not have are not in the contract.
-            ['client_type' => 'public', 'grant_types' => ['implicit']],
             // A public client's codes are anybody's without PKCE (OAuth 2.1 §7.5.1).
             ['client_type' => 'public', 'require_pkce' => false],
         ];
@@ -835,6 +833,12 @@ final class ManagementApiTest extends AcceptanceTestCase
                 json_encode($body, JSON_THROW_ON_ERROR),
             );
         }
+        // A grant this server does not have is not in the contract: a request built wrong.
+        self::assertSame(StatusCodeInterface::STATUS_BAD_REQUEST, $this->api(
+            RequestMethodInterface::METHOD_POST,
+            self::CLIENTS,
+            ['client_type' => 'public', 'grant_types' => ['implicit']],
+        )->getStatusCode());
     }
 
     public function testAConfidentialClientCanBeRelievedOfPkceAndHeldToItAgain(): void
@@ -1014,7 +1018,7 @@ final class ManagementApiTest extends AcceptanceTestCase
         self::assertSame('opaque', self::document($patched)['access_token_format']);
 
         self::assertSame(
-            StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
+            StatusCodeInterface::STATUS_BAD_REQUEST,
             $this->api(RequestMethodInterface::METHOD_PATCH, $path, ['access_token_format' => 'jwe'])->getStatusCode(),
         );
     }

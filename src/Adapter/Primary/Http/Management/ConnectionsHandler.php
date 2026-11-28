@@ -58,7 +58,7 @@ final readonly class ConnectionsHandler implements RequestHandlerInterface
     {
         return new Problem(
             StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
-            ContractViolation::DETAIL,
+            ContractViolation::REFUSED,
             [['pointer' => $refused->pointer, 'detail' => $refused->getMessage()]],
         );
     }
@@ -70,7 +70,7 @@ final readonly class ConnectionsHandler implements RequestHandlerInterface
         } catch (InvalidValue $refused) {
             return $this->responder->problem(new Problem(
                 StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
-                ContractViolation::DETAIL,
+                ContractViolation::REFUSED,
                 [['pointer' => '/saml', 'detail' => $refused->getMessage()]],
             ));
         }

@@ -101,11 +101,11 @@ final readonly class ResourceServerHandler implements RequestHandlerInterface
         try {
             return $errors === []
                 ? ClaimMappings::of($mappings)
-                : new Problem(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, ContractViolation::DETAIL, $errors);
+                : new Problem(StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY, ContractViolation::REFUSED, $errors);
         } catch (InvalidValue $refusal) {
             return new Problem(
                 StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY,
-                ContractViolation::DETAIL,
+                ContractViolation::REFUSED,
                 [['pointer' => '/claims', 'detail' => $refusal->getMessage()]],
             );
         }
