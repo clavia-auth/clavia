@@ -42,6 +42,8 @@ use Clavia\Adapter\Primary\Cli\Sqs\QueueMessagesFactory;
 use Clavia\Adapter\Primary\Cli\SyncIdentityFeedCommand;
 use Clavia\Adapter\Primary\Http\Access\AccessApiMiddleware;
 use Clavia\Adapter\Primary\Http\Access\AccessContract;
+use Clavia\Adapter\Primary\Http\Access\AuthZenMetadataHandler;
+use Clavia\Adapter\Primary\Http\Access\EvaluationHandler;
 use Clavia\Adapter\Primary\Http\Access\RelationshipsHandler;
 use Clavia\Adapter\Primary\Http\Auth\AuthCookies;
 use Clavia\Adapter\Primary\Http\Auth\AuthPageResponder;
@@ -231,6 +233,8 @@ use Clavia\Application\Authentication\SignIn\SignInWithPassword;
 use Clavia\Application\Authentication\SignOut;
 use Clavia\Application\Authentication\SignOutEverywhere;
 use Clavia\Application\Authorization\Caller\AuthenticateAuthorizationCaller;
+use Clavia\Application\Authorization\Evaluation\EvaluateAccess;
+use Clavia\Application\Authorization\Evaluation\SubjectFacts;
 use Clavia\Application\Authorization\Feed\IdentityFeed;
 use Clavia\Application\Authorization\Feed\ResyncStore;
 use Clavia\Application\Authorization\Feed\StoreReconciler;
@@ -959,6 +963,10 @@ final class ConfigProvider
                     SpokenForApi::class => Container\SpokenForApiFactory::class,
                     WriteRelationships::class => Container\WriteRelationshipsFactory::class,
                     ReadRelationships::class => Container\ReadRelationshipsFactory::class,
+                    EvaluationHandler::class => Container\EvaluationHandlerFactory::class,
+                    AuthZenMetadataHandler::class => Container\AuthZenMetadataHandlerFactory::class,
+                    EvaluateAccess::class => Container\EvaluateAccessFactory::class,
+                    SubjectFacts::class => Container\SubjectFactsFactory::class,
                     UsersHandler::class => Container\UsersHandlerFactory::class,
                     UserHandler::class => Container\UserHandlerFactory::class,
                     ClientsHandler::class => Container\ClientsHandlerFactory::class,

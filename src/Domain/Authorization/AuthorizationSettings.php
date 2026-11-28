@@ -45,7 +45,7 @@ final readonly class AuthorizationSettings
     /**
      * @param list<ClientId> $clients The clients that speak for the API.
      * @param bool $denialReasons Whether a denial says which kind it is (`no_relation`,
-     *                            `subject_inactive`, `unknown_type`), never more.
+     *                            `subject_inactive`, `unknown_type`, `condition_failed`), never more.
      *
      * @throws InvalidValue When a client is named twice, or more than twenty are.
      */

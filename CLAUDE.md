@@ -278,7 +278,7 @@ security rule, a scheduled command is missing from a kit, or a release's version
 | `/auth/*` | Sign-in, second factor, consent, device approval, sign-out | The browser session cookie |
 | `/api/v1/*` | Management API | A bearer access token for the Management API |
 | `/scim/v2/*` | SCIM 2.0 provisioning (RFC 7644), for directories | A provisioning token, as `Authorization: Bearer` |
-| `/access/v1/*` | The Authorization API: an API's relationships, then AuthZEN decisions | A bearer access token for the Authorization API, from a client speaking for that API |
+| `/access/v1/*` | The Authorization API: an API's relationships, and AuthZEN decisions | A bearer access token for the Authorization API, from a client speaking for that API |
 
 Keeping them apart is the central design constraint. The failure to avoid is authenticating
 `/api/v1/*` with the `/auth/*` session cookie: the Management API is a machine plane, reachable
@@ -341,8 +341,8 @@ decision engine (`DecisionEngine`, `AccessCheck`, `DecisionEngineFailed`).
 ### Fine-grained authorization
 
 Design in `docs/design/fine-grained-authorization.md` (AuthZEN over OpenFGA, #133), built in slices:
-the engine (#135), authorization on an API (#136), the identity feed (#137), then relationships for
-APIs (#139). Nothing asks the engine for a decision yet.
+the engine (#135), authorization on an API (#136), the identity feed (#137), relationships for APIs
+(#139), then AuthZEN evaluation (#138). Search (#140) is to come.
 
 - **OpenFGA runs beside Clavia**, its own container and PostgreSQL, reached by Clavia alone with a
   preshared key (`CLAVIA_FGA_URL`, `CLAVIA_FGA_API_KEY`; unset, the feature is off and
@@ -418,6 +418,25 @@ APIs (#139). Nothing asks the engine for a decision yet.
   `next_page_token` absent on the last). The shape is AuthZEN's: `resource` and `subject` as
   `{type, id}`, a subject's `relation` for a userset, an optional `condition` `{name, context}`. Nothing
   of the relationships is stored, logged or audited by Clavia; the engine not answering is `503`.
+- **AuthZEN evaluation** (#138, §5.2): `POST /access/v1/evaluation` and `/evaluations`
+  (`evaluate:access`, `EvaluateAccess`), held to AuthZEN 1.0: unknown members ignored, a malformed
+  request `400` (`AccessContract::isAuthZen()`), `X-Request-ID` sent back. A subject is a `user` or a
+  `client` the model declares, a resource of a declared type that can be related to, an action a
+  relation of that type (`AuthorizationModel::relates()`), no `context.clavia` (all `400`,
+  `EvaluationRefused`). **A subject Clavia does not know, a deactivated account or a deleted client is
+  denied before OpenFGA is asked.** Clavia adds `context.clavia.subject` (`SubjectFacts`, once per
+  subject per request): a person's `id`, `connection`, `app_metadata` (always an object), `roles` (the
+  names of their roles holding a permission on this API only) and `mfa_enrolled`; a client's `id`,
+  `type`, `first_party`. A model reads them through a condition parameter `clavia` of type `map<any>`.
+  A batch: at most 50, defaults merged member by member, answers in order, `execute_all`,
+  `deny_on_first_deny` or `permit_on_first_permit` (truncated after the deciding answer); an item that
+  cannot be asked is `{decision: false, context: {error: {status, message}}}`; one OpenFGA refuses (a
+  condition missing a parameter, `validation_error`, a refusal from `batchCheck()` too) is denied
+  alone, `condition_failed`, the batch asked again question by question. Reasons (`no_relation`,
+  `subject_inactive`, `unknown_type`, `condition_failed`) only to an API with `denial_reasons`; the
+  engine not answering is `503`. `GET /.well-known/authzen-configuration` (`AuthZenMetadataHandler`,
+  public, an hour) names `https://management.{domain}` and the two endpoints; Caddy answers it on
+  `management.*` and `404` on `auth.*`.
 
 ## Flows
 

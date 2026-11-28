@@ -18,6 +18,7 @@ use Clavia\Adapter\Primary\Http\OpenApi\Validation\RequestRejected;
 use Clavia\Adapter\Primary\Http\Shared\AccessTokenCredentials;
 use Clavia\Adapter\Primary\Http\Shared\BearerChallenger;
 use Clavia\Application\Authorization\Caller\AuthenticateAuthorizationCaller;
+use Clavia\Application\Authorization\Evaluation\EvaluationRefused;
 use Clavia\Application\Authorization\Relationships\RelationshipRefused;
 use Clavia\Application\Authorization\SpeaksForNoApi;
 use Clavia\Application\OAuth2\ProtectedResource\TokenScheme;
@@ -41,7 +42,12 @@ use Psr\Http\Server\RequestHandlerInterface;
  *     ({@see AuthenticateAuthorizationCaller}; `invalid_token`, 401), the audience before any scope.
  *  3. **The scope** the operation's `security` names in `docs/openapi/authorization-api.yaml`
  *     (`insufficient_scope`, 403).
- *  4. **The request** against the contract: 400, 415 or 422, every violation listed.
+ *  4. **The request** against the contract: 400, 415 or 422, every violation listed. AuthZEN's own
+ *     operations answer what the contract refuses with 400 (AuthZEN 1.0 §10.1.1), and a question
+ *     that cannot be asked too.
+ *
+ * A request's `X-Request-ID` is echoed on every answer (AuthZEN 1.0 §10.1.3), when it is one a header
+ * can carry back.
  *
  * The handler then gets an {@see AccessRequest}. The use cases' expected refusals become problem
  * documents here: a client speaking for no API is 403, a relationship refused 422 pointing at it,
@@ -61,8 +67,19 @@ final readonly class AccessApiMiddleware implements MiddlewareInterface
     ) {
     }
 
+    /** What an `X-Request-ID` echoed back may be: visible ASCII, at most 256 characters. */
+    private const string REQUEST_ID = '/^[\x21-\x7E]{1,256}$/D';
+
     #[\Override]
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
+    {
+        $response = $this->answer($request, $handler);
+        $id = $request->getHeaderLine('X-Request-ID');
+
+        return preg_match(self::REQUEST_ID, $id) === 1 ? $response->withHeader('X-Request-ID', $id) : $response;
+    }
+
+    private function answer(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
         $operation = $this->contract->operationFor($request) ?? throw new LogicException(sprintf(
             '%s %s is routed but not described in the Authorization API contract.',
@@ -88,7 +105,14 @@ final readonly class AccessApiMiddleware implements MiddlewareInterface
         try {
             $validated = $this->contract->validateRequest($request);
         } catch (RequestRejected $rejection) {
-            return $this->responder->problem(ContractViolation::problem($rejection));
+            $problem = ContractViolation::problem($rejection);
+            $unprocessable = $problem->status === StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY;
+
+            return $this->responder->problem(
+                $unprocessable && $this->contract->isAuthZen($operation)
+                    ? new Problem(StatusCodeInterface::STATUS_BAD_REQUEST, $problem->detail, $problem->errors)
+                    : $problem,
+            );
         }
 
         try {
@@ -96,6 +120,10 @@ final readonly class AccessApiMiddleware implements MiddlewareInterface
         } catch (SpeaksForNoApi $refusal) {
             return $this->responder->problem(
                 new Problem(StatusCodeInterface::STATUS_FORBIDDEN, $refusal->getMessage()),
+            );
+        } catch (EvaluationRefused $refusal) {
+            return $this->responder->problem(
+                new Problem(StatusCodeInterface::STATUS_BAD_REQUEST, $refusal->getMessage()),
             );
         } catch (RelationshipRefused $refusal) {
             return $this->responder->problem(self::refused($refusal));

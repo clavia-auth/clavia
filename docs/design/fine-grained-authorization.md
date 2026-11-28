@@ -167,6 +167,30 @@ tuples is OpenFGA's to accept or refuse, and its refusal is a `422` with its err
 6. `check(store, model, resource, action.name, subject, context)`; `{decision}` back.
 7. OpenFGA failing or slower than the timeout: `503`.
 
+Decided in slice 4 (#138):
+
+- **AuthZEN's rules on the wire.** Members AuthZEN does not define are ignored (§10.1.1), so its
+  schemas in `docs/openapi/authorization-api.yaml` are open; a request missing what it requires, or
+  that the contract refuses, is `400`, not Clavia's usual `422`. A request's `X-Request-ID` is sent
+  back on every answer (§10.1.3). `properties` are not read.
+- **A batch** (§7) takes the request's `subject`, `action`, `resource` and `context` as defaults an
+  item replaces member by member; at most 50; answered in order, up to and including the first denial
+  (`deny_on_first_deny`) or permit (`permit_on_first_permit`), the rest left out, as AuthZEN's
+  examples show. An item that cannot be asked is a denial with `context.error` `{status, message}`
+  (§7.2.1); a batch without items is one question.
+- **A question the engine refuses to evaluate is a denial**, `condition_failed`, a fourth reason: a
+  condition reading a parameter that is not there (an `app_metadata` key a person lacks) is OpenFGA's
+  `validation_error`, which would otherwise be a `503` for everyone. A batch with such an item is asked
+  again one question at a time, so only that one is denied. Conditions should guard with `has()`.
+- **Facts are read through a parameter `clavia` of type `map<any>`**, which OpenFGA accepts and
+  evaluates against nested, mixed values (checked against OpenFGA 1.22).
+- **"In a connection the API may see"** has nothing to stand on yet: an API is tied to no connection.
+  Every active account is a subject; whether an API should be confined to some connections is question
+  6 below.
+- **The metadata** (§9) is `GET /.well-known/authzen-configuration` on `management.{domain}`: the
+  identifier `https://management.{domain}` and the two evaluation endpoints, public, an hour's cache;
+  `404` on `auth.*`, and nowhere while `CLAVIA_FGA_URL` is unset.
+
 ### 5.3 Writing relationships
 
 `POST /access/v1/relationships` (`write:relationships`; Clavia's own, not AuthZEN): writes and
@@ -335,6 +359,10 @@ OpenFGA's Read API reads by object, or by type and subject, but not a whole type
 5. **The middleware's repository**: a new one (`clavia-auth/authzen-php`, say), with its own release
    cycle, published on Packagist. *Recommendation:* yes, under that name; creating the repository is
    yours.
-6. **CI**: the integration contract against a real OpenFGA needs an `openfga` service in
+6. **Connections an API may see** (§5.2, step 4): should an API's questions be confined to accounts
+   of some connections? *Recommendation:* not until there is a reason: an API learns only decisions,
+   and every account is a person Clavia knows. If it comes, it is a setting on the API's
+   authorization, defaulting to every connection.
+7. **CI**: the integration contract against a real OpenFGA needs an `openfga` service in
    `.github/workflows/ci.yml`, which is the maintainer's file. *Recommendation:* add it with slice 1;
    until then the contract runs against the double in CI and against OpenFGA locally.

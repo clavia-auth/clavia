@@ -123,6 +123,9 @@ auth.{$CLAVIA_ROOT_DOMAIN} {
 	handle /access/v1/* {
 		respond 404
 	}
+	handle /.well-known/authzen-configuration {
+		respond 404
+	}
 	# Metrics are the internal listener's alone.
 	handle /metrics {
 		respond 404
@@ -202,6 +205,11 @@ management.{$CLAVIA_ROOT_DOMAIN} {
 		header Cache-Control "no-store" {
 			defer
 		}
+		import clavia_app
+	}
+
+	# AuthZEN 1.0 §9: the decision point's metadata, public; its caching is the application's.
+	handle /.well-known/authzen-configuration {
 		import clavia_app
 	}
 

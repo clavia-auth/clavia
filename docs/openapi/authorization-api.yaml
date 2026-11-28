@@ -35,6 +35,16 @@ servers:
   - url: /
 
 tags:
+  - name: evaluation
+    x-displayName: Evaluation
+    description: |
+      AuthZEN 1.0's Access Evaluation and Access Evaluations APIs: may this subject do this to that
+      resource? Answered from the calling API's store, with what Clavia knows of the subject added to
+      the context its conditions read. As AuthZEN asks (§10.1.1), members this document does not
+      define are ignored, and a request missing what it requires is `400`.
+  - name: metadata
+    x-displayName: Metadata
+    description: AuthZEN 1.0's decision point metadata (§9), public.
   - name: relationships
     x-displayName: Relationships
     description: |
@@ -45,6 +55,145 @@ security:
   - authorizationToken: []
 
 paths:
+  /access/v1/evaluation:
+    post:
+      tags: [evaluation]
+      operationId: evaluateAccess
+      summary: Evaluate access
+      description: |
+        One question (AuthZEN 1.0 §6). In order, before the decision engine is asked anything:
+
+        - the `subject` is a person (`type: user`, the `sub` of their tokens) or an application
+          (`type: client`, its client id), a type the API's model declares; the `resource` is of a
+          type the model declares; `action.name` is a relation of that type; `context` has no
+          `clavia` member. Otherwise `400`.
+        - the subject exists in Clavia: an active account, or an application that exists. Otherwise
+          `{"decision": false}`, and the engine is not asked: a deactivated person is out at once,
+          whatever relationships remain.
+        - Clavia adds what it knows of the subject as `context.clavia.subject`, for the model's
+          conditions to read through a parameter `clavia` of type `map<any>`. For a person: `id`,
+          `connection`, `app_metadata`, `roles` (the names of their roles holding a permission on this
+          API) and `mfa_enrolled`; for an application: `id`, `type` (`confidential` or `public`) and
+          `first_party`. These facts are never sent back.
+
+        A condition that cannot be evaluated (it reads an `app_metadata` key the person does not have,
+        or a context member the request did not send) denies the question (`condition_failed`), and
+        that question alone: write conditions with `has()` where a fact may be missing, as in
+        `has(clavia.subject.app_metadata.department) && clavia.subject.app_metadata.department == department`.
+
+        `properties` on the subject, the action and the resource are not read. A denial carries its
+        kind in `context.reason` (`no_relation`, `subject_inactive`, `condition_failed`) only when the
+        API turned reasons on. The request's `X-Request-ID` is sent back.
+      security:
+        - authorizationToken: [evaluate:access]
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessEvaluation'
+            examples:
+              AccessEvaluation:
+                $ref: '#/components/examples/AccessEvaluation'
+      responses:
+        '200':
+          description: The decision. A denial is a `200` too.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decision'
+              examples:
+                Permit:
+                  $ref: '#/components/examples/Permit'
+                Denial:
+                  $ref: '#/components/examples/Denial'
+        '400':
+          $ref: '#/components/responses/MalformedQuestion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /access/v1/evaluations:
+    post:
+      tags: [evaluation]
+      operationId: evaluateAccessBatch
+      summary: Evaluate access in a batch
+      description: |
+        Up to fifty questions at once (AuthZEN 1.0 §7). The request's `subject`, `action`, `resource`
+        and `context` are defaults an evaluation's own replace, member by member; each evaluation must
+        end up with a subject, an action and a resource, or the request is `400`. Each is checked as
+        `POST /access/v1/evaluation` checks one, and the answers come back in the order asked. One
+        that cannot be asked is a denial whose `context.error` says why, with the status it would have
+        had alone. `options.evaluations_semantic` says how far to answer: `execute_all` (the default),
+        `deny_on_first_deny` (up to and including the first denial) or `permit_on_first_permit` (up to
+        and including the first permit). Without `evaluations`, it is a single question, answered as one.
+      security:
+        - authorizationToken: [evaluate:access]
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessEvaluations'
+            examples:
+              AccessEvaluations:
+                $ref: '#/components/examples/AccessEvaluations'
+      responses:
+        '200':
+          description: The decisions, in the order asked; or one decision, for a request without evaluations.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decisions'
+              examples:
+                Decisions:
+                  $ref: '#/components/examples/Decisions'
+        '400':
+          $ref: '#/components/responses/MalformedQuestion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /.well-known/authzen-configuration:
+    get:
+      tags: [metadata]
+      operationId: readDecisionPointMetadata
+      summary: Read the decision point's metadata
+      description: |
+        AuthZEN 1.0 §9: the decision point's identifier (`https://management.{domain}`) and the
+        endpoints it offers, and none it does not. Public, and cacheable for an hour.
+      security: []
+      responses:
+        '200':
+          description: The metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionPointMetadata'
+              examples:
+                DecisionPointMetadata:
+                  $ref: '#/components/examples/DecisionPointMetadata'
+
   /access/v1/relationships:
     post:
       tags: [relationships]
@@ -155,7 +304,43 @@ components:
             search:access: Search the subjects, resources and actions a decision allows
             write:relationships: Write and read the relationships of the API's resources
 
+  parameters:
+    RequestId:
+      name: X-Request-ID
+      in: header
+      required: false
+      description: An identifier of the request, sent back as it came (AuthZEN 1.0 §10.1.3).
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 256
+
+  headers:
+    RequestId:
+      description: The request's `X-Request-ID`, when it sent one.
+      schema:
+        type: string
+
   responses:
+    MalformedQuestion:
+      description: |
+        The request cannot be read, does not satisfy this document, or asks a question that cannot be
+        asked: a subject that is neither a person nor an application, a type or a relation the API's
+        model does not declare, a `context.clavia` (a problem document). Or a malformed `Authorization`
+        header (`invalid_request`, an RFC 6750 challenge).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            UnknownType:
+              $ref: '#/components/examples/UnknownType'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BearerError'
+          examples:
+            MalformedBearer:
+              $ref: '#/components/examples/MalformedBearer'
     BadRequest:
       description: |
         The request could not be read: malformed JSON or a parameter sent twice (a problem
@@ -249,6 +434,49 @@ components:
               $ref: '#/components/examples/ServiceUnavailable'
 
   examples:
+    AccessEvaluation:
+      summary: May Ada view the Q3 report, from the office?
+      value:
+        subject: {type: "user", id: "3f8e2d1c-5b4a-4c9e-8d7f-6a5b4c3d2e1f"}
+        action: {name: "viewer"}
+        resource: {type: "document", id: "q3-report"}
+        context: {network: "office"}
+    AccessEvaluations:
+      summary: May Ada view, edit and delete the Q3 report?
+      value:
+        subject: {type: "user", id: "3f8e2d1c-5b4a-4c9e-8d7f-6a5b4c3d2e1f"}
+        resource: {type: "document", id: "q3-report"}
+        evaluations:
+          - action: {name: "viewer"}
+          - action: {name: "editor"}
+          - action: {name: "owner"}
+        options: {evaluations_semantic: "execute_all"}
+    Permit:
+      summary: Permitted
+      value: {decision: true}
+    Denial:
+      summary: Denied, the API having turned reasons on
+      value: {decision: false, context: {reason: "no_relation"}}
+    Decisions:
+      summary: Two answers, and a question that could not be asked
+      value:
+        evaluations:
+          - {decision: true}
+          - {decision: false}
+          - {decision: false, context: {error: {status: 400, message: "The API's authorization model gives the resource's type no such relation."}}}
+    DecisionPointMetadata:
+      summary: A deployment's decision point
+      value:
+        policy_decision_point: "https://management.example.com"
+        access_evaluation_endpoint: "https://management.example.com/access/v1/evaluation"
+        access_evaluations_endpoint: "https://management.example.com/access/v1/evaluations"
+    UnknownType:
+      summary: A type the API's model does not declare
+      value:
+        type: "about:blank"
+        title: "Bad Request"
+        status: 400
+        detail: "The API's authorization model declares no such type."
     RelationshipChanges:
       summary: A person, a team and an application given documents, one taken back
       value:
@@ -349,6 +577,149 @@ components:
         detail: "The decision engine cannot answer now; nothing was done. Try again later."
 
   schemas:
+    EvaluationEntity:
+      description: A subject or a resource, as AuthZEN 1.0 §5.1 and §5.2 describe it.
+      type: object
+      additionalProperties: true
+      required: [type, id]
+      properties:
+        type:
+          type: string
+          minLength: 1
+          maxLength: 254
+        id:
+          type: string
+          minLength: 1
+          maxLength: 256
+        properties:
+          type: object
+          additionalProperties: true
+
+    EvaluationAction:
+      description: What the subject would do (AuthZEN 1.0 §5.3), a relation of the resource's type.
+      type: object
+      additionalProperties: true
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        properties:
+          type: object
+          additionalProperties: true
+
+    AccessEvaluation:
+      type: object
+      additionalProperties: true
+      required: [subject, action, resource]
+      properties:
+        subject:
+          $ref: '#/components/schemas/EvaluationEntity'
+        action:
+          $ref: '#/components/schemas/EvaluationAction'
+        resource:
+          $ref: '#/components/schemas/EvaluationEntity'
+        context:
+          type: object
+          additionalProperties: true
+
+    PartialEvaluation:
+      description: A question in a batch, or the batch's defaults (AuthZEN 1.0 §7.1).
+      type: object
+      additionalProperties: true
+      properties:
+        subject:
+          $ref: '#/components/schemas/EvaluationEntity'
+        action:
+          $ref: '#/components/schemas/EvaluationAction'
+        resource:
+          $ref: '#/components/schemas/EvaluationEntity'
+        context:
+          type: object
+          additionalProperties: true
+
+    AccessEvaluations:
+      type: object
+      additionalProperties: true
+      properties:
+        subject:
+          $ref: '#/components/schemas/EvaluationEntity'
+        action:
+          $ref: '#/components/schemas/EvaluationAction'
+        resource:
+          $ref: '#/components/schemas/EvaluationEntity'
+        context:
+          type: object
+          additionalProperties: true
+        evaluations:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/PartialEvaluation'
+        options:
+          type: object
+          additionalProperties: true
+          properties:
+            evaluations_semantic:
+              type: string
+              enum: [execute_all, deny_on_first_deny, permit_on_first_permit]
+
+    Decision:
+      description: AuthZEN 1.0 §5.5.
+      type: object
+      additionalProperties: false
+      required: [decision]
+      properties:
+        decision:
+          type: boolean
+        context:
+          type: object
+          additionalProperties: false
+          properties:
+            reason:
+              type: string
+              enum: [no_relation, subject_inactive, unknown_type, condition_failed]
+              description: The kind of denial, for an API that turned reasons on.
+            error:
+              type: object
+              additionalProperties: false
+              required: [status, message]
+              description: Why a question in a batch could not be asked (AuthZEN 1.0 §7.2.1).
+              properties:
+                status:
+                  type: integer
+                message:
+                  type: string
+
+    Decisions:
+      description: The answers of a batch in the order asked (AuthZEN 1.0 §7.2), or one, for a batch without questions.
+      type: object
+      additionalProperties: false
+      properties:
+        evaluations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Decision'
+        decision:
+          type: boolean
+        context:
+          type: object
+          additionalProperties: true
+
+    DecisionPointMetadata:
+      description: AuthZEN 1.0 §9.1.
+      type: object
+      additionalProperties: false
+      required: [policy_decision_point, access_evaluation_endpoint]
+      properties:
+        policy_decision_point:
+          type: string
+        access_evaluation_endpoint:
+          type: string
+        access_evaluations_endpoint:
+          type: string
+
     Entity:
       description: An object of the API's model, `type` and `id` as OpenFGA's notation takes them.
       type: object
