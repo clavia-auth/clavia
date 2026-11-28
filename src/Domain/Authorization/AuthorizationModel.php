@@ -35,10 +35,12 @@ final readonly class AuthorizationModel
     /**
      * @param non-empty-string $json
      * @param non-empty-list<ObjectType> $types
+     * @param array<string, list<string>> $relations Each type's relations, by name, as declared.
      */
     private function __construct(
         public string $json,
         public array $types,
+        private array $relations = [],
     ) {
     }
 
@@ -75,6 +77,7 @@ final readonly class AuthorizationModel
 
         $types = [];
         $names = [];
+        $relations = [];
         /** @var mixed $definition */
         foreach ($definitions as $definition) {
             $type = is_array($definition) ? ($definition['type'] ?? null) : null;
@@ -86,6 +89,11 @@ final readonly class AuthorizationModel
             }
             $names[] = $type;
             $types[] = ObjectType::fromString($type);
+            /** @var mixed $declared */
+            $declared = is_array($definition) ? ($definition['relations'] ?? null) : null;
+            $relations[$type] = is_array($declared) && ! array_is_list($declared)
+                ? array_map(strval(...), array_keys($declared))
+                : [];
             $reserved = ReservedType::tryFrom($type);
             if ($reserved !== null) {
                 /** @var array<array-key, mixed> $definition An array: its type was read above. */
@@ -96,7 +104,7 @@ final readonly class AuthorizationModel
             throw new InvalidValue('An authorization model declares the type "user": the people Clavia knows.');
         }
 
-        return new self($json, $types);
+        return new self($json, $types, $relations);
     }
 
     /**
@@ -150,5 +158,11 @@ final readonly class AuthorizationModel
     public function declares(ObjectType $type): bool
     {
         return array_any($this->types, static fn (ObjectType $declared): bool => $declared->equals($type));
+    }
+
+    /** Whether the type declares the relation: what a question may ask of an object of that type. */
+    public function relates(ObjectType $type, Relation $relation): bool
+    {
+        return in_array($relation->name, $this->relations[$type->value] ?? [], true);
     }
 }

@@ -13,6 +13,7 @@ namespace ClaviaTest\Unit\Domain\Authorization;
 
 use Clavia\Domain\Authorization\AuthorizationModel;
 use Clavia\Domain\Authorization\ObjectType;
+use Clavia\Domain\Authorization\Relation;
 use Clavia\Domain\Shared\InvalidValue;
 use ClaviaTest\Support\Contract\DecisionEngineContract;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -35,6 +36,19 @@ final class AuthorizationModelTest extends TestCase
         );
         self::assertTrue($model->declares(ObjectType::fromString('folder')));
         self::assertFalse($model->declares(ObjectType::fromString('invoice')));
+    }
+
+    public function testItKnowsTheRelationsEachTypeDeclares(): void
+    {
+        $model = AuthorizationModel::fromJson(DecisionEngineContract::MODEL);
+        $document = ObjectType::fromString('document');
+
+        foreach (['parent', 'owner', 'editor', 'viewer'] as $relation) {
+            self::assertTrue($model->relates($document, Relation::fromString($relation)), $relation);
+        }
+        self::assertFalse($model->relates($document, Relation::fromString('member')));
+        self::assertFalse($model->relates(ObjectType::fromString('user'), Relation::fromString('viewer')));
+        self::assertFalse($model->relates(ObjectType::fromString('invoice'), Relation::fromString('viewer')));
     }
 
     /** @return iterable<string, array{string}> */
