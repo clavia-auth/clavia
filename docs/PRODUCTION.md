@@ -258,7 +258,9 @@ migrations run over it. Practise it on a copy.
 4. **Do what the notes ask.** The usual steps:
    - `bin/clavia management-api:register` when there are new scopes, then give them to the roles
      that should hold them;
-   - a new scheduled command;
+   - a new scheduled command, such as `bin/clavia fga:sync` every minute from 0.6: with Compose,
+     take the release's `scheduler.sh`, which your copy of the kit mounts; with Helm, the chart's
+     CronJobs come with `helm upgrade`;
    - a change to the proxy in front.
 
 ## 10. Operating it

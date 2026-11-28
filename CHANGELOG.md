@@ -19,14 +19,85 @@ All notable changes to Clavia are written here, for the people who run it. The f
   - **Upgrading**: run `management-api:register` so the Management API gets the new scope, then
     give it to your administrators' role. The dashboard asks for every scope its operator holds.
 
+- **AuthZEN search** (#140, part of #133, [design](docs/design/fine-grained-authorization.md) §5.5).
+  An API's client asks who may act on a resource (`POST /access/v1/search/subject`), what a subject may
+  act on (`/search/resource`) and what it may do to a resource (`/search/action`), with the new
+  `search:access` scope, as AuthZEN 1.0 §8 describes. A search follows an evaluation's rules, and a
+  subject Clavia does not know has no resources and no actions.
+  - **Results are sorted by id, capped at 1,000** (OpenFGA's own maximum, given as
+    `search_max_results` in the metadata), and paged with `page.limit` (1 to 1,000, 50 by default) and
+    `page.token`. A token is good for the search that gave it only: change the search and it is `400`.
+  - **A subject search leaves out** deactivated or unknown accounts and deleted applications, and any
+    relationship whose condition reads Clavia's facts about the subject, since there is no subject yet
+    to read them from. A condition that starts with `has(clavia.subject)` simply does not count there;
+    an unguarded one makes OpenFGA refuse the whole listing, which then comes back empty, with
+    `context.error` saying why.
+
+- **AuthZEN evaluation** (#138, part of #133, [design](docs/design/fine-grained-authorization.md)
+  §5.2). An API's client asks whether a subject may act on a resource, now:
+  `POST /access/v1/evaluation`, or up to fifty questions at once with `POST /access/v1/evaluations`,
+  with the new `evaluate:access` scope, as AuthZEN 1.0 §6 and §7 describe. The answer is
+  `{"decision": true}` or `false`; a `503`, when OpenFGA does not answer, is never a decision, and an
+  API must treat it as a denial.
+  - **A subject** is a person (`user`, the `sub` of their tokens) or an application (`client`, its
+    client id). **A subject Clavia does not know, a deactivated account or a deleted application is
+    denied before OpenFGA is asked**, whatever relationships remain.
+  - **Clavia adds what it knows of the subject** as `context.clavia.subject`, for the model's
+    conditions to read through a parameter `clavia` of type `map<any>`: a person's `id`,
+    `connection`, `app_metadata`, `roles` (the names of their roles that hold a permission on this API
+    only) and `mfa_enrolled`; an application's `id`, `type` and `first_party`. An API cannot send a
+    `context.clavia` of its own (`400`), and the facts are never sent back.
+  - **A condition that cannot be evaluated** (it reads an `app_metadata` key the person lacks) denies
+    that question alone (`condition_failed`). Guard such conditions with `has()`.
+  - **A batch** takes AuthZEN's three semantics: `execute_all` (the default), `deny_on_first_deny`
+    and `permit_on_first_permit`. A question in it that cannot be asked is a denial with
+    `context.error`, and the others are still answered.
+  - **Denial reasons** (`no_relation`, `subject_inactive`, `unknown_type`, `condition_failed`) are
+    given only to an API whose `denial_reasons` is on, never more than the kind.
+  - **`GET /.well-known/authzen-configuration`** on `management.{domain}` is AuthZEN's metadata:
+    public, cacheable for an hour, listing exactly the endpoints that exist. It is not there while
+    `CLAVIA_FGA_URL` is unset.
+
+- **Relationships for APIs** (#139, part of #133, [design](docs/design/fine-grained-authorization.md)
+  §5.3). An API keeps its resources' relationships through Clavia: `POST /access/v1/relationships`
+  writes and deletes up to a hundred, all of them or none, and `GET /access/v1/relationships?object=`
+  reads one object's back, a page at a time. Both need the new `write:relationships` scope, granted on
+  the Authorization API to a client that speaks for the API.
+  - **The Authorization API has a contract** (`docs/openapi/authorization-api.yaml`), which its front
+    door checks every request against, as the Management API's does. It is published beside the other
+    two references.
+  - **Confined to the API's own types**: a relationship on one of Clavia's types (`user`, `client`,
+    `role`, `group`) or on a type the model does not declare is `422`, and so is a person or an
+    application Clavia does not know. OpenFGA's own refusal (written twice, deleted unwritten) is `422`
+    with its error code alone.
+  - **Clavia stores and logs nothing of an API's relationships**: they live in OpenFGA alone, and
+    are not in the audit trail.
+
+- **The identity feed** (#137, part of #133, [design](docs/design/fine-grained-authorization.md)
+  §5.4). Clavia writes who holds each role (`role:<role id>#member@user:<user id>`) into the store of
+  every API the role holds a permission on, and keeps it in step. A role given, taken or replaced, a
+  role's permissions moved, or a person, an application or a role deleted, is queued in the
+  transaction of the change and sent to OpenFGA just after the response. A person or an application
+  deleted loses every relationship naming them, the API's own included.
+  - **What fails is never lost**: it is sent again with a backoff (5 seconds, a minute, five minutes,
+    then every ten minutes), and never given up. While `CLAVIA_FGA_URL` is unset, changes are kept for
+    the APIs that have a store and sent once it is set again.
+  - **`bin/clavia fga:sync`** sends what is waiting; **`bin/clavia fga:resync <api>`** rebuilds an
+    API's role relationships from Clavia, when a store and Clavia have drifted.
+  - **Migration `0053`** adds the `fga_outbox` table.
+  - **Upgrading**: schedule `bin/clavia fga:sync` every minute. The production kit does: with
+    Compose, take the release's `scheduler.sh`, which your copy of the kit mounts into the `scheduler`
+    service; with Helm, the chart's `fga-sync` CronJob comes with `helm upgrade`. Without it, a role
+    change that could not be sent at once is never sent again.
+
 - **Fine-grained authorization on an API** (#136, part of #133,
   [design](docs/design/fine-grained-authorization.md) §5.1). `PUT
   /api/v1/resource-servers/{id}/authorization` (`update:resource_servers`) turns it on with an OpenFGA
   model (its JSON form, schema 1.1) and the clients that speak for the API. The API gets its own
   OpenFGA store, kept from then on, and a model that changes is written as a new version. `GET` shows
   the settings and the model. `DELETE` turns it off and keeps the store; `?confirm=delete` deletes the
-  store and every relationship in it. Deleting an API deletes its store too. Nothing asks for a
-  decision yet: that comes with the evaluation endpoints.
+  store and every relationship in it. Deleting an API deletes its store too. The API's clients then
+  ask for decisions through the Authorization API (below).
   - **A model declares `type user`**. `user`, `client`, `role` and `group` are Clavia's: `user` and
     `client` have no relation, and `role` and `group` are exactly `define member: [user]`. Clavia
     alone will write their relationships.
@@ -43,8 +114,9 @@ All notable changes to Clavia are written here, for the people who run it. The f
 
 - **OpenFGA beside Clavia** (#135, the first slice of fine-grained authorization, #133,
   [design](docs/design/fine-grained-authorization.md)). Clavia can now talk to OpenFGA, the decision
-  engine that will answer "may this person do this to that, now?" for your APIs. Nothing uses it
-  yet: no route, no Management API operation and no command exists until the next slices.
+  engine that answers "may this person do this to that, now?" for your APIs. It runs beside Clavia, with
+  its own database, and Clavia alone reaches it. The production kit does not run it yet (#248): bring
+  your own OpenFGA, and point Clavia at it.
   - **Three settings**: `CLAVIA_FGA_URL` (unset by default, which keeps the feature off),
     `CLAVIA_FGA_API_KEY` (the preshared key OpenFGA starts with, 16 to 512 characters, required with
     the URL) and `CLAVIA_FGA_TIMEOUT` (2 seconds, 1 to 10). The URL is your own infrastructure, so a
