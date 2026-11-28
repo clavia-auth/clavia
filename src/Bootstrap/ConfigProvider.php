@@ -32,12 +32,14 @@ use Clavia\Adapter\Primary\Cli\MigrateDatabaseCommand;
 use Clavia\Adapter\Primary\Cli\PurgeAuditEventsCommand;
 use Clavia\Adapter\Primary\Cli\PurgeUnusedClientsCommand;
 use Clavia\Adapter\Primary\Cli\RegisterManagementApiCommand;
+use Clavia\Adapter\Primary\Cli\ResyncStoreCommand;
 use Clavia\Adapter\Primary\Cli\RotateServiceProviderKeysCommand;
 use Clavia\Adapter\Primary\Cli\RotateSigningKeyCommand;
 use Clavia\Adapter\Primary\Cli\RunJobsCommand;
 use Clavia\Adapter\Primary\Cli\SeedDevelopmentDataCommand;
 use Clavia\Adapter\Primary\Cli\ShowConfigCommand;
 use Clavia\Adapter\Primary\Cli\Sqs\QueueMessagesFactory;
+use Clavia\Adapter\Primary\Cli\SyncIdentityFeedCommand;
 use Clavia\Adapter\Primary\Http\Auth\AuthCookies;
 use Clavia\Adapter\Primary\Http\Auth\AuthPageResponder;
 use Clavia\Adapter\Primary\Http\Auth\BrandingHandler;
@@ -225,6 +227,10 @@ use Clavia\Application\Authentication\SignIn\SignInWithPasskey;
 use Clavia\Application\Authentication\SignIn\SignInWithPassword;
 use Clavia\Application\Authentication\SignOut;
 use Clavia\Application\Authentication\SignOutEverywhere;
+use Clavia\Application\Authorization\Feed\IdentityFeed;
+use Clavia\Application\Authorization\Feed\ResyncStore;
+use Clavia\Application\Authorization\Feed\StoreReconciler;
+use Clavia\Application\Authorization\Feed\SyncIdentityFeed;
 use Clavia\Application\Clients\RegisterMachineClient;
 use Clavia\Application\Clients\Registration\DeleteClientConfiguration;
 use Clavia\Application\Clients\Registration\MarkRegistrationUsed;
@@ -417,6 +423,7 @@ use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
 use Clavia\Domain\Authentication\Passkey\RelyingParty;
+use Clavia\Domain\Authorization\IdentityFeedOutbox;
 use Clavia\Domain\Client\ClientLogoRepository;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\Registration\ClientRegistrationRepository;
@@ -495,6 +502,8 @@ final class ConfigProvider
         'clients:purge-unused' => PurgeUnusedClientsCommand::class,
         'jobs:run' => RunJobsCommand::class,
         'webhooks:deliver' => DeliverWebhooksCommand::class,
+        'fga:sync' => SyncIdentityFeedCommand::class,
+        'fga:resync' => ResyncStoreCommand::class,
         'users:import-sqs' => ImportUsersFromSqsCommand::class,
     ];
 
@@ -511,6 +520,7 @@ final class ConfigProvider
         DirectoryTrail::class,
         BackChannelLogout::class,
         MarkRegistrationUsed::class,
+        IdentityFeed::class,
         MetricsSubscriber::class,
     ];
 
@@ -772,6 +782,10 @@ final class ConfigProvider
                     UpdateResourceServer::class => Container\UpdateResourceServerFactory::class,
                     DeleteResourceServer::class => Container\DeleteResourceServerFactory::class,
                     ConfigureAuthorization::class => Container\ConfigureAuthorizationFactory::class,
+                    StoreReconciler::class => Container\StoreReconcilerFactory::class,
+                    SyncIdentityFeed::class => Container\SyncIdentityFeedFactory::class,
+                    ResyncStore::class => Container\ResyncStoreFactory::class,
+                    IdentityFeed::class => Container\IdentityFeedFactory::class,
                     DisableAuthorization::class => Container\DisableAuthorizationFactory::class,
                     GrantClientAccess::class => Container\GrantClientAccessFactory::class,
                     RegisterManagementApi::class => Container\RegisterManagementApiFactory::class,
@@ -858,6 +872,7 @@ final class ConfigProvider
                     ScimGroupRepository::class => Container\ScimGroupRepositoryFactory::class,
                     WebhookEndpointRepository::class => Container\WebhookEndpointRepositoryFactory::class,
                     WebhookDeliveryRepository::class => Container\WebhookDeliveryRepositoryFactory::class,
+                    IdentityFeedOutbox::class => Container\IdentityFeedOutboxFactory::class,
                     ClientRegistrationRepository::class => Container\ClientRegistrationRepositoryFactory::class,
                     UserJobRepository::class => Container\UserJobRepositoryFactory::class,
                     ConsentRepository::class => Container\ConsentRepositoryFactory::class,
@@ -970,6 +985,8 @@ final class ConfigProvider
                     PurgeUnusedClientsCommand::class => Container\PurgeUnusedClientsCommandFactory::class,
                     RunJobsCommand::class => Container\RunJobsCommandFactory::class,
                     DeliverWebhooksCommand::class => Container\DeliverWebhooksCommandFactory::class,
+                    SyncIdentityFeedCommand::class => Container\SyncIdentityFeedCommandFactory::class,
+                    ResyncStoreCommand::class => Container\ResyncStoreCommandFactory::class,
                     DeliverWebhooks::class => Container\DeliverWebhooksFactory::class,
                     WebhookSender::class => Container\WebhookSenderFactory::class,
                     ImportUsersFromSqsCommand::class => Container\ImportUsersFromSqsCommandFactory::class,

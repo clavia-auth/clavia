@@ -135,6 +135,37 @@ trait ResourceServerRepositoryContract
     }
 
     #[Test]
+    public function theApisWithAStoreAreListedSwitchedOnOrOff(): void
+    {
+        $settings = AuthorizationSettings::of(
+            true,
+            StoreId::fromString('01JAAAAAAAAAAAAAAAAAAAAAAA'),
+            AuthorizationModelId::fromString('01JBBBBBBBBBBBBBBBBBBBBBBB'),
+            AuthorizationModel::fromJson(DecisionEngineContract::MODEL),
+            [],
+            false,
+        );
+        $on = $this->anApi('https://documents.example/api/', []);
+        $off = $this->anApi('https://invoices.example/api/', []);
+        $never = $this->anApi('https://reports.example/api/', []);
+        $this->resourceServers()->save($on->withAuthorization($settings));
+        $this->resourceServers()->save($off->withAuthorization($settings->disabled()));
+        $this->resourceServers()->save($never);
+
+        $listed = array_map(
+            static fn (ResourceServer $api): string => $api->identifier->value,
+            $this->resourceServers()->withAuthorization(),
+        );
+        sort($listed);
+
+        self::assertSame(['https://documents.example/api/', 'https://invoices.example/api/'], $listed);
+        self::assertSame(
+            '01JAAAAAAAAAAAAAAAAAAAAAAA',
+            $this->resourceServers()->withAuthorization()[0]->authorization?->store->value,
+        );
+    }
+
+    #[Test]
     public function aClientSpeaksForOneApiAtMost(): void
     {
         $client = $this->aClient('shared-backend');

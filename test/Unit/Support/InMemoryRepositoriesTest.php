@@ -11,33 +11,15 @@ declare(strict_types=1);
 
 namespace ClaviaTest\Unit\Support;
 
-use Clavia\Domain\Client\ClientLogoRepository;
-use ClaviaTest\Support\Contract\ClientLogoRepositoryContract;
-use ClaviaTest\Support\Contract\ClientRegistrationRepositoryContract;
-use ClaviaTest\Support\Contract\InitialAccessTokenRepositoryContract;
-use ClaviaTest\Support\Contract\ProvisionedAccountRepositoryContract;
-use ClaviaTest\Support\Contract\ProvisioningTokenRepositoryContract;
-use ClaviaTest\Support\Contract\ScimGroupRepositoryContract;
-use ClaviaTest\Support\Contract\UserJobRepositoryContract;
-use ClaviaTest\Support\Contract\WebhookEndpointRepositoryContract;
-use ClaviaTest\Support\Fake\InMemoryClientLogoRepository;
-use ClaviaTest\Support\Fake\InMemoryClientRegistrationRepository;
-use ClaviaTest\Support\Fake\InMemoryInitialAccessTokenRepository;
-use ClaviaTest\Support\Fake\InMemoryProvisionedAccountRepository;
-use ClaviaTest\Support\Fake\InMemoryProvisioningTokenRepository;
-use ClaviaTest\Support\Fake\InMemoryScimGroupRepository;
-use ClaviaTest\Support\Fake\InMemoryUserJobRepository;
-use ClaviaTest\Support\Fake\InMemoryWebhookEndpointRepository;
 use Clavia\Domain\Authentication\Mfa\MfaFactorRepository;
 use Clavia\Domain\Authentication\Mfa\RecoveryCodeRepository;
 use Clavia\Domain\Authentication\Passkey\PasskeyRepository;
+use Clavia\Domain\Authorization\IdentityFeedOutbox;
 use Clavia\Domain\Client\ClientId;
+use Clavia\Domain\Client\ClientLogoRepository;
 use Clavia\Domain\Client\ClientRepository;
 use Clavia\Domain\Client\Registration\ClientRegistrationRepository;
 use Clavia\Domain\Client\Registration\InitialAccessTokenRepository;
-use Clavia\Domain\Provisioning\ProvisionedAccountRepository;
-use Clavia\Domain\Provisioning\ProvisioningTokenRepository;
-use Clavia\Domain\Provisioning\ScimGroupRepository;
 use Clavia\Domain\Connection\ConnectionRepository;
 use Clavia\Domain\Consent\ConsentRepository;
 use Clavia\Domain\Identity\ExternalIdentityRepository;
@@ -45,34 +27,55 @@ use Clavia\Domain\Identity\Jobs\UserJobRepository;
 use Clavia\Domain\Identity\UserId;
 use Clavia\Domain\Identity\UserRepository;
 use Clavia\Domain\OAuth2\AuthorizationCodeRepository;
+use Clavia\Domain\Provisioning\ProvisionedAccountRepository;
+use Clavia\Domain\Provisioning\ProvisioningTokenRepository;
+use Clavia\Domain\Provisioning\ScimGroupRepository;
 use Clavia\Domain\Rbac\RoleRepository;
 use Clavia\Domain\ResourceServer\ClientGrantRepository;
 use Clavia\Domain\ResourceServer\ResourceServerRepository;
+use Clavia\Domain\Webhook\WebhookEndpointRepository;
 use ClaviaTest\Support\Contract\AuthorizationCodeRepositoryContract;
+use ClaviaTest\Support\Contract\ClientLogoRepositoryContract;
+use ClaviaTest\Support\Contract\ClientRegistrationRepositoryContract;
 use ClaviaTest\Support\Contract\ClientRepositoryContract;
 use ClaviaTest\Support\Contract\ConnectionRepositoryContract;
 use ClaviaTest\Support\Contract\ConsentRepositoryContract;
 use ClaviaTest\Support\Contract\ExternalIdentityRepositoryContract;
+use ClaviaTest\Support\Contract\IdentityFeedOutboxContract;
+use ClaviaTest\Support\Contract\InitialAccessTokenRepositoryContract;
 use ClaviaTest\Support\Contract\MfaRepositoriesContract;
 use ClaviaTest\Support\Contract\PasskeyRepositoryContract;
+use ClaviaTest\Support\Contract\ProvisionedAccountRepositoryContract;
+use ClaviaTest\Support\Contract\ProvisioningTokenRepositoryContract;
 use ClaviaTest\Support\Contract\ResourceServerRepositoryContract;
 use ClaviaTest\Support\Contract\RoleRepositoryContract;
+use ClaviaTest\Support\Contract\ScimGroupRepositoryContract;
+use ClaviaTest\Support\Contract\UserJobRepositoryContract;
 use ClaviaTest\Support\Contract\UserRepositoryContract;
+use ClaviaTest\Support\Contract\WebhookEndpointRepositoryContract;
 use ClaviaTest\Support\Fake\InMemoryAuthorizationCodeRepository;
 use ClaviaTest\Support\Fake\InMemoryClientGrantRepository;
+use ClaviaTest\Support\Fake\InMemoryClientLogoRepository;
+use ClaviaTest\Support\Fake\InMemoryClientRegistrationRepository;
 use ClaviaTest\Support\Fake\InMemoryClientRepository;
 use ClaviaTest\Support\Fake\InMemoryConnectionRepository;
 use ClaviaTest\Support\Fake\InMemoryConsentRepository;
 use ClaviaTest\Support\Fake\InMemoryExternalIdentityRepository;
+use ClaviaTest\Support\Fake\InMemoryIdentityFeedOutbox;
+use ClaviaTest\Support\Fake\InMemoryInitialAccessTokenRepository;
 use ClaviaTest\Support\Fake\InMemoryMfaFactorRepository;
 use ClaviaTest\Support\Fake\InMemoryPasskeyRepository;
+use ClaviaTest\Support\Fake\InMemoryProvisionedAccountRepository;
+use ClaviaTest\Support\Fake\InMemoryProvisioningTokenRepository;
 use ClaviaTest\Support\Fake\InMemoryRecoveryCodeRepository;
 use ClaviaTest\Support\Fake\InMemoryResourceServerRepository;
 use ClaviaTest\Support\Fake\InMemoryRoleRepository;
+use ClaviaTest\Support\Fake\InMemoryScimGroupRepository;
 use ClaviaTest\Support\Fake\InMemoryTransactionManager;
+use ClaviaTest\Support\Fake\InMemoryUserJobRepository;
 use ClaviaTest\Support\Fake\InMemoryUserRepository;
+use ClaviaTest\Support\Fake\InMemoryWebhookEndpointRepository;
 use ClaviaTest\Support\Fake\SeededRandomSource;
-use Clavia\Domain\Webhook\WebhookEndpointRepository;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -86,6 +89,7 @@ final class InMemoryRepositoriesTest extends TestCase
     use ClientLogoRepositoryContract;
     use AuthorizationCodeRepositoryContract;
     use ResourceServerRepositoryContract;
+    use IdentityFeedOutboxContract;
     use MfaRepositoriesContract;
     use PasskeyRepositoryContract;
     use ExternalIdentityRepositoryContract;
@@ -108,6 +112,7 @@ final class InMemoryRepositoriesTest extends TestCase
     private InMemoryTransactionManager $transactions;
     private InMemoryAuthorizationCodeRepository $codes;
     private InMemoryResourceServerRepository $resourceServers;
+    private InMemoryIdentityFeedOutbox $feed;
     private InMemoryClientGrantRepository $clientGrants;
     private InMemoryMfaFactorRepository $factors;
     private InMemoryRecoveryCodeRepository $recoveryCodes;
@@ -135,7 +140,8 @@ final class InMemoryRepositoriesTest extends TestCase
         $this->transactions = new InMemoryTransactionManager();
         $this->codes = new InMemoryAuthorizationCodeRepository($this->transactions);
         $this->clientGrants = new InMemoryClientGrantRepository();
-        $this->resourceServers = new InMemoryResourceServerRepository($this->clientGrants);
+        $this->feed = new InMemoryIdentityFeedOutbox();
+        $this->resourceServers = new InMemoryResourceServerRepository($this->clientGrants, $this->feed);
         $this->factors = new InMemoryMfaFactorRepository($this->transactions);
         $this->recoveryCodes = new InMemoryRecoveryCodeRepository();
         $this->passkeys = new InMemoryPasskeyRepository();
@@ -266,6 +272,12 @@ final class InMemoryRepositoriesTest extends TestCase
     protected function resourceServers(): ResourceServerRepository
     {
         return $this->resourceServers;
+    }
+
+    #[\Override]
+    protected function identityFeedOutbox(): IdentityFeedOutbox
+    {
+        return $this->feed;
     }
 
     #[\Override]

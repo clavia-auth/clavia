@@ -27,9 +27,12 @@ final class InMemoryResourceServerRepository implements ResourceServerRepository
 
     /**
      * @param InMemoryClientGrantRepository|null $clientGrants The grants a deleted API takes with it.
+     * @param InMemoryIdentityFeedOutbox|null $feed The identity feed's entries a deleted API takes with it.
      */
-    public function __construct(private readonly ?InMemoryClientGrantRepository $clientGrants = null)
-    {
+    public function __construct(
+        private readonly ?InMemoryClientGrantRepository $clientGrants = null,
+        private readonly ?InMemoryIdentityFeedOutbox $feed = null,
+    ) {
     }
 
     #[\Override]
@@ -80,6 +83,7 @@ final class InMemoryResourceServerRepository implements ResourceServerRepository
         unset($this->resourceServers[$id->value]);
         // The table's ON DELETE CASCADE.
         $this->clientGrants?->forgetApi($id);
+        $this->feed?->forgetApi($id);
     }
 
     #[\Override]
@@ -91,5 +95,21 @@ final class InMemoryResourceServerRepository implements ResourceServerRepository
             static fn (ResourceServer $api): array => [$api->identifier->value, $api->name],
             static fn (ResourceServer $api): array => [$api->createdAt, $api->id->value],
         );
+    }
+
+    #[\Override]
+    public function withAuthorization(): array
+    {
+        $apis = array_values(array_filter(
+            $this->resourceServers,
+            static fn (ResourceServer $api): bool => $api->authorization !== null,
+        ));
+        usort(
+            $apis,
+            static fn (ResourceServer $a, ResourceServer $b): int => [$a->createdAt, $a->id->value]
+                <=> [$b->createdAt, $b->id->value],
+        );
+
+        return $apis;
     }
 }

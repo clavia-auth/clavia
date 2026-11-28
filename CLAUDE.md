@@ -82,6 +82,7 @@ The console is `bin/clavia`:
 | `clients:registration-token` | An initial access token for client registration, printed once |
 | `jobs:run` | Run the queued bulk jobs on the users (imports, exports), then exit; run every minute |
 | `webhooks:deliver` | Send the webhook deliveries due, then exit; run every minute |
+| `fga:sync`, `fga:resync <api>` | Send the identity changes OpenFGA has not taken (run every minute); bring an API's store back into step with Clavia's roles |
 | `users:import-sqs <queue-url>` | Import accounts from an AWS SQS queue, one per message, until stopped |
 | `clients:purge-unused` | Delete self-registered clients never issued a token after `CLAVIA_CLIENT_REGISTRATION_UNUSED_LIFETIME` days; run daily |
 | `roles:create`, `roles:assign`, `roles:list` | Roles, including the first administrator |
@@ -320,7 +321,7 @@ objects, repository interfaces, and an `Event` namespace for its domain events.
 | `Claims` | `ClaimName`, `ClaimSource`, `ClaimMapping`, `ClaimMappings`, `ClaimSubject`, `CustomClaims` | A custom claim never has a reserved name (registered, standard, or this server's), checked when saved and again at issuance; its source is the account (address, connection, profile, `app_metadata`, roles) or a constant, never the request; a source with no value leaves its claim out; at most twenty per API, no two reading nested metadata; 32 KiB per token, refused rather than cut |
 | `Webhook` | `WebhookEndpoint`, `WebhookEndpointId`, `WebhookSecret`, `EventFilter`, `WebhookEndpointRepository` | An endpoint is https, at most twenty, listening to known audit event types or `*`; its secret (`whsec_`, 32 random bytes) is the server's, shown once, sealed (`webhook:<id>:secret`), never hashed; after a rotation the previous one signs beside it for a day |
 | `Provisioning` | `ProvisioningToken`, `ProvisioningTokenId`, `ProvisioningTokenState`, `SubjectAttribute`, `ProvisioningTokenRepository`, `ScimUser`, `ScimFilter`, `ProvisionedAccount`, `ProvisionedAccountRepository` | A token is for one pool or enterprise connection and goes with it; shown once, kept as its digest; a day to two years, a year by default, flagged within thirty days; revoked, never changed otherwise |
-| `Authorization` | `ObjectType`, `ObjectRef`, `Relation`, `SubjectRef`, `Tuple`, `AuthorizationModel`, `ReservedType`, `AuthorizationSettings`, `StoreId`, `AuthorizationModelId` | Held to OpenFGA's notation: no `:`, `#`, `@` or space where it would be read as another part; an object at most 256 characters and never the wildcard `*`; a model is schema 1.1 with distinct types, kept as its JSON text, declares `user`, and takes Clavia's types only in Clavia's shape (`user`, `client` with no relation; `role`, `group` exactly `member: [user]`); a client speaks for one API at most, twenty per API; the engine's ids are ULIDs |
+| `Authorization` | `ObjectType`, `ObjectRef`, `Relation`, `SubjectRef`, `Tuple`, `AuthorizationModel`, `ReservedType`, `AuthorizationSettings`, `StoreId`, `AuthorizationModelId`, the identity feed's `FeedSubject`, `FeedEntry`, `IdentityFeedOutbox` | Held to OpenFGA's notation: no `:`, `#`, `@` or space where it would be read as another part; an object at most 256 characters and never the wildcard `*`; a model is schema 1.1 with distinct types, kept as its JSON text, declares `user`, and takes Clavia's types only in Clavia's shape (`user`, `client` with no relation; `role`, `group` exactly `member: [user]`); a client speaks for one API at most, twenty per API; the engine's ids are ULIDs; the feed's entries name what to reconcile, never tuples |
 
 The application mirrors these contexts (`Application\OAuth2`, `Authentication`, `Oidc`,
 `Management`, `Connection`, `Audit`…). `Application\Port` holds the technical ports: signing
@@ -338,7 +339,8 @@ decision engine (`DecisionEngine`, `AccessCheck`, `DecisionEngineFailed`).
 ### Fine-grained authorization
 
 Design in `docs/design/fine-grained-authorization.md` (AuthZEN over OpenFGA, #133), built in slices:
-the engine (#135), then authorization on an API (#136). Nothing asks the engine for a decision yet.
+the engine (#135), authorization on an API (#136), then the identity feed (#137). Nothing asks the
+engine for a decision yet.
 
 - **OpenFGA runs beside Clavia**, its own container and PostgreSQL, reached by Clavia alone with a
   preshared key (`CLAVIA_FGA_URL`, `CLAVIA_FGA_API_KEY`; unset, the feature is off and
@@ -349,7 +351,7 @@ the engine (#135), then authorization on an API (#136). Nothing asks the engine 
 - **The port is `DecisionEngine`**: stores, model versions (`AuthorizationModel`, OpenFGA's JSON,
   kept as the text it came as), atomic writes of at most 100 tuples, check, batch check (any size;
   `OpenFgaDecisionEngine` sends parts of 50), list objects, list users (objects only, never a
-  wildcard or a userset), read by subject. `Domain\Authorization` holds the notation:
+  wildcard or a userset), read by subject, read by object. `Domain\Authorization` holds the notation:
   `ObjectType`, `ObjectRef` (`type:id`, never the wildcard `*`), `Relation`, `SubjectRef` (an object
   or a userset `type:id#relation`), `Tuple`, and the engine's ULIDs (`StoreId`,
   `AuthorizationModelId`), each held to OpenFGA's rules.
@@ -379,6 +381,23 @@ the engine (#135), then authorization on an API (#136). Nothing asks the engine 
   (`RegisterAuthorizationApi`, through `SystemApiRegistration`, the Management API's too), with
   `AuthorizationPermission`'s scopes: `evaluate:access`, `search:access`, `write:relationships`.
   A speaking client is granted on it from the shell (`clients:grant`).
+- **The identity feed** (#137, §5.4): Clavia writes role memberships (`role:<id>#member@user:<id>`)
+  in the store of each API the role holds a permission on, and nothing else. `IdentityFeed`, a
+  subscriber, queues entries in `fga_outbox` (`IdentityFeedOutbox`) in the transaction of the change
+  (`RoleGiven`, `RoleTaken`, `UserRolesReplaced`, `RoleChanged` and `ResourceServerChanged` on
+  permissions, `RoleDeleted`, `UserDeleted`, `ClientDeleted`, `AuthorizationEnabled`,
+  `AuthorizationModelWritten`), for every API with a store, on or off. **An entry names a subject,
+  never tuples** (`FeedSubject`: `user:`, `role:`, `client:` or `*` for every role): the events say
+  what is, not what was, so `StoreReconciler` reads the store and Clavia when it sends, writes the
+  difference (deletions first, 100 at a time) and is idempotent. A person or an application gone
+  from Clavia loses every relationship naming them, the API's own included, on every type of the
+  model. One entry per API and subject: queuing it again moves its `generation`, and a worker settles
+  only the generation it claimed (`FOR UPDATE SKIP LOCKED`, a 30-second claim), so a change made
+  while one was sent is sent again. Sent after the response (`DeferredTasks`, 5 s), then by
+  `fga:sync` (`SyncIdentityFeed`, every minute, 50 s); a failure waits 5 s, 1 min, 5 min, then 10 min
+  at a time, and is never given up. `fga:resync <api>` (`ResyncStore`, by id or identifier)
+  reconciles every role Clavia knows, past the outbox. With `CLAVIA_FGA_URL` unset, entries are still
+  queued for the APIs that kept a store (one per subject) and `fga:sync` sends nothing until it is set.
 
 ## Flows
 

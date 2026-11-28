@@ -242,14 +242,29 @@ final readonly class OpenFgaDecisionEngine implements DecisionEngine
     #[\Override]
     public function readBySubject(StoreId $store, SubjectRef $subject, ObjectType $objectType): array
     {
+        // A type alone, `document:`, asks for every object of the type (OpenFGA's Read).
+        return $this->readTuples($store, ['user' => $subject->toString(), 'object' => $objectType->value . ':']);
+    }
+
+    #[\Override]
+    public function readByObject(StoreId $store, ObjectRef $object): array
+    {
+        return $this->readTuples($store, ['object' => $object->toString()]);
+    }
+
+    /**
+     * Every tuple matching the key, page after page.
+     *
+     * @param array<string, string> $key OpenFGA's `tuple_key`: an object, with or without a user.
+     *
+     * @return list<Tuple>
+     */
+    private function readTuples(StoreId $store, array $key): array
+    {
         $tuples = [];
         $continuation = '';
         do {
-            $body = [
-                // A type alone, `document:`, asks for every object of the type (OpenFGA's Read).
-                'tuple_key' => ['user' => $subject->toString(), 'object' => $objectType->value . ':'],
-                'page_size' => self::READ_PAGE_SIZE,
-            ];
+            $body = ['tuple_key' => $key, 'page_size' => self::READ_PAGE_SIZE];
             if ($continuation !== '') {
                 $body['continuation_token'] = $continuation;
             }

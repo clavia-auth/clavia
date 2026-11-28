@@ -245,6 +245,31 @@ final class FakeDecisionEngine implements DecisionEngine
         ));
     }
 
+    #[\Override]
+    public function readByObject(StoreId $store, ObjectRef $object): array
+    {
+        $this->reachable();
+        $this->storeOf($store);
+
+        return array_values(array_filter(
+            $this->tuples[$store->value],
+            static fn (Tuple $tuple): bool => $tuple->object->equals($object),
+        ));
+    }
+
+    /**
+     * Every relationship in the store, as written: what a test expects the engine to hold.
+     *
+     * @return list<string> In their notation, sorted.
+     */
+    public function relationshipsIn(StoreId $store): array
+    {
+        $tuples = array_keys($this->tuples[$store->value] ?? []);
+        sort($tuples);
+
+        return $tuples;
+    }
+
     /**
      * Whether `subject` holds `relation` on `object`, as the model works it out.
      *

@@ -145,4 +145,15 @@ interface DecisionEngine
      * @throws DecisionEngineFailed
      */
     public function readBySubject(StoreId $store, SubjectRef $subject, ObjectType $objectType): array;
+
+    /**
+     * Every relationship written on exactly this object, whatever its relation and subject, as
+     * written (nothing worked out): who a role names a member, which the identity feed keeps in
+     * step with Clavia (docs/design/fine-grained-authorization.md §5.4).
+     *
+     * @return list<Tuple>
+     *
+     * @throws DecisionEngineFailed
+     */
+    public function readByObject(StoreId $store, ObjectRef $object): array;
 }

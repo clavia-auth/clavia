@@ -108,7 +108,8 @@ A new context, `Domain\Authorization`:
 ### Application
 
 - Port `DecisionEngine`: `createStore()`, `deleteStore()`, `writeModel()`, `write(store, writes,
-  deletes)`, `check()`, `batchCheck()`, `listObjects()`, `listUsers()`, `readBySubject()`. Adapter
+  deletes)`, `check()`, `batchCheck()`, `listObjects()`, `listUsers()`, `readBySubject()`,
+  `readByObject()` (added in slice 3: a role's members). Adapter
   `OpenFgaDecisionEngine` (PSR-18, the preshared key, the timeout); double `FakeDecisionEngine`, a
   small in-memory evaluator of the union subset, run by the same contract as the adapter.
 - `Authorization\Evaluate`, `EvaluateMany`, `SearchSubjects`, `SearchResources`, `SearchActions`:
@@ -127,8 +128,8 @@ A new context, `Domain\Authorization`:
 
 ### Migrations
 
-`resource_servers` gains the authorization columns; `fga_outbox` (the store, writes and deletes as
-`jsonb`, attempts, next attempt, created); nothing of the graph.
+`resource_servers` gains the authorization columns; `fga_outbox` (the API, the subject to bring into
+step, a generation, attempts, next attempt, a claim, created; see §5.4); nothing of the graph.
 
 ## 5. Flows
 
@@ -182,6 +183,26 @@ non-reserved type of the model, and a `user` or `client` subject must exist in C
    retries with a backoff (5 s, 1 min, 5 min, then every 10 minutes for a day) and logs a warning.
 3. `fga:resync <api>` recomputes the store's `role` tuples from Clavia and writes the difference:
    the repair when a store and Clavia have drifted.
+
+Decided in slice 3 (#137): **an outbox row names a subject, not tuples**: `user:<id>` (the roles a
+person holds in that store), `role:<id>` (a role's members), `client:<id>` (a deleted application), or
+`*` (every role, queued when authorization is switched on, when a new model is written, and when an
+API's permissions change). The events say what is, not what was (`UserRolesReplaced` and `RoleChanged`
+do not carry what was held before, and a deleted person's relationships written by the API are known
+to OpenFGA alone), so the sender reads the store and Clavia when it sends and writes the difference,
+deletions first. That makes a send idempotent and order irrelevant: a row sent late, twice or after a
+newer one still leaves the store as Clavia says. One row per API and subject; queuing it again moves a
+`generation` on, and a worker deletes the row only at the generation it claimed, so a change committed
+while it was sending is sent again. A role given or taken queues the person for the stores of the APIs
+the role reaches; everything else queues every API with a store, switched on or off (a store switched
+off keeps its relationships, so it is kept in step). A person or an application gone from Clavia loses
+every relationship naming them, on every type of the model. A failure is never given up (after the
+backoff, every ten minutes): a dropped row could leave a person a role they lost. Rows are queued
+even while `CLAVIA_FGA_URL` is unset, for the APIs that kept a store (at most one per subject), and
+sent once it is set again, so nothing that happened meanwhile is lost. `fga:resync` reconciles every
+role Clavia knows: a role deleted is removed by its own row.
+OpenFGA's Read API reads by object, or by type and subject, but not a whole type, which is why
+`readByObject()` joined the port and the resync goes role by role.
 
 ### 5.5 Search
 

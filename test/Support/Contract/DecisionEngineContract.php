@@ -344,6 +344,34 @@ abstract class DecisionEngineContract extends TestCase
         ));
     }
 
+    public function testTheRelationshipsWrittenOnAnObjectAreReadBack(): void
+    {
+        [$store, $model] = $this->modelled();
+        $members = array_map(static fn (int $i): string => "team:sales#member@user:u$i", range(1, 120));
+        // More than OpenFGA returns in one page (100), over two writes.
+        $this->write($store, $model, ...array_slice($members, 0, 100));
+        $this->write($store, $model, ...array_slice($members, 100));
+        // Another object of the same type, and the same object's id on another type: not read.
+        $this->write($store, $model, 'team:support#member@user:u1', 'folder:sales#viewer@user:u1');
+        $this->write($store, $model, 'document:1#editor@team:sales#member');
+
+        $read = $this->engine()->readByObject($store, ObjectRef::fromString('team:sales'));
+
+        $found = array_map(static fn (Tuple $tuple): string => $tuple->toString(), $read);
+        sort($found);
+        $expected = $members;
+        sort($expected);
+        self::assertSame($expected, $found);
+        self::assertSame(
+            ['document:1#editor@team:sales#member'],
+            array_map(
+                static fn (Tuple $tuple): string => $tuple->toString(),
+                $this->engine()->readByObject($store, ObjectRef::fromString('document:1')),
+            ),
+        );
+        self::assertSame([], $this->engine()->readByObject($store, ObjectRef::fromString('team:nobody')));
+    }
+
     public function testAStoreIsAWorldOfItsOwn(): void
     {
         [$store, $model] = $this->modelled();
@@ -454,6 +482,7 @@ abstract class DecisionEngineContract extends TestCase
                 SubjectRef::fromString('user:ada'),
                 ObjectType::fromString('document'),
             ),
+            static fn (): mixed => $engine->readByObject($store, ObjectRef::fromString('team:sales')),
         ];
 
         foreach ($calls as $call) {
